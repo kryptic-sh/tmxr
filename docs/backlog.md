@@ -56,9 +56,8 @@ what was not.
   / `M-p` are bells only (no `monitor-activity` / `monitor-silence`).
   `find-window` matches window names through the picker, not pane contents or
   titles as tmux's does.
-- **Key notation**: hjkl's `<C-x>` form is not accepted (plan/01 and plan/06
-  once promised it); mouse events are built into `mouse.rs` and cannot be
-  rebound (`MouseDown1Pane` and friends are not key names).
+- **Mouse binds**: mouse events are built into `mouse.rs` and cannot be rebound
+  (`MouseDown1Pane` and friends are not key names).
 - **No 256-colour fallback, by design for now**: colours are always 24-bit RGB,
   which is what the tmux config asks for (`terminal-overrides ",*:RGB"` forces
   RGB on every terminal). Only for a user whose terminal lacks true colour (e.g.

@@ -94,6 +94,13 @@ impl FromStr for Key {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let err = || UnknownKey(s.to_owned());
+        // hjkl's notation (`<C-b>`, `<CR>`, `<M-h>`), accepted alongside
+        // tmux's names.
+        if let Some(inner) = s.strip_prefix('<').and_then(|r| r.strip_suffix('>'))
+            && !inner.is_empty()
+        {
+            return parse_bracketed(inner).ok_or_else(err);
+        }
         let mut mods = KeyModifiers::NONE;
         let mut rest = s;
         // Strip `C-` / `M-` / `S-` prefixes; a lone `-` or a name like `C-`
@@ -124,6 +131,55 @@ impl FromStr for Key {
             _ => Err(err()),
         }
     }
+}
+
+/// The inside of an hjkl `<…>` key: `C-` / `S-` / `A-` / `M-` prefixes
+/// (any case), then a special name or one character, as hjkl-keymap reads
+/// them.
+fn parse_bracketed(inner: &str) -> Option<Key> {
+    let mut mods = KeyModifiers::NONE;
+    let mut rest = inner;
+    while let Some((m, tail)) = rest.split_once('-')
+        && !tail.is_empty()
+    {
+        match m.to_ascii_uppercase().as_str() {
+            "C" => mods |= KeyModifiers::CONTROL,
+            "S" => mods |= KeyModifiers::SHIFT,
+            "A" | "M" => mods |= KeyModifiers::ALT,
+            _ => break,
+        }
+        rest = tail;
+    }
+    let code = match rest.to_ascii_lowercase().as_str() {
+        "space" => KeyCode::Char(' '),
+        "lt" => KeyCode::Char('<'),
+        "gt" => KeyCode::Char('>'),
+        "cr" | "enter" | "return" => KeyCode::Enter,
+        "esc" | "escape" => KeyCode::Esc,
+        "tab" => KeyCode::Tab,
+        "bs" | "backspace" => KeyCode::Backspace,
+        "del" | "delete" => KeyCode::Delete,
+        "ins" | "insert" => KeyCode::Insert,
+        "up" => KeyCode::Up,
+        "down" => KeyCode::Down,
+        "left" => KeyCode::Left,
+        "right" => KeyCode::Right,
+        "home" => KeyCode::Home,
+        "end" => KeyCode::End,
+        "pageup" => KeyCode::PageUp,
+        "pagedown" => KeyCode::PageDown,
+        name => match name.strip_prefix('f').map(str::parse::<u8>) {
+            Some(Ok(n)) if (1..=24).contains(&n) => KeyCode::F(n),
+            _ => {
+                let mut chars = rest.chars();
+                match (chars.next(), chars.next()) {
+                    (Some(c), None) => KeyCode::Char(c),
+                    _ => return None,
+                }
+            }
+        },
+    };
+    Some(Key::new(code, mods))
 }
 
 impl fmt::Display for Key {
@@ -171,6 +227,27 @@ mod tests {
         assert_eq!(k("PageUp"), k("PPage"));
         assert_eq!(k("c-b"), k("C-b"));
         assert!("Nope".parse::<Key>().is_err());
+        // hjkl's notation names the same keys.
+        for (hjkl, tmux) in [
+            ("<C-b>", "C-b"),
+            ("<c-b>", "C-b"),
+            ("<M-h>", "M-h"),
+            ("<A-h>", "M-h"),
+            ("<CR>", "Enter"),
+            ("<Esc>", "Escape"),
+            ("<BS>", "BSpace"),
+            ("<Space>", "Space"),
+            ("<C-Space>", "C-Space"),
+            ("<lt>", "<"),
+            ("<F5>", "F5"),
+            ("<C-M-x>", "C-M-x"),
+            ("<M-Up>", "M-Up"),
+        ] {
+            assert_eq!(k(hjkl), k(tmux), "{hjkl}");
+        }
+        assert!("<Nope>".parse::<Key>().is_err());
+        // A lone < or > is still the key itself.
+        assert_eq!(k("<").code, KeyCode::Char('<'));
         assert!("".parse::<Key>().is_err());
     }
 

@@ -20,7 +20,8 @@ tables work.
 
 Key names are tmux's: `C-x`, `M-x`, `S-x`, `C-M-x`, `Enter`, `Escape`, `Tab`,
 `BTab`, `Space`, `BSpace`, `Up`, `PPage`/`PageUp`, `F1`…`F24`, and literal
-punctuation (`'`, `"`, `;`, `%`, `\`). hjkl's `<C-x>` notation is not accepted.
+punctuation (`'`, `"`, `;`, `%`, `\`). hjkl's notation is accepted too: `<C-b>`,
+`<M-h>`, `<CR>`, `<Esc>`, `<lt>` and the other names hjkl-keymap reads.
 
 Mouse events are not keys in tables: `mouse on` behaviour (click to focus, drag
 a border, wheel and drag into copy mode, drag-end copy, status-line clicks) is

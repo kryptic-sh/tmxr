@@ -71,7 +71,8 @@ For hjkl's own splits to hand `C-h/j/k/l` over to tmxr panes, hjkl needs its
 Settings and binds live in `~/.config/tmxr/config.toml` (on every OS), layered
 over the built-in defaults in
 [crates/tmxr-config/defaults.toml](crates/tmxr-config/defaults.toml). Binds are
-tmux command strings:
+tmux command strings, and keys are tmux's names (`C-b`, `M-h`) or hjkl's
+(`<C-b>`, `<CR>`):
 
 ```toml
 mouse = false

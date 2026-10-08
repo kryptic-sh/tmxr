@@ -93,7 +93,7 @@ are MVP.
 | Wire encoding     | length-prefixed `postcard` frames (serde)              | Org precedent (`hjkl-app`); compact for frame data, no JSON-escaping of raw bytes     |
 | Frame composition | `ratatui` `Buffer` + custom in-memory `Backend`        | Reuses ratatui diffing and the `hjkl-*-tui` widgets (picker, statusline, theme)       |
 | Pane layout tree  | `hjkl-layout`                                          | Already has split/remove/neighbour/equalize/swap — what `select-pane -L` etc. need    |
-| Key notation      | tmux names (`C-b`, `M-h`, `C-\`) in config and CLI     | Users port binds verbatim                                                             |
+| Key notation      | tmux names (`C-b`, `M-h`, `C-\`) in config and CLI     | Users port binds verbatim; hjkl's `<C-b>` form is accepted as well                    |
 | Config            | TOML via `hjkl-config` / `hjkl-xdg`, defaults embedded | House style; `~/.config/tmxr/config.toml` on every OS                                 |
 | Fuzzy picker      | `hjkl-picker` + `hjkl-fuzzy`                           | Requested                                                                             |
 | Clipboard         | OSC 52 to the client tty, plus `hjkl-clipboard` local  | OSC 52 works over SSH; local copy covers terminals without OSC 52                     |
