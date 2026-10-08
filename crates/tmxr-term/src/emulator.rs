@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use crate::dcs::DcsSplitter;
 use crate::encode::InputModes;
 
 /// Side-channel state collected while parsing a pane's output.
@@ -112,22 +113,42 @@ impl vt100::Callbacks for Hooks {
     }
 }
 
+/// Whether panes' tmux passthrough can be taken out and forwarded. ConPTY
+/// forwards a program's DCS but drops its closing `ESC \` (seen on Windows 11
+/// build 26300), so the end of a passthrough cannot be found there and the
+/// splitter would hide the pane's later output; on Windows the output goes to
+/// vt100 unsplit, as it would without passthrough. Verified on Windows; the
+/// Unix side is exercised by CI.
+pub const PASSTHROUGH_SUPPORTED: bool = !cfg!(windows);
+
 /// One pane's emulator.
 pub struct Emulator {
     parser: vt100::Parser<Hooks>,
+    dcs: DcsSplitter,
+    /// tmux passthrough payloads (`ESC P tmux; … ESC \`) waiting to be
+    /// forwarded to the outer terminal.
+    passthrough: Vec<Vec<u8>>,
 }
 
 impl Emulator {
     pub fn new(rows: u16, cols: u16, scrollback: usize) -> Self {
         Self {
             parser: vt100::Parser::new_with_callbacks(rows, cols, scrollback, Hooks::default()),
+            dcs: DcsSplitter::default(),
+            passthrough: Vec::new(),
         }
     }
 
     /// Feed program output. Returns bytes that must be written back to the
     /// program (answers to queries such as cursor-position reports).
     pub fn process(&mut self, bytes: &[u8]) -> Vec<u8> {
-        self.parser.process(bytes);
+        if PASSTHROUGH_SUPPORTED {
+            let split = self.dcs.split(bytes);
+            self.parser.process(&split.text);
+            self.passthrough.extend(split.passthrough);
+        } else {
+            self.parser.process(bytes);
+        }
         std::mem::take(&mut self.parser.callbacks_mut().replies)
     }
 
@@ -159,6 +180,11 @@ impl Emulator {
     /// OSC 52 copies requested since the last call.
     pub fn take_clipboard(&mut self) -> Vec<(String, String)> {
         std::mem::take(&mut self.parser.callbacks_mut().clipboard)
+    }
+
+    /// tmux passthrough payloads received since the last call.
+    pub fn take_passthrough(&mut self) -> Vec<Vec<u8>> {
+        std::mem::take(&mut self.passthrough)
     }
 
     /// The modes key encoding depends on.

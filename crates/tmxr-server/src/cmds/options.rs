@@ -39,6 +39,10 @@ pub(super) fn run(
                 format!("default-terminal {}", c.default_terminal),
                 format!("extended-keys {}", c.extended_keys),
                 format!("set-clipboard {}", c.set_clipboard),
+                format!(
+                    "allow-passthrough {}",
+                    if c.allow_passthrough { "on" } else { "off" }
+                ),
             ];
             let mut all: Vec<String> = lines.to_vec();
             all.extend(
@@ -142,6 +146,13 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
         "default-shell" => c.default_shell = Some(need()?.to_owned()),
         "extended-keys" => need()?.clone_into(&mut c.extended_keys),
         "set-clipboard" => need()?.clone_into(&mut c.set_clipboard),
+        "allow-passthrough" => {
+            let on = on_off(value, c.allow_passthrough)?;
+            if on && !tmxr_term::emulator::PASSTHROUGH_SUPPORTED {
+                return Err(crate::server::PASSTHROUGH_UNSUPPORTED.into());
+            }
+            c.allow_passthrough = on;
+        }
         "status-left" => need()?.clone_into(&mut c.status.left),
         "status-right" => need()?.clone_into(&mut c.status.right),
         "status-left-length" => c.status.left_length = length(need()?)?,

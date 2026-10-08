@@ -85,8 +85,11 @@ what was not.
 - **Windows foreground process** = newest direct child of the pane's process
   that is ≥ 0.5 s old (skips prompt helpers like starship). A program launched
   less than 0.5 s before `C-h` is not yet seen as in front.
-- **DCS passthrough** (`allow-passthrough on` in the tmux config, used by image
-  protocols) is not supported by `vt100`; needs a pre-parser or a vt100 patch.
+- **Passthrough on Windows is unsupported.** ConPTY forwards a program's DCS but
+  drops its `ESC \` terminator (seen with PowerShell writing one on Windows 11
+  build 26300), so `tmxr_term::emulator::PASSTHROUGH_SUPPORTED` is false there
+  and `allow-passthrough` only logs that. Revisit if ConPTY changes. The Unix
+  forwarding is exercised by CI only, and not with a real image protocol.
 - **Windows `pane_current_path`** relies on shell integration (OSC 7 / OSC 9;9);
   without it splits open in the pane's start directory.
 - **Windows pipe DACL** `D:P(A;;GA;;;OW)(A;;GA;;;SY)` was verified to admit the

@@ -818,3 +818,40 @@ fn rotate_window_moves_panes_up_by_default_like_tmux() {
     t.run(&["rotate-window", "-D", "-t", "r"]);
     assert_eq!(order(&t), before);
 }
+
+#[test]
+fn passthrough_is_forwarded_where_the_platform_allows() {
+    let t = Tmxr::new("passthrough");
+    // A program that wraps an OSC in tmux's passthrough DCS (every ESC inside
+    // doubled), prints a marker after it, then waits.
+    #[cfg(unix)]
+    let program = [
+        "/bin/sh",
+        "-c",
+        r"printf '\033Ptmux;\033\033]1337;tmxr-pt-marker\007\033\\after-dcs'; sleep 30",
+    ];
+    #[cfg(windows)]
+    let program = [
+        "powershell.exe",
+        "-NoProfile",
+        "-Command",
+        r"$e=[char]27; [Console]::Out.Write($e+'Ptmux;'+$e+$e+']1337;tmxr-pt-marker'+[char]7+$e+'\'+'after-dcs'); Start-Sleep 30",
+    ];
+    let mut args = vec!["new", "-s", "pt"];
+    args.extend(program);
+    let s = t.attach(&args);
+    // On every platform, output after the DCS still reaches the pane.
+    s.wait_for("text after the DCS", |text| text.contains("after-dcs"));
+    assert!(!s.text().contains("tmux;"), "{}", s.text());
+
+    let forwarded = s.raw_text().contains("\x1b]1337;tmxr-pt-marker\x07");
+    if cfg!(windows) {
+        // ConPTY drops the DCS terminator, so tmxr leaves passthrough alone
+        // there and says so.
+        assert!(!forwarded);
+        let messages = t.run(&["show-messages"]);
+        assert!(messages.contains("allow-passthrough"), "{messages}");
+    } else {
+        assert!(forwarded, "payload not forwarded: {:?}", s.raw_text());
+    }
+}

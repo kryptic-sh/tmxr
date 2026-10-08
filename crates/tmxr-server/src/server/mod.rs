@@ -123,6 +123,10 @@ fn navigator_regex(pattern: &str) -> Result<regex::Regex, String> {
     regex::Regex::new(&format!("^(?:{pattern})$")).map_err(|e| format!("navigator.pattern: {e}"))
 }
 
+/// Why `allow-passthrough` does nothing on this platform.
+pub const PASSTHROUGH_UNSUPPORTED: &str =
+    "allow-passthrough: not supported on Windows (ConPTY drops the DCS terminator)";
+
 /// Rows the status line takes.
 pub const STATUS_ROWS: u16 = 1;
 /// Messages kept for `show-messages`.
@@ -144,6 +148,9 @@ impl Server {
                 crossterm::event::KeyModifiers::CONTROL,
             )
         });
+        if cfg.allow_passthrough && !tmxr_term::emulator::PASSTHROUGH_SUPPORTED {
+            key_errors.push(PASSTHROUGH_UNSUPPORTED.to_owned());
+        }
         let navigator = match navigator_regex(&cfg.navigator.pattern) {
             Ok(re) => Some(re),
             Err(e) => {
@@ -460,6 +467,30 @@ impl Server {
                 t.backend_mut().push_raw(&seq);
             }
             self.mark_client_dirty(id);
+        }
+    }
+
+    /// `allow-passthrough`: write a program's passthrough payload as is to
+    /// every client showing its pane's window.
+    fn forward_passthrough(&mut self, pane: PaneId, data: &[u8]) {
+        let Some(wid) = self.panes.get(&pane).map(|p| p.window) else {
+            return;
+        };
+        let viewers: Vec<ClientId> = self
+            .clients
+            .values()
+            .filter(|c| {
+                c.att.as_ref().is_some_and(|a| {
+                    self.sessions
+                        .get(&a.session)
+                        .and_then(Session::current_window)
+                        == Some(wid)
+                })
+            })
+            .map(|c| c.id)
+            .collect();
+        for id in viewers {
+            self.send(id, ServerMsg::Output(data.to_vec()));
         }
     }
 

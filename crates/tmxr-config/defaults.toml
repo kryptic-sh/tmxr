@@ -22,6 +22,8 @@ repeat-time = 500
 default-terminal = "tmux-256color"
 extended-keys = "always"
 set-clipboard = "on"
+# tmux.conf: set -g allow-passthrough on
+allow-passthrough = true
 update-environment = [
   "DISPLAY",
   "SSH_ASKPASS",

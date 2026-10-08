@@ -37,6 +37,9 @@ pub struct Config {
     pub default_shell: Option<String>,
     pub extended_keys: String,
     pub set_clipboard: String,
+    /// Forward programs' `ESC P tmux; … ESC \` passthrough to the outer
+    /// terminal (inline images and the like), as tmux's `allow-passthrough`.
+    pub allow_passthrough: bool,
     pub update_environment: Vec<String>,
     pub navigator: Navigator,
     pub status: Status,
@@ -276,6 +279,7 @@ mod tests {
         assert!(cfg.renumber_windows);
         assert_eq!(cfg.mode_keys, "vi");
         assert_eq!(cfg.extended_keys, "always");
+        assert!(cfg.allow_passthrough);
         assert_eq!(cfg.status.left, "");
         assert!(
             cfg.update_environment

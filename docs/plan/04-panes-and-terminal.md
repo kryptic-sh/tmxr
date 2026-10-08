@@ -36,10 +36,15 @@ What we hook through `vt100::Callbacks`:
 | `unhandled_osc`              | OSC 7 (`file://host/path`) and OSC 9;9 (Windows Terminal) → `pane_current_path` hint                               |
 | `unhandled_csi`              | `CSI > 4 ; n m` (modifyOtherKeys) and `CSI > flags u` / `CSI < u` (kitty keys) → the pane's extended-keys state    |
 
-Not supported by vt100 and deferred: DCS passthrough (`allow-passthrough on` in
-the config, used for image protocols) — recorded in the backlog, since it needs
-either a vt100 patch or a pre-parser that splits passthrough sequences out of
-the stream before vt100 sees them.
+DCS passthrough (`allow-passthrough on` in the config, used for image
+protocols), which vt100 has no hook for, goes through a pre-parser
+(`tmxr_term::dcs`) in front of vt100: DCS strings are taken out of the stream
+whole, `ESC P tmux; … ESC \` payloads come back with their doubled `ESC`s
+undoubled, and the server writes them as is to the clients showing that pane.
+Other DCS strings are dropped, as vt100 dropped them before. Not on Windows:
+ConPTY forwards a DCS but drops its `ESC \` (seen on Windows 11 build 26300), so
+the end of a passthrough cannot be found; there the output goes to vt100 unsplit
+and `allow-passthrough` logs that it is unsupported.
 
 ## Input encoding (key → bytes)
 

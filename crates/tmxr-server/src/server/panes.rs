@@ -262,12 +262,19 @@ impl Server {
                 }
                 let bell = p.emu.take_bell();
                 let clips = p.emu.take_clipboard();
+                let passthrough = p.emu.take_passthrough();
                 let wid = p.window;
                 if bell && let Some(w) = self.windows.get_mut(&wid) {
                     w.bell = true;
                 }
                 for (_, data) in clips {
                     self.forward_osc52(&data);
+                }
+                // tmux drops passthrough unless it is allowed.
+                if self.cfg.allow_passthrough {
+                    for data in passthrough {
+                        self.forward_passthrough(pid, &data);
+                    }
                 }
                 self.mark_window_dirty(wid);
             }
