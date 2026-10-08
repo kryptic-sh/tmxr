@@ -65,8 +65,10 @@ what was not.
   index in `AnsiBackend` when the client's environment does not advertise true
   colour (`COLORTERM`, `WT_SESSION`, …), behind an option.
 - **No frame-rate cap**: the server renders after each drained batch of events.
-  A pane producing output continuously renders as often as batches arrive; not
-  measured.
+  Measured on Windows (2026-10-09, a pane echoing a counter in an endless cmd
+  loop): about 19 KB/s of frames reached the client and `prefix d` still
+  detached in 50 ms, so it is not a problem there; ConPTY itself coalesces
+  output. A Unix pty can produce far more and is not measured.
 - **Resurrect**: pane titles are not saved (restored programs set their own); an
   argument allowlist (`resurrect.restore-args`, like resurrect's `~vim`
   strategies) is not implemented, and would need each pane's full command line
