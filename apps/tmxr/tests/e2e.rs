@@ -1250,3 +1250,45 @@ fn clock_mode_shows_big_digits_until_a_key() {
     s.send(b"q");
     s.wait_for("clock gone", |_| painted(&s) == 0);
 }
+
+#[test]
+fn clients_are_listed_and_detached_by_id() {
+    let t = Tmxr::new("clients");
+    t.run(&["new-session", "-d", "-s", "cl"]);
+    let first = t.attach(&["attach", "-t", "cl"]);
+    first.wait_for("first attached", |text| text.contains("cl"));
+    let second = t.attach(&["attach", "-t", "cl"]);
+    second.wait_for("second attached", |text| text.contains("cl"));
+    let ids = |t: &Tmxr| -> Vec<String> {
+        t.run(&["list-clients"])
+            .lines()
+            .filter_map(|l| l.split(':').next().map(str::to_owned))
+            .collect()
+    };
+    let both = t.wait_run(&["list-clients"], "two clients", |o| o.lines().count() == 2);
+    assert!(both.lines().all(|l| l.contains(": cl [")), "{both}");
+
+    // detach-client -t detaches exactly that client.
+    let before = ids(&t);
+    t.run(&["detach-client", "-t", &before[0]]);
+    t.wait_run(&["list-clients"], "one client left", |o| {
+        o.lines().count() == 1
+    });
+    assert_eq!(ids(&t), [before[1].clone()]);
+    assert!(!t.output(&["detach-client", "-t", "999"]).status.success());
+
+    // prefix D lists the clients; Enter detaches the chosen one.
+    // Ids grow, so the first client attached has the smaller one.
+    let num = |id: &String| id.parse::<u32>().unwrap();
+    let (detached, remaining) = if num(&before[0]) < num(&before[1]) {
+        (first, second)
+    } else {
+        (second, first)
+    };
+    drop(detached);
+    remaining.send(PREFIX);
+    remaining.send(b"D");
+    remaining.wait_for("client picker", |text| text.contains("clients 1/1"));
+    remaining.send(b"\r");
+    t.wait_run(&["list-clients"], "no clients", str::is_empty);
+}

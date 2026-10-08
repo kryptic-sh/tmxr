@@ -67,6 +67,7 @@ pub const COMMANDS: &[CommandSpec] = &[
         "[-p] [-t target-pane]"
     ),
     cmd!("choose-buffer", None, "Z", 0, 0, "[-Z]"),
+    cmd!("choose-client", None, "Z", 0, 0, "[-Z]"),
     cmd!(
         "choose-tree",
         None,
@@ -178,6 +179,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         "[-t target-session]"
     ),
     cmd!("list-buffers", Some("lsb"), "", 0, 0, ""),
+    cmd!(
+        "list-clients",
+        Some("lsc"),
+        "t:",
+        0,
+        0,
+        "[-t target-session]"
+    ),
     cmd!("list-commands", Some("lscm"), "", 0, 0, ""),
     cmd!(
         "list-keys",

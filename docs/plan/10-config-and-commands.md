@@ -99,6 +99,9 @@ it. Without a command it re-runs the one the pane started with. Each start of a
 pane gets a spawn number carried in its PTY events, so the old program's exit
 cannot close the respawned pane.
 
+Clients are named by their numeric id (`list-clients`), not by tty path as in
+tmux: `detach-client -t 3`.
+
 `command-prompt -k` takes one key press as its input, substituted as the key's
 tmux name in quotes so any key stays one argument; `prefix /` uses it with
 `list-keys -1N key` to describe a key.

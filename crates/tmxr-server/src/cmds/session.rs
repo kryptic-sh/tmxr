@@ -76,6 +76,8 @@ pub(super) fn run(
                     .filter(|c| c.att.is_some() && Some(c.id) != ctx.client)
                     .map(|c| c.id)
                     .collect()
+            } else if let Some(t) = a.value('t') {
+                vec![target_client(srv, t)?]
             } else if let Some(s) = a.value('s') {
                 let sid = target::session(srv, ctx, Some(s))?;
                 srv.clients
@@ -104,6 +106,35 @@ pub(super) fn run(
                 }
             } else {
                 srv.kill_session(sid);
+            }
+        }
+        "list-clients" => {
+            let only = a
+                .value('t')
+                .map(|t| target::session(srv, ctx, Some(t)))
+                .transpose()?;
+            for c in srv.clients.values() {
+                let Some(att) = c
+                    .att
+                    .as_ref()
+                    .filter(|a| only.is_none_or(|s| s == a.session))
+                else {
+                    continue;
+                };
+                let session = srv
+                    .sessions
+                    .get(&att.session)
+                    .map_or("", |s| s.name.as_str());
+                let term = c
+                    .hello
+                    .as_ref()
+                    .and_then(|h| h.terminal.as_ref())
+                    .map_or("", |t| t.term.as_str());
+                let _ = writeln!(
+                    out.stdout,
+                    "{}: {session} [{}x{} {term}]",
+                    c.id, att.cols, att.rows
+                );
             }
         }
         "list-sessions" => {
@@ -190,4 +221,13 @@ pub(super) fn run(
         _ => return Ok(false),
     }
     Ok(true)
+}
+
+/// An attached client by its id (`list-clients` shows them).
+fn target_client(srv: &Server, spec: &str) -> Result<ClientId, String> {
+    spec.trim_start_matches('=')
+        .parse::<ClientId>()
+        .ok()
+        .filter(|id| srv.clients.get(id).is_some_and(|c| c.att.is_some()))
+        .ok_or_else(|| format!("can't find client: {spec}"))
 }

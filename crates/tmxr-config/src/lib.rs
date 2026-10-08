@@ -225,7 +225,7 @@ mod tests {
 
     /// tmux's own default prefix binds that the tmux config leaves alone
     /// (docs/plan/06), as (key, command name). The config overrides `'`, `;`,
-    /// `l` and `x`; tmux binds tmxr has no command for yet (`D`, `C-z`) are
+    /// `l` and `x`; `C-z` (suspend-client) has no tmxr command yet and is
     /// listed in the backlog.
     const TMUX_BUILTIN_BINDS: &[(&str, &str)] = &[
         ("C-b", "send-prefix"),
@@ -270,6 +270,7 @@ mod tests {
         ("M-1", "select-layout"),
         ("E", "select-layout"),
         ("t", "clock-mode"),
+        ("D", "choose-client"),
         ("/", "command-prompt"),
         ("m", "select-pane"),
         ("M", "select-pane"),

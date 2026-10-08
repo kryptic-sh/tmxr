@@ -165,6 +165,27 @@ impl Overlay {
         Self::Picker(Box::new(PickerOverlay::with_query("windows", items, query)))
     }
 
+    /// The attached clients; Enter detaches one (`choose-client`).
+    pub fn client_picker(srv: &Server) -> Self {
+        let items = srv
+            .clients
+            .values()
+            .filter_map(|c| {
+                let att = c.att.as_ref()?;
+                let session = srv
+                    .sessions
+                    .get(&att.session)
+                    .map_or("", |s| s.name.as_str());
+                Some(Item {
+                    label: format!("{}: {session} [{}x{}]", c.id, att.cols, att.rows),
+                    matches: format!("{} {session}", c.id),
+                    target: Target::Client(c.id),
+                })
+            })
+            .collect();
+        Self::Picker(Box::new(PickerOverlay::new("clients", items)))
+    }
+
     /// The paste buffers, newest first; Enter pastes one into the pane.
     pub fn buffer_picker(srv: &Server) -> Self {
         let items = srv
@@ -324,6 +345,8 @@ enum Target {
     Window(SessionId, u32),
     /// A paste buffer, by name.
     Buffer(String),
+    /// An attached client.
+    Client(ClientId),
 }
 
 struct Item {
@@ -446,7 +469,7 @@ impl PickerOverlay {
         match self.rows.iter().find(|(l, _)| *l == label)?.1 {
             Target::Session(id, _) => Some(Previewed::Session(id)),
             Target::Window(s, i) => Some(Previewed::Window(s, i)),
-            Target::Buffer(_) => None,
+            Target::Buffer(_) | Target::Client(_) => None,
         }
     }
 
@@ -465,6 +488,7 @@ impl PickerOverlay {
                 Ok(t) => match *t {
                     Target::Session(s, _) => OverlayAction::Switch(s),
                     Target::Window(s, i) => OverlayAction::SwitchWindow(s, i),
+                    Target::Client(id) => OverlayAction::Run(format!("detach-client -t {id}")),
                     Target::Buffer(name) => {
                         OverlayAction::Run(format!("paste-buffer -p -b {}", join_args(&[name])))
                     }

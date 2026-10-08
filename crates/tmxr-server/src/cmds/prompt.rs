@@ -109,11 +109,12 @@ pub(super) fn run(
                 crate::server::if_shell(srv, ctx, cond, then, otherwise);
             }
         }
-        "choose-tree" | "choose-buffer" | "find-window" => {
+        "choose-tree" | "choose-buffer" | "choose-client" | "find-window" => {
             let c = attached_client(srv, ctx).ok_or("no current client")?;
             let ov = match p.name() {
                 "choose-buffer" if srv.buffers.is_empty() => return Err("no buffers".into()),
                 "choose-buffer" => Overlay::buffer_picker(srv),
+                "choose-client" => Overlay::client_picker(srv),
                 "find-window" => Overlay::window_picker(srv, c, &pos[0]),
                 _ if a.has('w') => Overlay::window_picker(srv, c, ""),
                 _ => Overlay::session_picker(srv, c),

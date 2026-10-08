@@ -72,6 +72,7 @@ vim-tmux-navigator; **(sens)** = tmux-sensible; **(yank)** = tmux-yank;
 | `E`                     | `select-layout -E`                                   | Spread panes out evenly                            | (tmux)                |
 | `/`                     | `command-prompt -k` → `list-keys -1N` (describe)     | Describe a key                                     | (tmux)                |
 | `t`                     | `clock-mode` (big clock until a key is pressed)      | Show a clock                                       | (tmux)                |
+| `D`                     | `choose-client -Z` (picker; Enter detaches)          | Choose a client to detach                          | (tmux)                |
 | `m` / `M`               | `select-pane -m` / `select-pane -M`                  | Mark the pane / clear the mark                     | (tmux)                |
 | `=`                     | `choose-buffer -Z` (picker; Enter pastes)            | Choose a paste buffer to paste                     | (tmux)                |
 | `f`                     | `find-window` prompt (window picker, pre-filtered)   | Find a window                                      | (tmux)                |
@@ -107,7 +108,7 @@ Dropped from tmux's defaults because the config reuses the key: `'`
 (select-window prompt), `;` (last-pane — `C-\` covers it), `l` (last-window —
 `b` covers it), `x` (kill-pane — moved to `X`; **new**, flagged in
 [16-open-questions.md](16-open-questions.md)). `I`/`U`/`M-u` (tpm) have nothing
-to do and are not bound. tmux defaults with no tmxr command yet (`D`, `C-z`) are
+to do and are not bound. tmux defaults with no tmxr command yet (`C-z`) are
 unbound until the commands exist; the backlog tracks them.
 
 ### `copy-mode-vi`

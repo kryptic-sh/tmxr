@@ -53,10 +53,12 @@ what was not.
 - **Not implemented**: emacs copy mode, `move-window -k` / `-r`. The marked pane
   has no border highlight (tmux draws it reversed); it shows as the window's `M`
   flag and `#{pane_marked}`.
-- **tmux default binds without a tmxr command yet**: `prefix D` (choose-client),
-  `C-z` (suspend-client). Alerts for `M-n` / `M-p` are bells only (no
-  `monitor-activity` / `monitor-silence`). `find-window` matches window names
-  through the picker, not pane contents or titles as tmux's does.
+- **tmux default binds without a tmxr command yet**: `prefix C-z`
+  (suspend-client): the client would need a protocol message to suspend itself
+  with `SIGTSTP` and redraw on `SIGCONT`, and Windows has no job control. Alerts
+  for `M-n` / `M-p` are bells only (no `monitor-activity` / `monitor-silence`).
+  `find-window` matches window names through the picker, not pane contents or
+  titles as tmux's does.
 - **Copy mode gaps** (plan/08): marks, `%`, `copy-pipe*`, `copy-command`,
   `refresh-from-pane`. A pending count is not shown anywhere (tmux shows a
   `(repeat)` prompt).
