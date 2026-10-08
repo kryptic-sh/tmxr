@@ -103,7 +103,9 @@ what was not.
   and `allow-passthrough` only logs that. Revisit if ConPTY changes. The Unix
   forwarding is exercised by CI only, and not with a real image protocol.
 - **Windows `pane_current_path`** relies on shell integration (OSC 7 / OSC 9;9);
-  without it splits open in the pane's start directory.
+  without it splits open in the pane's start directory. The README's PowerShell
+  prompt snippet provides it (verified by hand: after `cd C:\Windows` in such a
+  pane, `#{pane_current_path}` read `C:\Windows`); cmd.exe has no such hook.
 - **Windows pipe DACL** `D:P(A;;GA;;;OW)(A;;GA;;;SY)` was verified to admit the
   owner; that it rejects another user is unverified.
 

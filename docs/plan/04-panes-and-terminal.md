@@ -82,8 +82,9 @@ Needed for the navigator (`pane_current_command`) and for
 
 The Windows current-directory gap is real (reading another process's PEB is
 fragile and needs elevated rights for some processes). The shell-integration OSC
-route is the supported answer; the plan ships a PowerShell/pwsh prompt snippet
-in the README that emits OSC 7, and records the gap in the backlog.
+route is the supported answer: the README carries Windows Terminal's PowerShell
+prompt snippet, which emits OSC 9;9 (checked through ConPTY on Windows 11 build
+26300), and the gap stays in the backlog.
 
 ## Pane lifecycle
 
