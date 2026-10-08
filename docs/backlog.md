@@ -34,13 +34,8 @@ what was not.
 - **Not run on Linux/macOS locally**: the `cfg(unix)` arms (socket dir checks,
   peer uid, `setsid` spawn, `/proc` and `proc_pidinfo` inspection) are only
   compiled and tested by CI.
-- CI has not yet run the e2e test on Linux/macOS; first CI run of this commit is
-  the first time.
-
-## Plan sections that the implementation changed
-
-Update these plan files to match the code (or change the code back):
-
+- CI (commit a6648ab) runs the unit and e2e tests green on Linux, macOS and
+  Windows; the Unix arms are exercised there, not locally.
 - **02-architecture**: the server uses plain threads and an `mpsc` channel, not
   tokio; no `tokio` dependency. The theme is not an `hjkl-theme` file — the
   Tokyo Night palette lives as `@thm_*` user options in
