@@ -95,12 +95,15 @@ directory) are defaults the implementation follows until answered.
 
 ## Cross-repo work
 
-- **hjkl `$TMXR` fall-through.** `dispatch_tmux_navigate` in
-  `hjkl/apps/hjkl/src/app/window.rs` only hands off to `tmux select-pane` when
-  `$TMUX` is set. It needs the same branch for `$TMXR` → `tmxr select-pane` for
-  the `C-h/j/k/l` navigator to cross from hjkl splits into tmxr panes (milestone
-  M4). The tmxr side (`navigate-pane`, `TMXR`/`TMXR_PANE`, command clients
-  targeting their own pane) is implemented.
+- **hjkl `$TMXR` fall-through: committed in hjkl, not pushed.** hjkl commit
+  `074ef614` ("feat(app): hand edge navigation to tmxr panes", on hjkl `main`,
+  one ahead of `origin/main`) makes `dispatch_tmux_navigate` run
+  `tmxr select-pane` when `$TMXR` is set, checked before `$TMUX` (the decision
+  is `handoff_program` in `apps/hjkl/src/app/window.rs`, unit-tested). hjkl's
+  workspace fmt, clippy and tests passed locally (Windows). Left unpushed
+  because pushing to hjkl was not part of the tmxr work the owner authorised;
+  push it, then milestone M4's navigator crosses from hjkl splits into tmxr
+  panes. Not tested end to end with a real hjkl in a tmxr pane.
 - **nvim navigation.** vim-tmux-navigator shells out to `tmux`; a snippet or
   plugin option calling `tmxr select-pane` is needed for plain nvim.
 
