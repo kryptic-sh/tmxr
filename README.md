@@ -37,7 +37,8 @@ from tmux is listed in [docs/backlog.md](docs/backlog.md).
   the program in front when it is vim, hjkl or fzf — no plugin needed.
 - **Fuzzy pickers** on `hjkl-picker`: sessions (`prefix s`), windows
   (`prefix w`), paste buffers (`prefix =`), and `prefix f` to find a window.
-  Type to filter; `Escape` then `j` / `k` to move.
+  Type to filter; `Escape` then `j` / `k` to move. In the session picker `C-x`
+  kills, `C-r` renames, and `Enter` on a new name creates that session.
 - **Tokyo Night status line** in the catppuccin layout, built from tmux formats
   you can restyle.
 - **Session save / restore** like tmux-resurrect: `prefix C-s` / `C-r`,

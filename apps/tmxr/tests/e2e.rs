@@ -979,3 +979,48 @@ fn marked_pane_is_the_default_source_of_join_pane() {
     assert!(!t.run(&["list-windows", "-t", "mk"]).contains('M'));
     assert!(!t.output(&["join-pane", "-t", "mk:one"]).status.success());
 }
+
+#[test]
+fn session_picker_kills_renames_and_creates_sessions() {
+    let t = Tmxr::new("pickact");
+    t.run(&["new-session", "-d", "-s", "first"]);
+    let s = t.attach(&["new", "-s", "home"]);
+    s.wait_for("status line", |text| text.contains("home"));
+    let names = |t: &Tmxr| -> Vec<String> {
+        t.run(&["ls"])
+            .lines()
+            .filter_map(|l| l.split(':').next())
+            .map(str::to_owned)
+            .collect()
+    };
+    let open_picker = |s: &Screen| {
+        s.send(PREFIX);
+        s.send(b"s");
+        s.wait_for("picker", |text| text.contains("sessions "));
+    };
+
+    // C-r renames the highlighted session (the previous one, "first").
+    open_picker(&s);
+    s.send(b"\x12");
+    s.wait_for("rename prompt", |text| text.contains("(rename-session)"));
+    s.send(b"\x15renamed\r");
+    t.wait_run(&["ls"], "renamed session", |o| o.contains("renamed:"));
+
+    // C-x asks, then kills it.
+    open_picker(&s);
+    s.send(b"\x18");
+    s.wait_for("confirm", |text| text.contains("kill-session renamed?"));
+    s.send(b"y");
+    t.wait_run(&["ls"], "session killed", |o| !o.contains("renamed:"));
+
+    // Enter on a name nothing matches creates it and switches to it.
+    open_picker(&s);
+    s.send(b"brand-new\r");
+    t.wait_run(&["ls"], "new session attached", |o| {
+        o.lines()
+            .any(|l| l.starts_with("brand-new:") && l.contains("(attached)"))
+    });
+    let mut all = names(&t);
+    all.sort();
+    assert_eq!(all, ["brand-new", "home"]);
+}

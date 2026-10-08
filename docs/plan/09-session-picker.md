@@ -20,9 +20,11 @@ Replaces tmux's `choose-tree -Zs` on `prefix s` (and `choose-tree -Zw` on
   (`g`/`G` to the ends), `/`, `i` or `a` returns to the query, and `Escape` or
   `q` closes.
 - `Enter` switches the client to the selected session; `Escape`/`C-c` cancels.
-- Not implemented: extra actions (`C-x` kill session, `C-r` rename, `Enter` on
-  an unmatched name to create a session) and a preview of the selected session's
-  active window.
+- Actions: `C-x` kills the highlighted session after a y/n, `C-r` renames it
+  through a prompt, and `Enter` on a name no session matches creates that
+  session and switches to it. Each runs as a command addressing the session by
+  its `$id`.
+- Not implemented: a preview of the selected session's active window.
 
 ## Implementation
 

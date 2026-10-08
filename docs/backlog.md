@@ -50,9 +50,9 @@ what was not.
 
 ## Known gaps and follow-ups
 
-- **Not implemented**: `remain-on-exit`, clock mode, emacs copy mode,
-  `move-window -k` / `-r`. The marked pane has no border highlight (tmux draws
-  it reversed); it shows as the window's `M` flag and `#{pane_marked}`.
+- **Not implemented**: `remain-on-exit`, emacs copy mode, `move-window -k` /
+  `-r`. The marked pane has no border highlight (tmux draws it reversed); it
+  shows as the window's `M` flag and `#{pane_marked}`.
 - **tmux default binds without a tmxr command yet**: `prefix t` (clock-mode),
   `D` (choose-client), `/` (describe-key), `C-z` (suspend-client). Alerts for
   `M-n` / `M-p` are bells only (no `monitor-activity` / `monitor-silence`).
@@ -64,8 +64,11 @@ what was not.
 - **Key notation**: hjkl's `<C-x>` form is not accepted (plan/01 and plan/06
   once promised it); mouse events are built into `mouse.rs` and cannot be
   rebound (`MouseDown1Pane` and friends are not key names).
-- **Session picker gaps** (plan/09): no `C-x` kill / `C-r` rename actions, no
-  create-on-unmatched-`Enter`, no preview of the selected session's window.
+- **Session picker preview** (plan/09): no preview of the selected session's
+  window. The picker's source reports `has_preview() = false`.
+- **Clock mode** (`prefix t`) is not implemented: it needs local time (the
+  workspace has no date/time crate; `libc` `localtime_r` / `windows-sys`
+  `GetLocalTime`, both already dependencies, would do) and a block-digit font.
 - **No 256-colour fallback**: colours are always 24-bit RGB. A terminal without
   true colour gets wrong colours.
 - **No frame-rate cap**: the server renders after each drained batch of events.

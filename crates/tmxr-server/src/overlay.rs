@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hjkl_picker::{Picker, PickerAction, PickerEvent, PickerLogic};
 
+use crate::cmds::join_args;
 use crate::model::{ClientId, PaneId, SessionId};
 use crate::server::Server;
 
@@ -111,7 +112,7 @@ impl Overlay {
                         if attached { " (attached)" } else { "" }
                     ),
                     matches: s.name.clone(),
-                    target: Target::Session(s.id),
+                    target: Target::Session(s.id, s.name.clone()),
                 }
             })
             .collect();
@@ -299,7 +300,7 @@ impl Prompt {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Target {
-    Session(SessionId),
+    Session(SessionId, String),
     Window(SessionId, u32),
     /// A paste buffer, by name.
     Buffer(String),
@@ -402,15 +403,19 @@ impl PickerOverlay {
     }
 
     fn accept(&mut self) -> OverlayAction {
+        // Enter on a name no session matches creates that session.
+        let query = self.query();
+        if self.is_sessions() && self.picker.matched() == 0 && !query.is_empty() {
+            return OverlayAction::Run(join_args(&["new-session".into(), "-s".into(), query]));
+        }
         match self.picker.accept() {
             PickerEvent::Select(PickerAction::Custom(any)) => match any.downcast::<Target>() {
                 Ok(t) => match *t {
-                    Target::Session(s) => OverlayAction::Switch(s),
+                    Target::Session(s, _) => OverlayAction::Switch(s),
                     Target::Window(s, i) => OverlayAction::SwitchWindow(s, i),
-                    Target::Buffer(name) => OverlayAction::Run(format!(
-                        "paste-buffer -p -b {}",
-                        crate::cmds::join_args(&[name])
-                    )),
+                    Target::Buffer(name) => {
+                        OverlayAction::Run(format!("paste-buffer -p -b {}", join_args(&[name])))
+                    }
                 },
                 Err(_) => OverlayAction::Close,
             },
@@ -419,10 +424,55 @@ impl PickerOverlay {
         }
     }
 
+    fn is_sessions(&self) -> bool {
+        self.picker.title() == "sessions"
+    }
+
+    /// The highlighted session, for the session picker's actions.
+    fn selected_session(&mut self) -> Option<(SessionId, String)> {
+        match self.picker.accept() {
+            PickerEvent::Select(PickerAction::Custom(any)) => {
+                match *any.downcast::<Target>().ok()? {
+                    Target::Session(id, name) => Some((id, name)),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// `C-x` / `C-r` in the session picker: kill (after a y/n) or rename the
+    /// highlighted session, addressed by its `$id` so any name is safe.
+    fn session_action(&mut self, kill: bool) -> OverlayAction {
+        let Some((id, name)) = self.selected_session() else {
+            return OverlayAction::Keep;
+        };
+        let target = join_args(&[format!("${id}")]);
+        OverlayAction::Run(if kill {
+            join_args(&[
+                "confirm-before".into(),
+                "-p".into(),
+                format!("kill-session {name}? (y/n)"),
+                format!("kill-session -t {target}"),
+            ])
+        } else {
+            join_args(&[
+                "command-prompt".into(),
+                "-I".into(),
+                name,
+                "-p".into(),
+                "(rename-session)".into(),
+                format!("rename-session -t {target} -- '%%'"),
+            ])
+        })
+    }
+
     fn key(&mut self, ev: &KeyEvent) -> OverlayAction {
         let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
         match ev.code {
             KeyCode::Enter => return self.accept(),
+            KeyCode::Char('x') if ctrl && self.is_sessions() => return self.session_action(true),
+            KeyCode::Char('r') if ctrl && self.is_sessions() => return self.session_action(false),
             KeyCode::Down => self.picker.select_next(),
             KeyCode::Up => self.picker.select_prev(),
             KeyCode::Char('n' | 'j') if ctrl => self.picker.select_next(),
@@ -465,7 +515,7 @@ mod tests {
             .map(|(i, n)| Item {
                 label: (*n).to_owned(),
                 matches: (*n).to_owned(),
-                target: Target::Session(i as u32),
+                target: Target::Session(i as u32, (*n).to_owned()),
             })
             .collect()
     }
