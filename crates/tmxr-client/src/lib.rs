@@ -189,6 +189,11 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                 println!("[{reason}]");
                 return Ok(0);
             }
+            ServerMsg::Mouse(on) => {
+                if term.is_some() {
+                    terminal::set_mouse(on)?;
+                }
+            }
         }
     }
 }

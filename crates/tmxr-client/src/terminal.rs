@@ -43,10 +43,10 @@ impl Guard {
     pub fn enter() -> io::Result<Self> {
         enable_raw_mode()?;
         let mut out = io::stdout();
+        // Mouse capture waits for the server's `Mouse` (the `mouse` option).
         execute!(
             out,
             EnterAlternateScreen,
-            EnableMouseCapture,
             EnableBracketedPaste,
             EnableFocusChange
         )?;
@@ -71,6 +71,15 @@ impl Guard {
 impl Drop for Guard {
     fn drop(&mut self) {
         restore(self.kitty);
+    }
+}
+
+/// Capture the mouse, or hand it back to the terminal.
+pub fn set_mouse(on: bool) -> io::Result<()> {
+    if on {
+        execute!(io::stdout(), EnableMouseCapture)
+    } else {
+        execute!(io::stdout(), DisableMouseCapture)
     }
 }
 

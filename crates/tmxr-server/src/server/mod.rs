@@ -73,6 +73,8 @@ pub struct Attached {
     pub last_input: Instant,
     pub drag: Option<crate::mouse::Drag>,
     pub status_ranges: crate::render::StatusRanges,
+    /// Whether this client was last told to capture the mouse.
+    pub mouse: bool,
 }
 
 /// Paste buffer.
@@ -548,6 +550,10 @@ impl Server {
                 continue;
             };
             att.dirty = false;
+            // The `mouse` option reaches the client's terminal with its next
+            // frame, after attaching or after the option changes.
+            let mouse = self.cfg.mouse;
+            let tell_mouse = std::mem::replace(&mut att.mouse, mouse) != mouse;
             let full = std::mem::take(&mut att.full_redraw);
             let Some(mut term) = att.term.take() else {
                 continue;
@@ -563,6 +569,9 @@ impl Server {
             }
             if !bytes.is_empty() {
                 self.send(id, ServerMsg::Output(bytes));
+            }
+            if tell_mouse {
+                self.send(id, ServerMsg::Mouse(mouse));
             }
         }
     }

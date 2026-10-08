@@ -67,6 +67,7 @@ enum ServerMsg {
     Output(Vec<u8>),                // bytes for the client's terminal (frame diff, OSC 52, bell)
     CommandResult { status: i32, stdout: String, stderr: String },
     Detached { reason: String },    // detach, session killed, server exit
+    Mouse(bool),                    // capture the mouse or not (`mouse` option)
 }
 ```
 
@@ -80,6 +81,9 @@ Notes:
   backends. The server never parses terminal input bytes.
 - `Output` is opaque to the client. Terminal features are not negotiated: the
   server always emits 24-bit colour and OSC 52.
+- The client captures the mouse only when told: the server sends `Mouse` with
+  the client's first frame and again whenever the `mouse` option changes, so
+  with `mouse off` the terminal's own selection works without Shift.
 - `Hello.env` carries the client's whole environment. The server keeps the names
   listed in `update-environment` on the session it creates (so new panes get the
   attaching client's `DISPLAY`, `WAYLAND_DISPLAY`, `SSH_*`, …, like tmux), and

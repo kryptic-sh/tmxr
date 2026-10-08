@@ -42,6 +42,7 @@ impl Server {
             last_input: Instant::now(),
             drag: None,
             status_ranges: Vec::new(),
+            mouse: false,
         });
         self.restored_pending = false;
         self.send(id, ServerMsg::Attached);

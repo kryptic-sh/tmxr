@@ -717,3 +717,28 @@ fn status_line_has_the_catppuccin_layout_in_tokyo_night() {
         cells.iter().any(|c| c.0 == SESSION_ICON && c.2 == rgb(RED))
     });
 }
+
+#[test]
+fn mouse_option_turns_the_client_terminal_mouse_on_and_off() {
+    let t = Tmxr::new("mouse");
+    let s = t.attach(&["new", "-s", "m"]);
+    s.wait_for("status line", |text| text.contains('m'));
+    let mode = |s: &Screen| format!("{:?}", s.emu.lock().unwrap().screen().mouse_protocol_mode());
+    let wait_mode = |s: &Screen, on: bool| {
+        let deadline = Instant::now() + TIMEOUT;
+        while (mode(s) != "None") != on {
+            assert!(
+                Instant::now() < deadline,
+                "mouse {on} never applied: {}",
+                mode(s)
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    };
+    // `mouse on` (the default) captures the mouse once attached.
+    wait_mode(&s, true);
+    t.run(&["set-option", "-g", "mouse", "off"]);
+    wait_mode(&s, false);
+    t.run(&["set-option", "-g", "mouse", "on"]);
+    wait_mode(&s, true);
+}

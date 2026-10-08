@@ -71,8 +71,6 @@ what was not.
   nothing changed; an argument allowlist (`resurrect.restore-args`, like
   resurrect's `~vim` strategies) is not implemented; nothing saves on a signal.
 - **tmux-yank `prefix y`** (copy the shell's command line) is not bound.
-- **Mouse capture is always on in the client**; with `mouse = false` the server
-  ignores mouse events but the terminal's own selection still needs Shift.
 - **Windows `kill()` on a pane child** returned "There are no more files" (os
   error 18) in a test; not a bug in practice. `Server::kill_pane` calls `kill()`
   and then drops the pane, closing the ConPTY, and that does end the programs
