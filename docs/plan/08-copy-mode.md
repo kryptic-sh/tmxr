@@ -39,12 +39,19 @@ Commands, under tmux's `send-keys -X` names so user binds keep tmux semantics:
 - Search: `search-forward`, `search-backward`, `search-again`, `search-reverse`.
   Matching is literal, case-insensitive unless the needle has an uppercase
   letter (smart case).
+- Jumps on the cursor's line: `jump-forward`, `jump-backward`,
+  `jump-to-forward`, `jump-to-backward` (vi's `f F t T`), `jump-again` and
+  `jump-reverse` (`;` `,`). Given no character, a jump waits for the next key,
+  as vi does, rather than through tmux's one-key prompt.
 - `copy-selection`, `copy-selection-and-cancel`,
   `copy-selection-no-newlines-and-cancel`, `cancel`.
 
+Counts: digits typed in copy mode (`0` only after another digit, since `0` alone
+is `start-of-line`) repeat the next command, and a count before a jump repeats
+the jump (`3tx`). `send-keys -X -N count` does the same from a bind.
+
 The default binds in [06](06-keys-and-bindings.md#copy-mode-vi) map vi keys onto
-these. Not implemented: counts, `f`/`t` jumps, marks, `%`, `copy-pipe*` and
-`refresh-from-pane`.
+these. Not implemented: marks, `%`, `copy-pipe*` and `refresh-from-pane`.
 
 ## Copying
 

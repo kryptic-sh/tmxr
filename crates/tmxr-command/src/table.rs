@@ -354,10 +354,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "send-keys",
         Some("send"),
-        "lt:X",
+        "lN:t:X",
         0,
         ANY,
-        "[-lX] [-t target-pane] key ..."
+        "[-lX] [-N repeat-count] [-t target-pane] key ..."
     ),
     cmd!("send-prefix", None, "t:", 0, 0, "[-t target-pane]"),
     cmd!(

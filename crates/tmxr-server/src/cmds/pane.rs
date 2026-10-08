@@ -231,6 +231,13 @@ pub(super) fn run(
             let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
             if a.has('X') {
                 let (name, rest) = pos.split_first().ok_or("send-keys -X needs a command")?;
+                // -N: repeat count, as typed digits would give.
+                if let Some(n) = a.value('N') {
+                    let n: usize = n.parse().map_err(|_| format!("bad count: {n}"))?;
+                    if let Some(cm) = srv.panes.get_mut(&pid).and_then(|p| p.copy.as_mut()) {
+                        cm.count = n.min(crate::copy::MAX_COUNT);
+                    }
+                }
                 return crate::copy::command(srv, ctx, pid, name, rest).map(|()| true);
             }
             for word in pos {

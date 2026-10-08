@@ -5,6 +5,7 @@
 //! frozen copy, as in tmux. Motions are tmux's `copy-mode-vi` commands
 //! (`send-keys -X <name>`), so every key is an ordinary bind.
 
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::style::{Color, Modifier, Style};
 
 use crate::cmds::Ctx;
@@ -73,6 +74,58 @@ pub struct CopyMode {
     pub rows: u16,
     pub cols: u16,
     pub search: Option<(String, bool)>,
+    /// Repeat count typed before a command (`5j`), 0 for none.
+    pub count: usize,
+    /// An `f` / `F` / `t` / `T` waiting for the character to jump to.
+    pub pending_jump: Option<Jump>,
+    /// The last jump and its character, for `;` and `,`.
+    last_jump: Option<(Jump, char)>,
+}
+
+/// Largest repeat count, so a stray run of digits cannot spin the server.
+pub const MAX_COUNT: usize = 9999;
+
+/// vi's in-line character jumps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Jump {
+    /// `f`: onto the next occurrence.
+    Forward,
+    /// `F`: onto the previous occurrence.
+    Backward,
+    /// `t`: just before the next occurrence.
+    ToForward,
+    /// `T`: just after the previous occurrence.
+    ToBackward,
+}
+
+impl Jump {
+    fn from_command(name: &str) -> Option<Self> {
+        Some(match name {
+            "jump-forward" => Self::Forward,
+            "jump-backward" => Self::Backward,
+            "jump-to-forward" => Self::ToForward,
+            "jump-to-backward" => Self::ToBackward,
+            _ => return None,
+        })
+    }
+
+    fn command(self) -> &'static str {
+        match self {
+            Self::Forward => "jump-forward",
+            Self::Backward => "jump-backward",
+            Self::ToForward => "jump-to-forward",
+            Self::ToBackward => "jump-to-backward",
+        }
+    }
+
+    fn reversed(self) -> Self {
+        match self {
+            Self::Forward => Self::Backward,
+            Self::Backward => Self::Forward,
+            Self::ToForward => Self::ToBackward,
+            Self::ToBackward => Self::ToForward,
+        }
+    }
 }
 
 pub fn colour(c: vt100::Color) -> Color {
@@ -179,6 +232,71 @@ impl CopyMode {
             rows,
             cols,
             search: None,
+            count: 0,
+            pending_jump: None,
+            last_jump: None,
+        }
+    }
+
+    /// Keys copy mode takes before its key table: the character a pending
+    /// jump waits for (any other key cancels the wait) and count digits.
+    /// Returns whether the key was used.
+    pub fn take_key(&mut self, ev: &KeyEvent) -> bool {
+        let plain = !ev
+            .modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+        if let Some(jump) = self.pending_jump.take() {
+            if let (KeyCode::Char(c), true) = (ev.code, plain) {
+                let times = std::mem::take(&mut self.count).max(1);
+                self.apply(jump.command(), Some(&c.to_string()));
+                for _ in 1..times {
+                    self.apply("jump-again", None);
+                }
+            }
+            self.count = 0;
+            return true;
+        }
+        match (ev.code, plain) {
+            // `0` is start-of-line unless it continues a count.
+            (KeyCode::Char(d @ '0'..='9'), true) if d != '0' || self.count > 0 => {
+                let digit = d as usize - '0' as usize;
+                self.count = (self.count * 10 + digit).min(MAX_COUNT);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Run a command as many times as the pending count says (once without
+    /// one). A jump still waiting for its character keeps the count for it.
+    pub fn apply_counted(&mut self, name: &str, arg: Option<&str>) -> bool {
+        if Jump::from_command(name).is_some() && arg.is_none() {
+            return self.apply(name, None);
+        }
+        let times = std::mem::take(&mut self.count).max(1);
+        (0..times).all(|_| self.apply(name, arg))
+    }
+
+    /// Move to `c` on the cursor's line; `again` is a `;` / `,` repeat, which
+    /// steps past a `t` / `T` target the cursor already sits beside.
+    fn jump(&mut self, jump: Jump, c: char, again: bool) {
+        let line = self.lines.get(self.cy).map(Line::chars).unwrap_or_default();
+        let len = self.line_len(self.cy);
+        let till = matches!(jump, Jump::ToForward | Jump::ToBackward);
+        let skip = usize::from(again && till);
+        match jump {
+            Jump::Forward | Jump::ToForward => {
+                let from = self.cx + 1 + skip;
+                if let Some(x) = (from..len).find(|x| line.get(*x) == Some(&c)) {
+                    self.cx = if till { x - 1 } else { x };
+                }
+            }
+            Jump::Backward | Jump::ToBackward => {
+                let to = self.cx.saturating_sub(skip);
+                if let Some(x) = (0..to).rev().find(|x| line.get(*x) == Some(&c)) {
+                    self.cx = if till { x + 1 } else { x };
+                }
+            }
         }
     }
 
@@ -499,6 +617,26 @@ impl CopyMode {
                 self.find(&needle, forward, true);
                 self.search = Some((needle, forward));
             }
+            "jump-forward" | "jump-backward" | "jump-to-forward" | "jump-to-backward" => {
+                let jump = Jump::from_command(name).expect("matched a jump command");
+                match arg.and_then(|a| a.chars().next()) {
+                    Some(c) => {
+                        self.last_jump = Some((jump, c));
+                        self.jump(jump, c, false);
+                    }
+                    None => self.pending_jump = Some(jump),
+                }
+            }
+            "jump-again" | "jump-reverse" => {
+                if let Some((jump, c)) = self.last_jump {
+                    let jump = if name == "jump-again" {
+                        jump
+                    } else {
+                        jump.reversed()
+                    };
+                    self.jump(jump, c, true);
+                }
+            }
             "search-again" | "search-reverse" => {
                 if let Some((needle, fwd)) = self.search.clone() {
                     let forward = if name == "search-again" { fwd } else { !fwd };
@@ -570,7 +708,7 @@ pub fn command(
             }
         }
         other => {
-            if !cm.apply(other, args.first().map(String::as_str)) {
+            if !cm.apply_counted(other, args.first().map(String::as_str)) {
                 return Err(format!("unknown copy-mode command: {other}"));
             }
         }
@@ -589,6 +727,71 @@ mod tests {
         let mut p = vt100::Parser::new(5, 20, 100);
         p.process(text.as_bytes());
         CopyMode::new(p.screen_mut())
+    }
+
+    fn key(c: char) -> KeyEvent {
+        KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)
+    }
+
+    /// Copy mode over `text` with the cursor at the start of its first line.
+    fn at_start(text: &str) -> CopyMode {
+        let mut cm = mode(text);
+        (cm.cy, cm.cx) = (0, 0);
+        cm
+    }
+
+    #[test]
+    fn jumps_find_characters_on_the_line_and_repeat() {
+        // x at 0, 2, 4, 6.
+        let mut cm = at_start("x.x.x.x");
+        cm.apply("jump-forward", Some("."));
+        assert_eq!(cm.cx, 1);
+        cm.apply("jump-again", None);
+        assert_eq!(cm.cx, 3);
+        cm.apply("jump-reverse", None);
+        assert_eq!(cm.cx, 1);
+
+        // t stops before the x; ; then steps past the one beside it.
+        let mut cm = at_start("x.x.x.x");
+        cm.apply("jump-to-forward", Some("x"));
+        assert_eq!(cm.cx, 1);
+        cm.apply("jump-again", None);
+        assert_eq!(cm.cx, 3);
+
+        // F / T go back.
+        cm.cx = 6;
+        cm.apply("jump-backward", Some("x"));
+        assert_eq!(cm.cx, 4);
+        cm.apply("jump-to-backward", Some("x"));
+        assert_eq!(cm.cx, 3);
+        // No such character: the cursor stays.
+        cm.apply("jump-forward", Some("z"));
+        assert_eq!(cm.cx, 3);
+    }
+
+    #[test]
+    fn counts_repeat_commands_and_jumps_wait_for_their_character() {
+        let mut cm = at_start("abcdefghijklmnop");
+        // 0 alone is start-of-line, for the key table.
+        assert!(!cm.take_key(&key('0')));
+        assert!(cm.take_key(&key('1')));
+        assert!(cm.take_key(&key('0')));
+        assert_eq!(cm.count, 10);
+        cm.apply_counted("cursor-right", None);
+        assert_eq!((cm.cx, cm.count), (10, 0));
+
+        // 2fx: the count waits with the jump for its character.
+        let mut cm = at_start("x.x.x.x");
+        cm.take_key(&key('2'));
+        cm.apply_counted("jump-forward", None);
+        assert_eq!(cm.pending_jump, Some(Jump::Forward));
+        assert!(cm.take_key(&key('x')));
+        assert_eq!((cm.cx, cm.pending_jump), (4, None));
+
+        // Escape cancels a waiting jump.
+        cm.apply_counted("jump-forward", None);
+        assert!(cm.take_key(&KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)));
+        assert_eq!((cm.cx, cm.pending_jump), (4, None));
     }
 
     #[test]

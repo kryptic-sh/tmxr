@@ -117,6 +117,16 @@ impl Server {
             .and_then(|p| self.panes.get(&p))
             .is_some_and(|p| p.copy.is_some());
         if in_copy {
+            // A count digit or the character a jump waits for goes to copy
+            // mode itself, ahead of its key table.
+            let pane = active.expect("copy mode is in the active pane");
+            if let Some(p) = self.panes.get_mut(&pane)
+                && p.copy.as_mut().is_some_and(|cm| cm.take_key(&ev))
+            {
+                let window = p.window;
+                self.mark_window_dirty(window);
+                return;
+            }
             if let Some(b) = self.keys.get("copy-mode-vi", &key).cloned() {
                 self.run_bind(id, &b.cmd, Some(ev));
             }

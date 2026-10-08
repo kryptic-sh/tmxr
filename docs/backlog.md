@@ -58,9 +58,9 @@ what was not.
   `M-n` / `M-p` are bells only (no `monitor-activity` / `monitor-silence`).
   `find-window` matches window names through the picker, not pane contents or
   titles as tmux's does.
-- **Copy mode gaps** (plan/08): counts, `f`/`t`/`F`/`T`/`;`/`,`, marks, `%`,
-  `copy-pipe*`, `copy-command`, `refresh-from-pane`, highlighting of search
-  matches.
+- **Copy mode gaps** (plan/08): marks, `%`, `copy-pipe*`, `copy-command`,
+  `refresh-from-pane`, highlighting of search matches. A pending count is not
+  shown anywhere (tmux shows a `(repeat)` prompt).
 - **Key notation**: hjkl's `<C-x>` form is not accepted (plan/01 and plan/06
   once promised it); mouse events are built into `mouse.rs` and cannot be
   rebound (`MouseDown1Pane` and friends are not key names).

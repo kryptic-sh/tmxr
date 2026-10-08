@@ -1024,3 +1024,26 @@ fn session_picker_kills_renames_and_creates_sessions() {
     all.sort();
     assert_eq!(all, ["brand-new", "home"]);
 }
+
+#[test]
+fn copy_mode_counts_and_jumps_by_keyboard() {
+    let t = Tmxr::new("jump");
+    let s = t.attach(&["new", "-s", "jp"]);
+    s.wait_for("status line", |text| text.contains("jp"));
+    s.send(b"echo jumpme-a-b-c\r");
+    s.wait_for("echoed", |text| text.matches("jumpme-a-b-c").count() >= 2);
+    s.send(PREFIX);
+    s.send(b"[");
+    t.wait_run(
+        &["display-message", "-p", "-t", "jp", "#{pane_in_mode}"],
+        "copy mode",
+        |o| o.trim() == "1",
+    );
+    s.send(b"?");
+    s.wait_for("search prompt", |text| text.contains("(search up)"));
+    s.send(b"jumpme\r");
+    // 2f- lands on the second dash; v E y copies from there to the WORD end.
+    s.send(b"2f-");
+    s.send(b"vEy");
+    t.wait_run(&["show-buffer"], "copied text", |o| o == "-b-c");
+}

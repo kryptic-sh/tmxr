@@ -253,3 +253,9 @@ processes = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "top",
 "?" = { cmd = 'command-prompt -p "(search up)" "send-keys -X search-backward \"%%\""', note = "Search up" }
 "n" = { cmd = "send-keys -X search-again", note = "Next match" }
 "N" = { cmd = "send-keys -X search-reverse", note = "Previous match" }
+"f" = { cmd = "send-keys -X jump-forward", note = "Jump to the next char typed" }
+"F" = { cmd = "send-keys -X jump-backward", note = "Jump back to the char typed" }
+"t" = { cmd = "send-keys -X jump-to-forward", note = "Jump to just before the next char typed" }
+"T" = { cmd = "send-keys -X jump-to-backward", note = "Jump back to just after the char typed" }
+";" = { cmd = "send-keys -X jump-again", note = "Repeat the last jump" }
+"," = { cmd = "send-keys -X jump-reverse", note = "Repeat the last jump the other way" }
