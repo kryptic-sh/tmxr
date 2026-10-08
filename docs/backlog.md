@@ -39,9 +39,6 @@ what was not.
 
 ## Known gaps and follow-ups
 
-- **Restore-on-start applies to every socket label**, including throwaway `-L`
-  servers; the save on exit likewise overwrites `last` from whichever server
-  exits. Consider per-label save directories.
 - **Commands not implemented**: `join-pane`, `move-window`, `swap-window`,
   `respawn-pane`, `save-buffer`, `load-buffer`, `if-shell` (all listed in
   plan/10's MVP set), `swap-pane -s`, `remain-on-exit`, `display-panes` overlay

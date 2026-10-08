@@ -85,20 +85,7 @@ fn init_server_log(endpoint: &Endpoint) {
     if std::fs::create_dir_all(&dir).is_err() {
         return;
     }
-    let name = endpoint
-        .path()
-        .file_name()
-        .map_or_else(|| "default".into(), |n| n.to_string_lossy().into_owned());
-    let name: String = name
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect();
+    let name = endpoint.slug();
     let Ok(file) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)

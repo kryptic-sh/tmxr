@@ -21,4 +21,5 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Fuzzy session and window picker** (`prefix s` / `prefix w`) on
   `hjkl-picker`, moving with `j`/`k` or arrows.
 - **Save and restore of sessions** (`prefix C-s` / `C-r`), auto-save and restore
-  when the server starts.
+  when the server starts. Each server (`-L` label or `-S` socket) keeps its own
+  saves.

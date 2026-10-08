@@ -1,16 +1,18 @@
 //! Save and restore sessions, à la tmux-resurrect.
 //!
-//! A save is a versioned JSON file in `<data dir>/tmxr/resurrect/`, plus a
-//! `last` file naming the newest one. Restored panes start in their saved
-//! directory; a pane whose foreground program is in `resurrect.processes`
-//! starts that program again (by name — arguments are not saved, so a restore
-//! never re-runs a saved command line). See `docs/plan/11-resurrect.md`.
+//! A save is a versioned JSON file in `<data dir>/tmxr/resurrect/<server>/`
+//! (one directory per socket, see [`dir`]), plus a `last` file naming the
+//! newest one. Restored panes start in their saved directory; a pane whose
+//! foreground program is in `resurrect.processes` starts that program again
+//! (by name — arguments are not saved, so a restore never re-runs a saved
+//! command line). See `docs/plan/11-resurrect.md`.
 
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use hjkl_layout::{LayoutTree, SplitDir};
 use serde::{Deserialize, Serialize};
+use tmxr_proto::socket::Endpoint;
 
 use crate::model::{PaneId, SessionId};
 use crate::server::Server;
@@ -104,9 +106,11 @@ fn load_layout(l: &SavedLayout, panes: &[PaneId]) -> Option<LayoutTree> {
     })
 }
 
-pub fn dir() -> Result<PathBuf, String> {
+/// Saves of the server at `endpoint`. Each server keeps its own, so a
+/// throwaway `-L` server neither restores nor overwrites the main one's.
+pub fn dir(endpoint: &Endpoint) -> Result<PathBuf, String> {
     hjkl_xdg::data_dir("tmxr")
-        .map(|d| d.join("resurrect"))
+        .map(|d| d.join("resurrect").join(endpoint.slug()))
         .map_err(|e| e.to_string())
 }
 
@@ -211,7 +215,7 @@ pub fn read_last(dir: &Path) -> Result<Option<Save>, String> {
 /// `resurrect-save`.
 pub fn save(srv: &mut Server) -> Result<PathBuf, String> {
     let s = capture(srv);
-    write(&s, &dir()?, srv.cfg.resurrect.keep)
+    write(&s, &dir(&srv.endpoint)?, srv.cfg.resurrect.keep)
 }
 
 /// Recreate saved sessions whose names are not already in use.
@@ -323,7 +327,7 @@ fn restore_session(
 
 /// `resurrect-restore`.
 pub fn restore(srv: &mut Server, size: (u16, u16)) -> Result<usize, String> {
-    match read_last(&dir()?)? {
+    match read_last(&dir(&srv.endpoint)?)? {
         Some(save) => apply(srv, &save, size),
         None => Err("no saved sessions".into()),
     }
@@ -331,7 +335,7 @@ pub fn restore(srv: &mut Server, size: (u16, u16)) -> Result<usize, String> {
 
 /// Restore when the server starts (`resurrect.restore-on-start`).
 pub fn restore_on_start(srv: &mut Server) -> Result<(), String> {
-    if let Some(save) = read_last(&dir()?)? {
+    if let Some(save) = read_last(&dir(&srv.endpoint)?)? {
         let n = apply(srv, &save, (80, 23))?;
         srv.restored_pending = n > 0;
     }

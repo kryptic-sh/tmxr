@@ -62,6 +62,25 @@ impl Endpoint {
         &self.path
     }
 
+    /// The socket's last path component with everything but ASCII letters,
+    /// digits and `-` replaced by `_`: a name for per-server files (logs,
+    /// resurrect saves) that is safe on every filesystem.
+    pub fn slug(&self) -> String {
+        let name = self
+            .path
+            .file_name()
+            .map_or_else(|| DEFAULT_LABEL.into(), |n| n.to_string_lossy());
+        name.chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect()
+    }
+
     /// Connect to a server at this endpoint.
     pub fn connect(&self) -> io::Result<Stream> {
         Stream::connect(self.name()?)
@@ -263,6 +282,15 @@ mod tests {
     fn explicit_socket_wins_over_label() {
         let ep = Endpoint::resolve(Some(Path::new("/x/y")), Some("lbl")).unwrap();
         assert_eq!(ep.path(), Path::new("/x/y"));
+    }
+
+    #[test]
+    fn slugs_name_the_label_safely() {
+        let work = Endpoint::for_label("work.2").unwrap().slug();
+        assert!(work.ends_with("work_2"), "{work}");
+        assert_ne!(work, Endpoint::for_label("default").unwrap().slug());
+        let ep = Endpoint::resolve(Some(Path::new("/run/a b")), None).unwrap();
+        assert_eq!(ep.slug(), "a_b");
     }
 
     fn unique_endpoint(dir: &Path) -> Endpoint {
