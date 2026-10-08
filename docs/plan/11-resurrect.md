@@ -15,8 +15,8 @@ Stretch goal for the MVP; designed now so the model keeps what it needs.
   `vi vim nvim emacs man less more tail top htop irssi weechat mutt`, plus
   `hjkl` and `sqeel`). Anything else restores as a shell in the same directory.
 
-Not saved: pane titles, a window's last pane, program arguments, pane contents
-(tmux-resurrect's `capture-pane-contents`).
+Each window's last pane is saved too. Not saved: pane titles, program arguments,
+pane contents (tmux-resurrect's `capture-pane-contents`).
 
 ## Format and location
 
@@ -41,7 +41,9 @@ server never touches the main one's:
   0 disables) while any session exists, writing only when the sessions changed
   since the last save (an explicit `prefix C-s` always writes).
 - Save when the server exits (last session closed or `kill-server`), again only
-  when something changed. Nothing saves on a signal.
+  when something changed. On Unix, SIGTERM and SIGHUP end the server through
+  that same exit, so a logout or shutdown saves; the detached Windows server
+  receives no such signal.
 - **Auto-restore**: with `resurrect.restore-on-start = true`, a newly started
   server restores the last save before handling any client. When the restore
   produced sessions, the first bare `tmxr` attaches instead of creating a new

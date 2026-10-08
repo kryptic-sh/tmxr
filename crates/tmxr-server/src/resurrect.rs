@@ -44,6 +44,10 @@ pub struct SavedWindow {
     pub synchronize: bool,
     /// Position of the active pane in `panes`.
     pub active: usize,
+    /// Position of the window's last pane (`select-pane -l`), if any. Saves
+    /// from before this field restore without one.
+    #[serde(default)]
+    pub last: Option<usize>,
     pub layout: SavedLayout,
     pub panes: Vec<SavedPane>,
 }
@@ -139,6 +143,7 @@ pub fn capture(srv: &Server) -> Save {
                         zoomed: w.zoomed,
                         synchronize: w.synchronize,
                         active: panes.iter().position(|p| *p == w.active).unwrap_or(0),
+                        last: w.last_pane.and_then(|l| panes.iter().position(|p| *p == l)),
                         layout: save_layout(&w.layout, &panes),
                         panes: panes
                             .iter()
@@ -347,6 +352,7 @@ fn restore_session(
                 win.layout = tree;
             }
             win.active = panes.get(w.active).copied().unwrap_or(win.active);
+            win.last_pane = w.last.and_then(|l| panes.get(l).copied());
             win.zoomed = w.zoomed && panes.len() > 1;
             win.synchronize = w.synchronize;
             win.auto_name = w.auto_name;
@@ -404,6 +410,7 @@ mod tests {
                     zoomed: false,
                     synchronize: true,
                     active: 1,
+                    last: Some(0),
                     layout: SavedLayout::Split {
                         horizontal: true,
                         ratio: 0.3,
@@ -449,6 +456,15 @@ mod tests {
             load_layout(&saved, &[1]).is_none(),
             "missing pane is an error"
         );
+    }
+
+    #[test]
+    fn saves_without_last_pane_still_load() {
+        let mut json: serde_json::Value = serde_json::to_value(sample()).unwrap();
+        let window = &mut json["sessions"][0]["windows"][0];
+        assert!(window.as_object_mut().unwrap().remove("last").is_some());
+        let old: Save = serde_json::from_value(json).unwrap();
+        assert_eq!(old.sessions[0].windows[0].last, None);
     }
 
     #[test]

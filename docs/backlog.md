@@ -67,10 +67,11 @@ what was not.
 - **No frame-rate cap**: the server renders after each drained batch of events.
   A pane producing output continuously renders as often as batches arrive; not
   measured.
-- **Resurrect**: pane titles and a window's last pane are not saved; an argument
-  allowlist (`resurrect.restore-args`, like resurrect's `~vim` strategies) is
-  not implemented; nothing saves on a signal (SIGTERM / SIGHUP would need a
-  handler).
+- **Resurrect**: pane titles are not saved (restored programs set their own); an
+  argument allowlist (`resurrect.restore-args`, like resurrect's `~vim`
+  strategies) is not implemented, and would need each pane's full command line
+  (`/proc/<pid>/cmdline`, `KERN_PROCARGS2`, a Windows process's PEB). On Windows
+  nothing saves when the machine shuts down.
 - **tmux-yank `prefix y`** (copy the shell's command line) is not bound, on
   purpose for now. tmux-yank's `copy_line.sh` sends `C-a` to the shell, enters
   copy mode at the shell's cursor, selects to the end of the command and sends

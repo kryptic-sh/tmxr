@@ -52,6 +52,7 @@ pub fn run(endpoint: Endpoint, config: Option<PathBuf>) -> std::io::Result<()> {
     std::thread::Builder::new()
         .name("tmxr-accept".into())
         .spawn(move || conn::accept_loop(listener, tx))?;
+    server::signals::install();
     srv.run(rx);
     Ok(())
 }

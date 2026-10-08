@@ -377,6 +377,9 @@ fn resurrect_restores_a_multi_pane_layout() {
     t.run(&["split-window", "-h", "-t", "main"]);
     t.run(&["split-window", "-v", "-t", "main"]);
     t.run(&["resize-pane", "-L", "-t", "main", "5"]);
+    // Pane 2 active, pane 0 the last pane.
+    t.run(&["select-pane", "-t", "main.0"]);
+    t.run(&["select-pane", "-t", "main.2"]);
     t.wait_run(&["list-panes", "-t", "main"], "three panes", |o| {
         o.lines().count() == 3
     });
@@ -409,6 +412,13 @@ fn resurrect_restores_a_multi_pane_layout() {
     let restored = layout(&t);
     assert_eq!(restored.lines().count(), 3, "{restored}");
     assert_eq!(restored, saved);
+    // The last pane came back too: select-pane -l goes to pane 0.
+    t.run(&["select-pane", "-l", "-t", "main"]);
+    assert_eq!(
+        t.run(&["display-message", "-p", "-t", "main", "#{pane_index}"])
+            .trim(),
+        "0"
+    );
 }
 
 #[test]
@@ -1457,4 +1467,32 @@ fn copy_mode_shows_a_pending_count_and_marked_border() {
     s.wait_for("marked border", |_| reversed(&s) > before);
     t.run(&["select-pane", "-M"]);
     s.wait_for("mark cleared", |_| reversed(&s) == before);
+}
+
+#[cfg(unix)]
+#[test]
+fn sigterm_saves_sessions_before_the_server_exits() {
+    let t = Tmxr::new("sigterm");
+    t.run(&["new-session", "-d", "-s", "keepme"]);
+    let pid = t.run(&["display-message", "-p", "-t", "keepme", "#{pid}"]);
+    let pid = pid.trim();
+    assert!(pid.parse::<u32>().is_ok(), "{pid:?}");
+    let killed = Command::new("kill").args(["-TERM", pid]).status().unwrap();
+    assert!(killed.success());
+    t.wait_run(&["ls"], "server gone", str::is_empty);
+    let root = t.dir.path().join("data").join("tmxr").join("resurrect");
+    let saved: Vec<String> = std::fs::read_dir(&root)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .flat_map(|server| {
+            std::fs::read_dir(server.path())
+                .into_iter()
+                .flatten()
+                .flatten()
+        })
+        .filter(|f| f.file_name().to_string_lossy().ends_with(".json"))
+        .map(|f| std::fs::read_to_string(f.path()).unwrap_or_default())
+        .collect();
+    assert!(saved.iter().any(|s| s.contains("keepme")), "{saved:?}");
 }

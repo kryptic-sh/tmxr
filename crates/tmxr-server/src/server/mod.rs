@@ -4,6 +4,7 @@ mod attach;
 mod input;
 mod panes;
 mod shell;
+pub mod signals;
 mod windows;
 
 pub use shell::{if_shell, pipe_to_shell, run_shell};
@@ -221,6 +222,10 @@ impl Server {
             }
             self.tick();
             self.render_all();
+            if signals::exit_requested() {
+                info!("exit requested by a signal");
+                self.exiting = true;
+            }
             if self.exiting {
                 break;
             }
