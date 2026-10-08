@@ -4,7 +4,7 @@ use std::fmt::Write as _;
 
 use tmxr_command::Parsed;
 
-use super::{Ctx, Outcome, attached_client, expand_for, join_args};
+use super::{Ctx, Outcome, Res, attached_client, expand_for, join_args};
 use crate::overlay::Overlay;
 use crate::server::Server;
 use crate::target;
@@ -85,6 +85,25 @@ pub(super) fn run(
             let line = expand_for(srv, ctx, None, &pos[0]);
             crate::server::run_shell(srv, attached_client(srv, ctx), line, a.has('b'));
         }
+        "if-shell" => {
+            let mut ctx = ctx.clone();
+            if a.value('t').is_some() {
+                ctx.pane = Some(target::pane(srv, &ctx, a.value('t'))?.2);
+            }
+            let cond = expand_for(srv, &ctx, ctx.pane, &pos[0]);
+            let (then, otherwise) = (pos[1].clone(), pos.get(2).cloned());
+            if a.has('F') {
+                let ok = !cond.is_empty() && cond != "0";
+                if let Some(cmd) = if ok { Some(then) } else { otherwise } {
+                    run_nested(srv, &ctx, &cmd, out)?;
+                }
+            } else {
+                // tmux blocks the client until the shell command finishes
+                // unless -b; tmxr always runs it in the background, so the
+                // chosen command runs after this command list has returned.
+                crate::server::if_shell(srv, ctx, cond, then, otherwise);
+            }
+        }
         "choose-tree" => {
             let c = attached_client(srv, ctx).ok_or("no current client")?;
             let ov = if a.has('w') {
@@ -105,4 +124,17 @@ pub(super) fn run(
         _ => return Ok(false),
     }
     Ok(true)
+}
+
+/// Run a command line as part of the current command: its output joins
+/// `out`, and its failure fails the current command.
+fn run_nested(srv: &mut Server, ctx: &Ctx, line: &str, out: &mut Outcome) -> Res {
+    let inner = super::run_string(srv, ctx, line);
+    out.stdout.push_str(&inner.stdout);
+    out.attach = inner.attach.or(out.attach);
+    if inner.status == 0 {
+        Ok(())
+    } else {
+        Err(inner.stderr)
+    }
 }

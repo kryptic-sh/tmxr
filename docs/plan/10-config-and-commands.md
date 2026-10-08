@@ -94,8 +94,16 @@ A tmux-compatible parser shared by config binds, the command prompt
 own `navigate-pane`, `resurrect-save`, `resurrect-restore`.
 
 Not implemented yet (unknown commands to the parser): `move-window`,
-`swap-window`, `join-pane`, `respawn-pane`, `save-buffer`, `load-buffer`,
-`if-shell`.
+`swap-window`, `join-pane`, `respawn-pane`.
+
+`if-shell` always runs its shell command in the background, as tmux does with
+`-b`: the command client gets its reply at once, and the chosen command runs
+when the shell exits (errors go to the attached client's status line and
+`show-messages`). `-F` decides immediately, so its command runs as part of the
+same command list. `load-buffer -` (standard input) is not supported, since
+command clients do not forward their input; relative `save-buffer` /
+`load-buffer` paths are relative to the command client's directory, or the home
+directory for a key bind.
 
 One deliberate difference from tmux: `set-buffer` format-expands its data, so
 `prefix Y` is `set-buffer -w "#{pane_current_path}"` (tmux-yank's copy of the

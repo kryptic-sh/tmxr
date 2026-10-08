@@ -36,6 +36,11 @@ pub enum Event {
         client: Option<ClientId>,
         output: String,
     },
+    /// A command `if-shell` chose once its shell command finished.
+    Run {
+        ctx: Ctx,
+        cmd: String,
+    },
 }
 
 pub struct Client {
@@ -238,6 +243,12 @@ impl Server {
                         a.overlay = Some(Overlay::text(lines));
                         a.dirty = true;
                     }
+                }
+            }
+            Event::Run { ctx, cmd } => {
+                let out = crate::cmds::run_string(self, &ctx, &cmd);
+                if let Some(c) = ctx.client {
+                    self.report(c, &out);
                 }
             }
         }
@@ -1113,6 +1124,12 @@ impl Server {
             env: Vec::new(),
         };
         let out = crate::cmds::run_string(self, &ctx, cmd);
+        self.report(id, &out);
+    }
+
+    /// Show what a command run for an attached client printed: an error or a
+    /// one-line result in the status line, longer output in a text view.
+    fn report(&mut self, id: ClientId, out: &Outcome) {
         if !out.stderr.is_empty() {
             self.show_message(id, out.stderr.trim_end().to_owned());
         } else if !out.stdout.is_empty() {
@@ -1419,12 +1436,7 @@ pub fn run_shell(srv: &Server, client: Option<ClientId>, line: String, backgroun
     let _ = std::thread::Builder::new()
         .name("tmxr-run-shell".into())
         .spawn(move || {
-            let argv = crate::util::shell_command(&line);
-            let output = std::process::Command::new(&argv[0])
-                .args(&argv[1..])
-                .stdin(std::process::Stdio::null())
-                .output();
-            let text = match output {
+            let text = match shell_output(&line) {
                 Ok(o) => {
                     let mut t = String::from_utf8_lossy(&o.stdout).into_owned();
                     t.push_str(&String::from_utf8_lossy(&o.stderr));
@@ -1441,6 +1453,29 @@ pub fn run_shell(srv: &Server, client: Option<ClientId>, line: String, backgroun
                 output: text,
             });
         });
+}
+
+/// `if-shell`: run `line` in the background, then run `then` if it exited
+/// successfully, else `otherwise`, with `ctx` as the command context.
+pub fn if_shell(srv: &Server, ctx: Ctx, line: String, then: String, otherwise: Option<String>) {
+    let events = srv.events.clone();
+    let _ = std::thread::Builder::new()
+        .name("tmxr-if-shell".into())
+        .spawn(move || {
+            let ok = shell_output(&line).is_ok_and(|o| o.status.success());
+            if let Some(cmd) = if ok { Some(then) } else { otherwise } {
+                let _ = events.send(Event::Run { ctx, cmd });
+            }
+        });
+}
+
+/// Run a shell command line to completion with no input.
+fn shell_output(line: &str) -> std::io::Result<std::process::Output> {
+    let argv = crate::util::shell_command(line);
+    std::process::Command::new(&argv[0])
+        .args(&argv[1..])
+        .stdin(std::process::Stdio::null())
+        .output()
 }
 
 /// `split-window -l` size.

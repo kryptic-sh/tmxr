@@ -42,9 +42,9 @@ what was not.
 ## Known gaps and follow-ups
 
 - **Commands not implemented**: `join-pane`, `move-window`, `swap-window`,
-  `respawn-pane`, `save-buffer`, `load-buffer`, `if-shell` (all listed in
-  plan/10's MVP set), `swap-pane -s`, `remain-on-exit`, `display-panes` overlay
-  (currently prints indices), clock mode, emacs copy mode.
+  `respawn-pane` (all listed in plan/10's MVP set), `swap-pane -s`,
+  `remain-on-exit`, `display-panes` overlay (currently prints indices), clock
+  mode, emacs copy mode.
 - **Copy mode gaps** (plan/08): counts, `f`/`t`/`F`/`T`/`;`/`,`, marks, `%`,
   `copy-pipe*`, `copy-command`, `refresh-from-pane`, highlighting of search
   matches.
@@ -62,10 +62,10 @@ what was not.
   directory falls back to `$HOME` without a message; auto-save writes even when
   nothing changed; an argument allowlist (`resurrect.restore-args`, like
   resurrect's `~vim` strategies) is not implemented; nothing saves on a signal.
-- **`server.rs` and `cmds.rs` keep growing** (each over a thousand lines). Split
-  along their seams — client lifecycle and attach out of `server.rs`, command
-  families (session/window/pane/buffer/options) out of `cmds.rs` — as part of
-  the next change that touches them.
+- **`server.rs` keeps growing** (over a thousand lines; `cmds` is already split
+  by command family). Split along its seams — client lifecycle and attach, pane
+  spawning, the background shell helpers — as part of the next change that
+  touches it.
 - **tmux-yank `prefix y`** (copy the shell's command line) is not bound.
 - **Mouse capture is always on in the client**; with `mouse = false` the server
   ignores mouse events but the terminal's own selection still needs Shift.

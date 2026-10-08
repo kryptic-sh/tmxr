@@ -353,3 +353,42 @@ fn resurrect_restores_a_multi_pane_layout() {
     assert_eq!(restored.lines().count(), 3, "{restored}");
     assert_eq!(restored, saved);
 }
+
+#[test]
+fn buffers_save_to_and_load_from_files() {
+    let t = Tmxr::new("buffers");
+    t.run(&["new-session", "-d", "-s", "b"]);
+    let file = t.dir.path().join("buffer.txt");
+    let path = file.display().to_string();
+
+    t.run(&["set-buffer", "-b", "one", "hello"]);
+    t.run(&["save-buffer", "-b", "one", &path]);
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "hello");
+    t.run(&["save-buffer", "-a", "-b", "one", &path]);
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "hellohello");
+    assert_eq!(t.run(&["save-buffer", "-b", "one", "-"]), "hello");
+
+    std::fs::write(&file, "from a file\n").unwrap();
+    t.run(&["load-buffer", "-b", "two", &path]);
+    assert_eq!(t.run(&["show-buffer", "-b", "two"]), "from a file\n");
+}
+
+#[test]
+fn if_shell_picks_a_command_by_status_or_format() {
+    let t = Tmxr::new("ifshell");
+    t.run(&["new-session", "-d", "-s", "base"]);
+    t.run(&["if-shell", "-F", "1", "new -d -s f-yes", "new -d -s f-no"]);
+    t.run(&["if-shell", "-F", "0", "new -d -s z-yes", "new -d -s z-no"]);
+    t.run(&["if-shell", "exit 0", "new -d -s s-yes", "new -d -s s-no"]);
+    t.run(&["if-shell", "exit 1", "new -d -s e-yes", "new -d -s e-no"]);
+    // The shell runs in the background; wait for both chosen sessions.
+    let ls = t.wait_run(&["ls"], "if-shell sessions", |o| {
+        o.contains("s-yes:") && o.contains("e-no:")
+    });
+    for want in ["f-yes:", "z-no:", "s-yes:", "e-no:"] {
+        assert!(ls.contains(want), "{want} missing:\n{ls}");
+    }
+    for unwanted in ["f-no:", "z-yes:", "s-no:", "e-yes:"] {
+        assert!(!ls.contains(unwanted), "{unwanted} present:\n{ls}");
+    }
+}

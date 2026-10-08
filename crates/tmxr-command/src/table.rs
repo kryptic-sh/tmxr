@@ -125,6 +125,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         "[-t target-session]"
     ),
     cmd!(
+        "if-shell",
+        Some("if"),
+        "bFt:",
+        2,
+        3,
+        "[-bF] [-t target-pane] shell-command command [command]"
+    ),
+    cmd!(
         "kill-pane",
         Some("killp"),
         "at:",
@@ -177,6 +185,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         0,
         0,
         "[-a] [-t target-session]"
+    ),
+    cmd!(
+        "load-buffer",
+        Some("loadb"),
+        "b:w",
+        1,
+        1,
+        "[-w] [-b buffer-name] path"
     ),
     cmd!(
         "navigate-pane",
@@ -276,6 +292,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         1,
         1,
         "[-b] [-t target-pane] shell-command"
+    ),
+    cmd!(
+        "save-buffer",
+        Some("saveb"),
+        "ab:",
+        1,
+        1,
+        "[-a] [-b buffer-name] path"
     ),
     cmd!(
         "select-layout",
