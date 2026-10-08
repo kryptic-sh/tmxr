@@ -16,6 +16,7 @@ mode-keys = "vi"
 history-limit = 50000
 escape-time = 0
 display-time = 4000
+display-panes-time = 1000
 status-interval = 5
 repeat-time = 500
 default-terminal = "tmux-256color"
@@ -54,6 +55,9 @@ pane-border-style = "fg=#{@thm_surface1}"
 pane-active-border-style = "fg=#{@thm_blue}"
 message-style = "fg=#{@thm_fg},bg=#{@thm_surface0}"
 mode-style = "fg=#{@thm_fg},bg=#{@thm_selection}"
+# tmux's blue and red, from the palette.
+display-panes-colour = "#{@thm_blue}"
+display-panes-active-colour = "#{@thm_red}"
 
 [resurrect]
 auto-save-minutes = 15
@@ -151,6 +155,13 @@ processes = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "top",
 "}" = { cmd = "swap-pane -D", note = "Swap pane down" }
 "o" = { cmd = "select-pane -t :.+", note = "Next pane" }
 "C-o" = { cmd = "rotate-window", note = "Rotate panes" }
+"M-o" = { cmd = "rotate-window -D", note = "Rotate panes down" }
+"n" = { cmd = "next-window", note = "Next window" }
+"p" = { cmd = "previous-window", note = "Previous window" }
+"q" = { cmd = "display-panes", note = "Show pane numbers; a number selects the pane" }
+"#" = { cmd = "list-buffers", note = "List paste buffers" }
+"-" = { cmd = "delete-buffer", note = "Delete the most recent buffer" }
+"." = { cmd = 'command-prompt -p "(move-window)" "move-window -t \"%%\""', note = "Move window" }
 "Space" = { cmd = "next-layout", note = "Next layout" }
 "M-1" = { cmd = "select-layout even-horizontal", note = "Layout: even horizontal" }
 "M-2" = { cmd = "select-layout even-vertical", note = "Layout: even vertical" }

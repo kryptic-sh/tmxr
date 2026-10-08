@@ -514,7 +514,10 @@ impl Server {
                     a.repeat_until = None;
                     a.dirty = true;
                 }
-                if a.overlay.as_mut().is_some_and(Overlay::tick) {
+                if a.overlay.as_ref().is_some_and(Overlay::expired) {
+                    a.overlay = None;
+                    a.dirty = true;
+                } else if a.overlay.as_mut().is_some_and(Overlay::tick) {
                     a.dirty = true;
                 }
             }

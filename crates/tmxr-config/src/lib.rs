@@ -28,6 +28,8 @@ pub struct Config {
     pub history_limit: usize,
     pub escape_time: u64,
     pub display_time: u64,
+    /// How long `display-panes` shows pane numbers, in milliseconds.
+    pub display_panes_time: u64,
     pub status_interval: u64,
     pub repeat_time: u64,
     pub default_terminal: String,
@@ -69,6 +71,9 @@ pub struct Status {
     pub pane_active_border_style: String,
     pub message_style: String,
     pub mode_style: String,
+    /// `display-panes` number colour for the other panes, and the active one.
+    pub display_panes_colour: String,
+    pub display_panes_active_colour: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -204,6 +209,61 @@ mod tests {
             let b = bind(&cfg, table, key).unwrap_or_else(|| panic!("{table} {key} unbound"));
             assert_eq!(b.cmd, *cmd, "{table} {key}");
             assert!(b.note.is_some(), "{table} {key} has no note");
+        }
+    }
+
+    /// tmux's own default prefix binds that the tmux config leaves alone
+    /// (docs/plan/06), as (key, command name). The config overrides `'`, `;`,
+    /// `l` and `x`; tmux binds tmxr has no command for yet (`t`, `f`, `m`,
+    /// `M`, `E`, `D`, `=`, `/`, `C-z`, `M-n`, `M-p`) are listed in the backlog.
+    const TMUX_BUILTIN_BINDS: &[(&str, &str)] = &[
+        ("C-b", "send-prefix"),
+        ("C-o", "rotate-window"),
+        ("M-o", "rotate-window"),
+        ("Space", "next-layout"),
+        ("!", "break-pane"),
+        ("#", "list-buffers"),
+        ("$", "command-prompt"),
+        ("&", "confirm-before"),
+        ("(", "switch-client"),
+        (")", "switch-client"),
+        (",", "command-prompt"),
+        ("-", "delete-buffer"),
+        (".", "command-prompt"),
+        ("0", "select-window"),
+        ("9", "select-window"),
+        (":", "command-prompt"),
+        ("?", "list-keys"),
+        ("L", "switch-client"),
+        ("[", "copy-mode"),
+        ("]", "paste-buffer"),
+        ("d", "detach-client"),
+        ("i", "display-message"),
+        ("n", "next-window"),
+        ("o", "select-pane"),
+        ("p", "previous-window"),
+        ("q", "display-panes"),
+        ("r", "refresh-client"),
+        ("s", "choose-tree"),
+        ("w", "choose-tree"),
+        ("z", "resize-pane"),
+        ("{", "swap-pane"),
+        ("}", "swap-pane"),
+        ("~", "show-messages"),
+        ("PPage", "copy-mode"),
+        ("Up", "select-pane"),
+        ("C-Up", "resize-pane"),
+        ("M-Up", "resize-pane"),
+        ("M-1", "select-layout"),
+    ];
+
+    #[test]
+    fn defaults_keep_tmux_builtin_binds() {
+        let cfg = defaults();
+        for (key, cmd) in TMUX_BUILTIN_BINDS {
+            let b = bind(&cfg, "prefix", key).unwrap_or_else(|| panic!("prefix {key} unbound"));
+            assert_eq!(b.cmd.split(' ').next(), Some(*cmd), "prefix {key}");
+            assert!(b.note.is_some(), "prefix {key} has no note");
         }
     }
 

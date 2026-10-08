@@ -381,6 +381,33 @@ fn draw_overlay(
             Some(Position::new(x.min(cols.saturating_sub(1)), y))
         }
         Overlay::Confirm { .. } => None,
+        Overlay::Panes { labels, .. } => {
+            let win = srv
+                .sessions
+                .get(&att.session)
+                .and_then(|s| s.current_window())
+                .and_then(|w| srv.windows.get(&w))?;
+            let label_style = |colour: &str| {
+                style_option(&format!("fg={colour}"), &vars)
+                    .add_modifier(Modifier::REVERSED | Modifier::BOLD)
+            };
+            let other = label_style(&srv.cfg.status.display_panes_colour);
+            let active = label_style(&srv.cfg.status.display_panes_active_colour);
+            for (pid, r) in win.visible_rects() {
+                let Some((label, _)) = labels.iter().find(|(_, p)| *p == pid) else {
+                    continue;
+                };
+                let text = format!(" {label} ");
+                let w = text.len() as u16;
+                let x = r.x + r.w.saturating_sub(w) / 2;
+                let row = r.y + r.h / 2;
+                if row < y {
+                    let style = if pid == win.active { active } else { other };
+                    buf.set_stringn(x, row, &text, usize::from(r.w), style);
+                }
+            }
+            None
+        }
         Overlay::Text { lines, top } => {
             let area = Rect::new(0, 0, cols, y);
             Clear.render(area, buf);

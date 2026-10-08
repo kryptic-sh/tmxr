@@ -50,9 +50,14 @@ what was not.
 
 ## Known gaps and follow-ups
 
-- **Not implemented**: `remain-on-exit`, `display-panes` overlay (currently
-  prints indices), clock mode, emacs copy mode, a marked pane (so `join-pane` /
-  `swap-window` require `-s`), `move-window -k` / `-r`.
+- **Not implemented**: `remain-on-exit`, clock mode, emacs copy mode, a marked
+  pane (so `join-pane` / `swap-window` require `-s`), `move-window -k` / `-r`.
+- **tmux default binds without a tmxr command yet**: `prefix t` (clock-mode),
+  `f` (find-window), `m` / `M` (mark pane), `E` (spread panes evenly), `D`
+  (choose-client), `=` (choose-buffer), `/` (describe-key), `C-z`
+  (suspend-client), `M-n` / `M-p` (next/previous window with an alert). The
+  config leaves them bound in real tmux, so a user may reach for them; the rest
+  of tmux's defaults are pinned by `defaults_keep_tmux_builtin_binds`.
 - **Copy mode gaps** (plan/08): counts, `f`/`t`/`F`/`T`/`;`/`,`, marks, `%`,
   `copy-pipe*`, `copy-command`, `refresh-from-pane`, highlighting of search
   matches.

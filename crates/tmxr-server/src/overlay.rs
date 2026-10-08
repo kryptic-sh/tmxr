@@ -1,16 +1,16 @@
 //! Things drawn over a client's panes that take its keys while open: the
-//! command prompt, y/n confirmation, scrollable text (list-keys output) and
-//! the session / window picker.
+//! command prompt, y/n confirmation, scrollable text (list-keys output),
+//! the session / window picker and the `display-panes` numbers.
 
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::thread::JoinHandle;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hjkl_picker::{Picker, PickerAction, PickerEvent, PickerLogic};
 
-use crate::model::{ClientId, SessionId};
+use crate::model::{ClientId, PaneId, SessionId};
 use crate::server::Server;
 
 /// What a key did to an overlay.
@@ -28,9 +28,20 @@ pub enum OverlayAction {
 
 pub enum Overlay {
     Prompt(Prompt),
-    Confirm { prompt: String, cmd: String },
-    Text { lines: Vec<String>, top: usize },
+    Confirm {
+        prompt: String,
+        cmd: String,
+    },
+    Text {
+        lines: Vec<String>,
+        top: usize,
+    },
     Picker(Box<PickerOverlay>),
+    /// `display-panes`: each pane's number, shown until `until`.
+    Panes {
+        labels: Vec<(u32, PaneId)>,
+        until: Instant,
+    },
 }
 
 pub struct Prompt {
@@ -60,6 +71,19 @@ impl Overlay {
 
     pub fn text(lines: Vec<String>) -> Self {
         Self::Text { lines, top: 0 }
+    }
+
+    /// Show `labels` (pane number, pane) for `time`.
+    pub fn display_panes(labels: Vec<(u32, PaneId)>, time: Duration) -> Self {
+        Self::Panes {
+            labels,
+            until: Instant::now() + time,
+        }
+    }
+
+    /// Whether the overlay has timed out and should close by itself.
+    pub fn expired(&self) -> bool {
+        matches!(self, Self::Panes { until, .. } if *until <= Instant::now())
     }
 
     pub fn session_picker(srv: &Server, client: ClientId) -> Self {
@@ -150,6 +174,21 @@ impl Overlay {
                 OverlayAction::Keep
             }
             Self::Picker(p) => p.key(ev),
+            // A pane's number selects it; any other key just dismisses.
+            Self::Panes { labels, .. } => {
+                let pick = match ev.code {
+                    KeyCode::Char(c) => c.to_digit(10).and_then(|d| {
+                        labels
+                            .iter()
+                            .find(|(label, _)| *label == d)
+                            .map(|(_, p)| *p)
+                    }),
+                    _ => None,
+                };
+                pick.map_or(OverlayAction::Close, |p| {
+                    OverlayAction::Run(format!("select-pane -t %{p}"))
+                })
+            }
         }
     }
 

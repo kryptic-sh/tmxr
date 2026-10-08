@@ -764,3 +764,57 @@ fn long_status_right_is_cut_before_the_window_list() {
         "right side is status-right-length"
     );
 }
+
+#[test]
+fn display_panes_selects_by_number_until_it_times_out() {
+    let t = Tmxr::new("displayp");
+    let s = t.attach(&["new", "-s", "dp"]);
+    s.wait_for("status line", |text| text.contains("dp"));
+    t.run(&["split-window", "-h", "-t", "dp"]);
+    let active = |t: &Tmxr| t.run(&["display-message", "-p", "-t", "dp", "#{pane_index}"]);
+    t.wait_run(
+        &["display-message", "-p", "-t", "dp", "#{pane_index}"],
+        "new pane",
+        |o| o.trim() == "1",
+    );
+
+    // prefix q numbers the panes; 0 picks the left one.
+    s.send(PREFIX);
+    s.send(b"q");
+    std::thread::sleep(Duration::from_millis(200));
+    s.send(b"0");
+    t.wait_run(
+        &["display-message", "-p", "-t", "dp", "#{pane_index}"],
+        "pane 0",
+        |o| o.trim() == "0",
+    );
+
+    // After display-panes-time the numbers are gone: a digit is just typed.
+    s.send(PREFIX);
+    s.send(b"q");
+    std::thread::sleep(Duration::from_millis(1600));
+    s.send(b"1");
+    std::thread::sleep(Duration::from_millis(500));
+    assert_eq!(active(&t).trim(), "0");
+}
+
+#[test]
+fn rotate_window_moves_panes_up_by_default_like_tmux() {
+    let t = Tmxr::new("rotate");
+    t.run(&["new-session", "-d", "-s", "r"]);
+    t.run(&["split-window", "-d", "-t", "r"]);
+    t.run(&["split-window", "-d", "-t", "r"]);
+    let order = |t: &Tmxr| -> Vec<String> {
+        t.run(&["list-panes", "-t", "r"])
+            .lines()
+            .filter_map(|l| l.split_whitespace().find(|w| w.starts_with('%')))
+            .map(str::to_owned)
+            .collect()
+    };
+    let before = order(&t);
+    assert_eq!(before.len(), 3, "{before:?}");
+    t.run(&["rotate-window", "-t", "r"]);
+    assert_eq!(order(&t), [before[1].as_str(), &before[2], &before[0]]);
+    t.run(&["rotate-window", "-D", "-t", "r"]);
+    assert_eq!(order(&t), before);
+}

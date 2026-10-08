@@ -64,6 +64,10 @@ vim-tmux-navigator; **(sens)** = tmux-sensible; **(yank)** = tmux-yank;
 | `b`                     | `last-window`                                        | Last window                                        | (sens)                |
 | `C-n` / `n`             | `next-window`                                        | Next window                                        | (sens)/(tmux)         |
 | `C-p` / `p`             | `previous-window`                                    | Previous window                                    | (sens)/(tmux)         |
+| `q`                     | `display-panes` (numbers over panes; a digit picks)  | Show pane numbers                                  | (tmux)                |
+| `#` / `-`               | `list-buffers` / `delete-buffer`                     | List / delete paste buffers                        | (tmux)                |
+| `.`                     | `move-window` prompt                                 | Move window                                        | (tmux)                |
+| `M-o`                   | `rotate-window -D`                                   | Rotate panes down                                  | (tmux)                |
 | `R`                     | `source-file` (reload config)                        | Reload config                                      | (sens)                |
 | `C-b`                   | `send-prefix`                                        | Send the prefix key                                | (tmux)                |
 | `s`                     | session picker ([09](09-session-picker.md))          | Switch session                                     | (tmux, reimplemented) |
@@ -96,7 +100,9 @@ Dropped from tmux's defaults because the config reuses the key: `'`
 (select-window prompt), `;` (last-pane — `C-\` covers it), `l` (last-window —
 `b` covers it), `x` (kill-pane — moved to `X`; **new**, flagged in
 [16-open-questions.md](16-open-questions.md)). `I`/`U`/`M-u` (tpm) have nothing
-to do and are not bound.
+to do and are not bound. tmux defaults with no tmxr command yet (`t`, `f`, `m`,
+`M`, `E`, `D`, `=`, `/`, `C-z`, `M-n`, `M-p`) are unbound until the commands
+exist; the backlog tracks them.
 
 ### `copy-mode-vi`
 

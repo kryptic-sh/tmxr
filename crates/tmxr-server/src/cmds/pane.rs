@@ -5,8 +5,9 @@ use std::fmt::Write as _;
 use crossterm::event::KeyEvent;
 use tmxr_command::{Args, Key, Parsed};
 
-use super::{Ctx, Outcome, Res, cwd_arg, dir_flag};
+use super::{Ctx, Outcome, Res, attached_client, cwd_arg, dir_flag};
 use crate::model::PaneId;
+use crate::overlay::Overlay;
 use crate::server::{Server, SplitSize};
 use crate::target;
 
@@ -134,7 +135,8 @@ pub(super) fn run(
         "rotate-window" => {
             let (_, wid, _) = target::window(srv, ctx, a.value('t'))?;
             let w = srv.windows.get_mut(&wid).ok_or("no window")?;
-            w.layout = crate::layout::rotate(&w.layout, a.has('U'));
+            // tmux rotates up unless -D.
+            w.layout = crate::layout::rotate(&w.layout, !a.has('D'));
             srv.relayout(wid);
         }
         "break-pane" => {
@@ -175,14 +177,28 @@ pub(super) fn run(
         }
         "display-panes" => {
             let (_, _, wid) = target::window(srv, ctx, None)?;
-            let w = &srv.windows[&wid];
-            let list: Vec<String> = w
+            let labels: Vec<(u32, PaneId)> = srv.windows[&wid]
                 .panes()
-                .iter()
+                .into_iter()
                 .enumerate()
-                .map(|(i, p)| format!("{}=%{p}", i as u32 + srv.cfg.pane_base_index))
+                .map(|(i, p)| (i as u32 + srv.cfg.pane_base_index, p))
                 .collect();
-            let _ = writeln!(out.stdout, "panes: {}", list.join(" "));
+            match attached_client(srv, ctx) {
+                // On a client: numbers over the panes; a number selects.
+                Some(c) => {
+                    let time = std::time::Duration::from_millis(srv.cfg.display_panes_time);
+                    if let Some(a) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
+                        a.overlay = Some(Overlay::display_panes(labels, time));
+                        a.dirty = true;
+                    }
+                }
+                // For a script: the same mapping as text.
+                None => {
+                    let list: Vec<String> =
+                        labels.iter().map(|(i, p)| format!("{i}=%{p}")).collect();
+                    let _ = writeln!(out.stdout, "panes: {}", list.join(" "));
+                }
+            }
         }
         "capture-pane" => {
             let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
