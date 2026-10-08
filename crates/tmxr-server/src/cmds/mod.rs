@@ -11,9 +11,9 @@ mod window;
 
 use std::path::PathBuf;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::KeyEvent;
 use tmxr_command::format::expand;
-use tmxr_command::{Args, Key, Parsed};
+use tmxr_command::{Args, Parsed};
 
 use crate::layout::Dir;
 use crate::model::{ClientId, PaneId, SessionId};
@@ -193,17 +193,6 @@ fn run_one(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res {
         }
     }
     Err(format!("{}: not implemented", p.name()))
-}
-
-/// Key event for a key name, for tests and `send-keys`.
-pub fn key_event(name: &str) -> Option<KeyEvent> {
-    let k: Key = name.parse().ok()?;
-    Some(KeyEvent::new(k.code, k.mods))
-}
-
-#[allow(dead_code)]
-fn plain(c: char) -> KeyEvent {
-    KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)
 }
 
 #[cfg(test)]
