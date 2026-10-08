@@ -291,6 +291,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         1,
         "[-DLRUZ] [-x width] [-y height] [-t target-pane] [adjustment]"
     ),
+    cmd!(
+        "respawn-pane",
+        Some("respawnp"),
+        "c:kt:",
+        0,
+        ANY,
+        "[-k] [-c start-directory] [-t target-pane] [command]"
+    ),
     cmd!("resurrect-restore", None, "", 0, 0, ""),
     cmd!("resurrect-save", None, "", 0, 0, ""),
     cmd!(

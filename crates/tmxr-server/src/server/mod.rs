@@ -35,7 +35,8 @@ pub enum Event {
     },
     Msg(ClientId, ClientMsg),
     Disconnected(ClientId),
-    Pty(PaneId, PtyEvent),
+    /// Output or exit of a pane's program, tagged with the pane's spawn.
+    Pty(PaneId, u64, PtyEvent),
     /// A `run-shell` command finished.
     Shell {
         client: Option<ClientId>,
@@ -100,6 +101,7 @@ pub struct Server {
     next_session: SessionId,
     next_window: WindowId,
     next_pane: PaneId,
+    next_spawn: u64,
     next_buffer: u32,
     had_session: bool,
     pub exiting: bool,
@@ -166,6 +168,7 @@ impl Server {
             next_session: 0,
             next_window: 0,
             next_pane: 0,
+            next_spawn: 0,
             next_buffer: 0,
             had_session: false,
             exiting: false,
@@ -235,7 +238,12 @@ impl Server {
                 }
             }
             Event::Msg(id, msg) => self.client_msg(id, msg),
-            Event::Pty(pane, ev) => self.pty_event(pane, ev),
+            Event::Pty(pane, spawn, ev) => {
+                // A respawned pane's previous program can still report.
+                if self.panes.get(&pane).is_some_and(|p| p.spawn == spawn) {
+                    self.pty_event(pane, ev);
+                }
+            }
             Event::Shell { client, output } => {
                 let output = output.trim_end().to_owned();
                 if let Some(c) = client

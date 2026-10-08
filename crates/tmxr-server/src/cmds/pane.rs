@@ -114,6 +114,16 @@ pub(super) fn run(
             };
             srv.swap_panes(src, dst, a.has('d'))?;
         }
+        "respawn-pane" => {
+            let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
+            // Panes close when their program exits (no remain-on-exit), so
+            // the program is always still running and -k is required.
+            if !a.has('k') {
+                return Err(format!("respawn pane failed: pane %{pid} still active"));
+            }
+            let cwd = cwd_arg(srv, ctx, Some(pid), a);
+            srv.respawn_pane(pid, pos.to_vec(), cwd)?;
+        }
         "join-pane" => {
             let s = a.value('s').ok_or("join-pane needs -s src-pane")?;
             let src = target::pane(srv, ctx, Some(s))?.2;

@@ -27,6 +27,11 @@ pub struct Pane {
     /// `pane_current_path` when the process cannot be inspected.
     pub start_cwd: PathBuf,
     pub copy: Option<crate::copy::CopyMode>,
+    /// Which start of this pane the PTY belongs to: `respawn-pane` starts a
+    /// new program under the same id, and events from the old one are stale.
+    pub spawn: u64,
+    /// The command the pane was started with, for `respawn-pane`.
+    pub argv: Vec<String>,
 }
 
 pub struct Window {

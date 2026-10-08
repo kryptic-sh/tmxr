@@ -41,11 +41,6 @@ what was not.
 
 ## Known gaps and follow-ups
 
-- **`respawn-pane` is not implemented** (in plan/10's MVP set). Restarting a
-  pane under the same `%id` is unsafe as things stand: the old process's
-  `PtyEvent::Exited` arrives later as `Event::Pty(id, Exited)`, and
-  `Server::pty_event` would close the respawned pane. Panes need a spawn
-  generation carried in the event (or a fresh id, which tmux does not do).
 - **Not implemented**: `remain-on-exit`, `display-panes` overlay (currently
   prints indices), clock mode, emacs copy mode, a marked pane (so `join-pane` /
   `swap-window` require `-s`), `move-window -k` / `-r`.

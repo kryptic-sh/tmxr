@@ -467,3 +467,37 @@ fn panes_join_and_swap_across_windows() {
     assert_eq!(pane_id(&t, "p:w3"), other);
     assert_eq!(pane_id(&t, "p:w1.1"), lone);
 }
+
+#[test]
+fn respawn_pane_restarts_the_program_in_place() {
+    let t = Tmxr::new("respawn");
+    t.run(&["new-session", "-d", "-s", "r"]);
+    t.run(&["split-window", "-d", "-t", "r"]);
+    let id = t.run(&["display-message", "-p", "-t", "r.0", "#{pane_id}"]);
+    assert!(id.starts_with('%'), "{id:?}");
+    t.run(&["send-keys", "-t", "r.0", "echo before-respawn", "Enter"]);
+    t.wait_run(&["capture-pane", "-p", "-t", "r.0"], "marker", |o| {
+        o.matches("before-respawn").count() >= 2
+    });
+
+    // Without -k the running program is left alone.
+    t.run(&["respawn-pane", "-t", "r.0"]);
+    assert!(
+        t.run(&["capture-pane", "-p", "-t", "r.0"])
+            .contains("before-respawn")
+    );
+
+    // With -k a fresh program starts in the same pane: same id, clean screen.
+    t.run(&["respawn-pane", "-k", "-t", "r.0"]);
+    t.wait_run(&["capture-pane", "-p", "-t", "r.0"], "fresh screen", |o| {
+        !o.contains("before-respawn")
+    });
+    // The old program's exit arrives after the respawn and must not close
+    // the new one.
+    std::thread::sleep(Duration::from_secs(2));
+    assert_eq!(
+        t.run(&["display-message", "-p", "-t", "r.0", "#{pane_id}"]),
+        id
+    );
+    assert_eq!(t.run(&["list-panes", "-t", "r"]).lines().count(), 2);
+}

@@ -51,15 +51,17 @@ impl Server {
             crate::util::home_dir()
         };
         let spec = SpawnSpec {
-            argv,
+            argv: argv.clone(),
             cwd: Some(cwd.clone()),
             env,
             rows,
             cols,
         };
         let events = self.events.clone();
+        let spawn = self.next_spawn;
+        self.next_spawn += 1;
         let sink: Arc<dyn Fn(PtyEvent) + Send + Sync> = Arc::new(move |e| {
-            let _ = events.send(Event::Pty(pid, e));
+            let _ = events.send(Event::Pty(pid, spawn, e));
         });
         let pty = Pty::spawn(&spec, sink).map_err(|e| format!("could not start pane: {e}"))?;
         self.next_pane = self.next_pane.max(pid + 1);
@@ -73,8 +75,41 @@ impl Server {
                 rect: hjkl_layout::LayoutRect::new(0, 0, cols, rows),
                 start_cwd: cwd,
                 copy: None,
+                spawn,
+                argv,
             },
         );
+        Ok(())
+    }
+
+    /// `respawn-pane -k`: end the pane's program and start `argv` (else the
+    /// command it was started with) in its place, keeping its id and cell.
+    pub fn respawn_pane(
+        &mut self,
+        pid: PaneId,
+        argv: Vec<String>,
+        cwd: Option<PathBuf>,
+    ) -> Result<(), String> {
+        let p = self.panes.get(&pid).ok_or("no such pane")?;
+        let (wid, rect) = (p.window, p.rect);
+        let argv = if argv.is_empty() {
+            p.argv.clone()
+        } else {
+            argv
+        };
+        let cwd = cwd.unwrap_or_else(|| p.start_cwd.clone());
+        let session = self.session_of_window(wid).ok_or("window has no session")?;
+        let env = self.sessions[&session].env.clone();
+        if let Some(mut old) = self.panes.remove(&pid) {
+            let _ = old.pty.kill();
+        }
+        self.commands.remove(&pid);
+        if let Err(e) = self.spawn_pane(pid, wid, session, &argv, cwd, &env, rect.w, rect.h) {
+            // The old program is gone: take its cell out of the layout too.
+            self.remove_pane_from_window(wid, pid);
+            return Err(e);
+        }
+        self.relayout(wid);
         Ok(())
     }
 
