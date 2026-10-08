@@ -208,12 +208,12 @@ pub fn encode_mouse(
     let (x, y) = (u32::from(col) + 1, u32::from(row) + 1);
     match encoding {
         MouseProtocolEncoding::Sgr => {
-            format!("[<{code};{x};{y}{}", if release { 'm' } else { 'M' }).into_bytes()
+            format!("\x1b[<{code};{x};{y}{}", if release { 'm' } else { 'M' }).into_bytes()
         }
         MouseProtocolEncoding::Default | MouseProtocolEncoding::Utf8 => {
             // The legacy forms cannot say which button was released.
             let code = if release { 3 + (code & !3) } else { code };
-            let mut out = b"[M".to_vec();
+            let mut out = b"\x1b[M".to_vec();
             for v in [code + 32, x + 32, y + 32] {
                 match encoding {
                     MouseProtocolEncoding::Utf8 => {
@@ -358,15 +358,15 @@ mod tests {
         let up = ev(MouseEventKind::Up(MouseButton::Left));
         let sgr = MouseProtocolEncoding::Sgr;
         let pr = MouseProtocolMode::PressRelease;
-        assert_eq!(encode_mouse(&down, 4, 2, pr, sgr), b"[<0;5;3M");
-        assert_eq!(encode_mouse(&up, 4, 2, pr, sgr), b"[<0;5;3m");
+        assert_eq!(encode_mouse(&down, 4, 2, pr, sgr), b"\x1b[<0;5;3M");
+        assert_eq!(encode_mouse(&up, 4, 2, pr, sgr), b"\x1b[<0;5;3m");
         assert_eq!(
             encode_mouse(&down, 4, 2, pr, MouseProtocolEncoding::Default),
-            b"[M %#"
+            b"\x1b[M %#"
         );
         assert_eq!(
             encode_mouse(&up, 4, 2, pr, MouseProtocolEncoding::Default),
-            b"[M#%#"
+            b"\x1b[M#%#"
         );
         // Press-only mode drops releases; no mode drops everything.
         assert!(encode_mouse(&up, 4, 2, MouseProtocolMode::Press, sgr).is_empty());
@@ -376,13 +376,13 @@ mod tests {
         assert!(encode_mouse(&drag, 1, 1, pr, sgr).is_empty());
         assert_eq!(
             encode_mouse(&drag, 1, 1, MouseProtocolMode::ButtonMotion, sgr),
-            b"[<32;2;2M"
+            b"\x1b[<32;2;2M"
         );
         let wheel = MouseEvent {
             modifiers: C,
             ..ev(MouseEventKind::ScrollUp)
         };
-        assert_eq!(encode_mouse(&wheel, 0, 0, pr, sgr), b"[<80;1;1M");
+        assert_eq!(encode_mouse(&wheel, 0, 0, pr, sgr), b"\x1b[<80;1;1M");
         // Beyond column 222 the one-byte form cannot encode the position.
         assert!(encode_mouse(&down, 300, 0, pr, MouseProtocolEncoding::Default).is_empty());
     }
