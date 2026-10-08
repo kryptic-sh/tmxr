@@ -62,6 +62,11 @@ impl Server {
         let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
             return;
         };
+        // A message lasts display-time or until a key is pressed, as in tmux;
+        // otherwise it would hide a prompt being typed into.
+        if att.message.take().is_some() {
+            att.dirty = true;
+        }
         if let Some(mut ov) = att.overlay.take() {
             let action = ov.key(&ev);
             match action {
