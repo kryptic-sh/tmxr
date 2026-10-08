@@ -905,3 +905,38 @@ fn select_layout_spread_evens_out_a_row_of_panes() {
     let (min, max) = (after.iter().min().unwrap(), after.iter().max().unwrap());
     assert!(max - min <= 1, "{after:?}");
 }
+
+#[test]
+fn choose_buffer_pastes_and_find_window_switches() {
+    let t = Tmxr::new("chooseb");
+    let s = t.attach(&["new", "-s", "cb", "-n", "logs"]);
+    s.wait_for("status line", |text| text.contains("logs"));
+    t.run(&["new-window", "-d", "-t", "cb", "-n", "editor"]);
+    t.run(&["set-buffer", "-b", "alpha", "first-buffer-text"]);
+    t.run(&["set-buffer", "-b", "beta", "second-buffer-text"]);
+
+    // prefix = lists the buffers; typing filters, Enter pastes into the pane.
+    s.send(PREFIX);
+    s.send(b"=");
+    s.wait_for("buffer picker", |text| text.contains("buffers 2/2"));
+    s.send(b"alpha");
+    s.wait_for("filtered", |text| text.contains("buffers 1/2"));
+    s.send(b"\r");
+    s.wait_for("pasted buffer", |text| {
+        !text.contains("buffers 1/2") && text.contains("first-buffer-text")
+    });
+    assert!(!s.text().contains("second-buffer-text"));
+
+    // prefix f asks for text and opens the window list filtered by it.
+    s.send(PREFIX);
+    s.send(b"f");
+    s.wait_for("find prompt", |text| text.contains("(find-window)"));
+    s.send(b"editor\r");
+    s.wait_for("filtered windows", |text| text.contains("windows 1/2"));
+    s.send(b"\r");
+    t.wait_run(
+        &["display-message", "-p", "-t", "cb", "#{window_name}"],
+        "editor selected",
+        |o| o.trim() == "editor",
+    );
+}

@@ -37,4 +37,6 @@ Replaces tmux's `choose-tree -Zs` on `prefix s` (and `choose-tree -Zw` on
 - Rendering: the list and input row are drawn by tmxr (`render.rs`) with the
   `mode-style` for the selected row.
 - The same overlay backs the window picker (`prefix w`, `choose-tree -w`: every
-  session's windows, the current session's first).
+  session's windows, the current session's first), `find-window` (`prefix f`:
+  the window picker opened with the prompt's text as its query) and the buffer
+  picker (`prefix =`, `choose-buffer`: Enter pastes the buffer into the pane).

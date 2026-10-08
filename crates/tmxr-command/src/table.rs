@@ -66,6 +66,7 @@ pub const COMMANDS: &[CommandSpec] = &[
         0,
         "[-p] [-t target-pane]"
     ),
+    cmd!("choose-buffer", None, "Z", 0, 0, "[-Z]"),
     cmd!(
         "choose-tree",
         None,
@@ -116,6 +117,7 @@ pub const COMMANDS: &[CommandSpec] = &[
         "[-p] [-t target-pane] [message]"
     ),
     cmd!("display-panes", Some("displayp"), "", 0, 0, ""),
+    cmd!("find-window", Some("findw"), "Z", 1, 1, "[-Z] match-string"),
     cmd!(
         "has-session",
         Some("has"),

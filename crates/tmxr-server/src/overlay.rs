@@ -118,7 +118,9 @@ impl Overlay {
         Self::Picker(Box::new(PickerOverlay::new("sessions", items)))
     }
 
-    pub fn window_picker(srv: &Server, client: ClientId) -> Self {
+    /// Every session's windows, the client's session first; `query`
+    /// pre-filters them (`find-window`).
+    pub fn window_picker(srv: &Server, client: ClientId, query: &str) -> Self {
         let current = srv
             .clients
             .get(&client)
@@ -144,7 +146,29 @@ impl Overlay {
                 });
             }
         }
-        Self::Picker(Box::new(PickerOverlay::new("windows", items)))
+        Self::Picker(Box::new(PickerOverlay::with_query("windows", items, query)))
+    }
+
+    /// The paste buffers, newest first; Enter pastes one into the pane.
+    pub fn buffer_picker(srv: &Server) -> Self {
+        let items = srv
+            .buffers
+            .iter()
+            .map(|b| {
+                let preview: String = b
+                    .data
+                    .chars()
+                    .take(50)
+                    .map(|c| if c.is_control() { ' ' } else { c })
+                    .collect();
+                Item {
+                    label: format!("{}: {} bytes: \"{preview}\"", b.name, b.data.len()),
+                    matches: format!("{} {preview}", b.name),
+                    target: Target::Buffer(b.name.clone()),
+                }
+            })
+            .collect();
+        Self::Picker(Box::new(PickerOverlay::new("buffers", items)))
     }
 
     /// Feed a key. Returns what the server should do.
@@ -273,10 +297,12 @@ impl Prompt {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Target {
     Session(SessionId),
     Window(SessionId, u32),
+    /// A paste buffer, by name.
+    Buffer(String),
 }
 
 struct Item {
@@ -322,7 +348,7 @@ impl PickerLogic for Source {
     }
 
     fn select(&self, idx: usize) -> PickerAction {
-        PickerAction::Custom(Box::new(self.items[idx].target))
+        PickerAction::Custom(Box::new(self.items[idx].target.clone()))
     }
 
     fn preserve_source_order(&self) -> bool {
@@ -349,8 +375,19 @@ pub struct PickerOverlay {
 
 impl PickerOverlay {
     fn new(title: &'static str, items: Vec<Item>) -> Self {
+        Self::with_query(title, items, "")
+    }
+
+    /// A picker that opens already filtered by `query`.
+    fn with_query(title: &'static str, items: Vec<Item>, query: &str) -> Self {
         let many = items.len() > 1 && title == "sessions";
         let mut picker = Picker::new(Box::new(Source { title, items }));
+        if !query.is_empty() {
+            // Typing after the query keeps refining it.
+            picker.query.set_text(query);
+            picker.query.enter_insert_at_end();
+            picker.refresh();
+        }
         if many {
             picker.selected = 1;
         }
@@ -370,6 +407,10 @@ impl PickerOverlay {
                 Ok(t) => match *t {
                     Target::Session(s) => OverlayAction::Switch(s),
                     Target::Window(s, i) => OverlayAction::SwitchWindow(s, i),
+                    Target::Buffer(name) => OverlayAction::Run(format!(
+                        "paste-buffer -p -b {}",
+                        crate::cmds::join_args(&[name])
+                    )),
                 },
                 Err(_) => OverlayAction::Close,
             },
