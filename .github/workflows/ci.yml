@@ -235,6 +235,12 @@ jobs:
           tool: cargo-zigbuild
       - name: Build binary (zigbuild)
         if: matrix.zig == 'true'
+        env:
+          # zig's linker reports that it ignores rustc's `-O1` linker flag,
+          # and setup-rust-toolchain@v2's CARGO_BUILD_WARNINGS=deny turns
+          # that linker message into an error. Code warnings still fail the
+          # build through RUSTFLAGS=-D warnings.
+          CARGO_BUILD_WARNINGS: warn
         run:
           cargo zigbuild --release --locked --target ${{ matrix.zigbuild_target
           }} -p tmxr --bin tmxr
