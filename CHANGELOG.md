@@ -15,11 +15,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   command language.
 - **Built-in defaults port the owner's tmux config**: vim pane selection, splits
   and new windows in the current directory, `M-h`/`M-l`, synchronize panes on
-  `prefix x`, vi copy mode with `v`/`C-v`/`y`, tmux-sensible binds,
-  vim/hjkl-aware `C-h/j/k/l` navigation, Tokyo Night status line in the
-  catppuccin layout. Overridable from `~/.config/tmxr/config.toml`.
-- **Fuzzy session and window picker** (`prefix s` / `prefix w`) on
-  `hjkl-picker`, moving with `j`/`k` or arrows.
+  `prefix x`, vi copy mode with `v`/`C-v`/`y`, tmux-sensible and tmux-yank
+  binds, tmux's own default binds (`display-panes` numbers on `prefix q`, alert
+  windows on `M-n`/`M-p`, even spread on `prefix E`, …), vim/hjkl-aware
+  `C-h/j/k/l` navigation, Tokyo Night status line in the catppuccin layout.
+  Overridable from `~/.config/tmxr/config.toml`.
+- **The tmux command set of the plan's MVP**, including moving windows and panes
+  between sessions (`move-window`, `swap-window`, `join-pane`, `swap-pane -s`),
+  `respawn-pane`, `if-shell` and buffers to and from files.
+- **Fuzzy pickers** on `hjkl-picker` for sessions (`prefix s`), windows
+  (`prefix w`, and `prefix f` to find one) and paste buffers (`prefix =`),
+  moving with `j`/`k` or arrows.
+- **Mouse** (`mouse on`): click to focus, drag borders, wheel into copy mode,
+  drag to copy. With `mouse off` the client leaves the mouse to the terminal.
+- **tmux passthrough** (`allow-passthrough`, on by default as in the tmux
+  config) forwards programs' `ESC P tmux; …` sequences, such as inline images,
+  to the outer terminal. Unix only: ConPTY drops the sequence's terminator.
 - **Save and restore of sessions** (`prefix C-s` / `C-r`), auto-save and restore
   when the server starts. Each server (`-L` label or `-S` socket) keeps its own
   saves.
