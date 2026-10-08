@@ -43,6 +43,8 @@ pub struct Config {
     /// Keep a pane whose program exited, shown as dead, until it is
     /// respawned or killed (tmux's `remain-on-exit`).
     pub remain_on_exit: bool,
+    /// Shell command `copy-pipe` sends the copied text to when it names none.
+    pub copy_command: String,
     pub update_environment: Vec<String>,
     pub navigator: Navigator,
     pub status: Status,

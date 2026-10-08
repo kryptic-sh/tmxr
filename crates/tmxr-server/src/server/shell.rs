@@ -44,6 +44,37 @@ pub fn if_shell(srv: &Server, ctx: Ctx, line: String, then: String, otherwise: O
         });
 }
 
+/// `copy-pipe`: run `line` with the shell, `input` on its standard input,
+/// off the state thread. A failure goes to the message log.
+pub fn pipe_to_shell(srv: &Server, line: String, input: String) {
+    use std::io::Write as _;
+    use std::process::{Command, Stdio};
+    let events = srv.events.clone();
+    let _ = std::thread::Builder::new()
+        .name("tmxr-copy-pipe".into())
+        .spawn(move || {
+            let argv = crate::util::shell_command(&line);
+            let run = Command::new(&argv[0])
+                .args(&argv[1..])
+                .stdin(Stdio::piped())
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped())
+                .spawn()
+                .and_then(|mut child| {
+                    if let Some(mut stdin) = child.stdin.take() {
+                        stdin.write_all(input.as_bytes())?;
+                    }
+                    child.wait_with_output()
+                });
+            let failure = match run {
+                Ok(o) if o.status.success() => return,
+                Ok(o) => String::from_utf8_lossy(&o.stderr).trim().to_owned(),
+                Err(e) => e.to_string(),
+            };
+            let _ = events.send(Event::Log(format!("copy-pipe '{line}' failed: {failure}")));
+        });
+}
+
 /// Run a shell command line to completion with no input.
 fn shell_output(line: &str) -> std::io::Result<std::process::Output> {
     let argv = crate::util::shell_command(line);

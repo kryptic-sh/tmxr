@@ -708,12 +708,24 @@ pub fn command(
         "cancel" => leave(srv, pane),
         "copy-selection"
         | "copy-selection-and-cancel"
-        | "copy-selection-no-newlines-and-cancel" => {
+        | "copy-selection-no-newlines-and-cancel"
+        | "copy-pipe"
+        | "copy-pipe-and-cancel" => {
             let text = cm.selection_text();
             let cancel = name.ends_with("-and-cancel");
             if let Some(mut text) = text {
                 if name.contains("no-newlines") {
                     text = text.replace(['\r', '\n'], "");
+                }
+                // copy-pipe also hands the text to a command: its argument,
+                // else the copy-command option.
+                let pipe = name.starts_with("copy-pipe").then(|| {
+                    args.first()
+                        .cloned()
+                        .unwrap_or_else(|| srv.cfg.copy_command.clone())
+                });
+                if let Some(cmd) = pipe.filter(|c| !c.is_empty()) {
+                    crate::server::pipe_to_shell(srv, cmd, text.clone());
                 }
                 srv.set_clipboard(&text);
                 srv.add_buffer(text, None);

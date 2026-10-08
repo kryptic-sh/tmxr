@@ -146,6 +146,7 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
         "default-shell" => c.default_shell = Some(need()?.to_owned()),
         "extended-keys" => need()?.clone_into(&mut c.extended_keys),
         "set-clipboard" => need()?.clone_into(&mut c.set_clipboard),
+        "copy-command" => need()?.clone_into(&mut c.copy_command),
         "remain-on-exit" => c.remain_on_exit = on_off(value, c.remain_on_exit)?,
         "allow-passthrough" => {
             let on = on_off(value, c.allow_passthrough)?;

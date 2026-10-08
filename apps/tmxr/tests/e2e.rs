@@ -1330,3 +1330,37 @@ fn suspend_client_says_windows_cannot() {
     s.send(b"\x1a");
     s.wait_for("error", |text| text.contains("no job control"));
 }
+
+#[test]
+fn copy_pipe_sends_the_selection_to_copy_command() {
+    let t = Tmxr::new("pipe");
+    let sink = t.dir.path().join("piped.txt");
+    #[cfg(unix)]
+    let command = format!("cat > '{}'", sink.display());
+    #[cfg(windows)]
+    let command = format!("$input | Set-Content -NoNewline -Path '{}'", sink.display());
+    let s = t.attach(&["new", "-s", "pp"]);
+    s.wait_for("status line", |text| text.contains("pp"));
+    t.run(&["set-option", "-g", "copy-command", &command]);
+    s.send(b"echo pipeme-77\r");
+    s.wait_for("echoed", |text| text.matches("pipeme-77").count() >= 2);
+    s.send(PREFIX);
+    s.send(b"[");
+    s.send(b"?");
+    s.wait_for("search prompt", |text| text.contains("(search up)"));
+    s.send(b"pipeme\r");
+    s.send(b"vE");
+    // copy-pipe-and-cancel with no command uses copy-command.
+    std::thread::sleep(Duration::from_millis(200));
+    t.run(&["send-keys", "-t", "pp", "-X", "copy-pipe-and-cancel"]);
+    let deadline = Instant::now() + TIMEOUT;
+    loop {
+        let got = std::fs::read_to_string(&sink).unwrap_or_default();
+        if got.trim_end() == "pipeme-77" {
+            break;
+        }
+        assert!(Instant::now() < deadline, "sink holds {got:?}");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert_eq!(t.run(&["show-buffer"]), "pipeme-77");
+}

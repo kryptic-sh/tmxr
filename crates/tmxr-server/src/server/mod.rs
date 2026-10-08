@@ -6,7 +6,7 @@ mod panes;
 mod shell;
 mod windows;
 
-pub use shell::{if_shell, run_shell};
+pub use shell::{if_shell, pipe_to_shell, run_shell};
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::path::PathBuf;
@@ -42,6 +42,8 @@ pub enum Event {
         client: Option<ClientId>,
         output: String,
     },
+    /// A line for the message log from work done off the state thread.
+    Log(String),
     /// A command `if-shell` chose once its shell command finished.
     Run {
         ctx: Ctx,
@@ -278,6 +280,7 @@ impl Server {
                     }
                 }
             }
+            Event::Log(line) => self.log_message(line),
             Event::Run { ctx, cmd } => {
                 let out = crate::cmds::run_string(self, &ctx, &cmd);
                 if let Some(c) = ctx.client {

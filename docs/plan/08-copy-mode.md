@@ -51,7 +51,7 @@ is `start-of-line`) repeat the next command, and a count before a jump repeats
 the jump (`3tx`). `send-keys -X -N count` does the same from a bind.
 
 The default binds in [06](06-keys-and-bindings.md#copy-mode-vi) map vi keys onto
-these. Not implemented: marks, `%`, `copy-pipe*` and `refresh-from-pane`.
+these. Not implemented: marks, `%` and `refresh-from-pane`.
 
 ## Copying
 
@@ -63,7 +63,10 @@ these. Not implemented: marks, `%`, `copy-pipe*` and `refresh-from-pane`.
    clipboard through `hjkl-clipboard` on a background thread, covering terminals
    that ignore OSC 52.
 
-`copy-command` (piping the selection to a shell command) is not implemented.
+`copy-pipe` / `copy-pipe-and-cancel` copy as above and also send the text to a
+shell command on its standard input: the command's argument, else the
+`copy-command` option. The command runs off the state thread; a failure goes to
+the message log.
 
 `!` (copy without newlines), `Y`, `M-y` (copy and paste) and the drag-end copy
 come from tmux-yank's binds.
