@@ -141,7 +141,10 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
         "status-interval" => c.status_interval = num(need()?)?,
         "repeat-time" => c.repeat_time = num(need()?)?,
         "escape-time" => c.escape_time = num(need()?)?,
-        "mode-keys" => need()?.clone_into(&mut c.mode_keys),
+        "mode-keys" => match need()? {
+            v @ ("vi" | "emacs") => v.clone_into(&mut c.mode_keys),
+            v => return Err(format!("mode-keys: unknown value: {v} (vi or emacs)")),
+        },
         "default-terminal" => need()?.clone_into(&mut c.default_terminal),
         "default-shell" => c.default_shell = Some(need()?.to_owned()),
         "extended-keys" => need()?.clone_into(&mut c.extended_keys),

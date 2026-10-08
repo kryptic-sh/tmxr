@@ -327,12 +327,19 @@ impl CopyMode {
     }
 
     /// Keys copy mode takes before its key table: the character a pending
-    /// jump waits for (any other key cancels the wait) and count digits.
-    /// Returns whether the key was used.
-    pub fn take_key(&mut self, ev: &KeyEvent) -> bool {
+    /// jump waits for (any other key cancels the wait) and count digits,
+    /// typed plain in vi mode and with Alt (`M-1`) in emacs mode, as tmux's
+    /// tables have them. Returns whether the key was used.
+    pub fn take_key(&mut self, ev: &KeyEvent, emacs: bool) -> bool {
         let plain = !ev
             .modifiers
             .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+        let digit_mods = if emacs {
+            ev.modifiers.contains(KeyModifiers::ALT)
+                && !ev.modifiers.contains(KeyModifiers::CONTROL)
+        } else {
+            plain
+        };
         if let Some(jump) = self.pending_jump.take() {
             if let (KeyCode::Char(c), true) = (ev.code, plain) {
                 let times = std::mem::take(&mut self.count).max(1);
@@ -344,7 +351,7 @@ impl CopyMode {
             self.count = 0;
             return true;
         }
-        match (ev.code, plain) {
+        match (ev.code, digit_mods) {
             // `0` is start-of-line unless it continues a count.
             (KeyCode::Char(d @ '0'..='9'), true) if d != '0' || self.count > 0 => {
                 let digit = d as usize - '0' as usize;
@@ -895,25 +902,40 @@ mod tests {
     fn counts_repeat_commands_and_jumps_wait_for_their_character() {
         let mut cm = at_start("abcdefghijklmnop");
         // 0 alone is start-of-line, for the key table.
-        assert!(!cm.take_key(&key('0')));
-        assert!(cm.take_key(&key('1')));
-        assert!(cm.take_key(&key('0')));
+        assert!(!cm.take_key(&key('0'), false));
+        assert!(cm.take_key(&key('1'), false));
+        assert!(cm.take_key(&key('0'), false));
         assert_eq!(cm.count, 10);
         cm.apply_counted("cursor-right", None);
         assert_eq!((cm.cx, cm.count), (10, 0));
 
         // 2fx: the count waits with the jump for its character.
         let mut cm = at_start("x.x.x.x");
-        cm.take_key(&key('2'));
+        cm.take_key(&key('2'), false);
         cm.apply_counted("jump-forward", None);
         assert_eq!(cm.pending_jump, Some(Jump::Forward));
-        assert!(cm.take_key(&key('x')));
+        assert!(cm.take_key(&key('x'), false));
         assert_eq!((cm.cx, cm.pending_jump), (4, None));
 
         // Escape cancels a waiting jump.
         cm.apply_counted("jump-forward", None);
-        assert!(cm.take_key(&KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)));
+        assert!(cm.take_key(&KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE), false));
         assert_eq!((cm.cx, cm.pending_jump), (4, None));
+    }
+
+    #[test]
+    fn emacs_counts_are_typed_with_alt() {
+        let alt = |c| KeyEvent::new(KeyCode::Char(c), KeyModifiers::ALT);
+        let mut cm = at_start("abcdefghijklmnop");
+        // Plain digits are not counts in emacs mode.
+        assert!(!cm.take_key(&key('3'), true));
+        assert!(cm.take_key(&alt('1'), true));
+        assert!(cm.take_key(&alt('2'), true));
+        assert_eq!(cm.count, 12);
+        // And Alt digits are not counts in vi mode.
+        assert!(!cm.take_key(&alt('4'), false));
+        cm.apply_counted("cursor-right", None);
+        assert_eq!(cm.cx, 12);
     }
 
     #[test]

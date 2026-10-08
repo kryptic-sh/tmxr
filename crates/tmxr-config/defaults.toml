@@ -291,3 +291,63 @@ processes = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "top",
 "MouseDragEnd1Pane" = { cmd = "send-keys -X copy-selection-and-cancel", note = "Copy the dragged selection" }
 "WheelUpPane" = { cmd = "select-pane ; send-keys -X -N 5 scroll-up", note = "Scroll up" }
 "WheelDownPane" = { cmd = "select-pane ; send-keys -X -N 5 scroll-down", note = "Scroll down" }
+
+# Copy mode with `mode-keys emacs`: tmux's own copy-mode table, less the
+# commands tmxr does not have (paragraphs, goto-line, copy-end-of-line).
+# Counts are M-1 … M-9.
+[keys.copy-mode]
+"Escape" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
+"C-c" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
+"q" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
+"C-Space" = { cmd = "send-keys -X begin-selection", note = "Start selection" }
+"C-g" = { cmd = "send-keys -X clear-selection", note = "Clear selection" }
+"R" = { cmd = "send-keys -X rectangle-toggle", note = "Toggle rectangle selection" }
+"M-w" = { cmd = "send-keys -X copy-selection-and-cancel", note = "Copy selection" }
+"C-w" = { cmd = "send-keys -X copy-selection-and-cancel", note = "Copy selection" }
+"C-b" = { cmd = "send-keys -X cursor-left", note = "Cursor left" }
+"C-f" = { cmd = "send-keys -X cursor-right", note = "Cursor right" }
+"C-p" = { cmd = "send-keys -X cursor-up", note = "Cursor up" }
+"C-n" = { cmd = "send-keys -X cursor-down", note = "Cursor down" }
+"Left" = { cmd = "send-keys -X cursor-left", note = "Cursor left" }
+"Right" = { cmd = "send-keys -X cursor-right", note = "Cursor right" }
+"Up" = { cmd = "send-keys -X cursor-up", note = "Cursor up" }
+"Down" = { cmd = "send-keys -X cursor-down", note = "Cursor down" }
+"C-a" = { cmd = "send-keys -X start-of-line", note = "Start of line" }
+"C-e" = { cmd = "send-keys -X end-of-line", note = "End of line" }
+"Home" = { cmd = "send-keys -X start-of-line", note = "Start of line" }
+"End" = { cmd = "send-keys -X end-of-line", note = "End of line" }
+"M-m" = { cmd = "send-keys -X back-to-indentation", note = "First non-blank" }
+"M-b" = { cmd = "send-keys -X previous-word", note = "Previous word" }
+"M-f" = { cmd = "send-keys -X next-word-end", note = "End of word" }
+"C-M-f" = { cmd = "send-keys -X next-matching-bracket", note = "Matching bracket" }
+"M-<" = { cmd = "send-keys -X history-top", note = "Top of history" }
+"M->" = { cmd = "send-keys -X history-bottom", note = "Bottom of history" }
+"M-R" = { cmd = "send-keys -X top-line", note = "Top of screen" }
+"M-r" = { cmd = "send-keys -X middle-line", note = "Middle of screen" }
+"C-v" = { cmd = "send-keys -X page-down", note = "Page down" }
+"M-v" = { cmd = "send-keys -X page-up", note = "Page up" }
+"Space" = { cmd = "send-keys -X page-down", note = "Page down" }
+"NPage" = { cmd = "send-keys -X page-down", note = "Page down" }
+"PPage" = { cmd = "send-keys -X page-up", note = "Page up" }
+"M-Up" = { cmd = "send-keys -X halfpage-up", note = "Half page up" }
+"M-Down" = { cmd = "send-keys -X halfpage-down", note = "Half page down" }
+"C-Up" = { cmd = "send-keys -X scroll-up", note = "Scroll up" }
+"C-Down" = { cmd = "send-keys -X scroll-down", note = "Scroll down" }
+"C-s" = { cmd = 'command-prompt -p "(search down)" "send-keys -X search-forward \"%%\""', note = "Search down" }
+"C-r" = { cmd = 'command-prompt -p "(search up)" "send-keys -X search-backward \"%%\""', note = "Search up" }
+"n" = { cmd = "send-keys -X search-again", note = "Next match" }
+"N" = { cmd = "send-keys -X search-reverse", note = "Previous match" }
+"f" = { cmd = "send-keys -X jump-forward", note = "Jump to the next char typed" }
+"F" = { cmd = "send-keys -X jump-backward", note = "Jump back to the char typed" }
+"t" = { cmd = "send-keys -X jump-to-forward", note = "Jump to just before the next char typed" }
+"T" = { cmd = "send-keys -X jump-to-backward", note = "Jump back to just after the char typed" }
+";" = { cmd = "send-keys -X jump-again", note = "Repeat the last jump" }
+"," = { cmd = "send-keys -X jump-reverse", note = "Repeat the last jump the other way" }
+"X" = { cmd = "send-keys -X set-mark", note = "Set the mark" }
+"M-x" = { cmd = "send-keys -X jump-to-mark", note = "Jump to the mark (and back)" }
+"r" = { cmd = "send-keys -X refresh-from-pane", note = "Refresh from the live pane" }
+"MouseDown1Pane" = { cmd = "select-pane ; send-keys -X clear-selection", note = "Move the cursor to the click" }
+"MouseDrag1Pane" = { cmd = "select-pane ; send-keys -X begin-selection", note = "Select by dragging" }
+"MouseDragEnd1Pane" = { cmd = "send-keys -X copy-selection-and-cancel", note = "Copy the dragged selection" }
+"WheelUpPane" = { cmd = "select-pane ; send-keys -X -N 5 scroll-up", note = "Scroll up" }
+"WheelDownPane" = { cmd = "select-pane ; send-keys -X -N 5 scroll-down", note = "Scroll down" }

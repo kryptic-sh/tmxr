@@ -55,7 +55,16 @@ impl Server {
 
     /// The key table for a pane in copy mode.
     pub fn copy_table(&self) -> &'static str {
-        "copy-mode-vi"
+        if self.emacs_keys() {
+            "copy-mode"
+        } else {
+            "copy-mode-vi"
+        }
+    }
+
+    /// `mode-keys emacs`.
+    fn emacs_keys(&self) -> bool {
+        self.cfg.mode_keys == "emacs"
     }
 
     pub fn active_pane_of_session(&self, session: SessionId) -> Option<PaneId> {
@@ -138,8 +147,9 @@ impl Server {
             // A count digit or the character a jump waits for goes to copy
             // mode itself, ahead of its key table.
             let pane = active.expect("copy mode is in the active pane");
+            let emacs = self.emacs_keys();
             if let Some(p) = self.panes.get_mut(&pane)
-                && p.copy.as_mut().is_some_and(|cm| cm.take_key(&ev))
+                && p.copy.as_mut().is_some_and(|cm| cm.take_key(&ev, emacs))
             {
                 let window = p.window;
                 self.mark_window_dirty(window);

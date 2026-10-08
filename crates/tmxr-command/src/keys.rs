@@ -36,8 +36,11 @@ impl Key {
                 mods.remove(KeyModifiers::SHIFT);
                 let c = if mods.contains(KeyModifiers::CONTROL) {
                     // Legacy terminals deliver C-\ C-] C-^ C-_ as the bytes
-                    // 0x1c..0x1f, which crossterm reports as C-4 .. C-7.
+                    // 0x1c..0x1f, which crossterm reports as C-4 .. C-7, and
+                    // C-Space as 0x00, which Windows reports as C-2. tmux
+                    // names 0x00 C-Space and accepts C-@ for it.
                     match c {
+                        '2' | '@' => ' ',
                         '4' => '\\',
                         '5' => ']',
                         '6' => '^',
@@ -268,6 +271,10 @@ mod tests {
         // C-\ as legacy byte 0x1c (crossterm: C-4) and as an explicit char.
         let legacy = Key::from_event(&KeyEvent::new(KeyCode::Char('4'), KeyModifiers::CONTROL));
         assert_eq!(legacy, k("C-\\"));
+        // C-Space as 0x00, which Windows reports as C-2.
+        let nul = Key::from_event(&KeyEvent::new(KeyCode::Char('2'), KeyModifiers::CONTROL));
+        assert_eq!(nul, k("C-Space"));
+        assert_eq!(k("C-@"), k("C-Space"));
         // Shifted characters carry their shift.
         let pct = Key::from_event(&KeyEvent::new(KeyCode::Char('%'), KeyModifiers::SHIFT));
         assert_eq!(pct, k("%"));

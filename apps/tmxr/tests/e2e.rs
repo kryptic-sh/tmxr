@@ -1662,3 +1662,36 @@ fn detach_stays_responsive_under_flood_output() {
     );
     eprintln!("detach under flood: {took:?}");
 }
+
+#[test]
+fn emacs_copy_mode_selects_with_its_own_keys() {
+    let t = Tmxr::new("emacs");
+    let s = t.attach(&["new", "-s", "em"]);
+    s.wait_for("status line", |text| text.contains("em"));
+    let bad = t.output(&["set-option", "-g", "mode-keys", "bogus"]);
+    assert!(
+        !bad.status.success() && String::from_utf8_lossy(&bad.stderr).contains("vi or emacs"),
+        "{bad:?}"
+    );
+    t.run(&["set-option", "-g", "mode-keys", "emacs"]);
+    s.send(b"echo @emacs-copy\r");
+    s.wait_for("echoed", |text| {
+        text.lines().any(|l| l.trim_end() == "@emacs-copy")
+    });
+    s.send(PREFIX);
+    s.send(b"[");
+    // C-r searches up to the output line's start.
+    s.send(b"\x12");
+    s.wait_for("search prompt", |text| text.contains("(search up)"));
+    s.send(b"@emacs-copy\r");
+    s.wait_for("search done", |text| !text.contains("(search up)"));
+    // C-Space, then M-1 M-0 C-f: ten cells right, and M-w copies.
+    s.send(b"\x00");
+    s.send(b"\x1b1");
+    s.send(b"\x1b0");
+    s.send(b"\x06");
+    s.send(b"\x1bw");
+    t.wait_run(&["show-buffer"], "the selection copied", |o| {
+        o.trim_end() == "@emacs-copy"
+    });
+}

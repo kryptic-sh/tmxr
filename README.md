@@ -30,9 +30,9 @@ listed in [docs/backlog.md](docs/backlog.md).
 - **Defaults are an opinionated tmux setup**: vim-style pane selection
   (`prefix h/j/k/l`), splits and new windows in the current directory
   (`prefix '` `"` `;` `%` `c`), `M-h` / `M-l` to cycle windows, synchronized
-  panes on `prefix x`, vi copy mode with `v` / `C-v` / `y`, tmux-sensible and
-  tmux-yank binds, and tmux's own default binds. `prefix ?` lists every bind
-  with a note.
+  panes on `prefix x`, vi copy mode with `v` / `C-v` / `y` (or tmux's emacs
+  table with `mode-keys emacs`), tmux-sensible and tmux-yank binds, and tmux's
+  own default binds. `prefix ?` lists every bind with a note.
 - **vim / hjkl navigation built in**: `C-h/j/k/l` move between panes, or go to
   the program in front when it is vim, hjkl or fzf — no plugin needed.
 - **Fuzzy pickers** on `hjkl-picker`: sessions (`prefix s`), windows

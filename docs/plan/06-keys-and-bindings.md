@@ -9,7 +9,8 @@ note (`bind -N`).
 - `prefix` — entered after the prefix key (`C-b`); returns to `root` after one
   key unless the bind was made with `-r` (repeatable within `repeat-time`, 500
   ms).
-- `copy-mode-vi` — while a pane is in copy mode (`mode-keys vi`).
+- `copy-mode-vi` / `copy-mode` — while a pane is in copy mode (`mode-keys vi` /
+  `emacs`).
 - Overlay tables: `picker`, `prompt` (handled by the picker/prompt widgets, not
   user-rebindable in the MVP).
 

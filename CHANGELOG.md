@@ -17,6 +17,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `copy-mode -e`: scrolling back to the bottom leaves copy mode, as the wheel
   does. The flag was accepted before but did nothing.
 - `#{mouse_any_flag}`: whether the pane's program asked for the mouse.
+- **Emacs copy mode**: `mode-keys emacs` switches copy mode to tmux's emacs
+  table (`copy-mode`: `C-Space`, `M-w`, `C-s` / `C-r`, `M-1`… counts, …).
+  `mode-keys` now rejects values other than `vi` and `emacs`.
 
 ### Fixed
 
@@ -24,6 +27,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   delays key presses by seconds or grows the server's memory without bound: each
   pane's output waits in a bounded queue that slows the program down, and the
   server repaints during a flood.
+- `C-Space` binds now fire on Windows, where the terminal reports the key (byte
+  0x00) as `C-2`; `C-@` names the same key, as in tmux.
 
 ## [0.1.0] - 2026-10-09
 
