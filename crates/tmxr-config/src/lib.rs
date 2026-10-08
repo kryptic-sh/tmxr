@@ -218,7 +218,7 @@ mod tests {
     /// tmux's own default prefix binds that the tmux config leaves alone
     /// (docs/plan/06), as (key, command name). The config overrides `'`, `;`,
     /// `l` and `x`; tmux binds tmxr has no command for yet (`t`, `f`, `m`,
-    /// `M`, `E`, `D`, `=`, `/`, `C-z`, `M-n`, `M-p`) are listed in the backlog.
+    /// `M`, `D`, `=`, `/`, `C-z`) are listed in the backlog.
     const TMUX_BUILTIN_BINDS: &[(&str, &str)] = &[
         ("C-b", "send-prefix"),
         ("C-o", "rotate-window"),
@@ -243,8 +243,10 @@ mod tests {
         ("d", "detach-client"),
         ("i", "display-message"),
         ("n", "next-window"),
+        ("M-n", "next-window"),
         ("o", "select-pane"),
         ("p", "previous-window"),
+        ("M-p", "previous-window"),
         ("q", "display-panes"),
         ("r", "refresh-client"),
         ("s", "choose-tree"),
@@ -258,6 +260,7 @@ mod tests {
         ("C-Up", "resize-pane"),
         ("M-Up", "resize-pane"),
         ("M-1", "select-layout"),
+        ("E", "select-layout"),
     ];
 
     #[test]

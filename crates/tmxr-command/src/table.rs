@@ -245,10 +245,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "next-window",
         Some("next"),
-        "t:",
+        "at:",
         0,
         0,
-        "[-t target-session]"
+        "[-a] [-t target-session]"
     ),
     cmd!(
         "paste-buffer",
@@ -261,10 +261,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "previous-window",
         Some("prev"),
-        "t:",
+        "at:",
         0,
         0,
-        "[-t target-session]"
+        "[-a] [-t target-session]"
     ),
     cmd!("refresh-client", Some("refresh"), "", 0, 0, ""),
     cmd!(
@@ -328,10 +328,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "select-layout",
         Some("selectl"),
-        "nopt:",
+        "Enopt:",
         0,
         1,
-        "[-nop] [-t target-window] [layout-name]"
+        "[-Enop] [-t target-window] [layout-name]"
     ),
     cmd!(
         "select-pane",

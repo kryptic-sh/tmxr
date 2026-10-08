@@ -90,6 +90,21 @@ pub(super) fn run(
             };
             srv.select_window(sid, idx)?;
         }
+        // -a: the next / previous window with an alert (a bell), cycling.
+        "next-window" | "previous-window" if a.has('a') => {
+            let sid = target::session(srv, ctx, a.value('t'))?;
+            let s = &srv.sessions[&sid];
+            let alerted = |i: &&u32| srv.windows.get(&s.windows[*i]).is_some_and(|w| w.bell);
+            let after = s.windows.keys().filter(|i| **i > s.current);
+            let before = s.windows.keys().filter(|i| **i < s.current);
+            let found = if p.name() == "next-window" {
+                after.chain(before).find(alerted)
+            } else {
+                before.rev().chain(after.rev()).find(alerted)
+            };
+            let idx = *found.ok_or("no window with an alert")?;
+            srv.select_window(sid, idx)?;
+        }
         "next-window" | "previous-window" | "last-window" => {
             let sid = target::session(srv, ctx, a.value('t'))?;
             let spec = match p.name() {
@@ -135,6 +150,13 @@ pub(super) fn run(
                     );
                 }
             }
+        }
+        "select-layout" if a.has('E') => {
+            let (_, _, wid) = target::window(srv, ctx, a.value('t'))?;
+            let win = srv.windows.get_mut(&wid).ok_or("no window")?;
+            win.layout = crate::layout::spread(&win.layout, win.active);
+            win.zoomed = false;
+            srv.relayout(wid);
         }
         "next-layout" | "select-layout" => {
             let (_, _, wid) = target::window(srv, ctx, a.value('t'))?;

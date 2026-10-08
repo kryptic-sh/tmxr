@@ -202,6 +202,84 @@ pub fn rotate(tree: &LayoutTree, up: bool) -> LayoutTree {
     })
 }
 
+/// `select-layout -E`: spread out evenly the panes beside `pane` — the run of
+/// same-direction splits its parent split belongs to, which is the layout
+/// cell tmux spreads. Splits outside that run keep their ratios.
+pub fn spread(tree: &LayoutTree, pane: PaneId) -> LayoutTree {
+    let pane = pane as usize;
+    let dirs = path_dirs(tree, pane);
+    let Some(&dir) = dirs.last() else {
+        return tree.clone();
+    };
+    // The run starts at the highest split above the parent in that direction.
+    let start = dirs.iter().rposition(|d| *d != dir).map_or(0, |i| i + 1);
+    spread_from(tree, pane, start, dir)
+}
+
+/// Directions of the splits from the root down to `pane`'s parent.
+fn path_dirs(tree: &LayoutTree, pane: usize) -> Vec<SplitDir> {
+    match tree {
+        LayoutTree::Split { dir, a, b, .. } if tree.contains(pane) => {
+            let below = if a.contains(pane) { a } else { b };
+            let mut dirs = vec![*dir];
+            dirs.extend(path_dirs(below, pane));
+            dirs
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// Rebuild `tree`, evening out the run that starts `depth` splits down the
+/// path to `pane`.
+fn spread_from(tree: &LayoutTree, pane: usize, depth: usize, dir: SplitDir) -> LayoutTree {
+    if depth == 0 {
+        return even_run(tree, dir);
+    }
+    match tree {
+        LayoutTree::Split {
+            dir: d,
+            ratio,
+            a,
+            b,
+            ..
+        } => {
+            let (a, b) = if a.contains(pane) {
+                (spread_from(a, pane, depth - 1, dir), (**b).clone())
+            } else {
+                ((**a).clone(), spread_from(b, pane, depth - 1, dir))
+            };
+            LayoutTree::split(*d, *ratio, a, b)
+        }
+        other => other.clone(),
+    }
+}
+
+/// Give every member of a run of `dir` splits the same share.
+fn even_run(tree: &LayoutTree, dir: SplitDir) -> LayoutTree {
+    match tree {
+        LayoutTree::Split { dir: d, a, b, .. } if *d == dir => {
+            let (wa, wb) = (run_members(a, dir), run_members(b, dir));
+            LayoutTree::split(
+                dir,
+                wa as f32 / (wa + wb) as f32,
+                even_run(a, dir),
+                even_run(b, dir),
+            )
+        }
+        other => other.clone(),
+    }
+}
+
+/// How many members of a `dir` run `tree` holds.
+fn run_members(tree: &LayoutTree, dir: SplitDir) -> usize {
+    match tree {
+        LayoutTree::Split { dir: d, a, b, .. } if *d == dir => {
+            run_members(a, dir) + run_members(b, dir)
+        }
+        _ => 1,
+    }
+}
+
 /// tmux's preset layouts, in `next-layout` order.
 pub const PRESETS: &[&str] = &[
     "even-horizontal",
@@ -340,6 +418,39 @@ mod tests {
         assert_eq!(r.leaves(), vec![1, 2, 0]);
         let r = rotate(&three(), false);
         assert_eq!(r.leaves(), vec![2, 0, 1]);
+    }
+
+    #[test]
+    fn spread_evens_out_the_run_beside_the_pane() {
+        // 0 | (1 | 2) at 50/50 then 50/50: widths 39/19/20 of 80.
+        let run = LayoutTree::split(
+            SplitDir::Vertical,
+            0.5,
+            LayoutTree::Leaf(0),
+            LayoutTree::split(
+                SplitDir::Vertical,
+                0.5,
+                LayoutTree::Leaf(1),
+                LayoutTree::Leaf(2),
+            ),
+        );
+        let widths = |t: &LayoutTree| -> Vec<u16> {
+            pane_rects(t, 80, 24).iter().map(|(_, r)| r.w).collect()
+        };
+        let before = widths(&run);
+        assert!(before[0] > before[1] + 10, "{before:?}");
+        let after = widths(&spread(&run, 1));
+        let (min, max) = (after.iter().min().unwrap(), after.iter().max().unwrap());
+        assert!(max - min <= 1, "{after:?}");
+
+        // Above a run in another direction, a split keeps its ratio.
+        let tall = LayoutTree::split(SplitDir::Horizontal, 0.7, run, LayoutTree::Leaf(3));
+        let LayoutTree::Split { ratio, .. } = spread(&tall, 1) else {
+            unreachable!()
+        };
+        assert!((ratio - 0.7).abs() < f32::EPSILON);
+        // A lone pane has nothing to spread.
+        assert_eq!(spread(&LayoutTree::Leaf(0), 0).leaves(), vec![0]);
     }
 
     #[test]

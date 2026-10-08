@@ -855,3 +855,53 @@ fn passthrough_is_forwarded_where_the_platform_allows() {
         assert!(forwarded, "payload not forwarded: {:?}", s.raw_text());
     }
 }
+
+#[test]
+fn next_window_with_alert_skips_quiet_windows() {
+    let t = Tmxr::new("alert");
+    #[cfg(unix)]
+    let ring = ["/bin/sh", "-c", r"printf '\007'; sleep 30"];
+    #[cfg(windows)]
+    let ring = [
+        "powershell.exe",
+        "-NoProfile",
+        "-Command",
+        "[Console]::Out.Write([char]7); Start-Sleep 30",
+    ];
+    t.run(&["new-session", "-d", "-s", "al", "-n", "zero"]);
+    t.run(&["new-window", "-d", "-t", "al", "-n", "quiet"]);
+    let mut bell = vec!["new-window", "-d", "-t", "al", "-n", "ringing"];
+    bell.extend(ring);
+    t.run(&bell);
+    t.wait_run(&["list-windows", "-t", "al"], "bell flag", |o| {
+        o.lines().any(|l| l.contains("ringing!"))
+    });
+    let current = |t: &Tmxr| t.run(&["display-message", "-p", "-t", "al", "#{window_name}"]);
+    t.run(&["next-window", "-a", "-t", "al"]);
+    assert_eq!(current(&t).trim(), "ringing");
+    // Selecting the window cleared its alert; there is no other.
+    let out = t.output(&["next-window", "-a", "-t", "al"]);
+    assert!(!out.status.success());
+    assert_eq!(current(&t).trim(), "ringing");
+}
+
+#[test]
+fn select_layout_spread_evens_out_a_row_of_panes() {
+    let t = Tmxr::new("spread");
+    t.run(&["new-session", "-d", "-s", "sp", "-x", "100", "-y", "30"]);
+    t.run(&["split-window", "-h", "-t", "sp"]);
+    t.run(&["split-window", "-h", "-t", "sp"]);
+    let widths = |t: &Tmxr| -> Vec<u16> {
+        t.run(&["list-panes", "-t", "sp"])
+            .lines()
+            .filter_map(|l| l.split(['[', 'x']).nth(1)?.parse().ok())
+            .collect()
+    };
+    let before = widths(&t);
+    assert_eq!(before.len(), 3, "{before:?}");
+    assert!(before[0] > before[2] + 10, "uneven first: {before:?}");
+    t.run(&["select-layout", "-E", "-t", "sp"]);
+    let after = widths(&t);
+    let (min, max) = (after.iter().min().unwrap(), after.iter().max().unwrap());
+    assert!(max - min <= 1, "{after:?}");
+}
