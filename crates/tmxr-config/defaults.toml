@@ -78,7 +78,7 @@ processes = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "top",
 # catppuccin's session and host modules with the config's █ separators. The
 # session block turns red while the prefix key is pending.
 "@status_session_colour" = "#{?client_prefix,#{@thm_red},#{@thm_green}}"
-"@status_session" = "#[fg=#{E:@status_session_colour},bg=#{@thm_mantle}]█#[fg=#{@thm_crust},bg=#{E:@status_session_colour}] #[fg=#{@thm_fg},bg=#{@thm_surface0}] #S#[fg=#{@thm_surface0},bg=#{@thm_mantle}]█"
+"@status_session" = "#[fg=#{E:@status_session_colour},bg=#{@thm_mantle}]█#[fg=#{@thm_crust},bg=#{E:@status_session_colour}] #[fg=#{@thm_fg},bg=#{@thm_surface0}] #S#[fg=#{@thm_surface0},bg=#{@thm_mantle}]█"
 "@status_host" = "#[fg=#{@thm_mauve},bg=#{@thm_mantle}]█#[fg=#{@thm_crust},bg=#{@thm_mauve}]󰒋 #[fg=#{@thm_fg},bg=#{@thm_surface0}] #H#[fg=#{@thm_surface0},bg=#{@thm_mantle}]█"
 
 # ── Key binds ────────────────────────────────────────────────────────────────
