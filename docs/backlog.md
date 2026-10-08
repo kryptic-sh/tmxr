@@ -34,11 +34,14 @@ what was not.
   with and without `-F`; `move-window` / `swap-window` within and across
   sessions; `join-pane` and `swap-pane -s` across windows; `respawn-pane -k`
   surviving the old program's exit; resurrect restoring a three-pane layout into
-  a new server.
+  a new server; the status line's catppuccin layout and Tokyo Night colours,
+  cell by cell, including the session block turning red while the prefix is
+  pending.
 - **Not yet verified anywhere**: how the status line and borders look in a real
-  terminal emulator, mouse, and the navigator with a real hjkl or vim in front
-  (the test uses a renamed system program, so only the name match and the key
-  routing are covered).
+  terminal emulator (the e2e test checks the status line's cells and colours in
+  the vt100 emulator, not a terminal's rendering of the glyphs), mouse, and the
+  navigator with a real hjkl or vim in front (the test uses a renamed system
+  program, so only the name match and the key routing are covered).
 - **Not run on Linux/macOS locally**: the `cfg(unix)` arms (socket dir checks,
   peer uid, `setsid` spawn, `/proc` and `proc_pidinfo` inspection) are only
   compiled and tested by CI.
@@ -85,6 +88,12 @@ what was not.
   without it splits open in the pane's start directory.
 - **Windows pipe DACL** `D:P(A;;GA;;;OW)(A;;GA;;;SY)` was verified to admit the
   owner; that it rejects another user is unverified.
+
+- **One `leaky` test, unidentified.** A cold workspace `cargo nextest run` on
+  Windows on 2026-10-09 reported "80 passed (1 leaky)" (a test's child process
+  still held its output after it ended); four reruns were clean, and nextest's
+  summary did not name the test. Likely a server or pane process outliving
+  `kill-server` by a moment; not investigated further.
 
 ## Decisions awaiting the owner
 

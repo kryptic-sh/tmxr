@@ -221,6 +221,23 @@ impl Screen {
         panic!("client did not exit; screen:\n{}", self.text());
     }
 
+    /// The status line's cells: `(contents, fg, bg)`, colours as `Debug`
+    /// text (`Rgb(r, g, b)`).
+    fn status_cells(&self) -> Vec<(String, String, String)> {
+        let emu = self.emu.lock().unwrap();
+        let screen = emu.screen();
+        (0..COLS)
+            .filter_map(|col| screen.cell(ROWS - 1, col))
+            .map(|c| {
+                (
+                    c.contents().to_owned(),
+                    format!("{:?}", c.fgcolor()),
+                    format!("{:?}", c.bgcolor()),
+                )
+            })
+            .collect()
+    }
+
     fn raw_text(&self) -> String {
         String::from_utf8_lossy(&self.raw.lock().unwrap()).into_owned()
     }
@@ -628,5 +645,75 @@ fn copy_mode_selection_goes_to_a_buffer_and_pastes() {
     s.send(b"]");
     s.wait_for("pasted text", |text| {
         text.matches("copyme-1234").count() >= 3
+    });
+}
+
+/// The Tokyo Night palette as `Debug` text of a vt100 colour.
+fn rgb(hex: u32) -> String {
+    format!("Rgb({}, {}, {})", hex >> 16, (hex >> 8) & 0xff, hex & 0xff)
+}
+
+#[test]
+fn status_line_has_the_catppuccin_layout_in_tokyo_night() {
+    const MANTLE: u32 = 0x16_16_1e;
+    const SURFACE0: u32 = 0x29_2e_42;
+    const SURFACE1: u32 = 0x3b_42_61;
+    const OVERLAY2: u32 = 0x73_7a_a2;
+    const FG: u32 = 0xc0_ca_f5;
+    const MAUVE: u32 = 0xbb_9a_f7;
+    const GREEN: u32 = 0x9e_ce_6a;
+    const RED: u32 = 0xf7_76_8e;
+    const SESSION_ICON: &str = "\u{e795}";
+    const HOST_ICON: &str = "\u{f048b}";
+
+    let t = Tmxr::new("status");
+    let s = t.attach(&["new", "-s", "look", "-n", "first"]);
+    s.wait_for("status line", |text| text.contains("first"));
+    t.run(&["new-window", "-t", "look", "-n", "second"]);
+    s.wait_for("second window", |text| text.contains("second"));
+    let cells = s.status_cells();
+    let text: String = cells.iter().map(|c| c.0.as_str()).collect();
+    let at = |needle: &str| -> usize {
+        let byte = text
+            .find(needle)
+            .unwrap_or_else(|| panic!("{needle:?} not in {text:?}"));
+        text[..byte].chars().count()
+    };
+    let bg = |col: usize| cells[col].2.clone();
+    let fg = |col: usize| cells[col].1.clone();
+
+    // Windows, left: " N " number block, then " name" text block.
+    let first = at("first");
+    assert_eq!(cells[first - 3].0, "0", "{text:?}");
+    assert_eq!(bg(first - 3), rgb(OVERLAY2), "window number block");
+    assert_eq!(fg(first - 3), rgb(MANTLE), "number text is crust");
+    assert_eq!(bg(first), rgb(SURFACE0), "window text block");
+    assert_eq!(fg(first), rgb(FG));
+    let second = at("second");
+    assert_eq!(cells[second - 3].0, "1", "{text:?}");
+    assert_eq!(bg(second - 3), rgb(MAUVE), "current window number block");
+    assert_eq!(bg(second), rgb(SURFACE1), "current window text block");
+    // The gap between the window list and the modules is the status bg.
+    assert_eq!(bg(second + 12), rgb(MANTLE), "status background");
+
+    // Session module, right: █ separator, icon block, " look" text block.
+    let icon = at(SESSION_ICON);
+    assert_eq!(cells[icon - 1].0, "\u{2588}");
+    assert_eq!(
+        fg(icon - 1),
+        rgb(GREEN),
+        "separator takes the module colour"
+    );
+    assert_eq!(bg(icon), rgb(GREEN), "session icon block");
+    let name = at(" look");
+    assert_eq!(bg(name + 1), rgb(SURFACE0), "session text block");
+    // Host module after it, mauve.
+    assert_eq!(bg(at(HOST_ICON)), rgb(MAUVE), "host icon block");
+
+    // The session block turns red while the prefix is pending.
+    s.send(PREFIX);
+    s.wait_for("prefix pending", |_| {
+        let cells = s.status_cells();
+        cells.iter().any(|c| c.0 == SESSION_ICON && c.2 == rgb(RED))
     });
 }
