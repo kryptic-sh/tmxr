@@ -282,7 +282,9 @@ jobs:
           Copy-Item README.md, LICENSE dist/
           Compress-Archive -Path dist/* -DestinationPath $archive
           $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLower()
-          "$hash  $archive" | Out-File -Encoding ascii "$archive.sha256"
+          # An LF line, as sha256sum writes: Out-File's CRLF breaks
+          # `sha256sum -c` on the file name.
+          [IO.File]::WriteAllText("$PWD/$archive.sha256", "$hash  $archive`n")
       - name: Generate completions + man page for packaging
         if: matrix.deb == 'true' || matrix.rpm == 'true'
         run: |
