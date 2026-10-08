@@ -116,8 +116,8 @@ to do and are not bound.
 The core of tmux's default `copy-mode-vi` table (motions
 `h j k l w b e W B E 0 ^ $ g G H M L` and the arrows, `C-u C-d C-b C-f C-y C-e`,
 `PPage`/`NPage`, search `/ ? n N`, `Space` begin selection, `V` select line,
-`Enter` copy and cancel, `q` / `Escape` cancel), plus the binds below. Counts
-and `f F t T ; ,` work as in vi; marks and `%` are not implemented
+`Enter` copy and cancel, `q` / `Escape` cancel), plus the binds below. Counts,
+`f F t T ; ,`, `%`, marks (`X`, `M-x`) and `r` (refresh) work as in tmux
 ([08](08-copy-mode.md#engine)).
 
 | Key                 | Command                                          | From         |

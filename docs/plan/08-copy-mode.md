@@ -51,7 +51,10 @@ is `start-of-line`) repeat the next command, and a count before a jump repeats
 the jump (`3tx`). `send-keys -X -N count` does the same from a bind.
 
 The default binds in [06](06-keys-and-bindings.md#copy-mode-vi) map vi keys onto
-these. Not implemented: marks, `%` and `refresh-from-pane`.
+these, plus `set-mark` / `jump-to-mark` (`X`, `M-x`; jumping swaps the mark and
+the cursor), `next-matching-bracket` (`%`, across lines, counting nesting) and
+`refresh-from-pane` (`r`: a fresh snapshot keeping the cursor, selection and
+search).
 
 ## Copying
 

@@ -1364,3 +1364,29 @@ fn copy_pipe_sends_the_selection_to_copy_command() {
     }
     assert_eq!(t.run(&["show-buffer"]), "pipeme-77");
 }
+
+#[test]
+fn copy_mode_refresh_picks_up_new_output() {
+    let t = Tmxr::new("refresh");
+    let s = t.attach(&["new", "-s", "rf"]);
+    s.wait_for("status line", |text| text.contains("rf"));
+    s.send(PREFIX);
+    s.send(b"[");
+    t.wait_run(
+        &["display-message", "-p", "-t", "rf", "#{pane_in_mode}"],
+        "copy mode",
+        |o| o.trim() == "1",
+    );
+    // Output arriving meanwhile goes to the live pane, not the snapshot.
+    t.run(&["send-keys", "-t", "rf", "echo late-arrival", "Enter"]);
+    std::thread::sleep(Duration::from_millis(500));
+    assert!(!s.text().contains("late-arrival"), "{}", s.text());
+    // r takes a fresh snapshot, still in copy mode.
+    s.send(b"r");
+    s.wait_for("refreshed", |text| text.contains("late-arrival"));
+    assert_eq!(
+        t.run(&["display-message", "-p", "-t", "rf", "#{pane_in_mode}"])
+            .trim(),
+        "1"
+    );
+}

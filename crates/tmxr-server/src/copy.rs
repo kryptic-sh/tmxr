@@ -80,6 +80,8 @@ pub struct CopyMode {
     pub pending_jump: Option<Jump>,
     /// The last jump and its character, for `;` and `,`.
     last_jump: Option<(Jump, char)>,
+    /// `set-mark`: a position `jump-to-mark` returns to.
+    mark: Option<(usize, usize)>,
 }
 
 /// Columns where `needle` starts in `line`: literal, and case-insensitive
@@ -255,6 +257,68 @@ impl CopyMode {
             count: 0,
             pending_jump: None,
             last_jump: None,
+            mark: None,
+        }
+    }
+
+    /// Keep the view, cursor, selection, search and mark of `old` (a
+    /// snapshot of the same pane taken earlier), clamped to this one.
+    fn carry_over(&mut self, old: &Self) {
+        let last = self.last_line();
+        let clamp = |(y, x): (usize, usize)| (y.min(last), x);
+        (self.cy, self.cx) = clamp((old.cy, old.cx));
+        self.top = old.top.min(last);
+        self.anchor = old.anchor.map(clamp);
+        self.kind = old.kind;
+        self.search.clone_from(&old.search);
+        self.mark = old.mark.map(clamp);
+        self.last_jump = old.last_jump;
+        self.scroll_to_cursor();
+    }
+
+    /// vi's `%`: from the first bracket at or after the cursor on its line,
+    /// to the bracket that matches it, across lines.
+    fn matching_bracket(&mut self) {
+        const PAIRS: [(char, char); 3] = [('(', ')'), ('[', ']'), ('{', '}')];
+        let line = self.lines.get(self.cy).map(Line::chars).unwrap_or_default();
+        let Some((x, c)) = line
+            .iter()
+            .enumerate()
+            .skip(self.cx)
+            .find(|(_, c)| PAIRS.iter().any(|(o, cl)| *c == o || *c == cl))
+        else {
+            return;
+        };
+        let (forward, open, close) = match PAIRS.iter().find(|(o, cl)| c == o || c == cl) {
+            Some(&(o, cl)) => (*c == o, o, cl),
+            None => return,
+        };
+        let mut depth = 0usize;
+        let mut pos = Some((self.cy, x));
+        while let Some((y, px)) = pos {
+            let ch = self.char_at(y, px);
+            if ch == open {
+                depth = if forward {
+                    depth + 1
+                } else {
+                    depth.saturating_sub(1)
+                };
+            } else if ch == close {
+                depth = if forward {
+                    depth.saturating_sub(1)
+                } else {
+                    depth + 1
+                };
+            }
+            if depth == 0 {
+                (self.cy, self.cx) = (y, px);
+                return;
+            }
+            pos = if forward {
+                self.next_pos(y, px)
+            } else {
+                self.prev_pos(y, px)
+            };
         }
     }
 
@@ -644,6 +708,13 @@ impl CopyMode {
                     None => self.pending_jump = Some(jump),
                 }
             }
+            "set-mark" => self.mark = Some((self.cy, self.cx)),
+            "jump-to-mark" => {
+                if let Some(m) = self.mark.replace((self.cy, self.cx)) {
+                    (self.cy, self.cx) = m;
+                }
+            }
+            "next-matching-bracket" => self.matching_bracket(),
             "jump-again" | "jump-reverse" => {
                 if let Some((jump, c)) = self.last_jump {
                     let jump = if name == "jump-again" {
@@ -701,6 +772,17 @@ pub fn command(
     name: &str,
     args: &[String],
 ) -> Result<(), String> {
+    if name == "refresh-from-pane" {
+        // A fresh snapshot of the live pane, keeping where the user was.
+        let p = srv.panes.get_mut(&pane).ok_or("no such pane")?;
+        let old = p.copy.take().ok_or("not in a mode")?;
+        let mut fresh = CopyMode::new(p.emu.screen_mut());
+        fresh.carry_over(&old);
+        p.copy = Some(fresh);
+        let window = p.window;
+        srv.mark_window_dirty(window);
+        return Ok(());
+    }
     let Some(cm) = srv.panes.get_mut(&pane).and_then(|p| p.copy.as_mut()) else {
         return Err("not in a mode".into());
     };
@@ -821,6 +903,39 @@ mod tests {
         cm.apply_counted("jump-forward", None);
         assert!(cm.take_key(&KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)));
         assert_eq!((cm.cx, cm.pending_jump), (4, None));
+    }
+
+    #[test]
+    fn percent_finds_the_matching_bracket_across_lines() {
+        let mut cm = at_start("a (b [c] d) e");
+        cm.apply("next-matching-bracket", None);
+        assert_eq!(cm.cx, 10, "from before the ( to its )");
+        cm.apply("next-matching-bracket", None);
+        assert_eq!(cm.cx, 2, "and back");
+        cm.cx = 5;
+        cm.apply("next-matching-bracket", None);
+        assert_eq!(cm.cx, 7, "inner pair");
+
+        // Same-type nesting: the outer ( matches the outer ).
+        let mut cm = at_start("((x))");
+        cm.apply("next-matching-bracket", None);
+        assert_eq!(cm.cx, 4);
+
+        let mut cm = at_start("{\r\n  x\r\n}");
+        cm.apply("next-matching-bracket", None);
+        assert_eq!((cm.cy, cm.cx), (2, 0));
+    }
+
+    #[test]
+    fn jump_to_mark_swaps_with_the_cursor() {
+        let mut cm = at_start("abcdefgh");
+        cm.cx = 2;
+        cm.apply("set-mark", None);
+        cm.cx = 6;
+        cm.apply("jump-to-mark", None);
+        assert_eq!(cm.cx, 2);
+        cm.apply("jump-to-mark", None);
+        assert_eq!(cm.cx, 6);
     }
 
     #[test]

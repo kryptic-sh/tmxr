@@ -271,3 +271,7 @@ processes = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "top",
 "T" = { cmd = "send-keys -X jump-to-backward", note = "Jump back to just after the char typed" }
 ";" = { cmd = "send-keys -X jump-again", note = "Repeat the last jump" }
 "," = { cmd = "send-keys -X jump-reverse", note = "Repeat the last jump the other way" }
+"X" = { cmd = "send-keys -X set-mark", note = "Set the mark" }
+"M-x" = { cmd = "send-keys -X jump-to-mark", note = "Jump to the mark (and back)" }
+"%" = { cmd = "send-keys -X next-matching-bracket", note = "Matching bracket" }
+"r" = { cmd = "send-keys -X refresh-from-pane", note = "Refresh from the live pane" }
