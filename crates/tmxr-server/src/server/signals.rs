@@ -17,10 +17,12 @@ extern "C" fn on_signal(_: libc::c_int) {
 pub fn install() {
     #[cfg(unix)]
     for sig in [libc::SIGTERM, libc::SIGHUP] {
+        // `signal` takes the handler as an address.
+        let handler: extern "C" fn(libc::c_int) = on_signal;
         // SAFETY: `on_signal` only stores to an atomic, which a signal
         // handler may do; `signal` itself has no other preconditions.
         unsafe {
-            libc::signal(sig, on_signal as libc::sighandler_t);
+            libc::signal(sig, handler as libc::sighandler_t);
         }
     }
 }
