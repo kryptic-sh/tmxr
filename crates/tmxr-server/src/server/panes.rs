@@ -1,0 +1,257 @@
+//! Starting, splitting and closing panes, and their PTY events.
+
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use hjkl_layout::{LayoutTree, SplitDir};
+use tmxr_term::{Emulator, Pty, PtyEvent, SpawnSpec};
+use tracing::debug;
+
+use super::{Event, Server, SplitSize};
+use crate::model::{Pane, PaneId, SessionId, WindowId};
+
+impl Server {
+    #[allow(clippy::too_many_arguments)]
+    pub fn spawn_pane(
+        &mut self,
+        pid: PaneId,
+        window: WindowId,
+        session: SessionId,
+        argv: &[String],
+        cwd: PathBuf,
+        session_env: &[(String, String)],
+        cols: u16,
+        rows: u16,
+    ) -> Result<(), String> {
+        let mut env: Vec<(String, String)> = session_env.to_vec();
+        env.push((
+            "TERM".into(),
+            crate::util::pane_term(&self.cfg.default_terminal),
+        ));
+        env.push(("COLORTERM".into(), "truecolor".into()));
+        env.push((
+            tmxr_proto::socket::ENV_TMXR.into(),
+            tmxr_proto::socket::format_tmxr_env(&self.endpoint, self.pid, session),
+        ));
+        env.push((tmxr_proto::socket::ENV_TMXR_PANE.into(), format!("%{pid}")));
+        let argv = if argv.is_empty() {
+            self.cfg
+                .default_shell
+                .clone()
+                .map(|s| vec![s])
+                .unwrap_or_default()
+        } else if argv.len() == 1 && argv[0].contains(' ') {
+            crate::util::shell_command(&argv[0])
+        } else {
+            argv.to_vec()
+        };
+        let cwd = if cwd.is_dir() {
+            cwd
+        } else {
+            crate::util::home_dir()
+        };
+        let spec = SpawnSpec {
+            argv,
+            cwd: Some(cwd.clone()),
+            env,
+            rows,
+            cols,
+        };
+        let events = self.events.clone();
+        let sink: Arc<dyn Fn(PtyEvent) + Send + Sync> = Arc::new(move |e| {
+            let _ = events.send(Event::Pty(pid, e));
+        });
+        let pty = Pty::spawn(&spec, sink).map_err(|e| format!("could not start pane: {e}"))?;
+        self.next_pane = self.next_pane.max(pid + 1);
+        self.panes.insert(
+            pid,
+            Pane {
+                id: pid,
+                window,
+                pty,
+                emu: Emulator::new(rows.max(1), cols.max(1), self.cfg.history_limit),
+                rect: hjkl_layout::LayoutRect::new(0, 0, cols, rows),
+                start_cwd: cwd,
+                copy: None,
+            },
+        );
+        Ok(())
+    }
+
+    /// Split `target` and start a new pane. `horizontal` is tmux's `-h`
+    /// (side by side); `before` is `-b`; `size` is the new pane's cells.
+    #[allow(clippy::too_many_arguments)]
+    pub fn split(
+        &mut self,
+        target: PaneId,
+        horizontal: bool,
+        before: bool,
+        size: Option<SplitSize>,
+        cwd: PathBuf,
+        argv: Vec<String>,
+        focus: bool,
+    ) -> Result<PaneId, String> {
+        let wid = self.panes.get(&target).ok_or("no such pane")?.window;
+        let session = self.session_of_window(wid).ok_or("window has no session")?;
+        let env = self
+            .sessions
+            .get(&session)
+            .map(|s| s.env.clone())
+            .unwrap_or_default();
+        let new = self.next_pane;
+        self.insert_leaf(target, new, horizontal, before, size)?;
+        let win = self.windows.get_mut(&wid).ok_or("no such window")?;
+        let rects = crate::layout::pane_rects(&win.layout, win.cols, win.rows);
+        let r = rects
+            .iter()
+            .find(|(p, _)| *p == new)
+            .map(|(_, r)| *r)
+            .unwrap_or_default();
+        if let Err(e) = self.spawn_pane(new, wid, session, &argv, cwd, &env, r.w, r.h) {
+            if let Some(win) = self.windows.get_mut(&wid) {
+                let _ = win.layout.remove_leaf(new as usize);
+            }
+            return Err(e);
+        }
+        if focus {
+            self.select_pane(new);
+        }
+        self.relayout(wid);
+        Ok(new)
+    }
+
+    /// Split `target`'s cell in its window's layout and put `new` in the new
+    /// half (the layout half of `split-window`, shared with `join-pane`).
+    pub fn insert_leaf(
+        &mut self,
+        target: PaneId,
+        new: PaneId,
+        horizontal: bool,
+        before: bool,
+        size: Option<SplitSize>,
+    ) -> Result<(), String> {
+        let wid = self.panes.get(&target).ok_or("no such pane")?.window;
+        let win = self.windows.get_mut(&wid).ok_or("no such window")?;
+        win.zoomed = false;
+        let dir = if horizontal {
+            SplitDir::Vertical
+        } else {
+            SplitDir::Horizontal
+        };
+        let target_rect = self.panes.get(&target).map(|p| p.rect).unwrap_or_default();
+        let len = if horizontal {
+            target_rect.w
+        } else {
+            target_rect.h
+        };
+        if len < 3 {
+            return Err("pane too small".into());
+        }
+        // Fraction of the split given to the *first* child.
+        let new_cells = match size {
+            Some(SplitSize::Cells(n)) => f32::from(n.min(len - 2)),
+            Some(SplitSize::Percent(p)) => f32::from(len) * f32::from(p.min(100)) / 100.0,
+            None => f32::from(len) / 2.0,
+        };
+        let new_frac = (new_cells / f32::from(len)).clamp(0.05, 0.95);
+        let ratio = if before { new_frac } else { 1.0 - new_frac };
+        let t = target as usize;
+        let n = new as usize;
+        win.layout.replace_leaf(t, move |id| {
+            let (a, b) = if before {
+                (LayoutTree::Leaf(n), LayoutTree::Leaf(id))
+            } else {
+                (LayoutTree::Leaf(id), LayoutTree::Leaf(n))
+            };
+            LayoutTree::split(dir, ratio, a, b)
+        });
+        Ok(())
+    }
+
+    pub fn select_pane(&mut self, pane: PaneId) {
+        let Some(wid) = self.panes.get(&pane).map(|p| p.window) else {
+            return;
+        };
+        if let Some(win) = self.windows.get_mut(&wid)
+            && win.active != pane
+        {
+            win.last_pane = Some(win.active);
+            win.active = pane;
+            if win.zoomed {
+                win.zoomed = false;
+                self.relayout(wid);
+            }
+        }
+        self.mark_window_dirty(wid);
+    }
+
+    pub fn kill_pane(&mut self, pane: PaneId) {
+        if let Some(mut p) = self.panes.remove(&pane) {
+            let _ = p.pty.kill();
+            self.commands.remove(&pane);
+            self.remove_pane_from_window(p.window, pane);
+        }
+    }
+
+    pub(crate) fn remove_pane_from_window(&mut self, wid: WindowId, pane: PaneId) {
+        let Some(win) = self.windows.get_mut(&wid) else {
+            return;
+        };
+        match win.layout.remove_leaf(pane as usize) {
+            Ok(focus) => {
+                if win.active == pane {
+                    win.active = win
+                        .last_pane
+                        .filter(|l| *l != pane && win.layout.contains(*l as usize))
+                        .unwrap_or(focus as PaneId);
+                }
+                if win.last_pane == Some(pane) {
+                    win.last_pane = None;
+                }
+                win.zoomed = false;
+                self.relayout(wid);
+            }
+            Err(_) => self.kill_window(wid),
+        }
+    }
+
+    pub(super) fn pty_event(&mut self, pid: PaneId, ev: PtyEvent) {
+        match ev {
+            PtyEvent::Output(bytes) => {
+                let Some(p) = self.panes.get_mut(&pid) else {
+                    return;
+                };
+                let replies = p.emu.process(&bytes);
+                if !replies.is_empty() {
+                    let _ = p.pty.write(&replies);
+                }
+                let bell = p.emu.take_bell();
+                let clips = p.emu.take_clipboard();
+                let wid = p.window;
+                if bell && let Some(w) = self.windows.get_mut(&wid) {
+                    w.bell = true;
+                }
+                for (_, data) in clips {
+                    self.forward_osc52(&data);
+                }
+                self.mark_window_dirty(wid);
+            }
+            PtyEvent::Exited(code) => {
+                debug!(pane = pid, ?code, "pane exited");
+                if self.panes.contains_key(&pid) {
+                    self.panes.remove(&pid);
+                    self.commands.remove(&pid);
+                    let wid = self
+                        .windows
+                        .values()
+                        .find(|w| w.layout.contains(pid as usize))
+                        .map(|w| w.id);
+                    if let Some(w) = wid {
+                        self.remove_pane_from_window(w, pid);
+                    }
+                }
+            }
+            PtyEvent::Eof => {}
+        }
+    }
+}

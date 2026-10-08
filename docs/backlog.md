@@ -66,10 +66,6 @@ what was not.
   directory falls back to `$HOME` without a message; auto-save writes even when
   nothing changed; an argument allowlist (`resurrect.restore-args`, like
   resurrect's `~vim` strategies) is not implemented; nothing saves on a signal.
-- **`server.rs` keeps growing** (over a thousand lines; `cmds` is already split
-  by command family). Split along its seams — client lifecycle and attach, pane
-  spawning, the background shell helpers — as part of the next change that
-  touches it.
 - **tmux-yank `prefix y`** (copy the shell's command line) is not bound.
 - **Mouse capture is always on in the client**; with `mouse = false` the server
   ignores mouse events but the terminal's own selection still needs Shift.
