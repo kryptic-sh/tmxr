@@ -22,21 +22,27 @@ what was not.
   server, `new -d`, `ls`, `split-window -t`, `list-panes`, `display -p` with
   formats, `send-keys`, `capture-pane -p`, `kill-server`, resurrect
   save-on-exit + restore-on-start.
-- **Verified end to end on Windows** by `apps/tmxr/tests/e2e.rs` (real binary in
-  a ConPTY, shown to fail when an assertion is broken): attach, typing into the
-  pane, `prefix %` split, `prefix h`, the `C-l` navigator in a plain shell,
-  `prefix d` detach, `ls`, reattach with output preserved, command clients
-  starting and stopping a server, the `prefix s` picker switching to the
-  previous session with `Enter`, and resurrect restoring a three-pane layout
-  (sizes, split ratios, active pane) into a new server.
+- **Verified end to end** by `apps/tmxr/tests/e2e.rs` (real binary in a ConPTY
+  locally on Windows and in a pty on every CI platform; each test shown to fail
+  when the code it covers is broken): attach, typing into the pane, `prefix %`
+  split, `prefix h`, `prefix d` detach, `ls`, reattach with output preserved,
+  command clients starting and stopping a server; the `C-l` navigator moving
+  focus past a plain program and passing the key through to a program named
+  `hjkl`; the `prefix s` picker by `Enter`, by typing a filter and by `j` in
+  normal mode; copy mode by keyboard (`prefix [`, `?` search, `v` `E` `y`) into
+  a buffer and `prefix ]` pasting it; `save-buffer` / `load-buffer`; `if-shell`
+  with and without `-F`; `move-window` / `swap-window` within and across
+  sessions; `join-pane` and `swap-pane -s` across windows; `respawn-pane -k`
+  surviving the old program's exit; resurrect restoring a three-pane layout into
+  a new server.
 - **Not yet verified anywhere**: how the status line and borders look in a real
-  terminal emulator, mouse, copy mode by keyboard, moving and filtering in the
-  picker by keyboard (unit-tested only), and the navigator passing keys through
-  to a real hjkl/vim.
+  terminal emulator, mouse, and the navigator with a real hjkl or vim in front
+  (the test uses a renamed system program, so only the name match and the key
+  routing are covered).
 - **Not run on Linux/macOS locally**: the `cfg(unix)` arms (socket dir checks,
   peer uid, `setsid` spawn, `/proc` and `proc_pidinfo` inspection) are only
   compiled and tested by CI.
-- CI (commit 654fe43) runs the unit and e2e tests green on Linux, macOS and
+- CI (commit 9ab6d00) runs the unit and e2e tests green on Linux, macOS and
   Windows; the Unix arms are exercised there, not locally.
 
 ## Known gaps and follow-ups

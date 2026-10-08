@@ -29,9 +29,10 @@ impl Tmxr {
         let label = format!("e2e-{name}-{}", std::process::id());
         let shell = if cfg!(windows) { "cmd.exe" } else { "/bin/sh" };
         let config = dir.path().join("config.toml");
+        // No clipboard: copying in a test must not overwrite the desktop's.
         std::fs::write(
             &config,
-            format!("default-shell = {shell:?}\n[resurrect]\nrestore-on-start = false\nauto-save-minutes = 0\n"),
+            format!("default-shell = {shell:?}\nset-clipboard = \"off\"\n[resurrect]\nrestore-on-start = false\nauto-save-minutes = 0\n"),
         )
         .unwrap();
         Self { dir, label, config }
@@ -69,27 +70,34 @@ impl Tmxr {
         a
     }
 
-    /// Run a command client and return its stdout.
-    fn run(&self, rest: &[&str]) -> String {
-        let out = Command::new(env!("CARGO_BIN_EXE_tmxr"))
+    /// Run a command client.
+    fn output(&self, rest: &[&str]) -> std::process::Output {
+        Command::new(env!("CARGO_BIN_EXE_tmxr"))
             .args(self.args(rest))
             .envs(self.env())
             .output()
-            .unwrap();
-        String::from_utf8_lossy(&out.stdout).into_owned()
+            .unwrap()
+    }
+
+    /// Run a command client and return its stdout.
+    fn run(&self, rest: &[&str]) -> String {
+        String::from_utf8_lossy(&self.output(rest).stdout).into_owned()
     }
 
     /// Wait until a command's output satisfies `pred`.
     fn wait_run(&self, rest: &[&str], what: &str, pred: impl Fn(&str) -> bool) -> String {
         let deadline = Instant::now() + TIMEOUT;
         loop {
-            let out = self.run(rest);
+            let full = self.output(rest);
+            let out = String::from_utf8_lossy(&full.stdout).into_owned();
             if pred(&out) {
                 return out;
             }
             assert!(
                 Instant::now() < deadline,
-                "timed out waiting for {what}; last output:\n{out}"
+                "timed out waiting for {what}; last output ({}):\n{out}\nstderr:\n{}",
+                full.status,
+                String::from_utf8_lossy(&full.stderr)
             );
             std::thread::sleep(Duration::from_millis(100));
         }
@@ -294,7 +302,7 @@ fn command_clients_start_and_stop_a_server() {
 }
 
 #[test]
-fn session_picker_enter_switches_to_the_previous_session() {
+fn session_picker_switches_by_enter_filter_and_jk() {
     let t = Tmxr::new("picker");
     t.run(&["new-session", "-d", "-s", "alpha"]);
     let s = t.attach(&["new", "-s", "bravo"]);
@@ -311,6 +319,28 @@ fn session_picker_enter_switches_to_the_previous_session() {
     s.send(b"\r");
     let ls = t.wait_run(&["ls"], "alpha attached", |o| attached(o, "alpha"));
     assert!(!attached(&ls, "bravo"), "{ls}");
+
+    // Typing filters: "char" leaves one row, Enter switches to it.
+    t.run(&["new-session", "-d", "-s", "charlie"]);
+    s.send(PREFIX);
+    s.send(b"s");
+    s.wait_for("picker", |text| text.contains("sessions 3/3"));
+    s.send(b"char");
+    s.wait_for("filtered", |text| text.contains("sessions 1/3"));
+    s.send(b"\r");
+    t.wait_run(&["ls"], "charlie attached", |o| attached(o, "charlie"));
+
+    // Escape to normal mode, j moves down a row: charlie (current), alpha
+    // (where the picker opens), then bravo.
+    s.send(PREFIX);
+    s.send(b"s");
+    s.wait_for("picker", |text| text.contains("sessions 3/3"));
+    s.send(b"\x1b");
+    s.wait_for("normal mode", |text| text.contains("[normal]"));
+    s.send(b"j");
+    std::thread::sleep(Duration::from_millis(200));
+    s.send(b"\r");
+    t.wait_run(&["ls"], "bravo attached", |o| attached(o, "bravo"));
 }
 
 #[test]
@@ -500,4 +530,103 @@ fn respawn_pane_restarts_the_program_in_place() {
         id
     );
     assert_eq!(t.run(&["list-panes", "-t", "r"]).lines().count(), 2);
+}
+
+/// argv for a long-running program installed under `name` in the test's
+/// directory, so the navigator sees a foreground process with that name.
+fn fixture_program(t: &Tmxr, name: &str) -> Vec<String> {
+    #[cfg(unix)]
+    {
+        let path = t.dir.path().join(name);
+        std::fs::copy("/bin/sleep", &path).unwrap();
+        vec![path.display().to_string(), "60".into()]
+    }
+    #[cfg(windows)]
+    {
+        let root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+        let path = t.dir.path().join(format!("{name}.exe"));
+        std::fs::copy(format!(r"{root}\System32\PING.EXE"), &path).unwrap();
+        vec![
+            path.display().to_string(),
+            "-n".into(),
+            "60".into(),
+            "127.0.0.1".into(),
+        ]
+    }
+}
+
+#[test]
+fn navigator_passes_keys_to_hjkl_and_moves_otherwise() {
+    for (name, passes_through) in [("hjkl", true), ("plainprog", false)] {
+        let t = Tmxr::new(&format!("nav-{name}"));
+        let argv = fixture_program(&t, name);
+        let mut new = vec!["new-session", "-d", "-s", "nav"];
+        new.extend(argv.iter().map(String::as_str));
+        t.run(&new);
+        // A shell to the right; focus stays on the fixture on the left.
+        t.run(&["split-window", "-h", "-d", "-t", "nav.0"]);
+        t.wait_run(
+            &[
+                "display-message",
+                "-p",
+                "-t",
+                "nav.0",
+                "#{pane_current_command}",
+            ],
+            "fixture in front",
+            |o| o.trim() == name,
+        );
+        let s = t.attach(&["attach", "-t", "nav"]);
+        s.wait_for("status line", |text| text.contains("nav"));
+        let active = |t: &Tmxr| t.run(&["display-message", "-p", "-t", "nav", "#{pane_index}"]);
+        assert_eq!(active(&t).trim(), "0");
+
+        s.send(b"\x0c");
+        if passes_through {
+            // C-l went to hjkl; nothing should move.
+            std::thread::sleep(Duration::from_secs(1));
+            assert_eq!(active(&t).trim(), "0", "{name}: focus moved");
+        } else {
+            t.wait_run(
+                &["display-message", "-p", "-t", "nav", "#{pane_index}"],
+                "focus moved right",
+                |o| o.trim() == "1",
+            );
+        }
+    }
+}
+
+#[test]
+fn copy_mode_selection_goes_to_a_buffer_and_pastes() {
+    let t = Tmxr::new("copy");
+    let s = t.attach(&["new", "-s", "copy"]);
+    s.wait_for("status line", |text| text.contains("copy"));
+    s.send(b"echo copyme-1234\r");
+    s.wait_for("echoed marker", |text| {
+        text.matches("copyme-1234").count() >= 2
+    });
+    let in_mode = |t: &Tmxr| t.run(&["display-message", "-p", "-t", "copy", "#{pane_in_mode}"]);
+
+    // prefix [ enters copy mode; ? searches up; v E y copies one WORD.
+    s.send(PREFIX);
+    s.send(b"[");
+    t.wait_run(
+        &["display-message", "-p", "-t", "copy", "#{pane_in_mode}"],
+        "copy mode",
+        |o| o.trim() == "1",
+    );
+    s.send(b"?");
+    s.wait_for("search prompt", |text| text.contains("(search up)"));
+    s.send(b"copyme\r");
+    s.send(b"vE");
+    s.send(b"y");
+    t.wait_run(&["show-buffer"], "copied text", |o| o == "copyme-1234");
+    assert_eq!(in_mode(&t).trim(), "0", "y leaves copy mode");
+
+    // prefix ] pastes it at the shell prompt.
+    s.send(PREFIX);
+    s.send(b"]");
+    s.wait_for("pasted text", |text| {
+        text.matches("copyme-1234").count() >= 3
+    });
 }
