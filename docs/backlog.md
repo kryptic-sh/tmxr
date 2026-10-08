@@ -52,6 +52,12 @@ what was not.
 - **Key notation**: hjkl's `<C-x>` form is not accepted (plan/01 and plan/06
   once promised it); mouse events are built into `mouse.rs` and cannot be
   rebound (`MouseDown1Pane` and friends are not key names).
+- **Session picker gaps** (plan/09): no `C-x` kill / `C-r` rename actions, no
+  create-on-unmatched-`Enter`, no preview of the selected session's window.
+- **Picker match highlight is a hardcoded RGB** (`Color::Rgb(0x7a, 0xa2, 0xf7)`,
+  Tokyo Night blue) in `draw_overlay` in `render.rs`, so a config that overrides
+  `@thm_blue` does not recolour it. Read it from the theme options like the
+  other styles.
 - **No 256-colour fallback**: colours are always 24-bit RGB. A terminal without
   true colour gets wrong colours.
 - **No frame-rate cap**: the server renders after each drained batch of events.
