@@ -133,6 +133,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         "[-bF] [-t target-pane] shell-command command [command]"
     ),
     cmd!(
+        "join-pane",
+        Some("joinp"),
+        "bdhl:s:t:v",
+        0,
+        0,
+        "[-bdhv] [-l size] -s src-pane [-t dst-pane]"
+    ),
+    cmd!(
         "kill-pane",
         Some("killp"),
         "at:",
@@ -193,6 +201,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         1,
         1,
         "[-w] [-b buffer-name] path"
+    ),
+    cmd!(
+        "move-window",
+        Some("movew"),
+        "ds:t:",
+        0,
+        0,
+        "[-d] [-s src-window] [-t dst-window]"
     ),
     cmd!(
         "navigate-pane",
@@ -384,6 +400,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         0,
         0,
         "[-dDU] [-s src-pane] [-t dst-pane]"
+    ),
+    cmd!(
+        "swap-window",
+        Some("swapw"),
+        "ds:t:",
+        0,
+        0,
+        "[-d] -s src-window [-t dst-window]"
     ),
     cmd!(
         "switch-client",

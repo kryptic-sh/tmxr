@@ -14,6 +14,7 @@ pub mod keys;
 pub mod layout;
 pub mod model;
 pub mod mouse;
+pub mod moves;
 pub mod overlay;
 pub mod render;
 pub mod resurrect;

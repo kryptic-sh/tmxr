@@ -726,6 +726,38 @@ impl Server {
             .map(|s| s.env.clone())
             .unwrap_or_default();
         let new = self.next_pane;
+        self.insert_leaf(target, new, horizontal, before, size)?;
+        let win = self.windows.get_mut(&wid).ok_or("no such window")?;
+        let rects = crate::layout::pane_rects(&win.layout, win.cols, win.rows);
+        let r = rects
+            .iter()
+            .find(|(p, _)| *p == new)
+            .map(|(_, r)| *r)
+            .unwrap_or_default();
+        if let Err(e) = self.spawn_pane(new, wid, session, &argv, cwd, &env, r.w, r.h) {
+            if let Some(win) = self.windows.get_mut(&wid) {
+                let _ = win.layout.remove_leaf(new as usize);
+            }
+            return Err(e);
+        }
+        if focus {
+            self.select_pane(new);
+        }
+        self.relayout(wid);
+        Ok(new)
+    }
+
+    /// Split `target`'s cell in its window's layout and put `new` in the new
+    /// half (the layout half of `split-window`, shared with `join-pane`).
+    pub fn insert_leaf(
+        &mut self,
+        target: PaneId,
+        new: PaneId,
+        horizontal: bool,
+        before: bool,
+        size: Option<SplitSize>,
+    ) -> Result<(), String> {
+        let wid = self.panes.get(&target).ok_or("no such pane")?.window;
         let win = self.windows.get_mut(&wid).ok_or("no such window")?;
         win.zoomed = false;
         let dir = if horizontal {
@@ -760,23 +792,7 @@ impl Server {
             };
             LayoutTree::split(dir, ratio, a, b)
         });
-        let rects = crate::layout::pane_rects(&win.layout, win.cols, win.rows);
-        let r = rects
-            .iter()
-            .find(|(p, _)| *p == new)
-            .map(|(_, r)| *r)
-            .unwrap_or_default();
-        if let Err(e) = self.spawn_pane(new, wid, session, &argv, cwd, &env, r.w, r.h) {
-            if let Some(win) = self.windows.get_mut(&wid) {
-                let _ = win.layout.remove_leaf(n);
-            }
-            return Err(e);
-        }
-        if focus {
-            self.select_pane(new);
-        }
-        self.relayout(wid);
-        Ok(new)
+        Ok(())
     }
 
     pub fn session_of_window(&self, window: WindowId) -> Option<SessionId> {
@@ -830,7 +846,7 @@ impl Server {
         }
     }
 
-    fn remove_pane_from_window(&mut self, wid: WindowId, pane: PaneId) {
+    pub(crate) fn remove_pane_from_window(&mut self, wid: WindowId, pane: PaneId) {
         let Some(win) = self.windows.get_mut(&wid) else {
             return;
         };
@@ -862,12 +878,14 @@ impl Server {
             }
             self.commands.remove(&p);
         }
-        let Some(sid) = self
-            .sessions
-            .values()
-            .find(|s| s.windows.values().any(|w| *w == wid))
-            .map(|s| s.id)
-        else {
+        self.unlink_window(wid);
+    }
+
+    /// Take `wid` out of its session's window list, choosing the session's
+    /// next current window and renumbering like tmux. A session left without
+    /// windows is killed. The window itself and its panes are untouched.
+    pub fn unlink_window(&mut self, wid: WindowId) {
+        let Some(sid) = self.session_of_window(wid) else {
             return;
         };
         let renumber = self.cfg.renumber_windows;

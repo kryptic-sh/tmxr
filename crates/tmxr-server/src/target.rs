@@ -90,6 +90,25 @@ fn split_target(spec: &str) -> (Option<&str>, &str) {
     }
 }
 
+/// Resolve where a window should go (`new-window -t`, `move-window -t`):
+/// `session:index`, where the index need not exist yet. A word without `:`
+/// is an index when it is a number, else a session. A missing session means
+/// the current one; a missing index means "the first free one".
+pub fn destination(srv: &Server, ctx: &Ctx, spec: &str) -> Res<(SessionId, Option<u32>)> {
+    let index = |s: &str| s.trim_start_matches('=').parse::<u32>().ok();
+    let (sess, idx) = match spec.split_once(':') {
+        Some((sess, rest)) => (sess, index(rest)),
+        None if index(spec).is_some() => ("", index(spec)),
+        None => (spec, None),
+    };
+    let sid = if sess.is_empty() {
+        current_session(srv, ctx).ok_or("no current session")?
+    } else {
+        find_session(srv, sess)?
+    };
+    Ok((sid, idx))
+}
+
 /// Resolve a window target to `(session, index, window)`.
 pub fn window(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, u32, WindowId)> {
     let spec = spec.unwrap_or("");

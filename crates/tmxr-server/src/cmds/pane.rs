@@ -21,15 +21,7 @@ pub(super) fn run(
     match p.name() {
         "split-window" => {
             let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
-            let size = match a.value('l') {
-                None => None,
-                Some(l) => Some(match l.strip_suffix('%') {
-                    Some(pc) => {
-                        SplitSize::Percent(pc.parse().map_err(|_| format!("bad size: {l}"))?)
-                    }
-                    None => SplitSize::Cells(l.parse().map_err(|_| format!("bad size: {l}"))?),
-                }),
-            };
+            let size = split_size(a)?;
             let cwd = cwd_arg(srv, ctx, Some(pid), a)
                 .or_else(|| srv.panes.get(&pid).map(|p| p.start_cwd.clone()))
                 .unwrap_or_else(crate::util::home_dir);
@@ -105,23 +97,29 @@ pub(super) fn run(
         }
         "swap-pane" => {
             let (_, wid, pid) = target::pane(srv, ctx, a.value('t'))?;
-            let w = srv.windows.get_mut(&wid).ok_or("no window")?;
-            let panes = w.panes();
-            let i = panes.iter().position(|p| *p == pid).unwrap_or(0);
-            let n = panes.len();
-            let other = if let Some(s) = a.value('s') {
-                let _ = s;
-                return Err("swap-pane -s is not supported; use -U or -D".into());
-            } else if a.has('U') {
-                panes[(i + n - 1) % n]
-            } else {
-                panes[(i + 1) % n]
+            let (src, dst) = match a.value('s') {
+                Some(s) => (target::pane(srv, ctx, Some(s))?.2, pid),
+                None => {
+                    // -U / -D: swap with the previous / next pane.
+                    let panes = srv.windows.get(&wid).ok_or("no window")?.panes();
+                    let i = panes.iter().position(|p| *p == pid).unwrap_or(0);
+                    let n = panes.len();
+                    let other = if a.has('U') {
+                        panes[(i + n - 1) % n]
+                    } else {
+                        panes[(i + 1) % n]
+                    };
+                    (pid, other)
+                }
             };
-            w.layout = crate::layout::swap(&w.layout, pid, other);
-            if !a.has('d') {
-                w.active = pid;
-            }
-            srv.relayout(wid);
+            srv.swap_panes(src, dst, a.has('d'))?;
+        }
+        "join-pane" => {
+            let s = a.value('s').ok_or("join-pane needs -s src-pane")?;
+            let src = target::pane(srv, ctx, Some(s))?.2;
+            let dst = target::pane(srv, ctx, a.value('t'))?.2;
+            let size = split_size(a)?;
+            srv.join_pane(src, dst, a.has('h'), a.has('b'), size, !a.has('d'))?;
         }
         "rotate-window" => {
             let (_, wid, _) = target::window(srv, ctx, a.value('t'))?;
@@ -216,6 +214,18 @@ pub(super) fn run(
         _ => return Ok(false),
     }
     Ok(true)
+}
+
+/// `-l size` of `split-window` / `join-pane`: cells, or `N%` of the pane.
+fn split_size(a: &Args) -> Result<Option<SplitSize>, String> {
+    let Some(l) = a.value('l') else {
+        return Ok(None);
+    };
+    let bad = || format!("bad size: {l}");
+    Ok(Some(match l.strip_suffix('%') {
+        Some(pc) => SplitSize::Percent(pc.parse().map_err(|_| bad())?),
+        None => SplitSize::Cells(l.parse().map_err(|_| bad())?),
+    }))
 }
 
 /// vim-tmux-navigator: pass the key to vim/hjkl/fzf in front, else move.

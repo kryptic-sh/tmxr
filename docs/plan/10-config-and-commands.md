@@ -93,8 +93,13 @@ A tmux-compatible parser shared by config binds, the command prompt
 `run-shell`, `if-shell`, `choose-tree` (→ picker), `list-commands`; plus tmxr's
 own `navigate-pane`, `resurrect-save`, `resurrect-restore`.
 
-Not implemented yet (unknown commands to the parser): `move-window`,
-`swap-window`, `join-pane`, `respawn-pane`.
+Not implemented yet (an unknown command to the parser): `respawn-pane`.
+
+tmxr has no marked pane, so `join-pane` and `swap-window` need `-s`.
+`move-window` refuses an index in use (no `-k`) and has no `-r`; moving a
+session's last window away ends that session, as in tmux. A `-t` destination for
+`new-window` / `move-window` is `session:index`, and a bare word is an index
+when it is a number, else a session name.
 
 `if-shell` always runs its shell command in the background, as tmux does with
 `-b`: the command client gets its reply at once, and the chosen command runs

@@ -392,3 +392,78 @@ fn if_shell_picks_a_command_by_status_or_format() {
         assert!(!ls.contains(unwanted), "{unwanted} present:\n{ls}");
     }
 }
+
+#[test]
+fn windows_move_and_swap_between_sessions() {
+    let t = Tmxr::new("movew");
+    let windows = |t: &Tmxr, s: &str| -> Vec<String> {
+        t.run(&["list-windows", "-t", s])
+            .lines()
+            .map(|l| {
+                let (idx, rest) = l.split_once(": ").unwrap_or((l, ""));
+                let name = rest.split([' ', '*', '-']).next().unwrap_or("");
+                format!("{idx}:{name}")
+            })
+            .collect()
+    };
+    t.run(&["new-session", "-d", "-s", "a", "-n", "one"]);
+    t.run(&["new-window", "-d", "-t", "a", "-n", "two"]);
+    t.run(&["new-session", "-d", "-s", "b", "-n", "bee"]);
+
+    // Within a session: a new index.
+    t.run(&["move-window", "-d", "-s", "a:1", "-t", "a:5"]);
+    assert_eq!(windows(&t, "a"), ["0:one", "5:two"]);
+    // To another session: the first free index there.
+    t.run(&["move-window", "-d", "-s", "a:5", "-t", "b"]);
+    assert_eq!(windows(&t, "a"), ["0:one"]);
+    assert_eq!(windows(&t, "b"), ["0:bee", "1:two"]);
+    // Swap across sessions.
+    t.run(&["swap-window", "-d", "-s", "a:0", "-t", "b:0"]);
+    assert_eq!(windows(&t, "a"), ["0:bee"]);
+    assert_eq!(windows(&t, "b"), ["0:one", "1:two"]);
+    // Moving a session's last window away ends the session.
+    t.run(&["move-window", "-d", "-s", "a:0", "-t", "b:7"]);
+    let ls = t.run(&["ls"]);
+    assert!(!ls.lines().any(|l| l.starts_with("a:")), "{ls}");
+    assert_eq!(windows(&t, "b"), ["0:one", "1:two", "7:bee"]);
+
+    // A bare session name as a destination names the session, not the
+    // current one (c is newest, so current for a command client).
+    t.run(&["new-session", "-d", "-s", "c", "-n", "sea"]);
+    t.run(&["new-window", "-d", "-t", "b", "-n", "late"]);
+    assert_eq!(windows(&t, "b"), ["0:one", "1:two", "2:late", "7:bee"]);
+    assert_eq!(windows(&t, "c"), ["0:sea"]);
+}
+
+#[test]
+fn panes_join_and_swap_across_windows() {
+    let t = Tmxr::new("joinp");
+    let pane_id = |t: &Tmxr, target: &str| {
+        t.run(&["display-message", "-p", "-t", target, "#{pane_id}"])
+            .trim()
+            .to_owned()
+    };
+    let count = |t: &Tmxr, args: &[&str]| t.run(args).lines().count();
+    t.run(&["new-session", "-d", "-s", "p", "-n", "w1"]);
+    t.run(&["split-window", "-d", "-t", "p:w1"]);
+    t.run(&["new-window", "-d", "-t", "p", "-n", "w2"]);
+    let joined = pane_id(&t, "p:w2");
+    assert!(joined.starts_with('%'), "{joined:?}");
+
+    // Joining a window's only pane elsewhere closes that window.
+    t.run(&["join-pane", "-d", "-h", "-s", "p:w2", "-t", "p:w1.0"]);
+    assert_eq!(count(&t, &["list-windows", "-t", "p"]), 1);
+    assert_eq!(count(&t, &["list-panes", "-t", "p:w1"]), 3);
+    assert!(
+        t.run(&["list-panes", "-t", "p:w1"]).contains(&joined),
+        "{joined} not in w1"
+    );
+
+    // Swap a pane with one in another window.
+    t.run(&["new-window", "-d", "-t", "p", "-n", "w3"]);
+    let (lone, other) = (pane_id(&t, "p:w3"), pane_id(&t, "p:w1.1"));
+    assert!(lone.starts_with('%') && other.starts_with('%') && lone != other);
+    t.run(&["swap-pane", "-d", "-s", "p:w3", "-t", "p:w1.1"]);
+    assert_eq!(pane_id(&t, "p:w3"), other);
+    assert_eq!(pane_id(&t, "p:w1.1"), lone);
+}

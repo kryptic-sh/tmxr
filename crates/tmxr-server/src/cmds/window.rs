@@ -21,16 +21,7 @@ pub(super) fn run(
         "new-window" => {
             let (sid, cur_idx, _) = target::window(srv, ctx, None)?;
             let (sid, index) = match a.value('t') {
-                Some(t) if !t.is_empty() => {
-                    let (sess, rest) = t.split_once(':').unwrap_or(("", t));
-                    let sid = if sess.is_empty() {
-                        sid
-                    } else {
-                        target::session(srv, ctx, Some(sess))?
-                    };
-                    let idx = rest.trim_start_matches('=').parse::<u32>().ok();
-                    (sid, idx)
-                }
+                Some(t) if !t.is_empty() => target::destination(srv, ctx, t)?,
                 _ if a.has('a') => {
                     let s = &srv.sessions[&sid];
                     let idx = ((cur_idx + 1)..).find(|i| !s.windows.contains_key(i));
@@ -55,6 +46,20 @@ pub(super) fn run(
                 size,
                 !a.has('d'),
             )?;
+        }
+        "move-window" => {
+            let (_, _, wid) = target::window(srv, ctx, a.value('s'))?;
+            let (dst, index) = match a.value('t') {
+                Some(t) if !t.is_empty() => target::destination(srv, ctx, t)?,
+                _ => (target::session(srv, ctx, None)?, None),
+            };
+            srv.move_window(wid, dst, index, !a.has('d'))?;
+        }
+        "swap-window" => {
+            let s = a.value('s').ok_or("swap-window needs -s src-window")?;
+            let (_, _, src) = target::window(srv, ctx, Some(s))?;
+            let (_, _, dst) = target::window(srv, ctx, a.value('t'))?;
+            srv.swap_windows(src, dst, a.has('d'))?;
         }
         "kill-window" => {
             let (sid, _, wid) = target::window(srv, ctx, a.value('t'))?;
