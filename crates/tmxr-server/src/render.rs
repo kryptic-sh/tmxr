@@ -425,9 +425,9 @@ fn draw_overlay(
                 .saturating_sub(visible.saturating_sub(1))
                 .min(matched.saturating_sub(visible.min(matched)));
             let end = (start + visible).min(matched);
-            let highlight = Style::default()
-                .fg(Color::Rgb(0x7a, 0xa2, 0xf7))
-                .add_modifier(Modifier::BOLD);
+            // Matched characters take the picker's accent: the active border
+            // colour, like its frame and prompt.
+            let highlight = border.add_modifier(Modifier::BOLD);
             for (i, (label, hits, _)) in picker.visible_rows(start..end).into_iter().enumerate() {
                 let row = inner.y + 1 + i as u16;
                 let selected = start + i == picker.selected;
