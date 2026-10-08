@@ -18,6 +18,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   does. The flag was accepted before but did nothing.
 - `#{mouse_any_flag}`: whether the pane's program asked for the mouse.
 
+### Fixed
+
+- A pane printing faster than the server can parse (`seq` on Linux) no longer
+  delays key presses by seconds or grows the server's memory without bound: each
+  pane's output waits in a bounded queue that slows the program down, and the
+  server repaints during a flood.
+
 ## [0.1.0] - 2026-10-09
 
 ### Added

@@ -36,8 +36,11 @@ pub enum Event {
     },
     Msg(ClientId, ClientMsg),
     Disconnected(ClientId),
-    /// Output or exit of a pane's program, tagged with the pane's spawn.
+    /// End of output or exit of a pane's program, tagged with the pane's
+    /// spawn.
     Pty(PaneId, u64, PtyEvent),
+    /// Output is waiting in the pane's queue.
+    PtyOutput(PaneId, u64),
     /// A `run-shell` command finished.
     Shell {
         client: Option<ClientId>,
@@ -140,6 +143,9 @@ fn navigator_regex(pattern: &str) -> Result<regex::Regex, String> {
 pub const PASSTHROUGH_UNSUPPORTED: &str =
     "allow-passthrough: not supported on Windows (ConPTY drops the DCS terminator)";
 
+/// How long one pass of the loop handles queued events before it renders,
+/// so a pane flooding output still repaints.
+const DRAIN_BUDGET: Duration = Duration::from_millis(20);
 /// Rows the status line takes.
 pub const STATUS_ROWS: u16 = 1;
 /// Messages kept for `show-messages`.
@@ -215,7 +221,10 @@ impl Server {
             match rx.recv_timeout(tick) {
                 Ok(ev) => {
                     self.handle(ev);
-                    while let Ok(ev) = rx.try_recv() {
+                    let until = Instant::now() + DRAIN_BUDGET;
+                    while Instant::now() < until
+                        && let Ok(ev) = rx.try_recv()
+                    {
                         self.handle(ev);
                     }
                 }
@@ -271,6 +280,17 @@ impl Server {
                 // A respawned pane's previous program can still report.
                 if self.panes.get(&pane).is_some_and(|p| p.spawn == spawn) {
                     self.pty_event(pane, ev);
+                }
+            }
+            Event::PtyOutput(pane, spawn) => {
+                let bytes = self
+                    .panes
+                    .get(&pane)
+                    .filter(|p| p.spawn == spawn)
+                    .map(|p| p.output.0.take())
+                    .unwrap_or_default();
+                if !bytes.is_empty() {
+                    self.pty_event(pane, PtyEvent::Output(bytes));
                 }
             }
             Event::Shell { client, output } => {

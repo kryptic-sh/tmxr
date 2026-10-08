@@ -37,6 +37,8 @@ pub struct Pane {
     pub dead: Option<Option<u32>>,
     /// `clock-mode`: the pane shows a big clock until a key is pressed.
     pub clock: bool,
+    /// Output the reader thread has queued for this spawn.
+    pub output: crate::output::OutputHandle,
 }
 
 pub struct Window {

@@ -66,13 +66,13 @@ what was not.
   macOS Terminal.app) would a fallback matter: map RGB to the nearest xterm-256
   index in `AnsiBackend` when the client's environment does not advertise true
   colour (`COLORTERM`, `WT_SESSION`, …), behind an option.
-- **No frame-rate cap**: the server renders after each drained batch of events.
-  Measured on Windows (2026-10-09, a pane echoing a counter in an endless cmd
-  loop): about 19 KB/s of frames reached the client and `prefix d` still
-  detached in 50 ms, so it is not a problem there; ConPTY itself coalesces
-  output. A Unix pty produces far more;
+- **No frame-rate cap**: the server renders after each pass of its loop, and a
+  pass stops handling events after `DRAIN_BUDGET` so a flood still repaints.
+  Each pane's output waits in a bounded queue (`output::QUEUE_LIMIT`) that
+  blocks the reader when full; before that queue, an unbounded channel let `seq`
+  on Linux CI bury a key press under 6–9 s of output (2026-10-09).
   `detach_stays_responsive_under_flood_output` checks every CI platform detaches
-  within 5 s under a flood.
+  within 5 s under a flood. Frame rate itself is still not capped or measured.
 - **Resurrect**: pane titles are not saved (restored programs set their own); an
   argument allowlist (`resurrect.restore-args`, like resurrect's `~vim`
   strategies) is not implemented, and would need each pane's full command line
@@ -113,6 +113,10 @@ what was not.
   later were clean (those later runs did turn up a flaky test, since fixed), and
   nextest's summary did not name the leaking test. Likely a server or pane
   process outliving `kill-server` by a moment; not investigated further.
+- **`session_picker_previews_the_highlighted_session` timed out once** (30 s) in
+  a full Windows run on 2026-10-09 that took 50 s instead of the usual 20 s, and
+  passed on nextest's retry. 15 isolated runs and 5 more full runs were clean.
+  Not investigated; the timeout message was not captured.
 
 ## Decisions awaiting the owner
 

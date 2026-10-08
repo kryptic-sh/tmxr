@@ -60,8 +60,15 @@ impl Server {
         let events = self.events.clone();
         let spawn = self.next_spawn;
         self.next_spawn += 1;
+        let output = crate::output::OutputHandle::default();
+        let queue = Arc::clone(&output.0);
         let sink: Arc<dyn Fn(PtyEvent) + Send + Sync> = Arc::new(move |e| {
-            let _ = events.send(Event::Pty(pid, spawn, e));
+            let ev = match e {
+                PtyEvent::Output(bytes) if queue.push(&bytes) => Event::PtyOutput(pid, spawn),
+                PtyEvent::Output(_) => return,
+                other => Event::Pty(pid, spawn, other),
+            };
+            let _ = events.send(ev);
         });
         let pty = Pty::spawn(&spec, sink).map_err(|e| format!("could not start pane: {e}"))?;
         self.next_pane = self.next_pane.max(pid + 1);
@@ -79,6 +86,7 @@ impl Server {
                 argv,
                 dead: None,
                 clock: false,
+                output,
             },
         );
         Ok(())
