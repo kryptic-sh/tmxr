@@ -102,6 +102,13 @@ pub struct Server {
     last_save: Instant,
 }
 
+/// The navigator pattern, anchored to the whole process name. An invalid
+/// pattern is reported and leaves the navigator off: `C-h/j/k/l` then always
+/// move between panes.
+fn navigator_regex(pattern: &str) -> Result<regex::Regex, String> {
+    regex::Regex::new(&format!("^(?:{pattern})$")).map_err(|e| format!("navigator.pattern: {e}"))
+}
+
 /// Rows the status line takes.
 pub const STATUS_ROWS: u16 = 1;
 /// Messages kept for `show-messages`.
@@ -116,14 +123,20 @@ impl Server {
         cfg_path: Option<PathBuf>,
         events: Sender<Event>,
     ) -> Self {
-        let (keys, key_errors) = KeyTables::from_config(&cfg);
+        let (keys, mut key_errors) = KeyTables::from_config(&cfg);
         let prefix = cfg.prefix.parse().unwrap_or_else(|_| {
             Key::new(
                 crossterm::event::KeyCode::Char('b'),
                 crossterm::event::KeyModifiers::CONTROL,
             )
         });
-        let navigator = regex::Regex::new(&format!("^(?:{})$", cfg.navigator.pattern)).ok();
+        let navigator = match navigator_regex(&cfg.navigator.pattern) {
+            Ok(re) => Some(re),
+            Err(e) => {
+                key_errors.push(e);
+                None
+            }
+        };
         let mut srv = Self {
             endpoint,
             pid: std::process::id(),
@@ -1330,11 +1343,17 @@ impl Server {
 
     pub fn reload_config(&mut self) -> Result<(), String> {
         let (cfg, _) = tmxr_config::load(self.cfg_path.as_deref()).map_err(|e| e.to_string())?;
-        let (keys, errors) = KeyTables::from_config(&cfg);
+        let (keys, mut errors) = KeyTables::from_config(&cfg);
         if let Ok(p) = cfg.prefix.parse() {
             self.prefix = p;
         }
-        self.navigator = regex::Regex::new(&format!("^(?:{})$", cfg.navigator.pattern)).ok();
+        self.navigator = match navigator_regex(&cfg.navigator.pattern) {
+            Ok(re) => Some(re),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
         self.keys = keys;
         self.cfg = cfg;
         self.mark_all_dirty();
@@ -1429,4 +1448,23 @@ pub fn run_shell(srv: &Server, client: Option<ClientId>, line: String, backgroun
 pub enum SplitSize {
     Cells(u16),
     Percent(u16),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn navigator_pattern_matches_whole_names_and_reports_errors() {
+        let pattern = &tmxr_config::defaults().navigator.pattern;
+        let re = navigator_regex(pattern).unwrap();
+        for editor in ["hjkl", "nvim", "vim", "/usr/bin/nvim", "fzf", "sqeel"] {
+            assert!(re.is_match(editor), "{editor}");
+        }
+        for other in ["bash", "pwsh", "nvim-qt-launcher", "xhjkl"] {
+            assert!(!re.is_match(other), "{other}");
+        }
+        let err = navigator_regex("(vim").unwrap_err();
+        assert!(err.starts_with("navigator.pattern: "), "{err}");
+    }
 }
