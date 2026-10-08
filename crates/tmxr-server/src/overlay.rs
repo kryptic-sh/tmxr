@@ -69,15 +69,8 @@ impl Overlay {
             .and_then(|c| c.att.as_ref())
             .map(|a| a.session);
         let mut sessions: Vec<_> = srv.sessions.values().collect();
-        // Most recently used first, but the current session goes second so
-        // Enter straight away jumps to the previous one.
         sessions.sort_by_key(|s| std::cmp::Reverse(s.last_used));
-        if let Some(pos) = sessions.iter().position(|s| Some(s.id) == current)
-            && sessions.len() > 1
-        {
-            let cur = sessions.remove(pos);
-            sessions.insert(1.min(sessions.len()), cur);
-        }
+        current_first(&mut sessions, |s| Some(s.id) == current);
         let items = sessions
             .iter()
             .map(|s| {
@@ -253,6 +246,15 @@ struct Item {
     target: Target,
 }
 
+/// Move the current session to the top of a most-recently-used list. The
+/// session picker opens on the second row, so Enter straight away jumps to
+/// the previous session (like `switch-client -l`).
+fn current_first<T>(sessions: &mut [T], is_current: impl Fn(&T) -> bool) {
+    if let Some(pos) = sessions.iter().position(is_current) {
+        sessions[..=pos].rotate_right(1);
+    }
+}
+
 /// The picker's item source: a fixed list built when the picker opens.
 struct Source {
     title: &'static str,
@@ -412,6 +414,21 @@ mod tests {
         );
         let mut o = Overlay::confirm("kill?".into(), "kill-pane".into());
         assert_eq!(o.key(&k(KeyCode::Char('n'))), OverlayAction::Close);
+    }
+
+    #[test]
+    fn session_picker_opens_on_the_previous_session() {
+        // MRU order: the current session was used last, "work" before it.
+        let mut mru = vec!["main", "work", "dots"];
+        current_first(&mut mru, |s| *s == "main");
+        assert_eq!(mru, ["main", "work", "dots"]);
+        let o = PickerOverlay::new("sessions", items(&mru));
+        assert_eq!(mru[o.picker.selected], "work");
+        // The current session is not always the most recent (another client
+        // switched since); it still goes first and keeps the rest in order.
+        let mut mru = vec!["work", "dots", "main"];
+        current_first(&mut mru, |s| *s == "main");
+        assert_eq!(mru, ["main", "work", "dots"]);
     }
 
     #[test]
