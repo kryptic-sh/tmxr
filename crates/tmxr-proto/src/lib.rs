@@ -15,7 +15,7 @@ pub use codec::{ProtoError, read_msg, write_msg};
 
 /// Bumped on any change to a type in this module. Client and server refuse to
 /// talk across a mismatch rather than mis-decode each other.
-pub const PROTOCOL_VERSION: u32 = 2;
+pub const PROTOCOL_VERSION: u32 = 3;
 
 /// First message a client sends.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -39,6 +39,8 @@ pub struct TerminalInfo {
     pub rows: u16,
     /// `$TERM` of the outer terminal.
     pub term: String,
+    /// The client can suspend itself (`suspend-client`): Unix job control.
+    pub job_control: bool,
 }
 
 /// Messages from a client to the server.
@@ -53,6 +55,9 @@ pub enum ClientMsg {
     Input(crossterm::event::Event),
     /// The client wants to detach (sent on terminal hangup).
     Detach,
+    /// The client is back from `suspend-client`; its terminal was handed to
+    /// the shell meanwhile and needs a full redraw.
+    Resumed,
 }
 
 /// Messages from the server to a client.
@@ -79,4 +84,6 @@ pub enum ServerMsg {
     /// Turn the attached client's mouse capture on or off (the `mouse`
     /// option); with it off, the terminal's own selection works unshifted.
     Mouse(bool),
+    /// Stop the client process (`suspend-client`), as `C-z` stops a program.
+    Suspend,
 }

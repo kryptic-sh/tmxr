@@ -421,6 +421,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         "[-bdfhv] [-c start-directory] [-l size] [-t target-pane] [command]"
     ),
     cmd!(
+        "suspend-client",
+        Some("suspendc"),
+        "t:",
+        0,
+        0,
+        "[-t target-client]"
+    ),
+    cmd!(
         "swap-pane",
         Some("swapp"),
         "dDs:t:U",

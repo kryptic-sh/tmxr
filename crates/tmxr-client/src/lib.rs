@@ -11,10 +11,11 @@ mod terminal;
 
 use std::io::{self, IsTerminal, Write};
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use interprocess::local_socket::Stream;
 use interprocess::local_socket::traits::Stream as _;
+use interprocess::local_socket::{SendHalf, Stream};
 use tmxr_proto::socket::{ENV_TMXR, Endpoint};
 use tmxr_proto::{
     ClientMsg, Hello, PROTOCOL_VERSION, ServerMsg, TerminalInfo, read_msg, write_msg,
@@ -118,6 +119,7 @@ fn hello() -> Hello {
             cols,
             rows,
             term: std::env::var("TERM").unwrap_or_default(),
+            job_control: cfg!(unix),
         });
     Hello {
         protocol: PROTOCOL_VERSION,
@@ -137,6 +139,8 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
     write_msg(&mut send, &ClientMsg::Command(args)).map_err(to_io)?;
 
     let mut send = Some(send);
+    // Shared with the input thread once attached, to report a resume.
+    let mut writer: Option<Arc<Mutex<SendHalf>>> = None;
     let mut term: Option<terminal::Guard> = None;
     let mut stdout = io::stdout().lock();
     loop {
@@ -163,7 +167,9 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
             ServerMsg::Attached => {
                 term = Some(terminal::Guard::enter()?);
                 if let Some(s) = send.take() {
-                    terminal::spawn_input(s);
+                    let shared = Arc::new(Mutex::new(s));
+                    terminal::spawn_input(Arc::clone(&shared));
+                    writer = Some(shared);
                 }
             }
             ServerMsg::Output(bytes) => {
@@ -188,6 +194,18 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                 drop(term.take());
                 println!("[{reason}]");
                 return Ok(0);
+            }
+            ServerMsg::Suspend => {
+                // Hand the terminal back to the shell while stopped.
+                drop(term.take());
+                terminal::suspend()?;
+                term = Some(terminal::Guard::enter()?);
+                if let Some(w) = &writer {
+                    let mut w = w
+                        .lock()
+                        .map_err(|_| io::Error::other("input thread panicked"))?;
+                    write_msg(&mut *w, &ClientMsg::Resumed).map_err(to_io)?;
+                }
             }
             ServerMsg::Mouse(on) => {
                 if term.is_some() {

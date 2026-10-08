@@ -1,6 +1,7 @@
 //! The attached client's terminal: modes in, modes out, input pump.
 
 use std::io::{self, Write};
+use std::sync::{Arc, Mutex};
 
 use crossterm::event::{
     DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
@@ -84,14 +85,36 @@ pub fn set_mouse(on: bool) -> io::Result<()> {
 }
 
 /// Forward terminal events to the server until either side goes away.
-pub fn spawn_input(mut send: SendHalf) {
+pub fn spawn_input(send: Arc<Mutex<SendHalf>>) {
     let _ = std::thread::Builder::new()
         .name("tmxr-input".into())
         .spawn(move || {
             while let Ok(ev) = crossterm::event::read() {
-                if write_msg(&mut send, &ClientMsg::Input(ev)).is_err() {
+                let Ok(mut send) = send.lock() else { break };
+                if write_msg(&mut *send, &ClientMsg::Input(ev)).is_err() {
                     break;
                 }
             }
         });
+}
+
+/// Stop this process until the shell continues it (`suspend-client`), as
+/// `C-z` stops a program; returns once it runs again.
+#[cfg(unix)]
+pub fn suspend() -> io::Result<()> {
+    // SAFETY: `raise` only sends a signal to this process; SIGTSTP's default
+    // action stops it until SIGCONT.
+    if unsafe { libc::raise(libc::SIGTSTP) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+/// Windows has no job control; the server does not ask a client that said
+/// so in its hello, so reaching this is a protocol error.
+#[cfg(windows)]
+pub fn suspend() -> io::Result<()> {
+    Err(io::Error::other(
+        "suspend-client is not supported on Windows",
+    ))
 }

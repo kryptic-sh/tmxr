@@ -3,6 +3,7 @@
 use std::fmt::Write as _;
 
 use tmxr_command::Parsed;
+use tmxr_proto::ServerMsg;
 
 use super::{Ctx, Outcome, attached_client, client_size, cwd_arg, session_env};
 use crate::model::{ClientId, SessionId};
@@ -107,6 +108,21 @@ pub(super) fn run(
             } else {
                 srv.kill_session(sid);
             }
+        }
+        "suspend-client" => {
+            let c = match a.value('t') {
+                Some(t) => target_client(srv, t)?,
+                None => attached_client(srv, ctx).ok_or("no current client")?,
+            };
+            let job_control = srv.clients[&c]
+                .hello
+                .as_ref()
+                .and_then(|h| h.terminal.as_ref())
+                .is_some_and(|t| t.job_control);
+            if !job_control {
+                return Err("suspend-client: the client has no job control (Windows)".into());
+            }
+            srv.send(c, ServerMsg::Suspend);
         }
         "list-clients" => {
             let only = a

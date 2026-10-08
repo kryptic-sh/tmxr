@@ -287,7 +287,7 @@ impl Server {
         }
     }
 
-    fn send(&mut self, client: ClientId, msg: ServerMsg) {
+    pub(crate) fn send(&mut self, client: ClientId, msg: ServerMsg) {
         let Some(c) = self.clients.get_mut(&client) else {
             return;
         };
@@ -362,6 +362,15 @@ impl Server {
             }
             ClientMsg::Input(ev) => self.input(id, ev),
             ClientMsg::Detach => self.detach(id, "detached"),
+            ClientMsg::Resumed => {
+                // The shell had the terminal: repaint everything, and tell
+                // the client its mouse mode again.
+                if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
+                    a.full_redraw = true;
+                    a.mouse = false;
+                    a.dirty = true;
+                }
+            }
         }
     }
 

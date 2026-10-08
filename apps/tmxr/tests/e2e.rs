@@ -105,6 +105,11 @@ impl Tmxr {
 
     /// Start an attaching client in a pseudo-terminal.
     fn attach(&self, rest: &[&str]) -> Screen {
+        self.spawn(env!("CARGO_BIN_EXE_tmxr"), &self.args(rest))
+    }
+
+    /// Start `program` in a pseudo-terminal with the test's environment.
+    fn spawn(&self, program: &str, args: &[String]) -> Screen {
         let pair = native_pty_system()
             .openpty(PtySize {
                 rows: ROWS,
@@ -113,8 +118,8 @@ impl Tmxr {
                 pixel_height: 0,
             })
             .unwrap();
-        let mut cmd = CommandBuilder::new(env!("CARGO_BIN_EXE_tmxr"));
-        cmd.args(self.args(rest));
+        let mut cmd = CommandBuilder::new(program);
+        cmd.args(args);
         for (k, v) in self.env() {
             cmd.env(k, v);
         }
@@ -1291,4 +1296,37 @@ fn clients_are_listed_and_detached_by_id() {
     remaining.wait_for("client picker", |text| text.contains("clients 1/1"));
     remaining.send(b"\r");
     t.wait_run(&["list-clients"], "no clients", str::is_empty);
+}
+
+#[cfg(unix)]
+#[test]
+fn suspend_client_stops_and_fg_resumes() {
+    let t = Tmxr::new("suspend");
+    // tmxr under an interactive shell, so it has job control to stop in.
+    let sh = t.spawn("/bin/sh", &["-i".to_owned()]);
+    let line: Vec<String> = std::iter::once(env!("CARGO_BIN_EXE_tmxr").to_owned())
+        .chain(t.args(&["new", "-s", "sus"]))
+        .collect();
+    sh.send(format!("{}\r", line.join(" ")).as_bytes());
+    sh.wait_for("attached", |text| text.contains("sus"));
+    sh.send(PREFIX);
+    sh.send(b"\x1a");
+    sh.wait_for("stopped job", |text| {
+        text.to_lowercase().contains("stopped")
+    });
+    sh.send(b"fg\r");
+    sh.wait_for("redrawn after fg", |text| {
+        text.lines().last().is_some_and(|l| l.contains("sus"))
+    });
+}
+
+#[cfg(windows)]
+#[test]
+fn suspend_client_says_windows_cannot() {
+    let t = Tmxr::new("suspend");
+    let s = t.attach(&["new", "-s", "sus"]);
+    s.wait_for("status line", |text| text.contains("sus"));
+    s.send(PREFIX);
+    s.send(b"\x1a");
+    s.wait_for("error", |text| text.contains("no job control"));
 }

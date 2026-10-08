@@ -168,6 +168,7 @@ processes = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "top",
 "E" = { cmd = "select-layout -E", note = "Spread panes out evenly" }
 "t" = { cmd = "clock-mode", note = "Show a clock" }
 "D" = { cmd = "choose-client -Z", note = "Choose a client to detach" }
+"C-z" = { cmd = "suspend-client", note = "Suspend the client (fg brings it back)" }
 "/" = { cmd = 'command-prompt -k -p key "list-keys -1N %%"', note = "Describe a key" }
 "m" = { cmd = "select-pane -m", note = "Mark or unmark the pane" }
 "M" = { cmd = "select-pane -M", note = "Clear the marked pane" }

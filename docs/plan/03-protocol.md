@@ -43,7 +43,7 @@ ClientMsg::Hello(Hello {
     version: String,                // CARGO_PKG_VERSION, for messages
     cwd: String,                    // default -c for new sessions
     env: Vec<(String, String)>,     // the client's whole environment
-    terminal: Option<TerminalInfo>, // { cols, rows, term }; None = cannot attach
+    terminal: Option<TerminalInfo>, // { cols, rows, term, job_control }; None = cannot attach
 })
 ServerMsg::Hello { protocol: u32, version: String, pid: u32 }
 ```
@@ -59,6 +59,7 @@ enum ClientMsg {
     Command(Vec<String>),           // argv after `tmxr`; empty = default command
     Input(crossterm::event::Event), // key, mouse, paste, focus, resize
     Detach,                         // terminal hangup
+    Resumed,                        // back from suspend-client: redraw everything
 }
 
 enum ServerMsg {
@@ -68,6 +69,7 @@ enum ServerMsg {
     CommandResult { status: i32, stdout: String, stderr: String },
     Detached { reason: String },    // detach, session killed, server exit
     Mouse(bool),                    // capture the mouse or not (`mouse` option)
+    Suspend,                        // stop the client (suspend-client)
 }
 ```
 
@@ -81,6 +83,10 @@ Notes:
   backends. The server never parses terminal input bytes.
 - `Output` is opaque to the client. Terminal features are not negotiated: the
   server always emits 24-bit colour and OSC 52.
+- `suspend-client` sends `Suspend`: the client restores its terminal, stops
+  itself with `SIGTSTP`, and once the shell continues it re-enters raw mode and
+  sends `Resumed`, on which the server repaints. Only a client whose hello says
+  `job_control` (Unix) is asked; on Windows the command fails.
 - The client captures the mouse only when told: the server sends `Mouse` with
   the client's first frame and again whenever the `mouse` option changes, so
   with `mouse off` the terminal's own selection works without Shift.
