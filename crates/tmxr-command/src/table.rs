@@ -1,0 +1,517 @@
+//! The commands tmxr understands: names, aliases, flag specs, argument
+//! counts. Execution lives in the server; this is the shared vocabulary the
+//! CLI, config binds and the command prompt are checked against.
+
+use crate::args::{Args, ArgsError};
+
+/// One command's static description.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CommandSpec {
+    pub name: &'static str,
+    pub alias: Option<&'static str>,
+    /// getopt-style flag spec, see [`crate::args`].
+    pub flags: &'static str,
+    pub min_args: usize,
+    /// `usize::MAX` when the trailing arguments are a command.
+    pub max_args: usize,
+    pub usage: &'static str,
+}
+
+const ANY: usize = usize::MAX;
+
+macro_rules! cmd {
+    ($name:literal, $alias:expr, $flags:literal, $min:expr, $max:expr, $usage:literal) => {
+        CommandSpec {
+            name: $name,
+            alias: $alias,
+            flags: $flags,
+            min_args: $min,
+            max_args: $max,
+            usage: $usage,
+        }
+    };
+}
+
+/// Every command, sorted by name.
+pub const COMMANDS: &[CommandSpec] = &[
+    cmd!(
+        "attach-session",
+        Some("attach"),
+        "dt:",
+        0,
+        0,
+        "[-d] [-t target-session]"
+    ),
+    cmd!(
+        "bind-key",
+        Some("bind"),
+        "nrN:T:",
+        1,
+        ANY,
+        "[-nr] [-N note] [-T key-table] key [command [arguments]]"
+    ),
+    cmd!(
+        "break-pane",
+        Some("breakp"),
+        "dt:",
+        0,
+        0,
+        "[-d] [-t target-pane]"
+    ),
+    cmd!(
+        "capture-pane",
+        Some("capturep"),
+        "pt:",
+        0,
+        0,
+        "[-p] [-t target-pane]"
+    ),
+    cmd!(
+        "choose-tree",
+        None,
+        "swZt:",
+        0,
+        0,
+        "[-swZ] [-t target-pane]"
+    ),
+    cmd!(
+        "command-prompt",
+        None,
+        "I:p:t:",
+        0,
+        1,
+        "[-I inputs] [-p prompts] [template]"
+    ),
+    cmd!(
+        "confirm-before",
+        Some("confirm"),
+        "p:t:",
+        1,
+        ANY,
+        "[-p prompt] command"
+    ),
+    cmd!("copy-mode", None, "eut:", 0, 0, "[-eu] [-t target-pane]"),
+    cmd!(
+        "delete-buffer",
+        Some("deleteb"),
+        "b:",
+        0,
+        0,
+        "[-b buffer-name]"
+    ),
+    cmd!(
+        "detach-client",
+        Some("detach"),
+        "as:t:",
+        0,
+        0,
+        "[-a] [-s target-session] [-t target-client]"
+    ),
+    cmd!(
+        "display-message",
+        Some("display"),
+        "pt:",
+        0,
+        1,
+        "[-p] [-t target-pane] [message]"
+    ),
+    cmd!("display-panes", Some("displayp"), "", 0, 0, ""),
+    cmd!(
+        "has-session",
+        Some("has"),
+        "t:",
+        0,
+        0,
+        "[-t target-session]"
+    ),
+    cmd!(
+        "kill-pane",
+        Some("killp"),
+        "at:",
+        0,
+        0,
+        "[-a] [-t target-pane]"
+    ),
+    cmd!("kill-server", None, "", 0, 0, ""),
+    cmd!(
+        "kill-session",
+        None,
+        "at:",
+        0,
+        0,
+        "[-a] [-t target-session]"
+    ),
+    cmd!(
+        "kill-window",
+        Some("killw"),
+        "at:",
+        0,
+        0,
+        "[-a] [-t target-window]"
+    ),
+    cmd!("last-pane", Some("lastp"), "t:", 0, 0, "[-t target-window]"),
+    cmd!(
+        "last-window",
+        Some("last"),
+        "t:",
+        0,
+        0,
+        "[-t target-session]"
+    ),
+    cmd!("list-buffers", Some("lsb"), "", 0, 0, ""),
+    cmd!("list-commands", Some("lscm"), "", 0, 0, ""),
+    cmd!("list-keys", Some("lsk"), "NT:", 0, 0, "[-N] [-T key-table]"),
+    cmd!(
+        "list-panes",
+        Some("lsp"),
+        "at:",
+        0,
+        0,
+        "[-a] [-t target-window]"
+    ),
+    cmd!("list-sessions", Some("ls"), "", 0, 0, ""),
+    cmd!(
+        "list-windows",
+        Some("lsw"),
+        "at:",
+        0,
+        0,
+        "[-a] [-t target-session]"
+    ),
+    cmd!(
+        "navigate-pane",
+        None,
+        "DLlRt:U",
+        0,
+        0,
+        "[-DLlRU] [-t target-pane]"
+    ),
+    cmd!(
+        "new-session",
+        Some("new"),
+        "dc:n:s:x:y:",
+        0,
+        ANY,
+        "[-d] [-c start-directory] [-n window-name] [-s session-name] [-x width] [-y height] [command]"
+    ),
+    cmd!(
+        "new-window",
+        Some("neww"),
+        "adc:n:t:",
+        0,
+        ANY,
+        "[-ad] [-c start-directory] [-n window-name] [-t target-window] [command]"
+    ),
+    cmd!(
+        "next-layout",
+        Some("nextl"),
+        "t:",
+        0,
+        0,
+        "[-t target-window]"
+    ),
+    cmd!(
+        "next-window",
+        Some("next"),
+        "t:",
+        0,
+        0,
+        "[-t target-session]"
+    ),
+    cmd!(
+        "paste-buffer",
+        Some("pasteb"),
+        "b:dpt:",
+        0,
+        0,
+        "[-dp] [-b buffer-name] [-t target-pane]"
+    ),
+    cmd!(
+        "previous-window",
+        Some("prev"),
+        "t:",
+        0,
+        0,
+        "[-t target-session]"
+    ),
+    cmd!("refresh-client", Some("refresh"), "", 0, 0, ""),
+    cmd!(
+        "rename-session",
+        Some("rename"),
+        "t:",
+        1,
+        1,
+        "[-t target-session] new-name"
+    ),
+    cmd!(
+        "rename-window",
+        Some("renamew"),
+        "t:",
+        1,
+        1,
+        "[-t target-window] new-name"
+    ),
+    cmd!(
+        "resize-pane",
+        Some("resizep"),
+        "DLRt:Ux:y:Z",
+        0,
+        1,
+        "[-DLRUZ] [-x width] [-y height] [-t target-pane] [adjustment]"
+    ),
+    cmd!("resurrect-restore", None, "", 0, 0, ""),
+    cmd!("resurrect-save", None, "", 0, 0, ""),
+    cmd!(
+        "rotate-window",
+        Some("rotatew"),
+        "Dt:U",
+        0,
+        0,
+        "[-DU] [-t target-window]"
+    ),
+    cmd!(
+        "run-shell",
+        Some("run"),
+        "bt:",
+        1,
+        1,
+        "[-b] [-t target-pane] shell-command"
+    ),
+    cmd!(
+        "select-layout",
+        Some("selectl"),
+        "nopt:",
+        0,
+        1,
+        "[-nop] [-t target-window] [layout-name]"
+    ),
+    cmd!(
+        "select-pane",
+        Some("selectp"),
+        "DLlRt:U",
+        0,
+        0,
+        "[-DLlRU] [-t target-pane]"
+    ),
+    cmd!(
+        "select-window",
+        Some("selectw"),
+        "lnpt:",
+        0,
+        0,
+        "[-lnp] [-t target-window]"
+    ),
+    cmd!(
+        "send-keys",
+        Some("send"),
+        "lt:X",
+        0,
+        ANY,
+        "[-lX] [-t target-pane] key ..."
+    ),
+    cmd!("send-prefix", None, "t:", 0, 0, "[-t target-pane]"),
+    cmd!(
+        "set-buffer",
+        Some("setb"),
+        "ab:w",
+        1,
+        1,
+        "[-aw] [-b buffer-name] data"
+    ),
+    cmd!(
+        "set-option",
+        Some("set"),
+        "agost:uw",
+        1,
+        2,
+        "[-agosuw] [-t target] option [value]"
+    ),
+    cmd!(
+        "set-window-option",
+        Some("setw"),
+        "agot:u",
+        1,
+        2,
+        "[-agou] [-t target-window] option [value]"
+    ),
+    cmd!("show-buffer", Some("showb"), "b:", 0, 0, "[-b buffer-name]"),
+    cmd!("show-messages", Some("showmsgs"), "", 0, 0, ""),
+    cmd!(
+        "show-options",
+        Some("show"),
+        "gst:vw",
+        0,
+        1,
+        "[-gsvw] [-t target] [option]"
+    ),
+    cmd!("source-file", Some("source"), "q", 0, 1, "[-q] [path]"),
+    cmd!(
+        "split-window",
+        Some("splitw"),
+        "bc:dfhl:t:v",
+        0,
+        ANY,
+        "[-bdfhv] [-c start-directory] [-l size] [-t target-pane] [command]"
+    ),
+    cmd!(
+        "swap-pane",
+        Some("swapp"),
+        "dDs:t:U",
+        0,
+        0,
+        "[-dDU] [-s src-pane] [-t dst-pane]"
+    ),
+    cmd!(
+        "switch-client",
+        Some("switchc"),
+        "lnpt:T:",
+        0,
+        0,
+        "[-lnp] [-t target-session] [-T key-table]"
+    ),
+    cmd!(
+        "unbind-key",
+        Some("unbind"),
+        "anT:",
+        0,
+        1,
+        "[-an] [-T key-table] key"
+    ),
+];
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum CommandError {
+    #[error("unknown command: {0}")]
+    Unknown(String),
+    #[error("ambiguous command: {0}, could be: {1}")]
+    Ambiguous(String, String),
+    #[error("command {name}: {source}")]
+    Args {
+        name: &'static str,
+        source: ArgsError,
+    },
+    #[error("command {0}: too few arguments (usage: {0} {1})")]
+    TooFew(&'static str, &'static str),
+    #[error("command {0}: too many arguments (usage: {0} {1})")]
+    TooMany(&'static str, &'static str),
+}
+
+/// Find a command by full name, alias, or unique prefix of a name.
+pub fn lookup(name: &str) -> Result<&'static CommandSpec, CommandError> {
+    if let Some(c) = COMMANDS
+        .iter()
+        .find(|c| c.name == name || c.alias == Some(name))
+    {
+        return Ok(c);
+    }
+    let matches: Vec<_> = COMMANDS
+        .iter()
+        .filter(|c| c.name.starts_with(name))
+        .collect();
+    match matches.as_slice() {
+        [one] => Ok(one),
+        [] => Err(CommandError::Unknown(name.to_owned())),
+        many => Err(CommandError::Ambiguous(
+            name.to_owned(),
+            many.iter().map(|c| c.name).collect::<Vec<_>>().join(", "),
+        )),
+    }
+}
+
+/// A command ready to run: its spec and parsed arguments.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Parsed {
+    pub spec: &'static CommandSpec,
+    pub args: Args,
+}
+
+impl Parsed {
+    pub fn name(&self) -> &'static str {
+        self.spec.name
+    }
+}
+
+/// Resolve `argv[0]` and parse the rest against its flag spec.
+pub fn parse(argv: &[String]) -> Result<Parsed, CommandError> {
+    let (name, rest) = argv
+        .split_first()
+        .ok_or_else(|| CommandError::Unknown(String::new()))?;
+    let spec = lookup(name)?;
+    let args = Args::parse(spec.flags, rest).map_err(|source| CommandError::Args {
+        name: spec.name,
+        source,
+    })?;
+    let n = args.positional().len();
+    if n < spec.min_args {
+        return Err(CommandError::TooFew(spec.name, spec.usage));
+    }
+    if n > spec.max_args {
+        return Err(CommandError::TooMany(spec.name, spec.usage));
+    }
+    Ok(Parsed { spec, args })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn v(args: &[&str]) -> Vec<String> {
+        args.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    #[test]
+    fn table_is_sorted_unique_and_specs_are_well_formed() {
+        for pair in COMMANDS.windows(2) {
+            assert!(
+                pair[0].name < pair[1].name,
+                "{} / {}",
+                pair[0].name,
+                pair[1].name
+            );
+        }
+        let mut aliases: Vec<_> = COMMANDS.iter().filter_map(|c| c.alias).collect();
+        aliases.sort_unstable();
+        aliases.dedup();
+        assert_eq!(
+            aliases.len(),
+            COMMANDS.iter().filter(|c| c.alias.is_some()).count()
+        );
+        for c in COMMANDS {
+            assert!(c.min_args <= c.max_args, "{}", c.name);
+            assert!(!c.flags.starts_with(':'), "{}", c.name);
+        }
+    }
+
+    #[test]
+    fn lookup_by_name_alias_and_prefix() {
+        assert_eq!(lookup("split-window").unwrap().name, "split-window");
+        assert_eq!(lookup("splitw").unwrap().name, "split-window");
+        assert_eq!(lookup("ls").unwrap().name, "list-sessions");
+        assert_eq!(lookup("split").unwrap().name, "split-window");
+        assert!(matches!(lookup("list"), Err(CommandError::Ambiguous(..))));
+        assert!(matches!(
+            lookup("frobnicate"),
+            Err(CommandError::Unknown(_))
+        ));
+    }
+
+    #[test]
+    fn parse_checks_flags_and_counts() {
+        let p = parse(&v(&["splitw", "-h", "-c", "/tmp"])).unwrap();
+        assert_eq!(p.name(), "split-window");
+        assert!(p.args.has('h'));
+        assert_eq!(p.args.value('c'), Some("/tmp"));
+        assert!(matches!(
+            parse(&v(&["rename-window"])),
+            Err(CommandError::TooFew(..))
+        ));
+        assert!(matches!(
+            parse(&v(&["kill-server", "x"])),
+            Err(CommandError::TooMany(..))
+        ));
+        assert!(matches!(
+            parse(&v(&["kill-server", "-z"])),
+            Err(CommandError::Args { .. })
+        ));
+    }
+}

@@ -11,6 +11,16 @@ authors.workspace = true
 readme.workspace = true
 
 [dependencies]
+crossterm = "0.29.0"
+interprocess = "2.4.4"
+tmxr-command.workspace = true
+tmxr-proto.workspace = true
 
 [lints]
 workspace = true
+
+[target."cfg(unix)".dependencies]
+libc = "0.2.190"
+
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Console"] }

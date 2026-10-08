@@ -11,6 +11,8 @@ authors.workspace = true
 readme.workspace = true
 
 [dependencies]
+crossterm = "0.29.0"
+thiserror = "2.0.21"
 
 [lints]
 workspace = true

@@ -1,13 +1,14 @@
 //! `tmxr` — a tmux-style terminal multiplexer.
 //!
-//! Scaffold: the CLI surface is parsed, but no server or client exists yet, so
-//! every command reports that and exits non-zero. See `docs/plan/` for the
-//! design and `docs/plan/15-milestones.md` for the build order.
+//! The same binary is the client (`tmxr [command]`) and, run as
+//! `tmxr -S <socket> __server`, the server a client starts on demand.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::Parser;
+use tmxr_client::SERVER_ARG;
+use tmxr_proto::socket::Endpoint;
 
 /// Command-line interface, modelled on tmux's:
 /// `tmxr [-L label | -S socket] [-f config] [command [flags] [args]]`.
@@ -16,7 +17,9 @@ use clap::Parser;
     name = "tmxr",
     version,
     about = "A tmux-style terminal multiplexer",
-    after_help = "With no command, tmxr starts a new session (like tmux)."
+    after_help = "With no command, tmxr starts a new session (like tmux).\n\
+                  Commands use tmux's names and flags; `tmxr list-commands` lists them.\n\
+                  Separate several commands with a `\\;` argument."
 )]
 struct Cli {
     /// Server socket label; servers with different labels are independent.
@@ -42,13 +45,74 @@ struct Cli {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    let command = if cli.command.is_empty() {
-        "new-session".to_owned()
-    } else {
-        cli.command.join(" ")
+    let endpoint = match Endpoint::resolve(cli.socket.as_deref(), cli.label.as_deref()) {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("tmxr: {e}");
+            return ExitCode::FAILURE;
+        }
     };
-    eprintln!("tmxr: {command}: not implemented yet (the server lands in milestone M1)");
-    ExitCode::FAILURE
+    if cli.command.first().map(String::as_str) == Some(SERVER_ARG) {
+        init_server_log(&endpoint);
+        return match tmxr_server::run(endpoint, cli.config) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                tracing::error!("server failed: {e}");
+                ExitCode::FAILURE
+            }
+        };
+    }
+    let opts = tmxr_client::Options {
+        endpoint,
+        args: cli.command,
+        config: cli.config,
+    };
+    match tmxr_client::run(opts) {
+        Ok(status) => ExitCode::from(u8::try_from(status).unwrap_or(1)),
+        Err(e) => {
+            eprintln!("tmxr: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Server logs go to `<state dir>/tmxr/logs/server-<socket name>.log`, never
+/// to a terminal; `TMXR_LOG` sets the filter (default `info`).
+fn init_server_log(endpoint: &Endpoint) {
+    let Ok(dir) = hjkl_xdg::state_dir("tmxr").map(|d| d.join("logs")) else {
+        return;
+    };
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    let name = endpoint
+        .path()
+        .file_name()
+        .map_or_else(|| "default".into(), |n| n.to_string_lossy().into_owned());
+    let name: String = name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let Ok(file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join(format!("server-{name}.log")))
+    else {
+        return;
+    };
+    let filter = tracing_subscriber::EnvFilter::try_from_env("TMXR_LOG")
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_ansi(false)
+        .with_writer(std::sync::Mutex::new(file))
+        .init();
 }
 
 #[cfg(test)]

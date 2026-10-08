@@ -1,0 +1,460 @@
+//! Things drawn over a client's panes that take its keys while open: the
+//! command prompt, y/n confirmation, scrollable text (list-keys output) and
+//! the session / window picker.
+
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::thread::JoinHandle;
+use std::time::Instant;
+
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use hjkl_picker::{Picker, PickerAction, PickerEvent, PickerLogic};
+
+use crate::model::{ClientId, SessionId};
+use crate::server::Server;
+
+/// What a key did to an overlay.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OverlayAction {
+    Keep,
+    Close,
+    /// Close and run this command list.
+    Run(String),
+    /// Close and switch the client to this session.
+    Switch(SessionId),
+    /// Close, switch to the session and select the window index.
+    SwitchWindow(SessionId, u32),
+}
+
+pub enum Overlay {
+    Prompt(Prompt),
+    Confirm { prompt: String, cmd: String },
+    Text { lines: Vec<String>, top: usize },
+    Picker(Box<PickerOverlay>),
+}
+
+pub struct Prompt {
+    pub prompt: String,
+    pub input: Vec<char>,
+    pub cursor: usize,
+    /// `%%` in the template is replaced by the input; no template runs the
+    /// input itself.
+    pub template: Option<String>,
+}
+
+impl Overlay {
+    pub fn prompt(prompt: String, initial: String, template: Option<String>) -> Self {
+        let input: Vec<char> = initial.chars().collect();
+        let cursor = input.len();
+        Self::Prompt(Prompt {
+            prompt,
+            input,
+            cursor,
+            template,
+        })
+    }
+
+    pub fn confirm(prompt: String, cmd: String) -> Self {
+        Self::Confirm { prompt, cmd }
+    }
+
+    pub fn text(lines: Vec<String>) -> Self {
+        Self::Text { lines, top: 0 }
+    }
+
+    pub fn session_picker(srv: &Server, client: ClientId) -> Self {
+        let current = srv
+            .clients
+            .get(&client)
+            .and_then(|c| c.att.as_ref())
+            .map(|a| a.session);
+        let mut sessions: Vec<_> = srv.sessions.values().collect();
+        // Most recently used first, but the current session goes second so
+        // Enter straight away jumps to the previous one.
+        sessions.sort_by_key(|s| std::cmp::Reverse(s.last_used));
+        if let Some(pos) = sessions.iter().position(|s| Some(s.id) == current)
+            && sessions.len() > 1
+        {
+            let cur = sessions.remove(pos);
+            sessions.insert(1.min(sessions.len()), cur);
+        }
+        let items = sessions
+            .iter()
+            .map(|s| {
+                let attached = srv
+                    .clients
+                    .values()
+                    .any(|c| c.att.as_ref().is_some_and(|a| a.session == s.id));
+                let mark = if Some(s.id) == current { "*" } else { " " };
+                Item {
+                    label: format!(
+                        "{mark} {}: {} windows{}",
+                        s.name,
+                        s.windows.len(),
+                        if attached { " (attached)" } else { "" }
+                    ),
+                    matches: s.name.clone(),
+                    target: Target::Session(s.id),
+                }
+            })
+            .collect();
+        Self::Picker(Box::new(PickerOverlay::new("sessions", items)))
+    }
+
+    pub fn window_picker(srv: &Server, client: ClientId) -> Self {
+        let current = srv
+            .clients
+            .get(&client)
+            .and_then(|c| c.att.as_ref())
+            .map(|a| a.session);
+        let mut items = Vec::new();
+        let mut sessions: Vec<_> = srv.sessions.values().collect();
+        sessions.sort_by_key(|s| (Some(s.id) != current, s.name.clone()));
+        for s in sessions {
+            for (idx, wid) in &s.windows {
+                let Some(w) = srv.windows.get(wid) else {
+                    continue;
+                };
+                let mark = if Some(s.id) == current && *idx == s.current {
+                    "*"
+                } else {
+                    " "
+                };
+                items.push(Item {
+                    label: format!("{mark} {}:{idx} {}", s.name, w.name),
+                    matches: format!("{}:{idx} {}", s.name, w.name),
+                    target: Target::Window(s.id, *idx),
+                });
+            }
+        }
+        Self::Picker(Box::new(PickerOverlay::new("windows", items)))
+    }
+
+    /// Feed a key. Returns what the server should do.
+    pub fn key(&mut self, ev: &KeyEvent) -> OverlayAction {
+        let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
+        match self {
+            Self::Prompt(p) => p.key(ev),
+            Self::Confirm { cmd, .. } => match ev.code {
+                KeyCode::Char('y' | 'Y') => OverlayAction::Run(cmd.clone()),
+                _ => OverlayAction::Close,
+            },
+            Self::Text { lines, top } => {
+                let max = lines.len().saturating_sub(1);
+                match ev.code {
+                    KeyCode::Char('q') | KeyCode::Esc => return OverlayAction::Close,
+                    KeyCode::Char('c') if ctrl => return OverlayAction::Close,
+                    KeyCode::Char('j') | KeyCode::Down => *top = (*top + 1).min(max),
+                    KeyCode::Char('k') | KeyCode::Up => *top = top.saturating_sub(1),
+                    KeyCode::Char('d') if ctrl => *top = (*top + 10).min(max),
+                    KeyCode::Char('u') if ctrl => *top = top.saturating_sub(10),
+                    KeyCode::PageDown | KeyCode::Char(' ') => *top = (*top + 20).min(max),
+                    KeyCode::PageUp => *top = top.saturating_sub(20),
+                    KeyCode::Char('g') | KeyCode::Home => *top = 0,
+                    KeyCode::Char('G') | KeyCode::End => *top = max,
+                    _ => {}
+                }
+                OverlayAction::Keep
+            }
+            Self::Picker(p) => p.key(ev),
+        }
+    }
+
+    pub fn paste(&mut self, text: &str) {
+        if let Self::Prompt(p) = self {
+            for c in text.chars().filter(|c| !c.is_control()) {
+                p.input.insert(p.cursor, c);
+                p.cursor += 1;
+            }
+        }
+    }
+
+    /// Periodic work; returns whether a redraw is needed.
+    pub fn tick(&mut self) -> bool {
+        match self {
+            Self::Picker(p) => {
+                p.picker.tick(Instant::now());
+                p.picker.refresh()
+            }
+            _ => false,
+        }
+    }
+}
+
+impl Prompt {
+    fn key(&mut self, ev: &KeyEvent) -> OverlayAction {
+        let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
+        match ev.code {
+            KeyCode::Esc => return OverlayAction::Close,
+            KeyCode::Char('c' | 'g') if ctrl => return OverlayAction::Close,
+            KeyCode::Enter => {
+                let input: String = self.input.iter().collect();
+                if input.is_empty() && self.template.is_none() {
+                    return OverlayAction::Close;
+                }
+                let cmd = match &self.template {
+                    Some(t) => t.replace("%%", &input).replace("%1", &input),
+                    None => input,
+                };
+                return OverlayAction::Run(cmd);
+            }
+            KeyCode::Backspace | KeyCode::Char('h') if ctrl || ev.code == KeyCode::Backspace => {
+                if self.cursor > 0 {
+                    self.cursor -= 1;
+                    self.input.remove(self.cursor);
+                }
+            }
+            KeyCode::Delete => {
+                if self.cursor < self.input.len() {
+                    self.input.remove(self.cursor);
+                }
+            }
+            KeyCode::Left => self.cursor = self.cursor.saturating_sub(1),
+            KeyCode::Right => self.cursor = (self.cursor + 1).min(self.input.len()),
+            KeyCode::Home => self.cursor = 0,
+            KeyCode::End => self.cursor = self.input.len(),
+            KeyCode::Char('a') if ctrl => self.cursor = 0,
+            KeyCode::Char('e') if ctrl => self.cursor = self.input.len(),
+            KeyCode::Char('u') if ctrl => {
+                self.input.drain(..self.cursor);
+                self.cursor = 0;
+            }
+            KeyCode::Char('k') if ctrl => self.input.truncate(self.cursor),
+            KeyCode::Char('w') if ctrl => {
+                let mut i = self.cursor;
+                while i > 0 && self.input[i - 1] == ' ' {
+                    i -= 1;
+                }
+                while i > 0 && self.input[i - 1] != ' ' {
+                    i -= 1;
+                }
+                self.input.drain(i..self.cursor);
+                self.cursor = i;
+            }
+            KeyCode::Char(c) if !ctrl => {
+                self.input.insert(self.cursor, c);
+                self.cursor += 1;
+            }
+            _ => {}
+        }
+        OverlayAction::Keep
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Target {
+    Session(SessionId),
+    Window(SessionId, u32),
+}
+
+struct Item {
+    label: String,
+    matches: String,
+    target: Target,
+}
+
+/// The picker's item source: a fixed list built when the picker opens.
+struct Source {
+    title: &'static str,
+    items: Vec<Item>,
+}
+
+impl PickerLogic for Source {
+    fn title(&self) -> &str {
+        self.title
+    }
+
+    fn item_count(&self) -> usize {
+        self.items.len()
+    }
+
+    fn label(&self, idx: usize) -> String {
+        self.items[idx].label.clone()
+    }
+
+    fn match_text(&self, idx: usize) -> String {
+        self.items[idx].matches.clone()
+    }
+
+    fn has_preview(&self) -> bool {
+        false
+    }
+
+    fn select(&self, idx: usize) -> PickerAction {
+        PickerAction::Custom(Box::new(self.items[idx].target))
+    }
+
+    fn preserve_source_order(&self) -> bool {
+        true
+    }
+
+    fn enumerate(
+        &mut self,
+        _query: Option<&str>,
+        _cancel: Arc<AtomicBool>,
+    ) -> Option<JoinHandle<()>> {
+        None
+    }
+}
+
+/// The hjkl fuzzy picker plus a vim-style mode: in insert mode keys type
+/// into the filter; `Escape` switches to normal mode where `j`/`k` move and
+/// `i` / `/` return to the filter. Arrows, `C-n`/`C-p` and `C-j`/`C-k` move
+/// in both modes.
+pub struct PickerOverlay {
+    pub picker: Picker,
+    pub insert: bool,
+}
+
+impl PickerOverlay {
+    fn new(title: &'static str, items: Vec<Item>) -> Self {
+        let many = items.len() > 1 && title == "sessions";
+        let mut picker = Picker::new(Box::new(Source { title, items }));
+        if many {
+            picker.selected = 1;
+        }
+        Self {
+            picker,
+            insert: true,
+        }
+    }
+
+    pub fn query(&self) -> String {
+        self.picker.query.text()
+    }
+
+    fn accept(&mut self) -> OverlayAction {
+        match self.picker.accept() {
+            PickerEvent::Select(PickerAction::Custom(any)) => match any.downcast::<Target>() {
+                Ok(t) => match *t {
+                    Target::Session(s) => OverlayAction::Switch(s),
+                    Target::Window(s, i) => OverlayAction::SwitchWindow(s, i),
+                },
+                Err(_) => OverlayAction::Close,
+            },
+            PickerEvent::Select(PickerAction::None) | PickerEvent::Cancel => OverlayAction::Close,
+            PickerEvent::None => OverlayAction::Keep,
+        }
+    }
+
+    fn key(&mut self, ev: &KeyEvent) -> OverlayAction {
+        let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
+        match ev.code {
+            KeyCode::Enter => return self.accept(),
+            KeyCode::Down => self.picker.select_next(),
+            KeyCode::Up => self.picker.select_prev(),
+            KeyCode::Char('n' | 'j') if ctrl => self.picker.select_next(),
+            KeyCode::Char('p' | 'k') if ctrl => self.picker.select_prev(),
+            KeyCode::Char('c') if ctrl => return OverlayAction::Close,
+            KeyCode::Esc if self.insert => self.insert = false,
+            KeyCode::Esc => return OverlayAction::Close,
+            _ if self.insert => {
+                if let PickerEvent::Select(_) | PickerEvent::Cancel =
+                    hjkl_picker_tui::handle_key(&mut self.picker, *ev)
+                {
+                    return OverlayAction::Close;
+                }
+                self.picker.refresh();
+            }
+            KeyCode::Char('j') => self.picker.select_next(),
+            KeyCode::Char('k') => self.picker.select_prev(),
+            KeyCode::Char('g') => self.picker.selected = 0,
+            KeyCode::Char('G') => self.picker.selected = self.picker.matched().saturating_sub(1),
+            KeyCode::Char('i' | 'a' | '/') => self.insert = true,
+            KeyCode::Char('q') => return OverlayAction::Close,
+            _ => {}
+        }
+        OverlayAction::Keep
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn k(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    fn items(names: &[&str]) -> Vec<Item> {
+        names
+            .iter()
+            .enumerate()
+            .map(|(i, n)| Item {
+                label: (*n).to_owned(),
+                matches: (*n).to_owned(),
+                target: Target::Session(i as u32),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn prompt_edits_and_substitutes_the_template() {
+        let mut o = Overlay::prompt(":".into(), "ab".into(), Some("rename-window -- %%".into()));
+        o.key(&k(KeyCode::Backspace));
+        o.key(&k(KeyCode::Char('x')));
+        o.key(&k(KeyCode::Home));
+        o.key(&k(KeyCode::Char('>')));
+        assert_eq!(
+            o.key(&k(KeyCode::Enter)),
+            OverlayAction::Run("rename-window -- >ax".into())
+        );
+        let mut o = Overlay::prompt(":".into(), String::new(), None);
+        assert_eq!(o.key(&k(KeyCode::Esc)), OverlayAction::Close);
+    }
+
+    #[test]
+    fn confirm_runs_only_on_y() {
+        let mut o = Overlay::confirm("kill?".into(), "kill-pane".into());
+        assert_eq!(
+            o.key(&k(KeyCode::Char('y'))),
+            OverlayAction::Run("kill-pane".into())
+        );
+        let mut o = Overlay::confirm("kill?".into(), "kill-pane".into());
+        assert_eq!(o.key(&k(KeyCode::Char('n'))), OverlayAction::Close);
+    }
+
+    #[test]
+    fn picker_filters_moves_with_jk_and_selects() {
+        let mut o = Overlay::Picker(Box::new(PickerOverlay::new(
+            "sessions",
+            items(&["main", "work", "dots"]),
+        )));
+        // Sessions open on the second entry (the previous session).
+        let Overlay::Picker(p) = &o else {
+            unreachable!()
+        };
+        assert_eq!(p.picker.selected, 1);
+        // Typing filters.
+        o.key(&k(KeyCode::Char('d')));
+        o.key(&k(KeyCode::Char('o')));
+        let Overlay::Picker(p) = &o else {
+            unreachable!()
+        };
+        assert_eq!(p.picker.matched(), 1);
+        assert_eq!(o.key(&k(KeyCode::Enter)), OverlayAction::Switch(2));
+
+        // Escape → normal mode, then j/k move, Enter picks.
+        let mut o = Overlay::Picker(Box::new(PickerOverlay::new(
+            "sessions",
+            items(&["main", "work", "dots"]),
+        )));
+        assert_eq!(o.key(&k(KeyCode::Esc)), OverlayAction::Keep);
+        o.key(&k(KeyCode::Char('j')));
+        assert_eq!(o.key(&k(KeyCode::Enter)), OverlayAction::Switch(2));
+        let mut o = Overlay::Picker(Box::new(PickerOverlay::new(
+            "sessions",
+            items(&["main", "work", "dots"]),
+        )));
+        o.key(&k(KeyCode::Esc));
+        o.key(&k(KeyCode::Char('k')));
+        o.key(&k(KeyCode::Char('k')));
+        assert_eq!(
+            o.key(&k(KeyCode::Enter)),
+            OverlayAction::Switch(2),
+            "k wraps"
+        );
+        // A second Escape closes.
+        assert_eq!(o.key(&k(KeyCode::Esc)), OverlayAction::Close);
+    }
+}
