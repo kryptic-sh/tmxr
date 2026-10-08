@@ -123,13 +123,17 @@ fn draw_window(
     let vars = Vars::for_pane(srv, Some(win.active), Some(client));
     let border = style_option(&srv.cfg.status.pane_border_style, &vars);
     let active_border = style_option(&srv.cfg.status.pane_active_border_style, &vars);
-    let mode_style = style_option(&srv.cfg.status.mode_style, &vars);
+    let copy = CopyStyles {
+        selection: style_option(&srv.cfg.status.mode_style, &vars),
+        matched: style_option(&srv.cfg.status.copy_mode_match_style, &vars),
+        current: style_option(&srv.cfg.status.copy_mode_current_match_style, &vars),
+    };
     let w = win.cols.min(cols);
     let h = win.rows.min(rows);
 
     let mut cursor = None;
     for (pid, r) in &rects {
-        if let Some(c) = draw_pane(srv, *pid, *r, buf, w, h, mode_style)
+        if let Some(c) = draw_pane(srv, *pid, *r, buf, w, h, &copy)
             && *pid == win.active
         {
             cursor = Some(c);
@@ -202,6 +206,13 @@ fn draw_window(
 }
 
 /// Draw one pane. Returns its cursor position on screen when shown.
+/// How copy mode marks its selection and search matches.
+struct CopyStyles {
+    selection: Style,
+    matched: Style,
+    current: Style,
+}
+
 fn draw_pane(
     srv: &Server,
     pid: PaneId,
@@ -209,7 +220,7 @@ fn draw_pane(
     buf: &mut Buffer,
     max_w: u16,
     max_h: u16,
-    mode_style: Style,
+    copy: &CopyStyles,
 ) -> Option<Position> {
     let pane = srv.panes.get(&pid)?;
     let w = r.w.min(max_w.saturating_sub(r.x));
@@ -218,11 +229,17 @@ fn draw_pane(
         for row in 0..h {
             let y = cm.top + usize::from(row);
             let line = cm.lines.get(y);
+            let matches = cm.match_spans(y);
             for col in 0..w {
-                let cell = line.and_then(|l| l.cells.get(usize::from(col)));
+                let x = usize::from(col);
+                let cell = line.and_then(|l| l.cells.get(x));
                 let mut style = cell.map(|c| c.style).unwrap_or_default();
-                if cm.selected(y, usize::from(col)) {
-                    style = style.patch(mode_style);
+                if let Some((start, _)) = matches.iter().find(|(s, e)| (*s..*e).contains(&x)) {
+                    let current = y == cm.cy && *start == cm.cx;
+                    style = style.patch(if current { copy.current } else { copy.matched });
+                }
+                if cm.selected(y, x) {
+                    style = style.patch(copy.selection);
                 }
                 if y == cm.cy && usize::from(col) == cm.cx {
                     style = style.add_modifier(Modifier::REVERSED);
@@ -244,7 +261,7 @@ fn draw_pane(
         let tag = format!("[{offset}/{total}]");
         let tw = tag.len() as u16;
         if tw < w {
-            buf.set_string(r.x + w - tw, r.y, &tag, mode_style);
+            buf.set_string(r.x + w - tw, r.y, &tag, copy.selection);
         }
         return None;
     }

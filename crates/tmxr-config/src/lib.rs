@@ -74,6 +74,9 @@ pub struct Status {
     pub pane_active_border_style: String,
     pub message_style: String,
     pub mode_style: String,
+    /// Copy mode search matches, and the one under the cursor.
+    pub copy_mode_match_style: String,
+    pub copy_mode_current_match_style: String,
     /// `display-panes` number colour for the other panes, and the active one.
     pub display_panes_colour: String,
     pub display_panes_active_colour: String,

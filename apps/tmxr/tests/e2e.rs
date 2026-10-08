@@ -224,10 +224,15 @@ impl Screen {
     /// The status line's cells: `(contents, fg, bg)`, colours as `Debug`
     /// text (`Rgb(r, g, b)`).
     fn status_cells(&self) -> Vec<(String, String, String)> {
+        self.row_cells(ROWS - 1)
+    }
+
+    /// One screen row's cells, as [`Screen::status_cells`].
+    fn row_cells(&self, row: u16) -> Vec<(String, String, String)> {
         let emu = self.emu.lock().unwrap();
         let screen = emu.screen();
         (0..COLS)
-            .filter_map(|col| screen.cell(ROWS - 1, col))
+            .filter_map(|col| screen.cell(row, col))
             .map(|c| {
                 (
                     c.contents().to_owned(),
@@ -1046,4 +1051,37 @@ fn copy_mode_counts_and_jumps_by_keyboard() {
     s.send(b"2f-");
     s.send(b"vEy");
     t.wait_run(&["show-buffer"], "copied text", |o| o == "-b-c");
+}
+
+#[test]
+fn copy_mode_highlights_search_matches() {
+    const YELLOW: u32 = 0xe0_af_68;
+    const MAUVE: u32 = 0xbb_9a_f7;
+    let t = Tmxr::new("matches");
+    let s = t.attach(&["new", "-s", "hl"]);
+    s.wait_for("status line", |text| text.contains("hl"));
+    s.send(b"echo zq-hit zq-hit\r");
+    s.wait_for("echoed", |text| text.matches("zq-hit").count() >= 4);
+    s.send(PREFIX);
+    s.send(b"[");
+    s.send(b"?");
+    s.wait_for("search prompt", |text| text.contains("(search up)"));
+    s.send(b"zq-hit\r");
+    // Every match on screen is highlighted, the one under the cursor apart.
+    let backgrounds = |s: &Screen| -> Vec<String> {
+        (0..ROWS - 1)
+            .flat_map(|row| s.row_cells(row))
+            .filter(|c| c.0 == "z")
+            .map(|c| c.2)
+            .collect()
+    };
+    s.wait_for("highlighted", |_| {
+        let bgs = backgrounds(&s);
+        bgs.len() >= 4 && bgs.iter().filter(|b| **b == rgb(MAUVE)).count() == 1
+    });
+    let bgs = backgrounds(&s);
+    assert!(
+        bgs.iter().all(|b| *b == rgb(YELLOW) || *b == rgb(MAUVE)),
+        "{bgs:?}"
+    );
 }

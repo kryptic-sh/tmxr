@@ -82,6 +82,26 @@ pub struct CopyMode {
     last_jump: Option<(Jump, char)>,
 }
 
+/// Columns where `needle` starts in `line`: literal, and case-insensitive
+/// unless the needle has an uppercase letter (smart case).
+fn match_starts(line: &[char], needle: &str) -> Vec<usize> {
+    let needle: Vec<char> = needle.chars().collect();
+    if needle.is_empty() || needle.len() > line.len() {
+        return Vec::new();
+    }
+    let smart_case = needle.iter().any(|c| c.is_uppercase());
+    let eq = |a: char, b: char| {
+        if smart_case {
+            a == b
+        } else {
+            a.to_lowercase().eq(b.to_lowercase())
+        }
+    };
+    (0..=line.len() - needle.len())
+        .filter(|x| needle.iter().zip(&line[*x..]).all(|(a, b)| eq(*a, *b)))
+        .collect()
+}
+
 /// Largest repeat count, so a stray run of digits cannot spin the server.
 pub const MAX_COUNT: usize = 9999;
 
@@ -451,29 +471,13 @@ impl CopyMode {
             return false;
         }
         let n = self.lines.len();
-        let needle_chars: Vec<char> = needle.chars().collect();
-        let smart_case = needle.chars().any(char::is_uppercase);
-        let eq = |a: char, b: char| {
-            if smart_case {
-                a == b
-            } else {
-                a.to_lowercase().eq(b.to_lowercase())
-            }
-        };
-        let matches_at = |line: &[char], x: usize| {
-            x + needle_chars.len() <= line.len()
-                && needle_chars.iter().zip(&line[x..]).all(|(a, b)| eq(*a, *b))
-        };
         for step in 0..=n {
             let y = if forward {
                 (self.cy + step) % n
             } else {
                 (self.cy + n - step % n) % n
             };
-            let chars = self.lines[y].chars();
-            let hits: Vec<usize> = (0..chars.len())
-                .filter(|x| matches_at(&chars, *x))
-                .collect();
+            let hits = match_starts(&self.lines[y].chars(), needle);
             let pick = if forward {
                 hits.into_iter()
                     .find(|x| step > 0 || *x > self.cx || (!skip_current && *x == self.cx))
@@ -488,6 +492,19 @@ impl CopyMode {
             }
         }
         false
+    }
+
+    /// Columns `(start, end)` of the last search's matches on line `y`, for
+    /// highlighting.
+    pub fn match_spans(&self, y: usize) -> Vec<(usize, usize)> {
+        let (Some((needle, _)), Some(line)) = (&self.search, self.lines.get(y)) else {
+            return Vec::new();
+        };
+        let len = needle.chars().count();
+        match_starts(&line.chars(), needle)
+            .into_iter()
+            .map(|x| (x, x + len))
+            .collect()
     }
 
     /// Selected text, or `None` without a selection.

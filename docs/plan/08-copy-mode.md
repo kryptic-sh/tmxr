@@ -72,4 +72,6 @@ come from tmux-yank's binds.
 
 The pane shows the snapshot at the view offset with the selection in the
 `mode-style` style, the cursor drawn as a block, and the tmux position indicator
-`[offset/history]` at the top right. Search matches are not highlighted.
+`[offset/history]` at the top right. The last search's matches on screen are
+drawn in `copy-mode-match-style`, the one under the cursor in
+`copy-mode-current-match-style` (tmux's option names).

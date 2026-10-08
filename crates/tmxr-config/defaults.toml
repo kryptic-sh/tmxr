@@ -57,6 +57,10 @@ pane-border-style = "fg=#{@thm_surface1}"
 pane-active-border-style = "fg=#{@thm_blue}"
 message-style = "fg=#{@thm_fg},bg=#{@thm_surface0}"
 mode-style = "fg=#{@thm_fg},bg=#{@thm_selection}"
+# tmux colours matches cyan and the current one magenta; here the palette's
+# yellow and mauve.
+copy-mode-match-style = "fg=#{@thm_crust},bg=#{@thm_yellow}"
+copy-mode-current-match-style = "fg=#{@thm_crust},bg=#{@thm_mauve}"
 # tmux's blue and red, from the palette.
 display-panes-colour = "#{@thm_blue}"
 display-panes-active-colour = "#{@thm_red}"
