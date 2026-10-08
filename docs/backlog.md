@@ -103,9 +103,10 @@ what was not.
 
 - **One `leaky` test, unidentified.** A cold workspace `cargo nextest run` on
   Windows on 2026-10-09 reported "80 passed (1 leaky)" (a test's child process
-  still held its output after it ended); four reruns were clean, and nextest's
-  summary did not name the test. Likely a server or pane process outliving
-  `kill-server` by a moment; not investigated further.
+  still held its output after it ended); four reruns that day and seven more
+  later were clean (those later runs did turn up a flaky test, since fixed), and
+  nextest's summary did not name the leaking test. Likely a server or pane
+  process outliving `kill-server` by a moment; not investigated further.
 
 ## Decisions awaiting the owner
 

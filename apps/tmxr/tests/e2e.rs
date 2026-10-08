@@ -1075,18 +1075,20 @@ fn copy_mode_highlights_search_matches() {
     let t = Tmxr::new("matches");
     let s = t.attach(&["new", "-s", "hl"]);
     s.wait_for("status line", |text| text.contains("hl"));
-    s.send(b"echo zq-hit zq-hit\r");
-    s.wait_for("echoed", |text| text.matches("zq-hit").count() >= 4);
+    // The marker starts with @, which no temp-dir name in the prompt holds:
+    // counting a plain letter flaked when the random name contained it.
+    s.send(b"echo @zq-hit @zq-hit\r");
+    s.wait_for("echoed", |text| text.matches("@zq-hit").count() >= 4);
     s.send(PREFIX);
     s.send(b"[");
     s.send(b"?");
     s.wait_for("search prompt", |text| text.contains("(search up)"));
-    s.send(b"zq-hit\r");
+    s.send(b"@zq-hit\r");
     // Every match on screen is highlighted, the one under the cursor apart.
     let backgrounds = |s: &Screen| -> Vec<String> {
         (0..ROWS - 1)
             .flat_map(|row| s.row_cells(row))
-            .filter(|c| c.0 == "z")
+            .filter(|c| c.0 == "@")
             .map(|c| c.2)
             .collect()
     };
@@ -1095,9 +1097,19 @@ fn copy_mode_highlights_search_matches() {
         bgs.len() >= 4 && bgs.iter().filter(|b| **b == rgb(MAUVE)).count() == 1
     });
     let bgs = backgrounds(&s);
+    let where_marker: Vec<(u16, usize)> = (0..ROWS - 1)
+        .flat_map(|row| {
+            s.row_cells(row)
+                .into_iter()
+                .enumerate()
+                .filter(|(_, c)| c.0 == "@")
+                .map(move |(col, _)| (row, col))
+        })
+        .collect();
     assert!(
         bgs.iter().all(|b| *b == rgb(YELLOW) || *b == rgb(MAUVE)),
-        "{bgs:?}"
+        "{bgs:?} at {where_marker:?}\n{}",
+        s.text()
     );
 }
 
