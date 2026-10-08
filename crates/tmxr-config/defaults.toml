@@ -62,6 +62,8 @@ mode-style = "fg=#{@thm_fg},bg=#{@thm_selection}"
 # yellow and mauve.
 copy-mode-match-style = "fg=#{@thm_crust},bg=#{@thm_yellow}"
 copy-mode-current-match-style = "fg=#{@thm_crust},bg=#{@thm_mauve}"
+# tmux draws the clock in blue.
+clock-mode-colour = "#{@thm_blue}"
 # tmux's blue and red, from the palette.
 display-panes-colour = "#{@thm_blue}"
 display-panes-active-colour = "#{@thm_red}"
@@ -164,6 +166,7 @@ processes = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "top",
 "C-o" = { cmd = "rotate-window", note = "Rotate panes" }
 "M-o" = { cmd = "rotate-window -D", note = "Rotate panes down" }
 "E" = { cmd = "select-layout -E", note = "Spread panes out evenly" }
+"t" = { cmd = "clock-mode", note = "Show a clock" }
 "/" = { cmd = 'command-prompt -k -p key "list-keys -1N %%"', note = "Describe a key" }
 "m" = { cmd = "select-pane -m", note = "Mark or unmark the pane" }
 "M" = { cmd = "select-pane -M", note = "Clear the marked pane" }

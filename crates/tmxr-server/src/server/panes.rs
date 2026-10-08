@@ -78,6 +78,7 @@ impl Server {
                 spawn,
                 argv,
                 dead: None,
+                clock: false,
             },
         );
         Ok(())

@@ -215,6 +215,13 @@ pub(super) fn run(
                 }
             }
         }
+        "clock-mode" => {
+            let (_, wid, pid) = target::pane(srv, ctx, a.value('t'))?;
+            if let Some(p) = srv.panes.get_mut(&pid) {
+                p.clock = true;
+            }
+            srv.mark_window_dirty(wid);
+        }
         "capture-pane" => {
             let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
             let text = srv.panes[&pid].emu.screen().contents();

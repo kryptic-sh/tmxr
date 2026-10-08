@@ -13,6 +13,7 @@
 pub mod dcs;
 pub mod emulator;
 pub mod encode;
+pub mod localtime;
 pub mod process;
 pub mod pty;
 

@@ -123,10 +123,11 @@ fn draw_window(
     let vars = Vars::for_pane(srv, Some(win.active), Some(client));
     let border = style_option(&srv.cfg.status.pane_border_style, &vars);
     let active_border = style_option(&srv.cfg.status.pane_active_border_style, &vars);
-    let copy = CopyStyles {
+    let copy = PaneStyles {
         selection: style_option(&srv.cfg.status.mode_style, &vars),
         matched: style_option(&srv.cfg.status.copy_mode_match_style, &vars),
         current: style_option(&srv.cfg.status.copy_mode_current_match_style, &vars),
+        clock: style_option(&format!("fg={}", srv.cfg.status.clock_mode_colour), &vars),
     };
     let w = win.cols.min(cols);
     let h = win.rows.min(rows);
@@ -206,11 +207,13 @@ fn draw_window(
 }
 
 /// Draw one pane. Returns its cursor position on screen when shown.
-/// How copy mode marks its selection and search matches.
-struct CopyStyles {
+/// How a pane's modes draw: copy mode's selection and search matches, and
+/// clock mode's digits.
+struct PaneStyles {
     selection: Style,
     matched: Style,
     current: Style,
+    clock: Style,
 }
 
 fn draw_pane(
@@ -220,11 +223,15 @@ fn draw_pane(
     buf: &mut Buffer,
     max_w: u16,
     max_h: u16,
-    copy: &CopyStyles,
+    copy: &PaneStyles,
 ) -> Option<Position> {
     let pane = srv.panes.get(&pid)?;
     let w = r.w.min(max_w.saturating_sub(r.x));
     let h = r.h.min(max_h.saturating_sub(r.y));
+    if pane.clock {
+        draw_clock(buf, Rect::new(r.x, r.y, w, h), copy.clock);
+        return None;
+    }
     if let Some(cm) = &pane.copy {
         for row in 0..h {
             let y = cm.top + usize::from(row);
@@ -609,6 +616,56 @@ fn draw_preview(srv: &Server, pane: PaneId, buf: &mut Buffer, area: Rect) {
                 .unwrap_or(" ");
             if let Some(out) = buf.cell_mut((area.x + col, area.y + row)) {
                 out.set_symbol(sym).set_style(style);
+            }
+        }
+    }
+}
+
+/// tmux's clock font: 5x5 cells per glyph, `#` painted.
+const CLOCK_FONT: [[&str; 5]; 11] = [
+    ["#####", "#...#", "#...#", "#...#", "#####"], // 0
+    ["....#", "....#", "....#", "....#", "....#"], // 1
+    ["#####", "....#", "#####", "#....", "#####"], // 2
+    ["#####", "....#", "#####", "....#", "#####"], // 3
+    ["#...#", "#...#", "#####", "....#", "....#"], // 4
+    ["#####", "#....", "#####", "....#", "#####"], // 5
+    ["#####", "#....", "#####", "#...#", "#####"], // 6
+    ["#####", "....#", "....#", "....#", "....#"], // 7
+    ["#####", "#...#", "#####", "#...#", "#####"], // 8
+    ["#####", "#...#", "#####", "....#", "#####"], // 9
+    [".....", "..#..", ".....", "..#..", "....."], // :
+];
+
+/// Clock mode: the local time in big digits in the middle of the pane, or as
+/// plain `HH:MM` when the pane is too small for them.
+fn draw_clock(buf: &mut Buffer, area: Rect, colour: Style) {
+    Clear.render(area, buf);
+    let Some((h, m)) = tmxr_term::localtime::hour_minute() else {
+        return;
+    };
+    let text = format!("{h:02}:{m:02}");
+    let glyphs: Vec<usize> = text
+        .chars()
+        .map(|c| c.to_digit(10).map_or(10, |d| d as usize))
+        .collect();
+    let big_w = (glyphs.len() * 6 - 1) as u16;
+    if area.width < big_w || area.height < 5 {
+        let x = area.x + area.width.saturating_sub(5) / 2;
+        let y = area.y + area.height / 2;
+        buf.set_stringn(x, y, &text, usize::from(area.width), colour);
+        return;
+    }
+    let paint = Style::default().bg(colour.fg.unwrap_or(Color::Blue));
+    let x0 = area.x + (area.width - big_w) / 2;
+    let y0 = area.y + (area.height - 5) / 2;
+    for (i, g) in glyphs.iter().enumerate() {
+        for (row, bits) in CLOCK_FONT[*g].iter().enumerate() {
+            for (col, bit) in bits.chars().enumerate() {
+                if bit == '#'
+                    && let Some(cell) = buf.cell_mut((x0 + (i * 6 + col) as u16, y0 + row as u16))
+                {
+                    cell.set_symbol(" ").set_style(paint);
+                }
             }
         }
     }

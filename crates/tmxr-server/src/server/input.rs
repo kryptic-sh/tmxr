@@ -118,6 +118,14 @@ impl Server {
             return;
         }
         let active = self.active_pane_of_session(session);
+        // Any key leaves clock mode, as in tmux, and is not passed on.
+        if let Some(p) = active.and_then(|p| self.panes.get_mut(&p))
+            && std::mem::take(&mut p.clock)
+        {
+            let window = p.window;
+            self.mark_window_dirty(window);
+            return;
+        }
         let in_copy = active
             .and_then(|p| self.panes.get(&p))
             .is_some_and(|p| p.copy.is_some());

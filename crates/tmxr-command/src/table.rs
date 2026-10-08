@@ -75,6 +75,7 @@ pub const COMMANDS: &[CommandSpec] = &[
         0,
         "[-swZ] [-t target-pane]"
     ),
+    cmd!("clock-mode", None, "t:", 0, 0, "[-t target-pane]"),
     cmd!(
         "command-prompt",
         None,

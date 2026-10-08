@@ -80,6 +80,8 @@ pub struct Status {
     /// Copy mode search matches, and the one under the cursor.
     pub copy_mode_match_style: String,
     pub copy_mode_current_match_style: String,
+    /// The colour of clock mode's digits.
+    pub clock_mode_colour: String,
     /// `display-panes` number colour for the other panes, and the active one.
     pub display_panes_colour: String,
     pub display_panes_active_colour: String,
@@ -223,8 +225,8 @@ mod tests {
 
     /// tmux's own default prefix binds that the tmux config leaves alone
     /// (docs/plan/06), as (key, command name). The config overrides `'`, `;`,
-    /// `l` and `x`; tmux binds tmxr has no command for yet (`t`, `D`, `C-z`)
-    /// are listed in the backlog.
+    /// `l` and `x`; tmux binds tmxr has no command for yet (`D`, `C-z`) are
+    /// listed in the backlog.
     const TMUX_BUILTIN_BINDS: &[(&str, &str)] = &[
         ("C-b", "send-prefix"),
         ("C-o", "rotate-window"),
@@ -267,6 +269,7 @@ mod tests {
         ("M-Up", "resize-pane"),
         ("M-1", "select-layout"),
         ("E", "select-layout"),
+        ("t", "clock-mode"),
         ("/", "command-prompt"),
         ("m", "select-pane"),
         ("M", "select-pane"),

@@ -165,6 +165,7 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
         "pane-active-border-style" => need()?.clone_into(&mut c.status.pane_active_border_style),
         "message-style" => need()?.clone_into(&mut c.status.message_style),
         "mode-style" => need()?.clone_into(&mut c.status.mode_style),
+        "clock-mode-colour" => need()?.clone_into(&mut c.status.clock_mode_colour),
         "copy-mode-match-style" => need()?.clone_into(&mut c.status.copy_mode_match_style),
         "copy-mode-current-match-style" => {
             need()?.clone_into(&mut c.status.copy_mode_current_match_style);

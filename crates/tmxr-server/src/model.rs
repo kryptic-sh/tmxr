@@ -35,6 +35,8 @@ pub struct Pane {
     /// Set when the program exited and `remain-on-exit` kept the pane: the
     /// exit code, if the program had one.
     pub dead: Option<Option<u32>>,
+    /// `clock-mode`: the pane shows a big clock until a key is pressed.
+    pub clock: bool,
 }
 
 pub struct Window {

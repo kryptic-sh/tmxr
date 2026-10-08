@@ -53,19 +53,16 @@ what was not.
 - **Not implemented**: emacs copy mode, `move-window -k` / `-r`. The marked pane
   has no border highlight (tmux draws it reversed); it shows as the window's `M`
   flag and `#{pane_marked}`.
-- **tmux default binds without a tmxr command yet**: `prefix t` (clock-mode),
-  `D` (choose-client), `C-z` (suspend-client). Alerts for `M-n` / `M-p` are
-  bells only (no `monitor-activity` / `monitor-silence`). `find-window` matches
-  window names through the picker, not pane contents or titles as tmux's does.
+- **tmux default binds without a tmxr command yet**: `prefix D` (choose-client),
+  `C-z` (suspend-client). Alerts for `M-n` / `M-p` are bells only (no
+  `monitor-activity` / `monitor-silence`). `find-window` matches window names
+  through the picker, not pane contents or titles as tmux's does.
 - **Copy mode gaps** (plan/08): marks, `%`, `copy-pipe*`, `copy-command`,
   `refresh-from-pane`. A pending count is not shown anywhere (tmux shows a
   `(repeat)` prompt).
 - **Key notation**: hjkl's `<C-x>` form is not accepted (plan/01 and plan/06
   once promised it); mouse events are built into `mouse.rs` and cannot be
   rebound (`MouseDown1Pane` and friends are not key names).
-- **Clock mode** (`prefix t`) is not implemented: it needs local time (the
-  workspace has no date/time crate; `libc` `localtime_r` / `windows-sys`
-  `GetLocalTime`, both already dependencies, would do) and a block-digit font.
 - **No 256-colour fallback, by design for now**: colours are always 24-bit RGB,
   which is what the tmux config asks for (`terminal-overrides ",*:RGB"` forces
   RGB on every terminal). Only for a user whose terminal lacks true colour (e.g.

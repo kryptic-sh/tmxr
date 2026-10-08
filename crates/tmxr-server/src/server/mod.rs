@@ -120,6 +120,8 @@ pub struct Server {
     last_save: Instant,
     /// What resurrect last wrote, so an unchanged layout is not saved again.
     pub last_saved: Option<crate::resurrect::Save>,
+    /// The time clock-mode panes last showed, to redraw them each minute.
+    clock_shown: Option<(u8, u8)>,
 }
 
 /// The navigator pattern, anchored to the whole process name. An invalid
@@ -193,6 +195,7 @@ impl Server {
             marked: None,
             last_save: Instant::now(),
             last_saved: None,
+            clock_shown: None,
         };
         for e in key_errors {
             srv.log_message(e);
@@ -580,6 +583,21 @@ impl Server {
             self.last_save = now;
             if let Err(e) = crate::resurrect::save_if_changed(self) {
                 self.log_message(format!("resurrect auto-save failed: {e}"));
+            }
+        }
+        let clock_windows: Vec<WindowId> = self
+            .panes
+            .values()
+            .filter(|p| p.clock)
+            .map(|p| p.window)
+            .collect();
+        if !clock_windows.is_empty() {
+            let time = tmxr_term::localtime::hour_minute();
+            if time != self.clock_shown {
+                self.clock_shown = time;
+                for w in clock_windows {
+                    self.mark_window_dirty(w);
+                }
             }
         }
         if now.duration_since(self.last_status)

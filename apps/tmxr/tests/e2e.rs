@@ -1229,3 +1229,24 @@ fn describe_key_shows_a_binds_note() {
     );
     s.wait_for("unbound key", |text| text.contains("F5 is not bound"));
 }
+
+#[test]
+fn clock_mode_shows_big_digits_until_a_key() {
+    const BLUE: u32 = 0x7a_a2_f7;
+    let t = Tmxr::new("clock");
+    let s = t.attach(&["new", "-s", "ck"]);
+    s.wait_for("status line", |text| text.contains("ck"));
+    let painted = |s: &Screen| -> usize {
+        (0..ROWS - 1)
+            .flat_map(|row| s.row_cells(row))
+            .filter(|c| c.2 == rgb(BLUE))
+            .count()
+    };
+    assert_eq!(painted(&s), 0);
+    s.send(PREFIX);
+    s.send(b"t");
+    // HH:MM in 5x5 blocks: well over 20 painted cells for any time.
+    s.wait_for("clock", |_| painted(&s) > 20);
+    s.send(b"q");
+    s.wait_for("clock gone", |_| painted(&s) == 0);
+}
