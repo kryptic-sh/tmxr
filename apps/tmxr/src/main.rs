@@ -34,6 +34,14 @@ struct Cli {
     #[arg(short = 'f', value_name = "FILE")]
     config: Option<PathBuf>,
 
+    /// Print shell completions to stdout and exit (for packaging).
+    #[arg(long, value_enum, value_name = "SHELL", hide = true)]
+    completions: Option<CompletionShell>,
+
+    /// Print the man page (troff) to stdout and exit (for packaging).
+    #[arg(long, hide = true)]
+    man: bool,
+
     /// Command and its arguments, in tmux's command language.
     #[arg(
         value_name = "COMMAND",
@@ -43,8 +51,54 @@ struct Cli {
     command: Vec<String>,
 }
 
+/// Shells `--completions` generates for: clap_complete's own five plus
+/// nushell, which has its own generator crate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+enum CompletionShell {
+    Bash,
+    Zsh,
+    Fish,
+    Powershell,
+    Elvish,
+    Nushell,
+}
+
+impl CompletionShell {
+    fn generate(self, out: &mut dyn std::io::Write) {
+        use clap::CommandFactory;
+        use clap_complete::Shell;
+        let cmd = &mut Cli::command();
+        let shell = match self {
+            Self::Bash => Shell::Bash,
+            Self::Zsh => Shell::Zsh,
+            Self::Fish => Shell::Fish,
+            Self::Powershell => Shell::PowerShell,
+            Self::Elvish => Shell::Elvish,
+            Self::Nushell => {
+                clap_complete::generate(clap_complete_nushell::Nushell, cmd, "tmxr", out);
+                return;
+            }
+        };
+        clap_complete::generate(shell, cmd, "tmxr", out);
+    }
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    if let Some(shell) = cli.completions {
+        shell.generate(&mut std::io::stdout());
+        return ExitCode::SUCCESS;
+    }
+    if cli.man {
+        use clap::CommandFactory;
+        return match clap_mangen::Man::new(Cli::command()).render(&mut std::io::stdout()) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("tmxr: {e}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     let endpoint = match Endpoint::resolve(cli.socket.as_deref(), cli.label.as_deref()) {
         Ok(e) => e,
         Err(e) => {
@@ -110,6 +164,30 @@ mod cli_tests {
     #[test]
     fn cli_definition_is_valid() {
         Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn every_completion_shell_names_the_binary() {
+        use clap::ValueEnum;
+        for shell in CompletionShell::value_variants() {
+            let mut out = Vec::new();
+            shell.generate(&mut out);
+            let text = String::from_utf8(out).unwrap();
+            assert!(text.contains("tmxr"), "{shell:?}: {text}");
+        }
+    }
+
+    #[test]
+    fn packaging_flags_are_not_taken_for_a_command() {
+        let cli = Cli::parse_from(["tmxr", "--completions", "zsh"]);
+        assert_eq!(cli.completions, Some(CompletionShell::Zsh));
+        assert!(cli.command.is_empty());
+        let cli = Cli::parse_from(["tmxr", "--man"]);
+        assert!(cli.man && cli.command.is_empty());
+        // After a command, they belong to it.
+        let cli = Cli::parse_from(["tmxr", "new", "--man"]);
+        assert!(!cli.man);
+        assert_eq!(cli.command, ["new", "--man"]);
     }
 
     #[test]

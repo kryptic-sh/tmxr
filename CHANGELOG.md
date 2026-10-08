@@ -34,3 +34,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Save and restore of sessions** (`prefix C-s` / `C-r`), auto-save and restore
   when the server starts. Each server (`-L` label or `-S` socket) keeps its own
   saves.
+- **Release binaries** for Linux (glibc 2.28 and musl, x86_64 and aarch64, plus
+  `.deb` and `.rpm`), macOS (Apple silicon and Intel) and Windows (x86_64),
+  published to GitHub Releases with `.sha256` files, and shell completions and a
+  man page from the hidden `tmxr --completions <shell>` and `tmxr --man`.
