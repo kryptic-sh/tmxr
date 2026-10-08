@@ -1508,3 +1508,32 @@ fn sigterm_saves_sessions_before_the_server_exits() {
         .collect();
     assert!(saved.iter().any(|s| s.contains("keepme")), "{saved:?}");
 }
+
+#[test]
+fn detach_stays_responsive_under_flood_output() {
+    // A pane printing changing lines as fast as it can.
+    #[cfg(unix)]
+    let flood = ["/bin/sh", "-c", "seq 1 999999999"];
+    #[cfg(windows)]
+    let flood = [
+        "cmd.exe",
+        "/d",
+        "/c",
+        "for /l %i in (0,1,99999999) do @echo %i yyyyyyyyyyyyyyyyyyyyyyyy",
+    ];
+    let t = Tmxr::new("flood");
+    let mut args = vec!["new", "-s", "fl"];
+    args.extend(flood);
+    let mut s = t.attach(&args);
+    std::thread::sleep(Duration::from_secs(2));
+    let start = Instant::now();
+    s.send(PREFIX);
+    s.send(b"d");
+    s.wait_exit();
+    let took = start.elapsed();
+    assert!(
+        took < Duration::from_secs(5),
+        "detach took {took:?} under flood"
+    );
+    eprintln!("detach under flood: {took:?}");
+}
