@@ -1,0 +1,21 @@
+# cargo-nextest config.
+#
+# nextest runs each test in its own process, in parallel.
+#
+# pty-e2e: the end-to-end tests drive the real `tmxr` binary in a pty and
+# scrape the rendered screen (docs/plan/13-testing.md). Concurrent pty sessions
+# contend on terminal resources and timing, so they run one at a time, with a
+# retry budget for residual timing blips. nextest reports a test that only
+# passed on retry as FLAKY, so a real regression still shows as a failure.
+
+[test-groups]
+pty-e2e = { max-threads = 1 }
+
+[profile.default]
+# A deadlocked test is killed and reported by name instead of hanging CI.
+slow-timeout = { period = "120s", terminate-after = 4 }
+
+[[profile.default.overrides]]
+filter = 'package(tmxr) & binary(e2e)'
+test-group = 'pty-e2e'
+retries = 2

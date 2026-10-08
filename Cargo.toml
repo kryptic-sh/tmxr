@@ -1,0 +1,37 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "apps/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+repository = "https://github.com/kryptic-sh/tmxr"
+homepage = "https://github.com/kryptic-sh/tmxr"
+authors = ["mxaddict <mxaddict@kryptic.sh>"]
+readme = "README.md"
+
+[workspace.lints.clippy]
+or_fun_call = "deny"
+unused_peekable = "deny"
+assigning_clones = "warn"
+format_push_string = "warn"
+manual_let_else = "warn"
+map_unwrap_or = "warn"
+use_self = "warn"
+redundant_pub_crate = "warn"
+
+[workspace.dependencies]
+# internal
+tmxr-proto = { path = "crates/tmxr-proto", version = "0.1.0" }
+tmxr-command = { path = "crates/tmxr-command", version = "0.1.0" }
+tmxr-config = { path = "crates/tmxr-config", version = "0.1.0" }
+tmxr-term = { path = "crates/tmxr-term", version = "0.1.0" }
+tmxr-server = { path = "crates/tmxr-server", version = "0.1.0" }
+tmxr-client = { path = "crates/tmxr-client", version = "0.1.0" }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
