@@ -36,6 +36,11 @@ what was not.
   compiled and tested by CI.
 - CI (commit a6648ab) runs the unit and e2e tests green on Linux, macOS and
   Windows; the Unix arms are exercised there, not locally.
+
+## Plan sections that the implementation changed
+
+Update these plan files to match the code (or change the code back):
+
 - **02-architecture**: the server uses plain threads and an `mpsc` channel, not
   tokio; no `tokio` dependency. The theme is not an `hjkl-theme` file — the
   Tokyo Night palette lives as `@thm_*` user options in
