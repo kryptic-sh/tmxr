@@ -43,47 +43,54 @@ Splitting `tmxr-term` and `tmxr-command` out of the server is deliberate: both
 are pure enough to unit-test without a server, and both are where most of the
 correctness risk lives (byte encodings and parsing).
 
-`tmxr-server` will grow; it is split internally by module from the start
-(`model/`, `cmd/`, `render/`, `copy/`, `picker/`, `resurrect/`) so no file
-becomes the monolith.
+`tmxr-server` is split by module, one per concern: `model`, `server` (the event
+loop), `conn`, `cmds`, `keys`, `layout`, `render` + `backend`, `overlay`
+(prompt, confirm, text view, picker), `copy`, `mouse`, `resurrect`, `target`,
+`vars`.
 
 ## Server internals
 
-The server runs a **tokio** runtime with a single **state task** that owns the
-model (`Server { sessions, windows, panes, clients, buffers, options, keys }`).
-Nothing else touches the model; everything talks to it over an `mpsc` channel of
-`Event`s. That makes every mutation sequential without locks.
+The server uses plain OS threads and one `std::sync::mpsc` channel; there is no
+async runtime. A single **state thread** owns the model
+(`Server { sessions, windows, panes, clients, buffers, cfg, keys, … }`). Nothing
+else touches the model; every other thread sends it an `Event`, so every
+mutation is sequential without locks.
 
 ```
-           ┌────────────── Event channel ───────────────┐
- pane reader threads ─► PaneOutput(pane, bytes) ──────► │
- pane exit watcher    ─► PaneExited(pane, status) ────► │   state task
- client conn tasks    ─► ClientMsg(client, msg) ──────► │   (model + commands
- timers               ─► Tick / StatusInterval ───────► │    + render)
-           └────────────────────────────────────────────┘
+           ┌────────────── Event channel ────────────────┐
+ pane reader/waiter ─► Pty(pane, Output | Eof | Exited) ─► │
+ accept thread      ─► Connected(client, outbound tx) ───► │   state thread
+ client reader      ─► Msg(client, ClientMsg) ───────────► │   (model + commands
+ client reader      ─► Disconnected(client) ─────────────► │    + render)
+ run-shell thread   ─► Shell(client, output) ────────────► │
+           └─────────────────────────────────────────────┘
                                    │
-                    per-client outbound queue (ServerMsg)
+                per-client bounded outbound queue (ServerMsg)
                                    ▼
-                           client conn task ─► socket
+                       client writer thread ─► socket
 ```
 
-- **PTY I/O.** `portable-pty` readers are blocking, so each pane gets a
-  dedicated OS thread that reads into a buffer and sends `PaneOutput`. Writes to
-  the PTY happen on the state task (they are small) through the `MasterPty`
-  writer.
-- **Parsing.** The state task feeds `PaneOutput` into the pane's `vt100::Parser`
-  and marks the pane's windows dirty.
-- **Rendering** is pull-based and rate-limited: after a batch of events the
-  state task renders every client whose visible window is dirty, at most once
-  per frame interval (default 8 ms, so bursts of output coalesce). See
+- **PTY I/O.** `portable-pty` readers are blocking, so each pane has a reader
+  thread (sends `Output`, then `Eof`) and a waiter thread (sends `Exited`).
+  Writes to the PTY happen on the state thread (they are small).
+- **Parsing.** The state thread feeds `Output` into the pane's
+  `tmxr_term::Emulator` (`vt100` plus reply/OSC hooks) and marks the pane's
+  window dirty.
+- **Timers.** The state thread waits on the channel with a 250 ms timeout and
+  runs `tick` after every wake: message and key-repeat expiry, overlay timers,
+  resurrect auto-save.
+- **Rendering.** After draining every queued event the state thread renders each
+  attached client whose view is dirty. There is no fixed frame interval: a burst
+  of output that arrives together is coalesced by the drain, not by a timer. See
   [07-rendering-status-theme.md](07-rendering-status-theme.md).
-- **Back-pressure.** A client whose outbound queue is full gets its next frame
-  skipped and a full redraw once it drains (frames are diffs against what the
-  client last _received_, so dropping is safe only with a full redraw after).
+- **Back-pressure.** Each client's outbound queue is bounded (`CLIENT_QUEUE` in
+  `conn.rs`). When it is full the frame is dropped and the client's next frame
+  is a full redraw (frames are diffs against what the client last _received_, so
+  dropping is safe only with a full redraw after).
 
 ## Client internals
 
-The client is deliberately dumb and uses plain threads (no tokio):
+The client is deliberately dumb and uses plain threads:
 
 - **Input thread**: `crossterm::event::read()` → `ClientMsg::Input(event)`. On
   Windows this reads console input records, on Unix it parses stdin — either way
@@ -107,33 +114,28 @@ The client is deliberately dumb and uses plain threads (no tokio):
    its environment) — a command client — and the server moves focus.
 5. The focused pane's border changes colour; the next frame goes out.
 
-## Dependencies (initial)
+## Dependencies
 
-House-precedent versions; added with `cargo add` at scaffold time, not
-hand-written.
+House-precedent versions, added with `cargo add`, not hand-written.
 
-| Crate                                          | Used by             | Notes                                               |
-| ---------------------------------------------- | ------------------- | --------------------------------------------------- |
-| `clap` 4 (derive)                              | app                 | CLI                                                 |
-| `anyhow`                                       | app, server, client | binary-level errors                                 |
-| `thiserror` 2                                  | library crates      | typed errors                                        |
-| `tracing`, `tracing-subscriber`                | all                 | logs to `~/.local/state/tmxr/logs/` (never the tty) |
-| `serde`, `postcard`                            | proto               | wire encoding                                       |
-| `interprocess` 2 (+ `tokio` feature)           | proto/server/client | UDS / named pipes                                   |
-| `tokio`                                        | server              | runtime                                             |
-| `crossterm` 0.29 (+ `serde`)                   | client, server      | terminal I/O, event types on the wire               |
-| `ratatui` 0.30                                 | server              | frame buffer + widgets                              |
-| `portable-pty` 0.9                             | term                | PTYs                                                |
-| `vt100` 0.16                                   | term                | terminal emulation per pane                         |
-| `regex`                                        | server              | navigator pattern, copy-mode search                 |
-| `hjkl-layout`                                  | server              | pane trees                                          |
-| `hjkl-picker`, `hjkl-picker-tui`, `hjkl-fuzzy` | server              | session picker                                      |
-| `hjkl-theme`, `hjkl-theme-tui`                 | server              | Tokyo Night palette → ratatui styles                |
-| `hjkl-config`, `hjkl-xdg`                      | config              | TOML loading, paths                                 |
-| `hjkl-fs`                                      | server              | atomic writes, locks, pid liveness (resurrect)      |
-| `hjkl-clipboard`                               | server              | local clipboard for copy mode                       |
-| `hjkl-keymap`                                  | command             | `<C-x>` notation parsing / printing                 |
-| `libc` (unix) / `windows-sys` 0.61 (windows)   | term, client        | setsid, process inspection, toolhelp snapshots      |
-| dev: `tempfile`, `portable-pty`, `vt100`       | tests               | temp sockets/dirs, e2e PTY harness (hjkl/hrdr)      |
+| Crate                                        | Used by             | Notes                                            |
+| -------------------------------------------- | ------------------- | ------------------------------------------------ |
+| `clap` 4 (derive)                            | app                 | CLI                                              |
+| `thiserror` 2                                | library crates      | typed errors                                     |
+| `tracing`, `tracing-subscriber`              | server, app         | logs to `<state dir>/tmxr/logs/` (never the tty) |
+| `serde`, `postcard`                          | proto               | wire encoding                                    |
+| `interprocess` 2                             | proto/server/client | UDS / named pipes                                |
+| `crossterm` 0.29 (+ `serde`)                 | client, server      | terminal I/O, event types on the wire            |
+| `ratatui` 0.30                               | server              | frame buffer + widgets                           |
+| `portable-pty` 0.9                           | term                | PTYs                                             |
+| `vt100` 0.16                                 | term                | terminal emulation per pane                      |
+| `regex`                                      | server              | navigator pattern                                |
+| `hjkl-layout`                                | server              | pane trees                                       |
+| `hjkl-picker`, `hjkl-picker-tui`             | server              | session picker (fuzzy scoring via `hjkl-fuzzy`)  |
+| `hjkl-config`, `hjkl-xdg`, `toml`            | config, server, app | TOML loading, paths                              |
+| `serde_json`                                 | server              | resurrect save files                             |
+| `hjkl-clipboard`                             | server              | local clipboard for copy mode                    |
+| `libc` (unix) / `windows-sys` 0.61 (windows) | term, client        | setsid, process inspection, toolhelp snapshots   |
+| dev: `tempfile`, `portable-pty`, `vt100`     | tests               | temp sockets/dirs, e2e PTY harness (hjkl/hrdr)   |
 
 Anything not on this list needs a call before it is added.

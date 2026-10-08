@@ -37,32 +37,34 @@ what was not.
 - CI (commit a6648ab) runs the unit and e2e tests green on Linux, macOS and
   Windows; the Unix arms are exercised there, not locally.
 
-## Plan sections that the implementation changed
-
-Update these plan files to match the code (or change the code back):
-
-- **02-architecture**: the server uses plain threads and an `mpsc` channel, not
-  tokio; no `tokio` dependency. The theme is not an `hjkl-theme` file — the
-  Tokyo Night palette lives as `@thm_*` user options in
-  `crates/tmxr-config/defaults.toml` and the status formats reference them.
-- **03-protocol**: the client sends its whole environment in `Hello.env`; the
-  server keeps only `update-environment` names for sessions.
-- **08-copy-mode**: implemented with tmxr's own motions over a snapshot grid
-  (route 2), not the hjkl engine. Motion set: h j k l w b e W B E 0 ^ $ g G H M
-  L, C-u/d/b/f/y/e, `/` `?` `n` `N` (literal, smart-case), v / V / C-v.
-- **10-config**: `prefix Y` uses `set-buffer -w "#{pane_current_path}"`; tmxr's
-  `set-buffer` format-expands its data (tmux's does not).
-- **11-resurrect**: panes restore the program by name only (no arguments); saves
-  happen on server exit and every `auto-save-minutes`.
-
 ## Known gaps and follow-ups
 
 - **Restore-on-start applies to every socket label**, including throwaway `-L`
   servers; the save on exit likewise overwrites `last` from whichever server
   exits. Consider per-label save directories.
-- **`swap-pane -s`**, **`join-pane`**, **`move-window`**, **`swap-window`**,
-  **`respawn-pane`**, `remain-on-exit`, `display-panes` overlay (currently
-  prints indices), clock mode, emacs copy mode: not implemented.
+- **Commands not implemented**: `join-pane`, `move-window`, `swap-window`,
+  `respawn-pane`, `save-buffer`, `load-buffer`, `if-shell` (all listed in
+  plan/10's MVP set), `swap-pane -s`, `remain-on-exit`, `display-panes` overlay
+  (currently prints indices), clock mode, emacs copy mode.
+- **Copy mode gaps** (plan/08): counts, `f`/`t`/`F`/`T`/`;`/`,`, marks, `%`,
+  `copy-pipe*`, `copy-command`, `refresh-from-pane`, highlighting of search
+  matches.
+- **Key notation**: hjkl's `<C-x>` form is not accepted (plan/01 and plan/06
+  once promised it); mouse events are built into `mouse.rs` and cannot be
+  rebound (`MouseDown1Pane` and friends are not key names).
+- **No 256-colour fallback**: colours are always 24-bit RGB. A terminal without
+  true colour gets wrong colours.
+- **No frame-rate cap**: the server renders after each drained batch of events.
+  A pane producing output continuously renders as often as batches arrive; not
+  measured.
+- **Resurrect**: pane titles and a window's last pane are not saved; a missing
+  directory falls back to `$HOME` without a message; auto-save writes even when
+  nothing changed; an argument allowlist (`resurrect.restore-args`, like
+  resurrect's `~vim` strategies) is not implemented; nothing saves on a signal.
+- **`server.rs` and `cmds.rs` keep growing** (each over a thousand lines). Split
+  along their seams — client lifecycle and attach out of `server.rs`, command
+  families (session/window/pane/buffer/options) out of `cmds.rs` — as part of
+  the next change that touches them.
 - **tmux-yank `prefix y`** (copy the shell's command line) is not bound.
 - **Mouse capture is always on in the client**; with `mouse = false` the server
   ignores mouse events but the terminal's own selection still needs Shift.

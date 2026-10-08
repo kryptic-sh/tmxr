@@ -14,45 +14,49 @@ directly), as tmux does.
 On entry the pane's scrollback + visible screen is **snapshotted** into a text
 grid with per-cell styles (vt100's `Screen` with `set_scrollback(offset)` gives
 rows at any offset). The pane keeps running underneath; new output goes to the
-live parser and tmxr shows the frozen view, exactly like tmux (and like tmux,
-`refresh-from-pane` / re-entering picks up new output).
+live parser and tmxr shows the frozen view, exactly like tmux; leaving and
+re-entering copy mode picks up new output.
 
 State: cursor `(line, col)` in the snapshot, view top line, selection anchor,
-selection kind (char / line / rectangle), last search, last `f/t` char, marks.
+selection kind (char / line / rectangle) and the last search.
 
 ## Engine
 
-Two routes, decided by a spike at the start of M6:
+tmxr implements tmux's `copy-mode-vi` commands itself, over the snapshot grid
+(`crates/tmxr-server/src/copy.rs`). The plan's first choice was to drive an
+`hjkl_engine::Editor` over the snapshot; it was set aside because the engine is
+an editor first and wants a host and rendering surface that a frozen grid does
+not have, while the command set copy mode needs is small.
 
-1. **hjkl engine (preferred).** Load the snapshot text into
-   `hjkl_buffer::View::from_str` and drive an `hjkl_engine::Editor` with
-   `modifiable = false`. That brings vim's own motions, visual / visual-line /
-   visual-block, `/` `?` search with `n`/`N`, counts, marks and `%` — the same
-   motion code the user's editor runs, so muscle memory matches exactly. The
-   picker already pulls `hjkl-engine` and `hjkl-buffer` into the build, so the
-   dependency cost is already paid. tmux names (`begin-selection`,
-   `rectangle-toggle`, `copy-selection-and-cancel`, …) become thin adapters over
-   editor actions so `send-keys -X` and user binds keep tmux semantics.
-2. **Own motions.** If the engine needs a host/rendering surface that does not
-   fit (it is an editor first), implement the tmux `copy-mode-vi` command set
-   directly over the grid using `hjkl_engine::motions::*` where its free
-   functions (`Cursor + Query`) can run over a grid adapter.
+Commands, under tmux's `send-keys -X` names so user binds keep tmux semantics:
 
-Either way the copy-mode commands are exposed as tmux's `send-keys -X <name>`
-names, so the key table in [06](06-keys-and-bindings.md#copy-mode-vi) is just
-binds.
+- Cursor: `cursor-left/right/up/down`, `start-of-line`, `back-to-indentation`,
+  `end-of-line`, `next-word`, `previous-word`, `next-word-end` and the `-space`
+  (WORD) forms, `history-top/bottom`, `top/middle/bottom-line`.
+- Scrolling: `halfpage-up/down`, `page-up/down`, `scroll-up/down`.
+- Selection: `begin-selection`, `select-line`, `rectangle-toggle`,
+  `clear-selection`.
+- Search: `search-forward`, `search-backward`, `search-again`, `search-reverse`.
+  Matching is literal, case-insensitive unless the needle has an uppercase
+  letter (smart case).
+- `copy-selection`, `copy-selection-and-cancel`,
+  `copy-selection-no-newlines-and-cancel`, `cancel`.
+
+The default binds in [06](06-keys-and-bindings.md#copy-mode-vi) map vi keys onto
+these. Not implemented: counts, `f`/`t` jumps, marks, `%`, `copy-pipe*` and
+`refresh-from-pane`.
 
 ## Copying
 
-`copy-selection*` / `copy-pipe*`:
+`copy-selection*`:
 
 1. Push the text to the paste buffer stack (`buffer0`, `buffer1`, …).
-2. With `set-clipboard on` (default `external`): send OSC 52 to the client(s) —
-   works locally and over SSH, as tmux-yank's OSC 52 path does.
-3. Also set the **local** clipboard via `hjkl-clipboard` when the server runs on
-   the same machine as a desktop session (Wayland/X11/macOS/Windows), covering
-   terminals that ignore OSC 52. `copy-command` overrides this with a shell
-   command, like tmux.
+2. Unless `set-clipboard` is `off`: send OSC 52 to the attached clients (works
+   locally and over SSH, as tmux-yank's OSC 52 path does), and set the **local**
+   clipboard through `hjkl-clipboard` on a background thread, covering terminals
+   that ignore OSC 52.
+
+`copy-command` (piping the selection to a shell command) is not implemented.
 
 `!` (copy without newlines), `Y`, `M-y` (copy and paste) and the drag-end copy
 come from tmux-yank's binds.
@@ -60,5 +64,5 @@ come from tmux-yank's binds.
 ## Rendering
 
 The pane shows the snapshot at the view offset with the selection in the
-`selection` style, the cursor drawn as a block, and the tmux position indicator
-`[offset/history]` at the top right. Search matches are highlighted.
+`mode-style` style, the cursor drawn as a block, and the tmux position indicator
+`[offset/history]` at the top right. Search matches are not highlighted.

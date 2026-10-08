@@ -32,8 +32,9 @@ Out-of-band bytes are appended to the frame's `Output` after the diff: OSC 52
 clipboard writes, the bell, the client title (`set-titles`), and the client's
 focus/mouse/keyboard mode switches.
 
-Frame rate: dirty-driven, capped by a frame interval (8 ms) so a pane spewing
-output costs at most ~120 frames/s per client and usually much less.
+Frame rate: dirty-driven. The server renders after draining every queued event,
+so output that arrives together becomes one frame; there is no fixed frame
+interval capping a pane that keeps spewing output.
 
 ## Theme: Tokyo Night
 
@@ -53,12 +54,13 @@ folke's Tokyo Night "Night"). The canonical palette as hjkl ships it
 | `dark5`        | `#737aa2` | `red`            | `#f7768e` |
 | `selection`    | `#283457` | `terminal_black` | `#414868` |
 
-The theme is a `hjkl-theme` TOML file embedded in `tmxr-server`
-(`themes/tokyonight.toml`), converted to ratatui styles through
-`hjkl-theme-tui`, and selectable with a `theme` config key so other palettes can
-be dropped in later. Colours are emitted as 24-bit RGB (the config forces
-`terminal-overrides ",*:RGB"`); a client that reports no true colour gets the
-nearest 256-colour index.
+The palette lives as `@thm_*` user options in the embedded defaults
+(`crates/tmxr-config/defaults.toml`), named after catppuccin's roles, and the
+status, border and mode styles reference them with `#{@thm_*}` — the same way
+the catppuccin tmux plugin works. Another palette is a config file overriding
+those options; there is no separate theme file or `theme` key. Colours are
+always emitted as 24-bit RGB (the tmux config forces
+`terminal-overrides ",*:RGB"`); there is no 256-colour fallback.
 
 ### UI roles
 

@@ -93,6 +93,15 @@ A tmux-compatible parser shared by config binds, the command prompt
 `run-shell`, `if-shell`, `choose-tree` (→ picker), `list-commands`; plus tmxr's
 own `navigate-pane`, `resurrect-save`, `resurrect-restore`.
 
+Not implemented yet (unknown commands to the parser): `move-window`,
+`swap-window`, `join-pane`, `respawn-pane`, `save-buffer`, `load-buffer`,
+`if-shell`.
+
+One deliberate difference from tmux: `set-buffer` format-expands its data, so
+`prefix Y` is `set-buffer -w "#{pane_current_path}"` (tmux-yank's copy of the
+pane's directory) without a helper script. tmux's `set-buffer` stores the text
+literally.
+
 ## CLI (`apps/tmxr`)
 
 clap derive, following hjkl/krypt

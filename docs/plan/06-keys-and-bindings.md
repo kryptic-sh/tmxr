@@ -19,9 +19,13 @@ swallowed (tmux behaviour). `switch-client -T <table>` is supported so custom
 tables work.
 
 Key names are tmux's: `C-x`, `M-x`, `S-x`, `C-M-x`, `Enter`, `Escape`, `Tab`,
-`BTab`, `Space`, `BSpace`, `Up`, `PPage`/`PageUp`, `F1`…`F12`, `MouseDown1Pane`,
-`WheelUpPane`, `MouseDragEnd1Pane`, and literal punctuation (`'`, `"`, `;`, `%`,
-`\`). `hjkl-keymap`'s `<C-x>` notation is also accepted in the config.
+`BTab`, `Space`, `BSpace`, `Up`, `PPage`/`PageUp`, `F1`…`F24`, and literal
+punctuation (`'`, `"`, `;`, `%`, `\`). hjkl's `<C-x>` notation is not accepted.
+
+Mouse events are not keys in tables: `mouse on` behaviour (click to focus, drag
+a border, wheel and drag into copy mode, drag-end copy, status-line clicks) is
+built into the server (`crates/tmxr-server/src/mouse.rs`) and matches tmux's
+default mouse binds plus tmux-yank's `MouseDragEnd1Pane`; it cannot be rebound.
 
 `list-keys -N` (bound to `prefix ?`) shows every bind that has a note — the
 default config gives every bind a note, matching what `plugin-notes.sh` does for
@@ -96,10 +100,12 @@ to do and are not bound.
 
 ### `copy-mode-vi`
 
-tmux's full default `copy-mode-vi` table (motions
-`h j k l w b e W B E 0 ^ $ g G H M L f F t T ; ,`, `C-u C-d C-b C-f`, search
-`/ ? n N`, `Space` begin selection, `V` select line, `Enter` copy and cancel,
-`q` / `Escape` cancel, marks, `%` bracket match), plus:
+The core of tmux's default `copy-mode-vi` table (motions
+`h j k l w b e W B E 0 ^ $ g G H M L` and the arrows, `C-u C-d C-b C-f C-y C-e`,
+`PPage`/`NPage`, search `/ ? n N`, `Space` begin selection, `V` select line,
+`Enter` copy and cancel, `q` / `Escape` cancel), plus the binds below. tmux's
+`f F t T ; ,`, counts, marks and `%` are not implemented
+([08](08-copy-mode.md#engine)).
 
 | Key                 | Command                                          | From         |
 | ------------------- | ------------------------------------------------ | ------------ |

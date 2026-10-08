@@ -34,14 +34,17 @@ reader never allocates from an untrusted length beyond the cap.
 
 ## Handshake
 
-The first frame each way is a `Hello`:
+A connection starts with a `Hello` each way, then the client sends one
+`Command`:
 
 ```rust
-ClientMsg::Hello {
-    protocol: u32,          // PROTOCOL_VERSION, bumped on any wire change
-    version: String,        // CARGO_PKG_VERSION, for messages
-    kind: ClientKind,       // Attach { size, term, features, env, cwd } | Command { cwd, env }
-}
+ClientMsg::Hello(Hello {
+    protocol: u32,                  // PROTOCOL_VERSION, bumped on any wire change
+    version: String,                // CARGO_PKG_VERSION, for messages
+    cwd: String,                    // default -c for new sessions
+    env: Vec<(String, String)>,     // the client's whole environment
+    terminal: Option<TerminalInfo>, // { cols, rows, term }; None = cannot attach
+})
 ServerMsg::Hello { protocol: u32, version: String, pid: u32 }
 ```
 
@@ -52,35 +55,35 @@ A protocol mismatch is reported to the user with both versions and a hint
 
 ```rust
 enum ClientMsg {
-    Hello { .. },
-    Input(crossterm::event::Event),   // key, mouse, paste, focus, resize
-    Command(Vec<String>),             // argv after `tmxr`, e.g. ["split-window","-h"]
-    Detach,
+    Hello(Hello),
+    Command(Vec<String>),           // argv after `tmxr`; empty = default command
+    Input(crossterm::event::Event), // key, mouse, paste, focus, resize
+    Detach,                         // terminal hangup
 }
 
 enum ServerMsg {
-    Hello { .. },
-    Output(Vec<u8>),                  // bytes for the client's terminal (frame diff, OSC 52, bell)
+    Hello { protocol: u32, version: String, pid: u32 },
+    Attached,                       // the command attached; Output follows
+    Output(Vec<u8>),                // bytes for the client's terminal (frame diff, OSC 52, bell)
     CommandResult { status: i32, stdout: String, stderr: String },
-    Detached { reason: DetachReason }, // detach, session killed, server exit, replaced
-    Exit,                              // server shutting down
+    Detached { reason: String },    // detach, session killed, server exit
 }
 ```
 
 Notes:
 
+- An attaching command (`attach`, `new` without `-d`) turns the connection into
+  an attached client, answered with `Attached`; any other command gets one
+  `CommandResult` and the connection closes.
 - `crossterm` events go over the wire as-is (crossterm's `serde` feature), so
   key decoding happens once, in the client, with crossterm's per-platform
   backends. The server never parses terminal input bytes.
-- `Output` is opaque to the client. Terminal-feature differences between clients
-  (true colour, kitty keyboard, OSC 52 support) are reported in `Hello.features`
-  and handled by the server when it renders.
-- A `Command` connection may also be issued by an attached client (for the
-  command prompt the server already has it; this is for scripts).
-- `Hello.env` carries the client's `TERM`, `COLORTERM`, `SSH_TTY`,
-  `WAYLAND_DISPLAY`, `DISPLAY`, `XDG_*` and anything in the `update-environment`
-  option, so new panes get the attaching client's environment like tmux's
-  `update-environment` (the tmux config adds the Wayland variables to it).
+- `Output` is opaque to the client. Terminal features are not negotiated: the
+  server always emits 24-bit colour and OSC 52.
+- `Hello.env` carries the client's whole environment. The server keeps the names
+  listed in `update-environment` on the session it creates (so new panes get the
+  attaching client's `DISPLAY`, `WAYLAND_DISPLAY`, `SSH_*`, …, like tmux), and
+  reads `TMXR_PANE` from a command client to resolve its default target.
 
 ## Versioning rule
 

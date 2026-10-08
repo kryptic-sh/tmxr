@@ -10,7 +10,7 @@ Server
  ├─ windows:  id → Window  { id: @N, name, auto_name, layout: hjkl_layout::LayoutTree, active pane, last pane,
  │                           zoomed: Option<PaneId>, flags (bell/activity/silence), options (synchronize-panes …) }
  ├─ panes:    id → Pane    { id: %N, term: tmxr_term::Pane, window, title, copy_mode: Option<CopyMode>, … }
- ├─ clients:  id → Client  { session, size, key_table, prompt/picker/overlay, last frame, features }
+ ├─ clients:  id → Client  { session, size, key_table, prompt/picker/overlay, last frame }
  └─ buffers:  paste buffers (stack, `buffer-limit` 50)
 ```
 
