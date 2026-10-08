@@ -69,8 +69,12 @@ what was not.
 - **Clock mode** (`prefix t`) is not implemented: it needs local time (the
   workspace has no date/time crate; `libc` `localtime_r` / `windows-sys`
   `GetLocalTime`, both already dependencies, would do) and a block-digit font.
-- **No 256-colour fallback**: colours are always 24-bit RGB. A terminal without
-  true colour gets wrong colours.
+- **No 256-colour fallback, by design for now**: colours are always 24-bit RGB,
+  which is what the tmux config asks for (`terminal-overrides ",*:RGB"` forces
+  RGB on every terminal). Only for a user whose terminal lacks true colour (e.g.
+  macOS Terminal.app) would a fallback matter: map RGB to the nearest xterm-256
+  index in `AnsiBackend` when the client's environment does not advertise true
+  colour (`COLORTERM`, `WT_SESSION`, …), behind an option.
 - **No frame-rate cap**: the server renders after each drained batch of events.
   A pane producing output continuously renders as often as batches arrive; not
   measured.
