@@ -1149,8 +1149,10 @@ fn session_picker_previews_the_highlighted_session() {
     s.wait_for("alpha previewed", |text| {
         text.contains("sessions 2/2") && text.contains("preview-marker")
     });
-    // Moving to bravo previews bravo, which never printed the marker.
+    // Moving to bravo previews bravo, which never printed the marker. Wait
+    // for normal mode first: ESC and k sent together read as Alt-k on Unix.
     s.send(b"\x1b");
+    s.wait_for("normal mode", |text| text.contains("[normal]"));
     s.send(b"k");
     s.wait_for("bravo previewed", |text| {
         text.contains("sessions 2/2") && !text.contains("preview-marker")
