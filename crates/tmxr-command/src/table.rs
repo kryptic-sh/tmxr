@@ -140,7 +140,7 @@ pub const COMMANDS: &[CommandSpec] = &[
         "bdhl:s:t:v",
         0,
         0,
-        "[-bdhv] [-l size] -s src-pane [-t dst-pane]"
+        "[-bdhv] [-l size] [-s src-pane] [-t dst-pane]"
     ),
     cmd!(
         "kill-pane",
@@ -338,10 +338,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "select-pane",
         Some("selectp"),
-        "DLlRt:U",
+        "DLlMmRt:U",
         0,
         0,
-        "[-DLlRU] [-t target-pane]"
+        "[-DLlMmRU] [-t target-pane]"
     ),
     cmd!(
         "select-window",
@@ -417,7 +417,7 @@ pub const COMMANDS: &[CommandSpec] = &[
         "ds:t:",
         0,
         0,
-        "[-d] -s src-window [-t dst-window]"
+        "[-d] [-s src-window] [-t dst-window]"
     ),
     cmd!(
         "switch-client",

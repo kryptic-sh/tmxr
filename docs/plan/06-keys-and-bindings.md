@@ -70,6 +70,7 @@ vim-tmux-navigator; **(sens)** = tmux-sensible; **(yank)** = tmux-yank;
 | `M-o`                   | `rotate-window -D`                                   | Rotate panes down                                  | (tmux)                |
 | `M-n` / `M-p`           | `next-window -a` / `previous-window -a`              | Next / previous window with an alert (a bell)      | (tmux)                |
 | `E`                     | `select-layout -E`                                   | Spread panes out evenly                            | (tmux)                |
+| `m` / `M`               | `select-pane -m` / `select-pane -M`                  | Mark the pane / clear the mark                     | (tmux)                |
 | `=`                     | `choose-buffer -Z` (picker; Enter pastes)            | Choose a paste buffer to paste                     | (tmux)                |
 | `f`                     | `find-window` prompt (window picker, pre-filtered)   | Find a window                                      | (tmux)                |
 | `R`                     | `source-file` (reload config)                        | Reload config                                      | (sens)                |
@@ -104,8 +105,8 @@ Dropped from tmux's defaults because the config reuses the key: `'`
 (select-window prompt), `;` (last-pane — `C-\` covers it), `l` (last-window —
 `b` covers it), `x` (kill-pane — moved to `X`; **new**, flagged in
 [16-open-questions.md](16-open-questions.md)). `I`/`U`/`M-u` (tpm) have nothing
-to do and are not bound. tmux defaults with no tmxr command yet (`t`, `m`, `M`,
-`D`, `/`, `C-z`) are unbound until the commands exist; the backlog tracks them.
+to do and are not bound. tmux defaults with no tmxr command yet (`t`, `D`, `/`,
+`C-z`) are unbound until the commands exist; the backlog tracks them.
 
 ### `copy-mode-vi`
 

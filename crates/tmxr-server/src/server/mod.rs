@@ -113,6 +113,10 @@ pub struct Server {
     /// Sessions were restored at start-up and no client has attached yet: a
     /// bare `tmxr` attaches to them instead of creating a new session.
     pub restored_pending: bool,
+    /// The marked pane (`select-pane -m`): the default source of
+    /// `join-pane`, `swap-pane` and `swap-window`. Read it through
+    /// [`Server::marked_pane`], which forgets a pane that has closed.
+    pub marked: Option<PaneId>,
     last_save: Instant,
 }
 
@@ -184,6 +188,7 @@ impl Server {
             last_status: Instant::now(),
             commands: HashMap::new(),
             restored_pending: false,
+            marked: None,
             last_save: Instant::now(),
         };
         for e in key_errors {
@@ -468,6 +473,17 @@ impl Server {
             }
             self.mark_client_dirty(id);
         }
+    }
+
+    /// The marked pane, if it still exists.
+    pub fn marked_pane(&self) -> Option<PaneId> {
+        self.marked.filter(|p| self.panes.contains_key(p))
+    }
+
+    /// Whether `window` holds the marked pane (its `M` flag).
+    pub fn window_is_marked(&self, window: WindowId) -> bool {
+        self.marked_pane()
+            .is_some_and(|p| self.panes[&p].window == window)
     }
 
     /// `allow-passthrough`: write a program's passthrough payload as is to

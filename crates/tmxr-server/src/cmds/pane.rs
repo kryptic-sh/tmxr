@@ -51,6 +51,16 @@ pub(super) fn run(
                 srv.kill_pane(pid);
             }
         }
+        "select-pane" if a.has('m') || a.has('M') => {
+            // -m toggles the mark on the pane, -M clears it.
+            let pid = target::pane(srv, ctx, a.value('t'))?.2;
+            let old = srv.marked_pane();
+            srv.marked = (a.has('m') && old != Some(pid)).then_some(pid);
+            for p in [old, srv.marked].into_iter().flatten() {
+                let w = srv.panes[&p].window;
+                srv.mark_window_dirty(w);
+            }
+        }
         "select-pane" => {
             let (_, wid, pid) = target::pane(srv, ctx, a.value('t'))?;
             let to = if a.has('l') {
@@ -98,9 +108,11 @@ pub(super) fn run(
         }
         "swap-pane" => {
             let (_, wid, pid) = target::pane(srv, ctx, a.value('t'))?;
-            let (src, dst) = match a.value('s') {
-                Some(s) => (target::pane(srv, ctx, Some(s))?.2, pid),
-                None => {
+            let marked = srv.marked_pane().filter(|_| !a.has('U') && !a.has('D'));
+            let (src, dst) = match (a.value('s'), marked) {
+                (Some(s), _) => (target::pane(srv, ctx, Some(s))?.2, pid),
+                (None, Some(m)) => (m, pid),
+                (None, None) => {
                     // -U / -D: swap with the previous / next pane.
                     let panes = srv.windows.get(&wid).ok_or("no window")?.panes();
                     let i = panes.iter().position(|p| *p == pid).unwrap_or(0);
@@ -126,8 +138,11 @@ pub(super) fn run(
             srv.respawn_pane(pid, pos.to_vec(), cwd)?;
         }
         "join-pane" => {
-            let s = a.value('s').ok_or("join-pane needs -s src-pane")?;
-            let src = target::pane(srv, ctx, Some(s))?.2;
+            let src = match (a.value('s'), srv.marked_pane()) {
+                (Some(s), _) => target::pane(srv, ctx, Some(s))?.2,
+                (None, Some(m)) => m,
+                (None, None) => return Err("join-pane needs -s or a marked pane".into()),
+            };
             let dst = target::pane(srv, ctx, a.value('t'))?.2;
             let size = split_size(a)?;
             srv.join_pane(src, dst, a.has('h'), a.has('b'), size, !a.has('d'))?;

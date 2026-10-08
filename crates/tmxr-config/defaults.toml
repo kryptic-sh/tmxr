@@ -159,6 +159,8 @@ processes = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "top",
 "C-o" = { cmd = "rotate-window", note = "Rotate panes" }
 "M-o" = { cmd = "rotate-window -D", note = "Rotate panes down" }
 "E" = { cmd = "select-layout -E", note = "Spread panes out evenly" }
+"m" = { cmd = "select-pane -m", note = "Mark or unmark the pane" }
+"M" = { cmd = "select-pane -M", note = "Clear the marked pane" }
 "=" = { cmd = "choose-buffer -Z", note = "Choose a paste buffer to paste" }
 "f" = { cmd = 'command-prompt -p "(find-window)" "find-window -Z \"%%\""', note = "Find a window" }
 "M-n" = { cmd = "next-window -a", note = "Next window with an alert" }

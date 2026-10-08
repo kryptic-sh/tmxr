@@ -99,11 +99,12 @@ without a command it re-runs the one the pane started with. Each start of a pane
 gets a spawn number carried in its PTY events, so the old program's exit cannot
 close the respawned pane.
 
-tmxr has no marked pane, so `join-pane` and `swap-window` need `-s`.
-`move-window` refuses an index in use (no `-k`) and has no `-r`; moving a
-session's last window away ends that session, as in tmux. A `-t` destination for
-`new-window` / `move-window` is `session:index`, and a bare word is an index
-when it is a number, else a session name.
+Without `-s`, `join-pane`, `swap-pane` and `swap-window` take the marked pane
+(`select-pane -m`, `prefix m`), as in tmux. `move-window` refuses an index in
+use (no `-k`) and has no `-r`; moving a session's last window away ends that
+session, as in tmux. A `-t` destination for `new-window` / `move-window` is
+`session:index`, and a bare word is an index when it is a number, else a session
+name.
 
 `if-shell` always runs its shell command in the background, as tmux does with
 `-b`: the command client gets its reply at once, and the chosen command runs

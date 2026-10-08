@@ -90,9 +90,15 @@ impl Context for Vars<'_> {
                 let s = session?;
                 let w = window?;
                 let idx = s.index_of(w.id);
-                w.flags(idx == Some(s.current), idx.is_some() && idx == s.last)
+                w.flags(
+                    idx == Some(s.current),
+                    idx.is_some() && idx == s.last,
+                    srv.window_is_marked(w.id),
+                )
             }
             "pane_synchronized" => flag(window?.synchronize),
+            "pane_marked" => flag(srv.marked_pane() == Some(pane?.id)),
+            "pane_marked_set" => flag(srv.marked_pane().is_some()),
             "pane_id" => format!("%{}", pane?.id),
             "pane_index" => {
                 let w = window?;

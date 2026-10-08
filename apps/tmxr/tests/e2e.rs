@@ -940,3 +940,42 @@ fn choose_buffer_pastes_and_find_window_switches() {
         |o| o.trim() == "editor",
     );
 }
+
+#[test]
+fn marked_pane_is_the_default_source_of_join_pane() {
+    let t = Tmxr::new("mark");
+    t.run(&["new-session", "-d", "-s", "mk", "-n", "one"]);
+    t.run(&["split-window", "-d", "-t", "mk:one"]);
+    t.run(&["new-window", "-d", "-t", "mk", "-n", "two"]);
+    let marked = t.run(&["display-message", "-p", "-t", "mk:one.1", "#{pane_id}"]);
+    let marked = marked.trim();
+    assert!(marked.starts_with('%'), "{marked:?}");
+
+    // Mark a pane: its window shows the M flag.
+    t.run(&["select-pane", "-m", "-t", "mk:one.1"]);
+    let windows = t.run(&["list-windows", "-t", "mk"]);
+    assert!(
+        windows.lines().any(|l| l.starts_with("0: one*M (")),
+        "{windows}"
+    );
+    assert_eq!(
+        t.run(&["display-message", "-p", "-t", "mk:one.1", "#{pane_marked}"])
+            .trim(),
+        "1"
+    );
+
+    // join-pane without -s takes the marked pane.
+    let out = t.output(&["join-pane", "-d", "-t", "mk:two"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(t.run(&["list-panes", "-t", "mk:two"]).contains(marked));
+    assert_eq!(t.run(&["list-panes", "-t", "mk:one"]).lines().count(), 1);
+
+    // -M clears it; then join-pane has no source.
+    t.run(&["select-pane", "-M"]);
+    assert!(!t.run(&["list-windows", "-t", "mk"]).contains('M'));
+    assert!(!t.output(&["join-pane", "-t", "mk:one"]).status.success());
+}

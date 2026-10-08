@@ -70,7 +70,7 @@ impl Window {
         }
     }
 
-    pub fn flags(&self, current: bool, last: bool) -> String {
+    pub fn flags(&self, current: bool, last: bool, marked: bool) -> String {
         let mut f = String::new();
         if current {
             f.push('*');
@@ -79,6 +79,9 @@ impl Window {
         }
         if self.bell {
             f.push('!');
+        }
+        if marked {
+            f.push('M');
         }
         if self.zoomed {
             f.push('Z');

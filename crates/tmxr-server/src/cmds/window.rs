@@ -56,8 +56,11 @@ pub(super) fn run(
             srv.move_window(wid, dst, index, !a.has('d'))?;
         }
         "swap-window" => {
-            let s = a.value('s').ok_or("swap-window needs -s src-window")?;
-            let (_, _, src) = target::window(srv, ctx, Some(s))?;
+            let src = match (a.value('s'), srv.marked_pane()) {
+                (Some(s), _) => target::window(srv, ctx, Some(s))?.2,
+                (None, Some(m)) => srv.panes[&m].window,
+                (None, None) => return Err("swap-window needs -s or a marked pane".into()),
+            };
             let (_, _, dst) = target::window(srv, ctx, a.value('t'))?;
             srv.swap_windows(src, dst, a.has('d'))?;
         }
@@ -143,7 +146,11 @@ pub(super) fn run(
                         out.stdout,
                         "{prefix}{idx}: {}{} ({} panes) [{}x{}]",
                         w.name,
-                        w.flags(*idx == s.current, Some(*idx) == s.last),
+                        w.flags(
+                            *idx == s.current,
+                            Some(*idx) == s.last,
+                            srv.window_is_marked(*wid)
+                        ),
                         w.panes().len(),
                         w.cols,
                         w.rows
