@@ -150,12 +150,12 @@ fn draw_window(
     let is_border = |x: i32, y: i32| {
         x >= 0 && y >= 0 && x < i32::from(w) && y < i32::from(h) && !covered(x as u16, y as u16)
     };
-    let active = rects
-        .iter()
-        .find(|(p, _)| *p == win.active)
-        .map(|(_, r)| *r);
-    let touches_active = |x: u16, y: u16| {
-        active.is_some_and(|r| {
+    let rect_of = |pane: PaneId| rects.iter().find(|(p, _)| *p == pane).map(|(_, r)| *r);
+    let active = rect_of(win.active);
+    // The marked pane's border is drawn reversed, as tmux does.
+    let marked = srv.marked_pane().and_then(rect_of);
+    let touches = |rect: Option<hjkl_layout::LayoutRect>, x: u16, y: u16| {
+        rect.is_some_and(|r| {
             let (x, y) = (i32::from(x), i32::from(y));
             let (rx, ry, rw, rh) = (
                 i32::from(r.x),
@@ -193,11 +193,14 @@ fn draw_window(
                     _ => "┘",
                 },
             };
-            let style = if touches_active(x, y) && rects.len() > 1 {
+            let mut style = if touches(active, x, y) && rects.len() > 1 {
                 active_border
             } else {
                 border
             };
+            if touches(marked, x, y) {
+                style = style.add_modifier(Modifier::REVERSED);
+            }
             if let Some(cell) = buf.cell_mut((x, y)) {
                 cell.set_symbol(ch).set_style(style);
             }
@@ -265,7 +268,11 @@ fn draw_pane(
         }
         // tmux's position indicator, top right.
         let (offset, total) = cm.position();
-        let tag = format!("[{offset}/{total}]");
+        // A count being typed shows first, as tmux's `(repeat)` prompt.
+        let tag = match cm.count {
+            0 => format!("[{offset}/{total}]"),
+            n => format!("(repeat) {n} [{offset}/{total}]"),
+        };
         let tw = tag.len() as u16;
         if tw < w {
             buf.set_string(r.x + w - tw, r.y, &tag, copy.selection);

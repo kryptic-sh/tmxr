@@ -1420,3 +1420,41 @@ fn move_window_renumbers_and_replaces() {
     t.run(&["move-window", "-d", "-k", "-s", "mk:0", "-t", "mk:1"]);
     assert_eq!(windows(&t), ["1:a"]);
 }
+
+#[test]
+fn copy_mode_shows_a_pending_count_and_marked_border() {
+    let t = Tmxr::new("indicators");
+    let s = t.attach(&["new", "-s", "in"]);
+    s.wait_for("status line", |text| text.contains("in"));
+
+    // A count being typed shows until the command that uses it.
+    s.send(PREFIX);
+    s.send(b"[");
+    t.wait_run(
+        &["display-message", "-p", "-t", "in", "#{pane_in_mode}"],
+        "copy mode",
+        |o| o.trim() == "1",
+    );
+    s.send(b"5");
+    s.wait_for("count shown", |text| text.contains("(repeat) 5"));
+    s.send(b"k");
+    s.wait_for("count used", |text| !text.contains("(repeat)"));
+    s.send(b"q");
+
+    // The marked pane's border is drawn reversed.
+    let reversed = |s: &Screen| -> usize {
+        let emu = s.emu.lock().unwrap();
+        let screen = emu.screen();
+        (0..ROWS - 1)
+            .flat_map(|row| (0..COLS).map(move |col| (row, col)))
+            .filter(|(row, col)| screen.cell(*row, *col).is_some_and(|c| c.inverse()))
+            .count()
+    };
+    t.run(&["split-window", "-h", "-t", "in"]);
+    s.wait_for("split", |text| text.contains('│'));
+    let before = reversed(&s);
+    t.run(&["select-pane", "-m", "-t", "in.0"]);
+    s.wait_for("marked border", |_| reversed(&s) > before);
+    t.run(&["select-pane", "-M"]);
+    s.wait_for("mark cleared", |_| reversed(&s) == before);
+}

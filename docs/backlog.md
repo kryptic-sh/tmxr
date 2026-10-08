@@ -50,16 +50,12 @@ what was not.
 
 ## Known gaps and follow-ups
 
-- **Not implemented**: emacs copy mode. The marked pane has no border highlight
-  (tmux draws it reversed); it shows as the window's `M` flag and
-  `#{pane_marked}`.
+- **Not implemented**: emacs copy mode.
 - **tmux default binds**: all of tmux's defaults are bound; `prefix C-z`
   (suspend-client) errors on Windows, which has no job control. Alerts for `M-n`
   / `M-p` are bells only (no `monitor-activity` / `monitor-silence`).
   `find-window` matches window names through the picker, not pane contents or
   titles as tmux's does.
-- **Copy mode**: a pending count is not shown anywhere (tmux shows a `(repeat)`
-  prompt).
 - **Key notation**: hjkl's `<C-x>` form is not accepted (plan/01 and plan/06
   once promised it); mouse events are built into `mouse.rs` and cannot be
   rebound (`MouseDown1Pane` and friends are not key names).

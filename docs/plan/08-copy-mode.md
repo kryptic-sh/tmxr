@@ -46,9 +46,10 @@ Commands, under tmux's `send-keys -X` names so user binds keep tmux semantics:
 - `copy-selection`, `copy-selection-and-cancel`,
   `copy-selection-no-newlines-and-cancel`, `cancel`.
 
-Counts: digits typed in copy mode (`0` only after another digit, since `0` alone
-is `start-of-line`) repeat the next command, and a count before a jump repeats
-the jump (`3tx`). `send-keys -X -N count` does the same from a bind.
+Counts (shown as `(repeat) N` before the position indicator while typed): digits
+typed in copy mode (`0` only after another digit, since `0` alone is
+`start-of-line`) repeat the next command, and a count before a jump repeats the
+jump (`3tx`). `send-keys -X -N count` does the same from a bind.
 
 The default binds in [06](06-keys-and-bindings.md#copy-mode-vi) map vi keys onto
 these, plus `set-mark` / `jump-to-mark` (`X`, `M-x`; jumping swaps the mark and
