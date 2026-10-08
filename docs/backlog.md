@@ -82,7 +82,14 @@ what was not.
   allowlist (`resurrect.restore-args`, like resurrect's `~vim` strategies) is
   not implemented; nothing saves on a signal (SIGTERM / SIGHUP would need a
   handler).
-- **tmux-yank `prefix y`** (copy the shell's command line) is not bound.
+- **tmux-yank `prefix y`** (copy the shell's command line) is not bound, on
+  purpose for now. tmux-yank's `copy_line.sh` sends `C-a` to the shell, enters
+  copy mode at the shell's cursor, selects to the end of the command and sends
+  `C-e`; it works because each step is a separate `tmux` call, slow enough for
+  the shell to redraw. As one tmxr command list the copy-mode snapshot would be
+  taken before the shell moved its cursor. Doing it properly needs a delay
+  between steps (an `if-shell "sleep 0.1"` works on Unix only) or shell
+  integration (OSC 133 prompt marks) to find the command line.
 - **Windows `kill()` on a pane child** returned "There are no more files" (os
   error 18) in a test; not a bug in practice. `Server::kill_pane` calls `kill()`
   and then drops the pane, closing the ConPTY, and that does end the programs
