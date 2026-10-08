@@ -12,10 +12,10 @@ on the [hjkl](https://github.com/kryptic-sh/hjkl) crates. Part of the
 
 ## Status
 
-**Early, unreleased.** The MVP in [the plan](docs/plan/00-index.md) is
-implemented and tested end to end on Linux, macOS and Windows in CI, but there
-is no release yet: build it from source. What is missing or behaves differently
-from tmux is listed in [docs/backlog.md](docs/backlog.md).
+**Early: v0.1.0 is the first release.** The MVP in
+[the plan](docs/plan/00-index.md) is implemented and tested end to end on Linux,
+macOS and Windows in CI. What is missing or behaves differently from tmux is
+listed in [docs/backlog.md](docs/backlog.md).
 
 ## What it does
 
@@ -105,6 +105,21 @@ function prompt {
 
 Shells that emit OSC 7 (`file://host/path`) work too. Without either, splits
 open in the directory the pane started in.
+
+## Installing
+
+Download the archive for your platform from
+[GitHub Releases](https://github.com/kryptic-sh/tmxr/releases) and put `tmxr`
+(`tmxr.exe` on Windows) on your `PATH`. Each file has a `.sha256` beside it.
+There are builds for Linux (x86_64 and aarch64, glibc 2.28+ or static musl, and
+`.deb` / `.rpm` packages, which install completions and a man page), macOS
+(Apple silicon and Intel) and Windows (x86_64).
+
+Shell completions and the man page come from the binary itself:
+`tmxr --completions <bash|zsh|fish|powershell|elvish|nushell>` and `tmxr --man`.
+
+Package managers (AUR, Homebrew, Scoop, Alpine) and crates.io are not set up
+yet.
 
 ## Building
 

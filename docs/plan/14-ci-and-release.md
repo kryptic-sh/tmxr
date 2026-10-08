@@ -36,6 +36,10 @@ repos' schedule), `.github/dependabot.yml` (the standard cargo + actions form),
 
 ## Phase 2 — first release (M8)
 
+State: v0.1.0 adopts `build`, `publish-github-release` and `tag-release-status`
+and the `--completions` / `--man` flags. crates.io, the AUR, Homebrew, Scoop and
+Alpine are deferred; [the backlog](../backlog.md) says what each needs.
+
 Add hrdr's release jobs verbatim in shape, renamed for tmxr:
 
 - `build` — 7 targets: `x86_64`/`aarch64` `unknown-linux-gnu` (zigbuild, glibc

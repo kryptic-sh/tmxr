@@ -119,21 +119,35 @@ The provisional decisions in
 kill-pane, theme, config format, vim navigation, picker mode, Windows current
 directory) are defaults the implementation follows until answered.
 
+## Release channels not set up
+
+v0.1.0 ships to GitHub Releases only (the owner's call, 2026-10-09). Left out of
+hrdr's pipeline, with what each needs:
+
+- **crates.io**: the name `tmxr` belongs to another project (slaptijack's tmux
+  workspace launcher, crates.io owner `slaptijack`); `tmxr-proto` …
+  `tmxr-client` were free. Needs a package name decided (e.g. `tmxr-cli`
+  installing the `tmxr` binary) plus hrdr's `publish-crates` job with its
+  topological order.
+- **AUR (`tmxr-bin`), Homebrew tap, Scoop bucket**: need kryptic-sh/tmxr added
+  to the org secrets `AUR_SSH_KEY`, `BREW_SSH_KEY` and `SCOOP_SSH_KEY`, which
+  are limited to selected repos (changing that needs `admin:org`), then hrdr's
+  `aur-bin`, `brew-tap`, `scoop-bucket` jobs and `pkg/` templates renamed.
+- **Alpine `.apk`**: needs only hrdr's `alpine` job and
+  `pkg/alpine/APKBUILD.in`.
+- **Site entry** on kryptic-sh.github.io (plan/14 lists the files).
+
 ## Cross-repo work
 
-- **hjkl `$TMXR` fall-through: committed in hjkl, not pushed.** hjkl commit
-  `074ef614` ("feat(app): hand edge navigation to tmxr panes", on hjkl `main`,
-  one ahead of `origin/main`) makes `dispatch_tmux_navigate` run
-  `tmxr select-pane` when `$TMXR` is set, checked before `$TMUX` (the decision
-  is `handoff_program` in `apps/hjkl/src/app/window.rs`, unit-tested). hjkl's
-  workspace fmt, clippy and tests passed locally (Windows). Left unpushed
-  because pushing to hjkl was not part of the tmxr work the owner authorised;
-  push it, then milestone M4's navigator crosses from hjkl splits into tmxr
-  panes. Not tested end to end with a real hjkl in a tmxr pane.
+- **hjkl `$TMXR` fall-through** is in hjkl `main` (`074ef614`, CI green on
+  2026-10-09) but not in an hjkl release yet: `dispatch_tmux_navigate` runs
+  `tmxr select-pane` when `$TMXR` is set. Not tested end to end with a real hjkl
+  in a tmxr pane.
 - **nvim navigation.** vim-tmux-navigator shells out to `tmux`; a snippet or
   plugin option calling `tmxr select-pane` is needed for plain nvim.
 
 ## Not yet verified
 
-- The release pipeline (phase 2 of plan/14) does not exist yet; nothing about
-  packaging has been exercised.
+- The `.deb` and `.rpm` packages are built and their contents listed in CI, but
+  were never installed on a Debian or Fedora system; the macOS and Linux release
+  binaries were not run outside CI's smoke step.
