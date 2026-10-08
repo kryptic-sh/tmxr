@@ -44,6 +44,9 @@ disable-when-zoomed = false
 style = "bg=#{@thm_mantle},fg=#{@thm_fg}"
 left = ""
 right = "#{E:@status_session}#{E:@status_host}"
+# tmux's defaults; the tmux config sets neither.
+left-length = 10
+right-length = 40
 # catppuccin's "basic" window style, with the config's " #W" window text.
 window-format = "#[fg=#{@thm_crust},bg=#{@thm_overlay2}] #I #[fg=#{@thm_fg},bg=#{@thm_surface0}] #W#{?window_flags, #{window_flags},} #[default]"
 window-current-format = "#[fg=#{@thm_crust},bg=#{@thm_mauve}] #I #[fg=#{@thm_fg},bg=#{@thm_surface1}] #W#{?window_flags, #{window_flags},} #[default]"

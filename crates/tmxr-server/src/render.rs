@@ -320,10 +320,19 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
     }
 
     let right = format::expand(&srv.cfg.status.right, &vars);
-    let right_w = runs_width(&right).min(cols);
+    let right_w = runs_width(&right)
+        .min(srv.cfg.status.right_length)
+        .min(cols);
     let limit = cols - right_w;
     let left = format::expand(&srv.cfg.status.left, &vars);
-    let mut x = draw_runs(buf, 0, y, limit, base, &left);
+    let mut x = draw_runs(
+        buf,
+        0,
+        y,
+        limit.min(srv.cfg.status.left_length),
+        base,
+        &left,
+    );
     for (idx, wid) in &session.windows {
         let Some(win) = srv.windows.get(wid) else {
             continue;

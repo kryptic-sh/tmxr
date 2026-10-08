@@ -33,6 +33,8 @@ pub(super) fn run(
                 format!("history-limit {}", c.history_limit),
                 format!("display-time {}", c.display_time),
                 format!("status-interval {}", c.status_interval),
+                format!("status-left-length {}", c.status.left_length),
+                format!("status-right-length {}", c.status.right_length),
                 format!("repeat-time {}", c.repeat_time),
                 format!("default-terminal {}", c.default_terminal),
                 format!("extended-keys {}", c.extended_keys),
@@ -114,6 +116,9 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
         v.parse::<u64>()
             .map_err(|_| format!("{name}: bad number {v}"))
     };
+    let length = |v: &str| {
+        num(v).and_then(|n| u16::try_from(n).map_err(|_| format!("{name}: too large: {v}")))
+    };
     let c = &mut srv.cfg;
     match name {
         "prefix" => {
@@ -139,6 +144,8 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
         "set-clipboard" => need()?.clone_into(&mut c.set_clipboard),
         "status-left" => need()?.clone_into(&mut c.status.left),
         "status-right" => need()?.clone_into(&mut c.status.right),
+        "status-left-length" => c.status.left_length = length(need()?)?,
+        "status-right-length" => c.status.right_length = length(need()?)?,
         "status-style" => need()?.clone_into(&mut c.status.style),
         "window-status-format" => need()?.clone_into(&mut c.status.window_format),
         "window-status-current-format" => need()?.clone_into(&mut c.status.window_current_format),

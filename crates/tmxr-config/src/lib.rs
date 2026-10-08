@@ -58,6 +58,11 @@ pub struct Status {
     pub style: String,
     pub left: String,
     pub right: String,
+    /// Most cells `left` may take (tmux's `status-left-length`).
+    pub left_length: u16,
+    /// Most cells `right` may take (tmux's `status-right-length`); a longer
+    /// right side is cut at its end so the window list keeps its room.
+    pub right_length: u16,
     pub window_format: String,
     pub window_current_format: String,
     pub pane_border_style: String,

@@ -123,7 +123,12 @@ defaults above are expressed in that language rather than hard-coded, so users
 can restyle it. The format engine is in `tmxr-command` (see
 [10](10-config-and-commands.md)).
 
-`hjkl-statusline` was considered for this: its `Bar`/`Segment` model is an
-editor status line (mode, file, cursor) without per-segment `#[style]` runs, so
-it is used only where it fits (truncation/width math) rather than as the status
-line model. Decided at implementation time; recorded either way.
+As in tmux, `status-left-length` (10) and `status-right-length` (40) cap the two
+sides, and the window list takes the cells between them. A right side that is
+longer (a long hostname or session name) is cut at its end rather than pushing
+the window list off the line.
+
+`hjkl-statusline` was considered for this and not used: its `Bar`/`Segment`
+model is an editor status line (mode, file, cursor) without per-segment
+`#[style]` runs. tmxr draws the status line itself (`render.rs`), with its own
+width math over the expanded style runs.

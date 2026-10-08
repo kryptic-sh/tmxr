@@ -742,3 +742,25 @@ fn mouse_option_turns_the_client_terminal_mouse_on_and_off() {
     t.run(&["set-option", "-g", "mouse", "on"]);
     wait_mode(&s, true);
 }
+
+#[test]
+fn long_status_right_is_cut_before_the_window_list() {
+    // A session name this long makes the right side (session and host
+    // modules) wider than status-right-length, like a long hostname does.
+    let name = "a-session-name-long-enough-to-crowd-the-status-line";
+    let t = Tmxr::new("statuslen");
+    let s = t.attach(&["new", "-s", name, "-n", "first"]);
+    s.wait_for("status line", |text| text.contains("first"));
+    t.run(&["new-window", "-t", name, "-n", "second"]);
+    s.wait_for("both windows in full", |_| {
+        let text: String = s.status_cells().iter().map(|c| c.0.clone()).collect();
+        text.contains("first") && text.contains("second")
+    });
+    let cells = s.status_cells();
+    let right_start = cells.iter().position(|c| c.0 == "\u{2588}").unwrap();
+    assert_eq!(
+        usize::from(COLS) - right_start,
+        40,
+        "right side is status-right-length"
+    );
+}
