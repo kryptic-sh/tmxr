@@ -41,6 +41,7 @@ impl Server {
             full_redraw: true,
             last_input: Instant::now(),
             drag: None,
+            press: None,
             status_ranges: Vec::new(),
             mouse: false,
         });

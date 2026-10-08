@@ -82,6 +82,8 @@ pub struct CopyMode {
     last_jump: Option<(Jump, char)>,
     /// `set-mark`: a position `jump-to-mark` returns to.
     mark: Option<(usize, usize)>,
+    /// `copy-mode -e`: scrolling back to the bottom leaves copy mode.
+    pub scroll_exit: bool,
 }
 
 /// Columns where `needle` starts in `line`: literal, and case-insensitive
@@ -258,6 +260,7 @@ impl CopyMode {
             pending_jump: None,
             last_jump: None,
             mark: None,
+            scroll_exit: false,
         }
     }
 
@@ -273,6 +276,7 @@ impl CopyMode {
         self.search.clone_from(&old.search);
         self.mark = old.mark.map(clamp);
         self.last_jump = old.last_jump;
+        self.scroll_exit = old.scroll_exit;
         self.scroll_to_cursor();
     }
 
@@ -821,6 +825,13 @@ pub fn command(
         other => {
             if !cm.apply_counted(other, args.first().map(String::as_str)) {
                 return Err(format!("unknown copy-mode command: {other}"));
+            }
+            let scrolled_out = matches!(other, "scroll-down" | "page-down")
+                && cm.scroll_exit
+                && cm.anchor.is_none()
+                && cm.position().0 == 0;
+            if scrolled_out {
+                leave(srv, pane);
             }
         }
     }

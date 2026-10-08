@@ -93,7 +93,7 @@ pub const COMMANDS: &[CommandSpec] = &[
         ANY,
         "[-p prompt] command"
     ),
-    cmd!("copy-mode", None, "eut:", 0, 0, "[-eu] [-t target-pane]"),
+    cmd!("copy-mode", None, "eMut:", 0, 0, "[-eMu] [-t target-pane]"),
     cmd!(
         "delete-buffer",
         Some("deleteb"),
@@ -305,10 +305,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "resize-pane",
         Some("resizep"),
-        "DLRt:Ux:y:Z",
+        "DLMRt:Ux:y:Z",
         0,
         1,
-        "[-DLRUZ] [-x width] [-y height] [-t target-pane] [adjustment]"
+        "[-DLMRUZ] [-x width] [-y height] [-t target-pane] [adjustment]"
     ),
     cmd!(
         "respawn-pane",
@@ -371,10 +371,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "send-keys",
         Some("send"),
-        "lN:t:X",
+        "lMN:t:X",
         0,
         ANY,
-        "[-lX] [-N repeat-count] [-t target-pane] key ..."
+        "[-lMX] [-N repeat-count] [-t target-pane] key ..."
     ),
     cmd!("send-prefix", None, "t:", 0, 0, "[-t target-pane]"),
     cmd!(

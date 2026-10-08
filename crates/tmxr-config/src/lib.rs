@@ -314,7 +314,7 @@ mod tests {
         let cfg = defaults();
         let env = |_: &str| None;
         for (table, key, b) in cfg.binds() {
-            key.parse::<tmxr_command::Key>()
+            key.parse::<tmxr_command::BindKey>()
                 .unwrap_or_else(|e| panic!("{table} {key}: {e}"));
             let cmds = tmxr_command::tokenize(&b.cmd, &env)
                 .unwrap_or_else(|e| panic!("{table} {key}: {e}"));

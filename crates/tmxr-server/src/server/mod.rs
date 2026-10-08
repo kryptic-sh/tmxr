@@ -75,6 +75,8 @@ pub struct Attached {
     pub full_redraw: bool,
     pub last_input: Instant,
     pub drag: Option<crate::mouse::Drag>,
+    /// The mouse button being held, if any.
+    pub press: Option<crate::mouse::Press>,
     pub status_ranges: crate::render::StatusRanges,
     /// Whether this client was last told to capture the mouse.
     pub mouse: bool,
@@ -410,6 +412,7 @@ impl Server {
             key: None,
             cwd: hello.map(|h| PathBuf::from(&h.cwd)),
             env: hello.map(|h| h.env.clone()).unwrap_or_default(),
+            mouse: None,
         }
     }
 

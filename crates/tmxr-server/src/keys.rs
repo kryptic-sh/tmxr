@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use tmxr_command::Key;
+use tmxr_command::BindKey;
 use tmxr_config::Config;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15,7 +15,7 @@ pub struct BindSpec {
 
 #[derive(Debug, Default, Clone)]
 pub struct KeyTables {
-    tables: HashMap<String, HashMap<Key, BindSpec>>,
+    tables: HashMap<String, HashMap<BindKey, BindSpec>>,
 }
 
 impl KeyTables {
@@ -25,7 +25,7 @@ impl KeyTables {
         let mut t = Self::default();
         let mut errors = Vec::new();
         for (table, key, bind) in cfg.binds() {
-            match key.parse::<Key>() {
+            match key.parse::<BindKey>() {
                 Ok(k) => t.bind(
                     table,
                     k,
@@ -41,18 +41,18 @@ impl KeyTables {
         (t, errors)
     }
 
-    pub fn get(&self, table: &str, key: &Key) -> Option<&BindSpec> {
+    pub fn get(&self, table: &str, key: &BindKey) -> Option<&BindSpec> {
         self.tables.get(table)?.get(key)
     }
 
-    pub fn bind(&mut self, table: &str, key: Key, spec: BindSpec) {
+    pub fn bind(&mut self, table: &str, key: BindKey, spec: BindSpec) {
         self.tables
             .entry(table.to_owned())
             .or_default()
             .insert(key, spec);
     }
 
-    pub fn unbind(&mut self, table: &str, key: &Key) -> bool {
+    pub fn unbind(&mut self, table: &str, key: &BindKey) -> bool {
         self.tables
             .get_mut(table)
             .is_some_and(|t| t.remove(key).is_some())
@@ -63,7 +63,7 @@ impl KeyTables {
     }
 
     /// Every bind, sorted by table then key name.
-    pub fn list(&self, table: Option<&str>) -> Vec<(String, Key, BindSpec)> {
+    pub fn list(&self, table: Option<&str>) -> Vec<(String, BindKey, BindSpec)> {
         let mut out: Vec<_> = self
             .tables
             .iter()
@@ -83,7 +83,7 @@ mod tests {
     fn default_tables_resolve_the_config_binds() {
         let (t, errors) = KeyTables::from_config(&tmxr_config::defaults());
         assert!(errors.is_empty(), "{errors:?}");
-        let k = |s: &str| s.parse::<Key>().unwrap();
+        let k = |s: &str| s.parse::<BindKey>().unwrap();
         assert_eq!(
             t.get("prefix", &k("%")).unwrap().cmd,
             "split-window -h -c \"#{pane_current_path}\""

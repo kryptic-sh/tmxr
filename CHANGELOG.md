@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Mouse keys**: `MouseDown1Pane`, `MouseDrag1Border`, `MouseDragEnd1Pane`,
+  `WheelUpPane`, `MouseDown1Status` and the rest of tmux's mouse key names can
+  be bound and unbound in any key table, with `-t =` for the pane or window
+  under the mouse and the `-M` flags of `send-keys`, `copy-mode` and
+  `resize-pane`. The mouse behaviour that was built in is now default binds, so
+  `unbind -n WheelUpPane` (for example) turns one part of it off.
+- `copy-mode -e`: scrolling back to the bottom leaves copy mode, as the wheel
+  does. The flag was accepted before but did nothing.
+- `#{mouse_any_flag}`: whether the pane's program asked for the mouse.
+
 ## [0.1.0] - 2026-10-09
 
 ### Added

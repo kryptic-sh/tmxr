@@ -20,8 +20,16 @@ pub(super) fn run(
     let pos = a.positional();
     match p.name() {
         "copy-mode" => {
+            if a.has('M') {
+                return crate::mouse::copy_mode_drag(srv, ctx).map(|()| true);
+            }
             let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
             crate::copy::enter(srv, pid, a.has('u'));
+            if a.has('e')
+                && let Some(cm) = srv.panes.get_mut(&pid).and_then(|p| p.copy.as_mut())
+            {
+                cm.scroll_exit = true;
+            }
         }
         "paste-buffer" => {
             let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;

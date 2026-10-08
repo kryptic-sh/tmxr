@@ -215,6 +215,38 @@ impl Screen {
         }
     }
 
+    /// Wait until the client has (or has not) asked its terminal for the
+    /// mouse, so mouse input reaches it.
+    fn wait_mouse(&self, on: bool) {
+        let mode = || {
+            format!(
+                "{:?}",
+                self.emu.lock().unwrap().screen().mouse_protocol_mode()
+            )
+        };
+        let deadline = Instant::now() + TIMEOUT;
+        while (mode() != "None") != on {
+            assert!(
+                Instant::now() < deadline,
+                "mouse {on} never applied: {}",
+                mode()
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    /// Send an SGR mouse event at a 0-based screen cell: `code` 0/1/2 a
+    /// button, +32 a drag, 64/65 the wheel; `release` ends a click.
+    fn mouse(&self, code: u8, col: u16, row: u16, release: bool) {
+        let end = if release { 'm' } else { 'M' };
+        self.send(format!("\x1b[<{code};{};{}{end}", col + 1, row + 1).as_bytes());
+    }
+
+    fn click(&self, code: u8, col: u16, row: u16) {
+        self.mouse(code, col, row, false);
+        self.mouse(code, col, row, true);
+    }
+
     fn wait_exit(&mut self) {
         let deadline = Instant::now() + TIMEOUT;
         while Instant::now() < deadline {
@@ -743,24 +775,117 @@ fn mouse_option_turns_the_client_terminal_mouse_on_and_off() {
     let t = Tmxr::new("mouse");
     let s = t.attach(&["new", "-s", "m"]);
     s.wait_for("status line", |text| text.contains('m'));
-    let mode = |s: &Screen| format!("{:?}", s.emu.lock().unwrap().screen().mouse_protocol_mode());
-    let wait_mode = |s: &Screen, on: bool| {
-        let deadline = Instant::now() + TIMEOUT;
-        while (mode(s) != "None") != on {
-            assert!(
-                Instant::now() < deadline,
-                "mouse {on} never applied: {}",
-                mode(s)
-            );
-            std::thread::sleep(Duration::from_millis(50));
-        }
-    };
     // `mouse on` (the default) captures the mouse once attached.
-    wait_mode(&s, true);
+    s.wait_mouse(true);
     t.run(&["set-option", "-g", "mouse", "off"]);
-    wait_mode(&s, false);
+    s.wait_mouse(false);
     t.run(&["set-option", "-g", "mouse", "on"]);
-    wait_mode(&s, true);
+    s.wait_mouse(true);
+}
+
+#[test]
+fn default_mouse_binds_focus_scroll_and_select_windows() {
+    let t = Tmxr::new("mousedef");
+    let s = t.attach(&["new", "-s", "md", "-n", "first"]);
+    s.wait_for("status line", |text| text.contains("first"));
+    s.wait_mouse(true);
+    let format_is = |f: &str, want: &str, what: &str| {
+        t.wait_run(&["display-message", "-p", "-t", "md", f], what, |o| {
+            o.trim() == want
+        });
+    };
+    t.run(&["split-window", "-h", "-t", "md"]);
+    format_is("#{pane_index}", "1", "the new pane focused");
+    // MouseDown1Pane: a click in the left pane focuses it.
+    s.click(0, 5, 3);
+    format_is("#{pane_index}", "0", "the clicked pane focused");
+    // WheelUpPane enters copy mode; WheelDownPane back at the bottom leaves
+    // it (copy-mode -e).
+    s.mouse(64, 5, 3, false);
+    format_is("#{pane_in_mode}", "1", "copy mode from the wheel");
+    s.mouse(65, 5, 3, false);
+    format_is("#{pane_in_mode}", "0", "copy mode left at the bottom");
+    // MouseDown1Status: a click on a window's name selects it.
+    t.run(&["new-window", "-t", "md", "-n", "second"]);
+    format_is("#{window_index}", "1", "the new window current");
+    s.wait_for("both windows listed", |text| text.contains("second"));
+    let cells = s.status_cells();
+    let col = (0..cells.len())
+        .find(|&i| {
+            cells[i..]
+                .iter()
+                .take(5)
+                .map(|c| c.0.as_str())
+                .collect::<String>()
+                == "first"
+        })
+        .expect("first window in the status line");
+    s.click(0, u16::try_from(col).unwrap(), ROWS - 1);
+    format_is("#{window_index}", "0", "the clicked window current");
+}
+
+#[test]
+fn dragging_in_a_pane_copies_the_selection() {
+    let t = Tmxr::new("mousedrag");
+    let s = t.attach(&["new", "-s", "dr"]);
+    s.wait_for("status line", |text| text.contains("dr"));
+    s.wait_mouse(true);
+    s.send(b"echo @drag-me\r");
+    s.wait_for("echoed", |text| {
+        text.lines().any(|l| l.trim_end() == "@drag-me")
+    });
+    let row = s
+        .text()
+        .lines()
+        .position(|l| l.trim_end() == "@drag-me")
+        .expect("output line");
+    let row = u16::try_from(row).unwrap();
+    // MouseDrag1Pane starts a selection in copy mode, the drag extends it and
+    // MouseDragEnd1Pane copies it and leaves copy mode.
+    s.mouse(0, 0, row, false);
+    s.mouse(32, 3, row, false);
+    s.mouse(32, 7, row, false);
+    s.mouse(0, 7, row, true);
+    t.wait_run(&["show-buffer"], "the selection copied", |o| {
+        o.trim_end() == "@drag-me"
+    });
+    t.wait_run(
+        &["display-message", "-p", "-t", "dr", "#{pane_in_mode}"],
+        "copy mode left",
+        |o| o.trim() == "0",
+    );
+}
+
+#[test]
+fn mouse_keys_can_be_bound_and_unbound() {
+    let t = Tmxr::new("mousebind");
+    let s = t.attach(&["new", "-s", "mb"]);
+    s.wait_for("status line", |text| text.contains("mb"));
+    s.wait_mouse(true);
+    t.run(&[
+        "bind-key",
+        "-n",
+        "MouseDown3Pane",
+        "rename-window",
+        "clicked",
+    ]);
+    t.run(&["unbind-key", "-n", "WheelUpPane"]);
+    let keys = t.run(&["list-keys", "-T", "root"]);
+    assert!(
+        keys.contains("MouseDown3Pane rename-window clicked") && !keys.contains("WheelUpPane"),
+        "{keys}"
+    );
+    // The unbound wheel goes to the program instead of into copy mode; the
+    // right click after it shows both were handled.
+    s.mouse(64, 5, 3, false);
+    s.click(2, 5, 3);
+    t.wait_run(
+        &["display-message", "-p", "-t", "mb", "#{window_name}"],
+        "the right-click bind run",
+        |o| o.trim() == "clicked",
+    );
+    let mode = t.run(&["display-message", "-p", "-t", "mb", "#{pane_in_mode}"]);
+    assert_eq!(mode.trim(), "0", "unbound WheelUpPane entered copy mode");
 }
 
 #[test]

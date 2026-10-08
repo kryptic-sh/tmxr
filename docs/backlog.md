@@ -56,8 +56,10 @@ what was not.
   / `M-p` are bells only (no `monitor-activity` / `monitor-silence`).
   `find-window` matches window names through the picker, not pane contents or
   titles as tmux's does.
-- **Mouse binds**: mouse events are built into `mouse.rs` and cannot be rebound
-  (`MouseDown1Pane` and friends are not key names).
+- **Mouse keys**: `DoubleClick1Pane` / `TripleClick1Pane` (tmux's word and line
+  selection in copy mode) and `SecondClick` are not recognised; there is no
+  click timing. `MouseDown1StatusLeft` / `StatusRight` / `StatusDefault` are not
+  either: the whole status line is `Status`.
 - **No 256-colour fallback, by design for now**: colours are always 24-bit RGB,
   which is what the tmux config asks for (`terminal-overrides ",*:RGB"` forces
   RGB on every terminal). Only for a user whose terminal lacks true colour (e.g.

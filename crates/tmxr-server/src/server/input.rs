@@ -53,6 +53,11 @@ impl Server {
         }
     }
 
+    /// The key table for a pane in copy mode.
+    pub fn copy_table(&self) -> &'static str {
+        "copy-mode-vi"
+    }
+
     pub fn active_pane_of_session(&self, session: SessionId) -> Option<PaneId> {
         let w = self.sessions.get(&session)?.current_window()?;
         self.windows.get(&w).map(|w| w.active)
@@ -94,7 +99,7 @@ impl Server {
         att.repeat_until = None;
         if table != "root" {
             att.dirty = true;
-            if let Some(b) = self.keys.get(&table, &key).cloned() {
+            if let Some(b) = self.keys.get(&table, &key.into()).cloned() {
                 if !repeating || b.repeat {
                     if b.repeat
                         && let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut())
@@ -140,12 +145,12 @@ impl Server {
                 self.mark_window_dirty(window);
                 return;
             }
-            if let Some(b) = self.keys.get("copy-mode-vi", &key).cloned() {
+            if let Some(b) = self.keys.get(self.copy_table(), &key.into()).cloned() {
                 self.run_bind(id, &b.cmd, Some(ev));
             }
             return;
         }
-        if let Some(b) = self.keys.get("root", &key).cloned() {
+        if let Some(b) = self.keys.get("root", &key.into()).cloned() {
             self.run_bind(id, &b.cmd, Some(ev));
             return;
         }
@@ -167,10 +172,14 @@ impl Server {
             client: Some(id),
             pane,
             key,
-            cwd: None,
-            env: Vec::new(),
+            ..Ctx::default()
         };
-        let out = crate::cmds::run_string(self, &ctx, cmd);
+        self.run_bind_ctx(id, &ctx, cmd);
+    }
+
+    /// Run a bind's command list in `ctx`, reporting to client `id`.
+    pub fn run_bind_ctx(&mut self, id: ClientId, ctx: &Ctx, cmd: &str) {
+        let out = crate::cmds::run_string(self, ctx, cmd);
         self.report(id, &out);
     }
 

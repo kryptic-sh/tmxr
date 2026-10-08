@@ -2,7 +2,7 @@
 
 use std::fmt::Write as _;
 
-use tmxr_command::{Key, Parsed};
+use tmxr_command::{BindKey, Parsed};
 
 use super::{Ctx, Outcome, join_args};
 use crate::keys::BindSpec;
@@ -23,7 +23,7 @@ pub(super) fn run(
             } else {
                 a.value('T').unwrap_or("prefix")
             };
-            let key: Key = pos[0]
+            let key: BindKey = pos[0]
                 .parse()
                 .map_err(|e: tmxr_command::keys::UnknownKey| e.to_string())?;
             let cmd = if pos.len() == 2 && pos[1].contains(' ') {
@@ -64,7 +64,7 @@ pub(super) fn run(
             if a.has('a') {
                 srv.keys.unbind_all(table);
             } else {
-                let key: Key = pos
+                let key: BindKey = pos
                     .first()
                     .ok_or("unbind-key needs a key")?
                     .parse()
@@ -77,7 +77,7 @@ pub(super) fn run(
             let table = a.value('T');
             let key = pos
                 .first()
-                .map(|k| k.parse::<Key>().map_err(|e| e.to_string()))
+                .map(|k| k.parse::<BindKey>().map_err(|e| e.to_string()))
                 .transpose()?;
             let mut binds = srv.keys.list(table);
             if let Some(k) = key {

@@ -101,19 +101,7 @@ impl FromStr for Key {
         {
             return parse_bracketed(inner).ok_or_else(err);
         }
-        let mut mods = KeyModifiers::NONE;
-        let mut rest = s;
-        // Strip `C-` / `M-` / `S-` prefixes; a lone `-` or a name like `C-`
-        // (the key `-` with Ctrl) is handled by requiring something after.
-        while rest.len() > 2 && rest.as_bytes()[1] == b'-' {
-            match rest.as_bytes()[0] {
-                b'C' | b'c' => mods |= KeyModifiers::CONTROL,
-                b'M' | b'm' => mods |= KeyModifiers::ALT,
-                b'S' | b's' => mods |= KeyModifiers::SHIFT,
-                _ => break,
-            }
-            rest = &rest[2..];
-        }
+        let (mods, rest) = split_mods(s);
         if let Some(n) = rest.strip_prefix('F').and_then(|n| n.parse::<u8>().ok())
             && (1..=24).contains(&n)
         {
@@ -131,6 +119,38 @@ impl FromStr for Key {
             _ => Err(err()),
         }
     }
+}
+
+/// Strip tmux's `C-` / `M-` / `S-` prefixes from a key name. A lone `-` or
+/// a name like `C-` (the key `-` with Ctrl) is handled by requiring something
+/// after each prefix.
+pub(crate) fn split_mods(s: &str) -> (KeyModifiers, &str) {
+    let mut mods = KeyModifiers::NONE;
+    let mut rest = s;
+    while rest.len() > 2 && rest.as_bytes()[1] == b'-' {
+        match rest.as_bytes()[0] {
+            b'C' | b'c' => mods |= KeyModifiers::CONTROL,
+            b'M' | b'm' => mods |= KeyModifiers::ALT,
+            b'S' | b's' => mods |= KeyModifiers::SHIFT,
+            _ => break,
+        }
+        rest = &rest[2..];
+    }
+    (mods, rest)
+}
+
+/// Write `mods` as tmux's `C-` / `M-` / `S-` prefixes.
+pub(crate) fn write_mods(f: &mut fmt::Formatter<'_>, mods: KeyModifiers) -> fmt::Result {
+    if mods.contains(KeyModifiers::CONTROL) {
+        f.write_str("C-")?;
+    }
+    if mods.contains(KeyModifiers::ALT) {
+        f.write_str("M-")?;
+    }
+    if mods.contains(KeyModifiers::SHIFT) {
+        f.write_str("S-")?;
+    }
+    Ok(())
 }
 
 /// The inside of an hjkl `<…>` key: `C-` / `S-` / `A-` / `M-` prefixes
@@ -184,15 +204,7 @@ fn parse_bracketed(inner: &str) -> Option<Key> {
 
 impl fmt::Display for Key {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.mods.contains(KeyModifiers::CONTROL) {
-            f.write_str("C-")?;
-        }
-        if self.mods.contains(KeyModifiers::ALT) {
-            f.write_str("M-")?;
-        }
-        if self.mods.contains(KeyModifiers::SHIFT) {
-            f.write_str("S-")?;
-        }
+        write_mods(f, self.mods)?;
         match self.code {
             KeyCode::Char(' ') => f.write_str("Space"),
             KeyCode::Char(c) => write!(f, "{c}"),

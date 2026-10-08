@@ -4,7 +4,8 @@
 //! (`N` or `=N`), `+`/`-` (next/previous, optionally `+N`), `!` / `{last}`,
 //! `^` / `{start}`, `$` / `{end}`, name or name prefix. Panes: `%id`, index,
 //! `+`/`-`, `!` / `{last}`, `{left}`/`{right}`/`{up}`/`{down}`. Any part may be
-//! empty to mean "current".
+//! empty to mean "current". In a mouse bind, `=` or `{mouse}` is the window or
+//! pane under the mouse.
 
 use crate::cmds::Ctx;
 use crate::layout::{Dir, neighbour};
@@ -34,6 +35,11 @@ pub fn current_session(srv: &Server, ctx: &Ctx) -> Option<SessionId> {
         .values()
         .max_by_key(|s| s.last_used)
         .map(|s| s.id)
+}
+
+/// `=` / `{mouse}`: the mouse target of a mouse bind.
+fn is_mouse(spec: &str) -> bool {
+    matches!(spec, "=" | "{mouse}")
 }
 
 fn current_pane(srv: &Server, ctx: &Ctx, session: SessionId) -> Option<PaneId> {
@@ -112,6 +118,11 @@ pub fn destination(srv: &Server, ctx: &Ctx, spec: &str) -> Res<(SessionId, Optio
 /// Resolve a window target to `(session, index, window)`.
 pub fn window(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, u32, WindowId)> {
     let spec = spec.unwrap_or("");
+    if is_mouse(spec) {
+        let t = ctx.mouse.ok_or("no mouse target")?;
+        let (idx, wid) = t.window.ok_or("no window under the mouse")?;
+        return Ok((t.session, idx, wid));
+    }
     if let Some(id) = spec
         .strip_prefix('@')
         .map(|r| r.split('.').next().unwrap_or(r))
@@ -222,6 +233,12 @@ fn window_index(srv: &Server, sid: SessionId, spec: &str) -> Res<u32> {
 /// Resolve a pane target to `(session, window, pane)`.
 pub fn pane(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, WindowId, PaneId)> {
     let spec = spec.unwrap_or("");
+    if is_mouse(spec) {
+        let t = ctx.mouse.ok_or("no mouse target")?;
+        let pane = t.pane.ok_or("no pane under the mouse")?;
+        let p = srv.panes.get(&pane).ok_or("no pane under the mouse")?;
+        return Ok((t.session, p.window, pane));
+    }
     if let Some(id) = spec
         .strip_prefix('%')
         .and_then(|n| n.parse::<PaneId>().ok())

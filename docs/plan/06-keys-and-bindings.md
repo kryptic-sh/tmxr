@@ -23,10 +23,17 @@ Key names are tmux's: `C-x`, `M-x`, `S-x`, `C-M-x`, `Enter`, `Escape`, `Tab`,
 punctuation (`'`, `"`, `;`, `%`, `\`). hjkl's notation is accepted too: `<C-b>`,
 `<M-h>`, `<CR>`, `<Esc>`, `<lt>` and the other names hjkl-keymap reads.
 
-Mouse events are not keys in tables: `mouse on` behaviour (click to focus, drag
-a border, wheel and drag into copy mode, drag-end copy, status-line clicks) is
-built into the server (`crates/tmxr-server/src/mouse.rs`) and matches tmux's
-default mouse binds plus tmux-yank's `MouseDragEnd1Pane`; it cannot be rebound.
+Mouse events are keys, as in tmux: `MouseDown1Pane`, `MouseUp3Pane`,
+`MouseDrag1Border`, `MouseDragEnd1Pane`, `WheelUpPane`, `MouseDown1Status` and
+so on (buttons 1–3; `Pane`, `Border` or `Status`; `C-` / `M-` / `S-` prefixes).
+A pane in copy mode looks them up in the copy-mode table, everything else in
+`root`; a pane event nothing binds goes to the pane's program. Mouse binds run
+with the mouse as their target: `-t =` (or `{mouse}`) is the pane or window
+under it, `send-keys -M` passes the event to the program, `copy-mode -M` starts
+a drag selection and `resize-pane -M` drags a border;
+`send-keys -X begin-selection` / `clear-selection` from a mouse bind act at the
+mouse. `defaults.toml` binds tmux's defaults plus tmux-yank's
+`MouseDragEnd1Pane`. `DoubleClick` / `TripleClick` keys are not recognised.
 
 `list-keys -N` (bound to `prefix ?`) shows every bind that has a note — the
 default config gives every bind a note, matching what `plugin-notes.sh` does for

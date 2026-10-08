@@ -111,6 +111,15 @@ processes = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "top",
 # tmux.conf: Shift Alt vim keys to switch windows.
 "M-h" = { cmd = "previous-window", note = "Previous window" }
 "M-l" = { cmd = "next-window", note = "Next window" }
+# The mouse (with `mouse on`), as tmux's own binds: a program that asked for
+# the mouse gets it; otherwise click to focus, drag to select into copy mode,
+# wheel up into copy mode, drag a border to resize, click a window in the
+# status line. A pane event nothing binds goes to the program.
+"MouseDown1Pane" = { cmd = "select-pane -t = ; send-keys -M", note = "Focus the pane clicked" }
+"MouseDrag1Pane" = { cmd = "if-shell -F '#{mouse_any_flag}' 'send-keys -M' 'copy-mode -M'", note = "Select text by dragging" }
+"WheelUpPane" = { cmd = "if-shell -F '#{mouse_any_flag}' 'send-keys -M' 'copy-mode -e ; send-keys -X -N 5 scroll-up'", note = "Scroll up into copy mode" }
+"MouseDrag1Border" = { cmd = "resize-pane -M", note = "Resize panes by dragging a border" }
+"MouseDown1Status" = { cmd = "select-window -t =", note = "Select the window clicked" }
 
 [keys.prefix]
 # tmux.conf: vim style pane selection.
@@ -275,3 +284,10 @@ processes = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "top",
 "M-x" = { cmd = "send-keys -X jump-to-mark", note = "Jump to the mark (and back)" }
 "%" = { cmd = "send-keys -X next-matching-bracket", note = "Matching bracket" }
 "r" = { cmd = "send-keys -X refresh-from-pane", note = "Refresh from the live pane" }
+# The mouse in copy mode: click moves the cursor, a drag selects and its end
+# copies (tmux-yank's MouseDragEnd1Pane), the wheel scrolls.
+"MouseDown1Pane" = { cmd = "select-pane ; send-keys -X clear-selection", note = "Move the cursor to the click" }
+"MouseDrag1Pane" = { cmd = "select-pane ; send-keys -X begin-selection", note = "Select by dragging" }
+"MouseDragEnd1Pane" = { cmd = "send-keys -X copy-selection-and-cancel", note = "Copy the dragged selection" }
+"WheelUpPane" = { cmd = "select-pane ; send-keys -X -N 5 scroll-up", note = "Scroll up" }
+"WheelDownPane" = { cmd = "select-pane ; send-keys -X -N 5 scroll-down", note = "Scroll down" }

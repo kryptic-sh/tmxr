@@ -34,6 +34,9 @@ pub struct Ctx {
     pub cwd: Option<PathBuf>,
     /// The command client's environment.
     pub env: Vec<(String, String)>,
+    /// The mouse event that triggered a bind: the `=` target, and what
+    /// `send-keys -M`, `copy-mode -M` and `resize-pane -M` act on.
+    pub mouse: Option<crate::mouse::MouseTarget>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]

@@ -45,9 +45,10 @@ listed in [docs/backlog.md](docs/backlog.md).
 - **Session save / restore** like tmux-resurrect: `prefix C-s` / `C-r`,
   auto-save, and restore when the server starts. Each server (`-L` label) keeps
   its own saves.
-- Mouse (click to focus, drag borders, wheel into copy mode, drag to copy), OSC
-  52 and the local clipboard, and tmux passthrough (`allow-passthrough`) for
-  inline images — Unix only; see the backlog for why not Windows.
+- Mouse (click to focus, drag borders, wheel into copy mode, drag to copy), all
+  rebindable as tmux's mouse keys (`MouseDown1Pane`, `WheelUpPane`, …), OSC 52
+  and the local clipboard, and tmux passthrough (`allow-passthrough`) for inline
+  images — Unix only; see the backlog for why not Windows.
 
 ## Using it
 

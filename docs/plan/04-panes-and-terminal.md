@@ -62,8 +62,8 @@ The server encodes a crossterm `KeyEvent` for a pane from that pane's modes:
   paste.
 - Mouse → re-encoded relative to the pane's origin in the pane's requested
   protocol (X10 / normal / button / any-event; default / UTF-8 / SGR). Mouse
-  events for panes that did not ask for the mouse drive tmxr itself (focus,
-  resize drag, wheel → copy mode).
+  events go through the mouse key binds first ([06](06-keys-and-bindings.md));
+  `send-keys -M`, and any pane event nothing binds, reach the program this way.
 
 This is the piece with the most edge cases, so it is a pure function
 (`encode_key(&KeyEvent, &PaneModes) -> Vec<u8>`) with a table-driven test

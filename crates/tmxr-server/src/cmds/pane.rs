@@ -84,6 +84,9 @@ pub(super) fn run(
         }
         "navigate-pane" => navigate(srv, ctx, a)?,
         "resize-pane" => {
+            if a.has('M') {
+                return crate::mouse::resize_drag(srv, ctx).map(|()| true);
+            }
             let (_, wid, pid) = target::pane(srv, ctx, a.value('t'))?;
             if a.has('Z') {
                 let w = srv.windows.get_mut(&wid).ok_or("no window")?;
@@ -235,6 +238,9 @@ pub(super) fn run(
             }
         }
         "send-keys" => {
+            if a.has('M') {
+                return crate::mouse::forward(srv, ctx).map(|()| true);
+            }
             let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
             if a.has('X') {
                 let (name, rest) = pos.split_first().ok_or("send-keys -X needs a command")?;
@@ -244,6 +250,9 @@ pub(super) fn run(
                     if let Some(cm) = srv.panes.get_mut(&pid).and_then(|p| p.copy.as_mut()) {
                         cm.count = n.min(crate::copy::MAX_COUNT);
                     }
+                }
+                if crate::mouse::copy_command_at_mouse(srv, ctx, pid, name) {
+                    return Ok(true);
                 }
                 return crate::copy::command(srv, ctx, pid, name, rest).map(|()| true);
             }

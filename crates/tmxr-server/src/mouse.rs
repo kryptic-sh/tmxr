@@ -1,17 +1,22 @@
-//! Mouse handling for an attached client (`mouse on`).
+//! Mouse handling for an attached client (`mouse on`), as tmux does it.
 //!
-//! - A pane whose program asked for the mouse gets the event, re-encoded
-//!   relative to the pane.
-//! - Otherwise: a click focuses the pane, a drag on a border resizes, a drag
-//!   inside a pane selects in copy mode and copies on release (tmux-yank's
-//!   `MouseDragEnd1Pane`), the wheel scrolls through copy mode, and a click on
-//!   a window in the status line selects it.
+//! Each event becomes a mouse key (`MouseDown1Pane`, `WheelUpPane`,
+//! `MouseDragEnd1Pane`, …), looked up in the root table, or in the copy-mode
+//! table for a pane in copy mode. Its commands run with the mouse as their
+//! target: `-t =`, `send-keys -M` (pass the event to the pane's program),
+//! `copy-mode -M` (select by dragging) and `resize-pane -M` (drag a border).
+//! A pane event no bind claims goes to the pane's program, when it asked for
+//! the mouse. The default binds in `defaults.toml` give tmux's behaviour.
+//!
+//! A drag those commands start then follows the mouse until the button is
+//! released.
 
-use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use tmxr_command::{MouseAction, MouseKey, MouseLocation};
 
 use crate::cmds::Ctx;
 use crate::layout::Dir;
-use crate::model::{ClientId, PaneId};
+use crate::model::{ClientId, PaneId, SessionId, WindowId};
 use crate::server::{STATUS_ROWS, Server};
 
 /// An in-progress drag.
@@ -27,8 +32,36 @@ pub enum Drag {
     Select { pane: PaneId },
 }
 
-/// Lines the wheel scrolls per notch, as tmux's default binds.
-const WHEEL_LINES: usize = 5;
+/// A held mouse button: where it went down, and whether it has moved since,
+/// which turns its release into `MouseDragEnd` and locates the drag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Press {
+    pub col: u16,
+    pub row: u16,
+    pub dragged: bool,
+}
+
+/// What a mouse bind acts on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MouseTarget {
+    pub event: MouseEvent,
+    pub location: MouseLocation,
+    /// Where the key happened: the event, or for a drag the press that
+    /// started it.
+    pub col: u16,
+    pub row: u16,
+    pub session: SessionId,
+    /// The window under the mouse: its index and id.
+    pub window: Option<(u32, WindowId)>,
+    /// The pane under the mouse, or the one left of / above a border.
+    pub pane: Option<PaneId>,
+    /// The border under the mouse, as `resize-pane -M` would drag it.
+    pub border: Option<Drag>,
+}
+
+const MODS: KeyModifiers = KeyModifiers::CONTROL
+    .union(KeyModifiers::ALT)
+    .union(KeyModifiers::SHIFT);
 
 pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
     if !srv.cfg.mouse {
@@ -37,159 +70,301 @@ pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
     let Some(att) = srv.clients.get(&id).and_then(|c| c.att.as_ref()) else {
         return;
     };
-    let session = att.session;
-    let rows = att.rows;
-    let drag = att.drag;
-    if m.row >= rows.saturating_sub(STATUS_ROWS) {
-        if let MouseEventKind::Down(MouseButton::Left) = m.kind {
-            let hit = att
-                .status_ranges
-                .iter()
-                .find(|(a, b, _)| m.column >= *a && m.column < *b)
-                .map(|(_, _, idx)| *idx);
-            if let Some(idx) = hit {
-                let _ = srv.select_window(session, idx);
-            }
-        }
+    let press = att.press;
+    if follow_drag(srv, id, m) {
         return;
     }
-    let Some(wid) = srv.sessions.get(&session).and_then(|s| s.current_window()) else {
+    let here = (m.column, m.row);
+    let (action, at) = match m.kind {
+        MouseEventKind::Down(b) => {
+            set_press(
+                srv,
+                id,
+                Some(Press {
+                    col: m.column,
+                    row: m.row,
+                    dragged: false,
+                }),
+            );
+            (MouseAction::Down(button(b)), here)
+        }
+        MouseEventKind::Up(b) => {
+            set_press(srv, id, None);
+            match press {
+                Some(p) if p.dragged => (MouseAction::DragEnd(button(b)), (p.col, p.row)),
+                _ => (MouseAction::Up(button(b)), here),
+            }
+        }
+        MouseEventKind::Drag(b) => {
+            let p = press.unwrap_or(Press {
+                col: m.column,
+                row: m.row,
+                dragged: false,
+            });
+            set_press(srv, id, Some(Press { dragged: true, ..p }));
+            (MouseAction::Drag(button(b)), (p.col, p.row))
+        }
+        MouseEventKind::ScrollUp => (MouseAction::WheelUp, here),
+        MouseEventKind::ScrollDown => (MouseAction::WheelDown, here),
+        _ => return,
+    };
+    let Some(target) = locate(srv, id, m, at) else {
         return;
     };
-    let Some(win) = srv.windows.get(&wid) else {
-        return;
-    };
-    let rects = win.visible_rects();
-    let hit = rects
-        .iter()
-        .find(|(_, r)| m.column >= r.x && m.column < r.x + r.w && m.row >= r.y && m.row < r.y + r.h)
-        .map(|(p, r)| (*p, *r));
+    dispatch(srv, id, action, target);
+    // A drag a bind just started takes this event as its first motion.
+    if matches!(action, MouseAction::Drag(_)) {
+        follow_drag(srv, id, m);
+    }
+}
 
-    // Continue a drag first: it owns the mouse until the button is released.
-    if let Some(d) = drag {
-        match (d, m.kind) {
-            (Drag::Border { pane, vertical, at }, MouseEventKind::Drag(MouseButton::Left)) => {
-                let now = if vertical { m.column } else { m.row };
-                if now != at {
-                    let (dir, cells) = match (vertical, now > at) {
-                        (true, true) => (Dir::Right, now - at),
-                        (true, false) => (Dir::Left, at - now),
-                        (false, true) => (Dir::Down, now - at),
-                        (false, false) => (Dir::Up, at - now),
-                    };
+/// tmux's button numbers: 1 left, 2 middle, 3 right.
+fn button(b: MouseButton) -> u8 {
+    match b {
+        MouseButton::Left => 1,
+        MouseButton::Middle => 2,
+        MouseButton::Right => 3,
+    }
+}
+
+/// Run the bind for `action` at `target`, or pass a pane event nothing binds
+/// to the pane's program.
+fn dispatch(srv: &mut Server, id: ClientId, action: MouseAction, target: MouseTarget) {
+    let in_copy = target
+        .pane
+        .and_then(|p| srv.panes.get(&p))
+        .is_some_and(|p| p.copy.is_some());
+    let on_pane = target.location == MouseLocation::Pane;
+    let table = if on_pane && in_copy {
+        srv.copy_table()
+    } else {
+        "root"
+    };
+    let key = MouseKey {
+        action,
+        location: target.location,
+        mods: target.event.modifiers & MODS,
+    };
+    let ctx = Ctx {
+        client: Some(id),
+        pane: target
+            .pane
+            .or_else(|| srv.active_pane_of_session(target.session)),
+        mouse: Some(target),
+        ..Ctx::default()
+    };
+    match srv.keys.get(table, &key.into()).cloned() {
+        Some(b) => srv.run_bind_ctx(id, &ctx, &b.cmd),
+        None if on_pane && !in_copy => {
+            let _ = forward(srv, &ctx);
+        }
+        None => {}
+    }
+}
+
+/// Where the mouse is, as a bind sees it; `None` off every pane, border and
+/// status line.
+fn locate(
+    srv: &Server,
+    id: ClientId,
+    event: MouseEvent,
+    (col, row): (u16, u16),
+) -> Option<MouseTarget> {
+    let att = srv.clients.get(&id)?.att.as_ref()?;
+    let session = att.session;
+    let mut t = MouseTarget {
+        event,
+        location: MouseLocation::Status,
+        col,
+        row,
+        session,
+        window: None,
+        pane: None,
+        border: None,
+    };
+    let sess = srv.sessions.get(&session)?;
+    if row >= att.rows.saturating_sub(STATUS_ROWS) {
+        t.window = att
+            .status_ranges
+            .iter()
+            .find(|(a, b, _)| col >= *a && col < *b)
+            .and_then(|(_, _, idx)| Some((*idx, *sess.windows.get(idx)?)));
+        return Some(t);
+    }
+    let wid = sess.current_window()?;
+    t.window = Some((sess.current, wid));
+    let rects = srv.windows.get(&wid)?.visible_rects();
+    if let Some((pane, _)) = rects
+        .iter()
+        .find(|(_, r)| col >= r.x && col < r.x + r.w && row >= r.y && row < r.y + r.h)
+    {
+        t.location = MouseLocation::Pane;
+        t.pane = Some(*pane);
+        return Some(t);
+    }
+    let border = border_at(&rects, col, row)?;
+    t.location = MouseLocation::Border;
+    t.border = Some(border);
+    if let Drag::Border { pane, .. } = border {
+        t.pane = Some(pane);
+    }
+    Some(t)
+}
+
+/// Move an in-progress drag with the mouse, ending it when the button is
+/// released. Whether the event belonged to a drag.
+fn follow_drag(srv: &mut Server, id: ClientId, m: MouseEvent) -> bool {
+    let Some(drag) = srv
+        .clients
+        .get(&id)
+        .and_then(|c| c.att.as_ref())
+        .and_then(|a| a.drag)
+    else {
+        return false;
+    };
+    match (drag, m.kind) {
+        (Drag::Border { pane, vertical, at }, MouseEventKind::Drag(MouseButton::Left)) => {
+            let now = if vertical { m.column } else { m.row };
+            if now != at {
+                let (dir, cells) = match (vertical, now > at) {
+                    (true, true) => (Dir::Right, now - at),
+                    (true, false) => (Dir::Left, at - now),
+                    (false, true) => (Dir::Down, now - at),
+                    (false, false) => (Dir::Up, at - now),
+                };
+                if let Some(wid) = srv.panes.get(&pane).map(|p| p.window) {
                     if let Some(w) = srv.windows.get_mut(&wid) {
                         let (c, r) = (w.cols, w.rows);
                         crate::layout::resize(&mut w.layout, pane, dir, cells, c, r);
                     }
                     srv.relayout(wid);
-                    set_drag(
-                        srv,
-                        id,
-                        Some(Drag::Border {
-                            pane,
-                            vertical,
-                            at: now,
-                        }),
-                    );
                 }
-                return;
-            }
-            (Drag::Select { pane }, MouseEventKind::Drag(MouseButton::Left)) => {
-                move_copy_cursor(srv, pane, m.column, m.row);
-                return;
-            }
-            (Drag::Select { pane }, MouseEventKind::Up(MouseButton::Left)) => {
-                set_drag(srv, id, None);
-                let ctx = Ctx {
-                    client: Some(id),
-                    pane: Some(pane),
-                    ..Ctx::default()
-                };
-                let _ = crate::copy::command(srv, &ctx, pane, "copy-selection-and-cancel", &[]);
-                return;
-            }
-            (_, MouseEventKind::Up(_)) => {
-                set_drag(srv, id, None);
-                return;
-            }
-            _ => {}
-        }
-    }
-
-    let Some((pane, rect)) = hit else {
-        // On a border: start a resize drag.
-        if let MouseEventKind::Down(MouseButton::Left) = m.kind
-            && let Some(d) = border_at(&rects, m.column, m.row)
-        {
-            set_drag(srv, id, Some(d));
-        }
-        return;
-    };
-
-    let in_copy = srv.panes.get(&pane).is_some_and(|p| p.copy.is_some());
-    let wants_mouse = srv
-        .panes
-        .get(&pane)
-        .is_some_and(|p| p.emu.screen().mouse_protocol_mode() != vt100::MouseProtocolMode::None);
-
-    if wants_mouse && !in_copy {
-        if let MouseEventKind::Down(_) = m.kind {
-            srv.select_pane(pane);
-        }
-        if let Some(p) = srv.panes.get_mut(&pane) {
-            let s = p.emu.screen();
-            let bytes = tmxr_term::encode::encode_mouse(
-                &m,
-                m.column - rect.x,
-                m.row - rect.y,
-                s.mouse_protocol_mode(),
-                s.mouse_protocol_encoding(),
-            );
-            if !bytes.is_empty() {
-                let _ = p.pty.write(&bytes);
+                set_drag(
+                    srv,
+                    id,
+                    Some(Drag::Border {
+                        pane,
+                        vertical,
+                        at: now,
+                    }),
+                );
             }
         }
-        return;
-    }
-
-    match m.kind {
-        MouseEventKind::Down(MouseButton::Left) => {
-            srv.select_pane(pane);
-            if in_copy {
-                move_copy_cursor(srv, pane, m.column, m.row);
-                if let Some(cm) = srv.panes.get_mut(&pane).and_then(|p| p.copy.as_mut()) {
-                    cm.anchor = None;
-                }
-            }
-        }
-        MouseEventKind::Drag(MouseButton::Left) => {
-            srv.select_pane(pane);
-            crate::copy::enter(srv, pane, false);
+        (Drag::Select { pane }, MouseEventKind::Drag(MouseButton::Left)) => {
             move_copy_cursor(srv, pane, m.column, m.row);
+        }
+        (Drag::Select { pane }, MouseEventKind::Up(MouseButton::Left)) => {
+            set_drag(srv, id, None);
+            set_press(srv, id, None);
+            // The copy table's MouseDragEnd1Pane decides what the selection
+            // is for (tmux-yank: copy it and leave copy mode).
+            let session = srv
+                .clients
+                .get(&id)
+                .and_then(|c| c.att.as_ref())
+                .map(|a| a.session);
+            let window = srv.panes.get(&pane).map(|p| p.window);
+            if let (Some(session), Some(window)) = (session, window) {
+                let index = srv.sessions.get(&session).and_then(|s| s.index_of(window));
+                let target = MouseTarget {
+                    event: m,
+                    location: MouseLocation::Pane,
+                    col: m.column,
+                    row: m.row,
+                    session,
+                    window: index.map(|i| (i, window)),
+                    pane: Some(pane),
+                    border: None,
+                };
+                dispatch(srv, id, MouseAction::DragEnd(1), target);
+            }
+        }
+        (_, MouseEventKind::Up(_)) => {
+            set_drag(srv, id, None);
+            set_press(srv, id, None);
+        }
+        // Another button or the wheel during a drag: handled as usual.
+        _ => return false,
+    }
+    true
+}
+
+/// `send-keys -M`: pass the bind's mouse event to the program in the pane
+/// under it, in the encoding that program asked for (nothing if it did not).
+pub fn forward(srv: &mut Server, ctx: &Ctx) -> Result<(), String> {
+    let t = ctx.mouse.ok_or("send-keys -M needs a mouse event")?;
+    let pane = t.pane.ok_or("no pane under the mouse")?;
+    let p = srv.panes.get_mut(&pane).ok_or("no pane under the mouse")?;
+    let r = p.rect;
+    let col = t
+        .event
+        .column
+        .saturating_sub(r.x)
+        .min(r.w.saturating_sub(1));
+    let row = t.event.row.saturating_sub(r.y).min(r.h.saturating_sub(1));
+    let s = p.emu.screen();
+    let bytes = tmxr_term::encode::encode_mouse(
+        &t.event,
+        col,
+        row,
+        s.mouse_protocol_mode(),
+        s.mouse_protocol_encoding(),
+    );
+    if !bytes.is_empty() {
+        let _ = p.pty.write(&bytes);
+    }
+    Ok(())
+}
+
+/// `copy-mode -M`: enter copy mode in the pane under the mouse and select
+/// from where the drag started.
+pub fn copy_mode_drag(srv: &mut Server, ctx: &Ctx) -> Result<(), String> {
+    let t = ctx.mouse.ok_or("copy-mode -M needs a mouse event")?;
+    let pane = t.pane.ok_or("no pane under the mouse")?;
+    crate::copy::enter(srv, pane, false);
+    start_selection(srv, ctx, pane, t);
+    Ok(())
+}
+
+/// `resize-pane -M`: drag the border under the mouse.
+pub fn resize_drag(srv: &mut Server, ctx: &Ctx) -> Result<(), String> {
+    let t = ctx.mouse.ok_or("resize-pane -M needs a mouse event")?;
+    let border = t.border.ok_or("not on a border")?;
+    let id = ctx.client.ok_or("no client")?;
+    set_drag(srv, id, Some(border));
+    Ok(())
+}
+
+/// `send-keys -X begin-selection` / `clear-selection` from a mouse bind on a
+/// pane in copy mode act at the mouse, as in tmux: begin starts a drag
+/// selection there, clear moves the cursor there. Whether it was handled.
+pub fn copy_command_at_mouse(srv: &mut Server, ctx: &Ctx, pane: PaneId, name: &str) -> bool {
+    let Some(t) = ctx.mouse.filter(|t| t.pane == Some(pane)) else {
+        return false;
+    };
+    if !srv.panes.get(&pane).is_some_and(|p| p.copy.is_some()) {
+        return false;
+    }
+    match name {
+        "begin-selection" => start_selection(srv, ctx, pane, t),
+        "clear-selection" => {
+            move_copy_cursor(srv, pane, t.col, t.row);
             if let Some(cm) = srv.panes.get_mut(&pane).and_then(|p| p.copy.as_mut()) {
-                cm.apply("begin-selection", None);
-            }
-            set_drag(srv, id, Some(Drag::Select { pane }));
-        }
-        MouseEventKind::ScrollUp => {
-            crate::copy::enter(srv, pane, false);
-            scroll(srv, pane, "scroll-up");
-        }
-        MouseEventKind::ScrollDown if in_copy => {
-            scroll(srv, pane, "scroll-down");
-            // Scrolling back to the bottom leaves copy mode, as tmux's wheel
-            // binds do with `copy-mode -e`.
-            let at_bottom = srv
-                .panes
-                .get(&pane)
-                .and_then(|p| p.copy.as_ref())
-                .is_some_and(|c| c.position().0 == 0 && c.anchor.is_none());
-            if at_bottom {
-                let ctx = Ctx::default();
-                let _ = crate::copy::command(srv, &ctx, pane, "cancel", &[]);
+                cm.anchor = None;
             }
         }
-        _ => {}
+        _ => return false,
+    }
+    true
+}
+
+fn start_selection(srv: &mut Server, ctx: &Ctx, pane: PaneId, t: MouseTarget) {
+    move_copy_cursor(srv, pane, t.col, t.row);
+    if let Some(cm) = srv.panes.get_mut(&pane).and_then(|p| p.copy.as_mut()) {
+        cm.apply("begin-selection", None);
+    }
+    if let Some(id) = ctx.client {
+        set_drag(srv, id, Some(Drag::Select { pane }));
     }
 }
 
@@ -199,14 +374,9 @@ fn set_drag(srv: &mut Server, id: ClientId, drag: Option<Drag>) {
     }
 }
 
-fn scroll(srv: &mut Server, pane: PaneId, cmd: &str) {
-    if let Some(cm) = srv.panes.get_mut(&pane).and_then(|p| p.copy.as_mut()) {
-        for _ in 0..WHEEL_LINES {
-            cm.apply(cmd, None);
-        }
-    }
-    if let Some(w) = srv.panes.get(&pane).map(|p| p.window) {
-        srv.mark_window_dirty(w);
+fn set_press(srv: &mut Server, id: ClientId, press: Option<Press>) {
+    if let Some(a) = srv.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
+        a.press = press;
     }
 }
 
