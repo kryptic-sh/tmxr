@@ -26,16 +26,17 @@ what was not.
   a ConPTY, shown to fail when an assertion is broken): attach, typing into the
   pane, `prefix %` split, `prefix h`, the `C-l` navigator in a plain shell,
   `prefix d` detach, `ls`, reattach with output preserved, command clients
-  starting and stopping a server, and the `prefix s` picker switching to the
-  previous session with `Enter`.
+  starting and stopping a server, the `prefix s` picker switching to the
+  previous session with `Enter`, and resurrect restoring a three-pane layout
+  (sizes, split ratios, active pane) into a new server.
 - **Not yet verified anywhere**: how the status line and borders look in a real
   terminal emulator, mouse, copy mode by keyboard, moving and filtering in the
-  picker by keyboard (unit-tested only), resurrect restore of multi-pane
-  layouts, and the navigator passing keys through to a real hjkl/vim.
+  picker by keyboard (unit-tested only), and the navigator passing keys through
+  to a real hjkl/vim.
 - **Not run on Linux/macOS locally**: the `cfg(unix)` arms (socket dir checks,
   peer uid, `setsid` spawn, `/proc` and `proc_pidinfo` inspection) are only
   compiled and tested by CI.
-- CI (commit 4e6b778) runs the unit and e2e tests green on Linux, macOS and
+- CI (commit 654fe43) runs the unit and e2e tests green on Linux, macOS and
   Windows; the Unix arms are exercised there, not locally.
 
 ## Known gaps and follow-ups

@@ -312,3 +312,44 @@ fn session_picker_enter_switches_to_the_previous_session() {
     let ls = t.wait_run(&["ls"], "alpha attached", |o| attached(o, "alpha"));
     assert!(!attached(&ls, "bravo"), "{ls}");
 }
+
+#[test]
+fn resurrect_restores_a_multi_pane_layout() {
+    let t = Tmxr::new("resurrect");
+    t.run(&["new-session", "-d", "-s", "main"]);
+    t.run(&["split-window", "-h", "-t", "main"]);
+    t.run(&["split-window", "-v", "-t", "main"]);
+    t.run(&["resize-pane", "-L", "-t", "main", "5"]);
+    t.wait_run(&["list-panes", "-t", "main"], "three panes", |o| {
+        o.lines().count() == 3
+    });
+    // `0: [38x23] %0 (active)`: pane ids change on restore, so drop them and
+    // compare index, size and the active mark.
+    let layout = |t: &Tmxr| -> String {
+        t.run(&["list-panes", "-t", "main"])
+            .lines()
+            .map(|l| {
+                l.split_whitespace()
+                    .filter(|w| !w.starts_with('%'))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let saved = layout(&t);
+    t.run(&["kill-server"]);
+    t.wait_run(&["ls"], "server gone", str::is_empty);
+
+    // A new server restores the save before running its first command.
+    let config = std::fs::read_to_string(&t.config).unwrap();
+    std::fs::write(
+        &t.config,
+        config.replace("restore-on-start = false", "restore-on-start = true"),
+    )
+    .unwrap();
+    t.run(&["new-session", "-d", "-s", "other"]);
+    let restored = layout(&t);
+    assert_eq!(restored.lines().count(), 3, "{restored}");
+    assert_eq!(restored, saved);
+}
