@@ -47,12 +47,25 @@ pub(super) fn run(
                 !a.has('d'),
             )?;
         }
+        // -r: renumber the target session's windows; nothing moves.
+        "move-window" if a.has('r') => {
+            let sid = target::session(srv, ctx, a.value('t'))?;
+            srv.renumber_windows(sid);
+        }
         "move-window" => {
             let (_, _, wid) = target::window(srv, ctx, a.value('s'))?;
             let (dst, index) = match a.value('t') {
                 Some(t) if !t.is_empty() => target::destination(srv, ctx, t)?,
                 _ => (target::session(srv, ctx, None)?, None),
             };
+            // -k: a window already at the index is killed to make room.
+            if a.has('k')
+                && let Some(i) = index
+                && let Some(&old) = srv.sessions[&dst].windows.get(&i)
+                && old != wid
+            {
+                srv.kill_window(old);
+            }
             srv.move_window(wid, dst, index, !a.has('d'))?;
         }
         "swap-window" => {

@@ -1390,3 +1390,33 @@ fn copy_mode_refresh_picks_up_new_output() {
         "1"
     );
 }
+
+#[test]
+fn move_window_renumbers_and_replaces() {
+    let t = Tmxr::new("movewk");
+    let windows = |t: &Tmxr| -> Vec<String> {
+        t.run(&["list-windows", "-t", "mk"])
+            .lines()
+            .map(|l| {
+                let (idx, rest) = l.split_once(": ").unwrap_or((l, ""));
+                let name = rest.split([' ', '*', '-']).next().unwrap_or("");
+                format!("{idx}:{name}")
+            })
+            .collect()
+    };
+    t.run(&["new-session", "-d", "-s", "mk", "-n", "a"]);
+    t.run(&["new-window", "-d", "-t", "mk", "-n", "b"]);
+    t.run(&["move-window", "-d", "-s", "mk:1", "-t", "mk:7"]);
+    assert_eq!(windows(&t), ["0:a", "7:b"]);
+    // -r closes the gaps.
+    t.run(&["move-window", "-r", "-t", "mk"]);
+    assert_eq!(windows(&t), ["0:a", "1:b"]);
+    // Without -k an occupied index is refused; with it, its window goes.
+    assert!(
+        !t.output(&["move-window", "-d", "-s", "mk:0", "-t", "mk:1"])
+            .status
+            .success()
+    );
+    t.run(&["move-window", "-d", "-k", "-s", "mk:0", "-t", "mk:1"]);
+    assert_eq!(windows(&t), ["1:a"]);
+}

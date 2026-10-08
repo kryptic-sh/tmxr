@@ -177,8 +177,6 @@ impl Server {
         let Some(sid) = self.session_of_window(wid) else {
             return;
         };
-        let renumber = self.cfg.renumber_windows;
-        let base = self.cfg.base_index;
         let s = self.sessions.get_mut(&sid).expect("session found above");
         let index = s.index_of(wid);
         if let Some(i) = index {
@@ -200,20 +198,32 @@ impl Server {
             }
             s.last = None;
         }
-        if renumber {
-            let current_win = s.windows.get(&s.current).copied();
-            let last_win = s.last.and_then(|l| s.windows.get(&l).copied());
-            let ordered: Vec<WindowId> = s.windows.values().copied().collect();
-            s.windows = ordered
-                .iter()
-                .enumerate()
-                .map(|(i, w)| (base + i as u32, *w))
-                .collect();
-            if let Some(c) = current_win.and_then(|w| s.index_of(w)) {
-                s.current = c;
-            }
-            s.last = last_win.and_then(|w| s.index_of(w));
+        if self.cfg.renumber_windows {
+            self.renumber_windows(sid);
         }
+        self.mark_session_dirty(sid);
+    }
+
+    /// Close the gaps in `sid`'s window indices, from `base-index` up and in
+    /// order, keeping its current and last window (`renumber-windows`,
+    /// `move-window -r`).
+    pub fn renumber_windows(&mut self, sid: SessionId) {
+        let base = self.cfg.base_index;
+        let Some(s) = self.sessions.get_mut(&sid) else {
+            return;
+        };
+        let current_win = s.windows.get(&s.current).copied();
+        let last_win = s.last.and_then(|l| s.windows.get(&l).copied());
+        let ordered: Vec<WindowId> = s.windows.values().copied().collect();
+        s.windows = ordered
+            .iter()
+            .enumerate()
+            .map(|(i, w)| (base + i as u32, *w))
+            .collect();
+        if let Some(c) = current_win.and_then(|w| s.index_of(w)) {
+            s.current = c;
+        }
+        s.last = last_win.and_then(|w| s.index_of(w));
         self.mark_session_dirty(sid);
     }
 

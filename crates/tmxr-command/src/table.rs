@@ -224,10 +224,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "move-window",
         Some("movew"),
-        "ds:t:",
+        "dkrs:t:",
         0,
         0,
-        "[-d] [-s src-window] [-t dst-window]"
+        "[-dkr] [-s src-window] [-t dst-window]"
     ),
     cmd!(
         "navigate-pane",

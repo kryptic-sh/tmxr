@@ -50,9 +50,9 @@ what was not.
 
 ## Known gaps and follow-ups
 
-- **Not implemented**: emacs copy mode, `move-window -k` / `-r`. The marked pane
-  has no border highlight (tmux draws it reversed); it shows as the window's `M`
-  flag and `#{pane_marked}`.
+- **Not implemented**: emacs copy mode. The marked pane has no border highlight
+  (tmux draws it reversed); it shows as the window's `M` flag and
+  `#{pane_marked}`.
 - **tmux default binds**: all of tmux's defaults are bound; `prefix C-z`
   (suspend-client) errors on Windows, which has no job control. Alerts for `M-n`
   / `M-p` are bells only (no `monitor-activity` / `monitor-silence`).

@@ -108,10 +108,10 @@ tmux name in quotes so any key stays one argument; `prefix /` uses it with
 
 Without `-s`, `join-pane`, `swap-pane` and `swap-window` take the marked pane
 (`select-pane -m`, `prefix m`), as in tmux. `move-window` refuses an index in
-use (no `-k`) and has no `-r`; moving a session's last window away ends that
-session, as in tmux. A `-t` destination for `new-window` / `move-window` is
-`session:index`, and a bare word is an index when it is a number, else a session
-name.
+use unless `-k` (which kills the window there), and `-r` renumbers a session's
+windows; moving a session's last window away ends that session, as in tmux. A
+`-t` destination for `new-window` / `move-window` is `session:index`, and a bare
+word is an index when it is a number, else a session name.
 
 `if-shell` always runs its shell command in the background, as tmux does with
 `-b`: the command client gets its reply at once, and the chosen command runs
