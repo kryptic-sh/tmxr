@@ -45,7 +45,7 @@ what was not.
 - **Not run on Linux/macOS locally**: the `cfg(unix)` arms (socket dir checks,
   peer uid, `setsid` spawn, `/proc` and `proc_pidinfo` inspection) are only
   compiled and tested by CI.
-- CI (commit 9ab6d00) runs the unit and e2e tests green on Linux, macOS and
+- CI (commit b4c8c6a) runs the unit and e2e tests green on Linux, macOS and
   Windows; the Unix arms are exercised there, not locally.
 
 ## Known gaps and follow-ups
