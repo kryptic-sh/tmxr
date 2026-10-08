@@ -20,11 +20,11 @@ Not saved: pane titles, a window's last pane, program arguments, pane contents
 
 ## Format and location
 
-`<data dir>/tmxr/resurrect/<server>/` (via `hjkl-xdg`; `~/.local/share` on
-Linux), one directory per socket (`Endpoint::slug`: `default` for the default
-Unix socket, `tmxr-<user>-<label>` for a Windows pipe). Each server restores and
-prunes only its own saves, so a throwaway `-L` server never touches the main
-one's:
+`<data dir>/tmxr/resurrect/<server>/` (via `hjkl-xdg`: `$XDG_DATA_HOME`, else
+`~/.local/share`, on every OS), one directory per socket (`Endpoint::slug`:
+`default` for the default Unix socket, `tmxr-<user>-<label>` for a Windows
+pipe). Each server restores and prunes only its own saves, so a throwaway `-L`
+server never touches the main one's:
 
 - `tmxr-<unix millis>.json` — one save. `serde_json`, versioned
   (`{"version": 1, …}`), pretty-printed on purpose: people hand-edit these. A

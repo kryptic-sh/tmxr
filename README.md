@@ -10,29 +10,76 @@ Sessions, windows and panes that outlive the terminal you started them in, built
 on the [hjkl](https://github.com/kryptic-sh/hjkl) crates. Part of the
 [kryptic.sh](https://kryptic.sh) suite.
 
-## What it will do
+## Status
+
+**Early, unreleased.** The MVP in [the plan](docs/plan/00-index.md) is
+implemented and tested end to end on Linux, macOS and Windows in CI, but there
+is no release yet: build it from source. What is missing or behaves differently
+from tmux is listed in [docs/backlog.md](docs/backlog.md).
+
+## What it does
 
 - A long-lived **server** owns every session, window, pane and child process;
   **clients** attach from any terminal and detach without killing anything — the
-  tmux model, on all three platforms (ConPTY + named pipes on Windows).
-- tmux's command language and key names:
-  `tmxr split-window -h -c '#{pane_current_path}'` means what it means in tmux.
-- Ships an opinionated tmux setup as its defaults: vim-style pane selection,
-  splits and new windows in the current directory, `M-h`/`M-l` window cycling,
-  vi copy mode, synchronized panes on `prefix x`.
-- Built-in vim/hjkl navigation: `C-h/j/k/l` move between panes, or pass through
-  to vim / hjkl / fzf when one is in front — no plugin needed.
-- A fuzzy session picker (`prefix s`) on `hjkl-picker`.
-- Tokyo Night status line.
-- Session save/restore à la tmux-resurrect.
+  tmux model, on all three platforms (openpty and Unix sockets; ConPTY and an
+  owner-only named pipe on Windows). The server starts on demand.
+- tmux's **command language**, key names and formats:
+  `tmxr split-window -h -c '#{pane_current_path}'` means what it means in tmux,
+  on the command line, in binds and at the `prefix :` prompt.
+  `tmxr list-commands` lists the commands.
+- **Defaults are an opinionated tmux setup**: vim-style pane selection
+  (`prefix h/j/k/l`), splits and new windows in the current directory
+  (`prefix '` `"` `;` `%` `c`), `M-h` / `M-l` to cycle windows, synchronized
+  panes on `prefix x`, vi copy mode with `v` / `C-v` / `y`, tmux-sensible and
+  tmux-yank binds, and tmux's own default binds. `prefix ?` lists every bind
+  with a note.
+- **vim / hjkl navigation built in**: `C-h/j/k/l` move between panes, or go to
+  the program in front when it is vim, hjkl or fzf — no plugin needed.
+- **Fuzzy pickers** on `hjkl-picker`: sessions (`prefix s`), windows
+  (`prefix w`), paste buffers (`prefix =`), and `prefix f` to find a window.
+  Type to filter; `Escape` then `j` / `k` to move.
+- **Tokyo Night status line** in the catppuccin layout, built from tmux formats
+  you can restyle.
+- **Session save / restore** like tmux-resurrect: `prefix C-s` / `C-r`,
+  auto-save, and restore when the server starts. Each server (`-L` label) keeps
+  its own saves.
+- Mouse (click to focus, drag borders, wheel into copy mode, drag to copy), OSC
+  52 and the local clipboard, and tmux passthrough (`allow-passthrough`) for
+  inline images — Unix only; see the backlog for why not Windows.
 
-## Status
+## Using it
 
-**Pre-alpha: nothing works yet.** This repository holds the plan and the
-workspace scaffold; the binary parses its command line and reports that the
-server is not implemented. The design lives in
-[docs/plan/](docs/plan/00-index.md) and the build order in
-[docs/plan/15-milestones.md](docs/plan/15-milestones.md).
+```sh
+tmxr                     # new session (or attach to restored ones)
+tmxr new -s work         # named session
+tmxr attach -t work      # attach; `prefix d` detaches
+tmxr ls                  # list sessions
+tmxr -L scratch          # a separate server with its own sessions
+tmxr kill-server
+```
+
+The prefix is `C-b`. Inside a pane, `tmxr <command>` talks to the server that
+pane belongs to (via `$TMXR`), as `tmux` does.
+
+For hjkl's own splits to hand `C-h/j/k/l` over to tmxr panes, hjkl needs its
+`$TMXR` handoff, which is not in an hjkl release yet.
+
+## Configuration
+
+Settings and binds live in `~/.config/tmxr/config.toml` (on every OS), layered
+over the built-in defaults in
+[crates/tmxr-config/defaults.toml](crates/tmxr-config/defaults.toml). Binds are
+tmux command strings:
+
+```toml
+mouse = false
+
+[keys.prefix]
+x = false                                                  # remove a default
+"|" = { cmd = "split-window -h", note = "Split side by side" }
+```
+
+`prefix R` (or `tmxr source-file`) reloads it.
 
 ## Building
 
