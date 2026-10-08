@@ -68,8 +68,11 @@ what was not.
 - **Mouse capture is always on in the client**; with `mouse = false` the server
   ignores mouse events but the terminal's own selection still needs Shift.
 - **Windows `kill()` on a pane child** returned "There are no more files" (os
-  error 18) in a test; panes are closed by dropping the ConPTY instead. Check
-  whether `kill-pane` actually terminates programs on Windows.
+  error 18) in a test; not a bug in practice. `Server::kill_pane` calls `kill()`
+  and then drops the pane, closing the ConPTY, and that does end the programs
+  (which of the two does it was not isolated): verified by hand on 2026-10-09
+  with the real binary, both a pane running `ping -t` directly and `cmd.exe`
+  running it (no `PING.EXE` left 2–3 s after `kill-pane`).
 - **Windows foreground process** = newest direct child of the pane's process
   that is ≥ 0.5 s old (skips prompt helpers like starship). A program launched
   less than 0.5 s before `C-h` is not yet seen as in front.
