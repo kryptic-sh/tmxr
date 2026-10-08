@@ -90,16 +90,17 @@ pub fn shell_command(line: &str) -> Vec<String> {
     }
 }
 
-/// The display name of the program a window starts with.
-pub fn program_name(argv: &[String]) -> String {
-    let prog = argv.first().map_or_else(
-        || {
-            tmxr_term::pty::default_shell()
-                .to_string_lossy()
-                .into_owned()
-        },
-        |p| p.split_whitespace().next().unwrap_or(p).to_owned(),
-    );
+/// The display name of the program a window starts with: the first word of
+/// `argv`, or with no command the shell a pane starts (`default-shell`, else
+/// the system's).
+pub fn program_name(argv: &[String], default_shell: Option<&str>) -> String {
+    let prog = match (argv.first(), default_shell) {
+        (Some(p), _) => p.split_whitespace().next().unwrap_or(p).to_owned(),
+        (None, Some(sh)) => sh.to_owned(),
+        (None, None) => tmxr_term::pty::default_shell()
+            .to_string_lossy()
+            .into_owned(),
+    };
     process_name(&prog)
 }
 
@@ -222,6 +223,8 @@ mod tests {
         );
         assert_eq!(process_name("-zsh"), "zsh");
         assert_eq!(process_name("PING.EXE"), "PING");
-        assert_eq!(program_name(&["hjkl src/main.rs".into()]), "hjkl");
+        assert_eq!(program_name(&["hjkl src/main.rs".into()], None), "hjkl");
+        assert_eq!(program_name(&[], Some("/usr/bin/fish")), "fish");
+        assert_eq!(program_name(&["top".into()], Some("cmd.exe")), "top");
     }
 }

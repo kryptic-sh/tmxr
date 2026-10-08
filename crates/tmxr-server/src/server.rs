@@ -613,7 +613,7 @@ impl Server {
         if let Some(win) = self.windows.get_mut(&wid)
             && win.auto_name
         {
-            win.name = crate::util::program_name(&argv);
+            win.name = crate::util::program_name(&argv, self.cfg.default_shell.as_deref());
         }
         let s = self.sessions.get_mut(&session).ok_or("no such session")?;
         s.windows.insert(index, wid);
