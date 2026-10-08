@@ -182,9 +182,9 @@ pub(super) fn run(
             }
         }
         "resurrect-restore" => {
-            let n = crate::resurrect::restore(srv, client_size(srv, ctx))?;
+            let done = crate::resurrect::restore(srv, client_size(srv, ctx))?;
             if let Some(c) = attached_client(srv, ctx) {
-                srv.show_message(c, format!("restored {n} sessions"));
+                srv.show_message(c, done.message());
             }
         }
         _ => return Ok(false),

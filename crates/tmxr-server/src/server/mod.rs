@@ -118,6 +118,8 @@ pub struct Server {
     /// [`Server::marked_pane`], which forgets a pane that has closed.
     pub marked: Option<PaneId>,
     last_save: Instant,
+    /// What resurrect last wrote, so an unchanged layout is not saved again.
+    pub last_saved: Option<crate::resurrect::Save>,
 }
 
 /// The navigator pattern, anchored to the whole process name. An invalid
@@ -190,6 +192,7 @@ impl Server {
             restored_pending: false,
             marked: None,
             last_save: Instant::now(),
+            last_saved: None,
         };
         for e in key_errors {
             srv.log_message(e);
@@ -217,7 +220,7 @@ impl Server {
                 break;
             }
         }
-        if let Err(e) = crate::resurrect::save(&mut self) {
+        if let Err(e) = crate::resurrect::save_if_changed(&mut self) {
             warn!("resurrect save on exit failed: {e}");
         }
         for c in self.clients.values() {
@@ -575,7 +578,7 @@ impl Server {
             && now.duration_since(self.last_save) >= Duration::from_secs(every * 60)
         {
             self.last_save = now;
-            if let Err(e) = crate::resurrect::save(self) {
+            if let Err(e) = crate::resurrect::save_if_changed(self) {
                 self.log_message(format!("resurrect auto-save failed: {e}"));
             }
         }

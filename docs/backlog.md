@@ -74,10 +74,10 @@ what was not.
 - **No frame-rate cap**: the server renders after each drained batch of events.
   A pane producing output continuously renders as often as batches arrive; not
   measured.
-- **Resurrect**: pane titles and a window's last pane are not saved; a missing
-  directory falls back to `$HOME` without a message; auto-save writes even when
-  nothing changed; an argument allowlist (`resurrect.restore-args`, like
-  resurrect's `~vim` strategies) is not implemented; nothing saves on a signal.
+- **Resurrect**: pane titles and a window's last pane are not saved; an argument
+  allowlist (`resurrect.restore-args`, like resurrect's `~vim` strategies) is
+  not implemented; nothing saves on a signal (SIGTERM / SIGHUP would need a
+  handler).
 - **tmux-yank `prefix y`** (copy the shell's command line) is not bound.
 - **Windows `kill()` on a pane child** returned "There are no more files" (os
   error 18) in a test; not a bug in practice. `Server::kill_pane` calls `kill()`

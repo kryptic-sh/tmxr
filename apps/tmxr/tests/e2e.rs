@@ -1085,3 +1085,46 @@ fn copy_mode_highlights_search_matches() {
         "{bgs:?}"
     );
 }
+
+#[test]
+fn resurrect_skips_unchanged_saves_and_reports_missing_dirs() {
+    let t = Tmxr::new("resave");
+    let saves = |t: &Tmxr| -> usize {
+        let root = t.dir.path().join("data").join("tmxr").join("resurrect");
+        std::fs::read_dir(&root)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .flat_map(|server| {
+                std::fs::read_dir(server.path())
+                    .into_iter()
+                    .flatten()
+                    .flatten()
+            })
+            .filter(|f| f.file_name().to_string_lossy().ends_with(".json"))
+            .count()
+    };
+    let gone = t.dir.path().join("soon-gone");
+    std::fs::create_dir(&gone).unwrap();
+    let gone_str = gone.display().to_string();
+    t.run(&["new-session", "-d", "-s", "keep", "-c", &gone_str]);
+    t.run(&["resurrect-save"]);
+    assert_eq!(saves(&t), 1);
+    // Nothing changed: the save on exit writes nothing new.
+    t.run(&["kill-server"]);
+    t.wait_run(&["ls"], "server gone", str::is_empty);
+    assert_eq!(saves(&t), 1);
+
+    // The session's directory disappears; restoring says so.
+    std::fs::remove_dir(&gone).unwrap();
+    let config = std::fs::read_to_string(&t.config).unwrap();
+    std::fs::write(
+        &t.config,
+        config.replace("restore-on-start = false", "restore-on-start = true"),
+    )
+    .unwrap();
+    t.run(&["new-session", "-d", "-s", "other"]);
+    let messages = t.run(&["show-messages"]);
+    assert!(messages.contains("missing, started in $HOME"), "{messages}");
+    assert!(messages.contains("soon-gone"), "{messages}");
+}

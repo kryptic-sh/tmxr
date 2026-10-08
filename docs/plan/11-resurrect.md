@@ -38,9 +38,10 @@ server never touches the main one's:
 
 - `prefix C-s` → `resurrect-save`; `prefix C-r` → `resurrect-restore`.
 - Periodic auto-save every `resurrect.auto-save-minutes` (tmux-continuum's idea;
-  0 disables) while any session exists, whether or not anything changed.
-- Save when the server exits (last session closed or `kill-server`). Nothing
-  saves on a signal.
+  0 disables) while any session exists, writing only when the sessions changed
+  since the last save (an explicit `prefix C-s` always writes).
+- Save when the server exits (last session closed or `kill-server`), again only
+  when something changed. Nothing saves on a signal.
 - **Auto-restore**: with `resurrect.restore-on-start = true`, a newly started
   server restores the last save before handling any client. When the restore
   produced sessions, the first bare `tmxr` attaches instead of creating a new
@@ -50,7 +51,8 @@ server never touches the main one's:
 
 - A session that already exists by name is skipped (tmux-resurrect does the
   same), so restore is safe to run twice.
-- A directory that no longer exists falls back to `$HOME`, silently.
+- A directory that no longer exists falls back to `$HOME`, and the restore
+  message lists the missing directories.
 - A saved program is started by name as the pane's command, in the pane's
   directory, so `hjkl` comes back as `hjkl` in the right place. Arguments are
   never saved, because blindly re-running a saved command line is how restore

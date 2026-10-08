@@ -7,6 +7,7 @@
 //! (by name — arguments are not saved, so a restore never re-runs a saved
 //! command line). See `docs/plan/11-resurrect.md`.
 
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -212,31 +213,69 @@ pub fn read_last(dir: &Path) -> Result<Option<Save>, String> {
     Ok(Some(save))
 }
 
-/// `resurrect-save`.
+/// `resurrect-save`: write the sessions now.
 pub fn save(srv: &mut Server) -> Result<PathBuf, String> {
     let s = capture(srv);
-    write(&s, &dir(&srv.endpoint)?, srv.cfg.resurrect.keep)
+    let path = write(&s, &dir(&srv.endpoint)?, srv.cfg.resurrect.keep)?;
+    srv.last_saved = Some(s);
+    Ok(path)
+}
+
+/// Auto-save and the save on exit: write only when the sessions changed
+/// since the last save, so an idle server does not churn out copies that
+/// push real history past `resurrect.keep`.
+pub fn save_if_changed(srv: &mut Server) -> Result<Option<PathBuf>, String> {
+    if srv.last_saved.as_ref() == Some(&capture(srv)) {
+        return Ok(None);
+    }
+    save(srv).map(Some)
+}
+
+/// What a restore did.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Restored {
+    pub sessions: usize,
+    /// Saved directories that are gone; their panes started in `$HOME`.
+    pub missing_dirs: Vec<PathBuf>,
+}
+
+impl Restored {
+    /// One line for the status line / message log.
+    pub fn message(&self) -> String {
+        let mut m = format!("restored {} sessions", self.sessions);
+        if !self.missing_dirs.is_empty() {
+            let dirs: Vec<String> = self
+                .missing_dirs
+                .iter()
+                .map(|d| d.display().to_string())
+                .collect();
+            let _ = write!(m, "; missing, started in $HOME: {}", dirs.join(", "));
+        }
+        m
+    }
 }
 
 /// Recreate saved sessions whose names are not already in use.
-/// Returns how many sessions were created.
-pub fn apply(srv: &mut Server, save: &Save, size: (u16, u16)) -> Result<usize, String> {
-    let mut created = 0;
+pub fn apply(srv: &mut Server, save: &Save, size: (u16, u16)) -> Result<Restored, String> {
+    let mut done = Restored::default();
     for s in &save.sessions {
         if srv.sessions.values().any(|x| x.name == s.name) || s.windows.is_empty() {
             continue;
         }
-        let sid = restore_session(srv, s, size)?;
-        created += 1;
-        let _ = sid;
+        restore_session(srv, s, size, &mut done.missing_dirs)?;
+        done.sessions += 1;
     }
-    Ok(created)
+    done.missing_dirs.sort();
+    done.missing_dirs.dedup();
+    Ok(done)
 }
 
-fn existing_dir(p: &Path) -> PathBuf {
+/// `p` if it is still a directory, else `$HOME`, noting `p` in `missing`.
+fn existing_dir(p: &Path, missing: &mut Vec<PathBuf>) -> PathBuf {
     if p.is_dir() {
         p.to_path_buf()
     } else {
+        missing.push(p.to_path_buf());
         crate::util::home_dir()
     }
 }
@@ -245,6 +284,7 @@ fn restore_session(
     srv: &mut Server,
     s: &SavedSession,
     size: (u16, u16),
+    missing: &mut Vec<PathBuf>,
 ) -> Result<SessionId, String> {
     let first = &s.windows[0];
     let argv = |p: &SavedPane| p.command.clone().map(|c| vec![c]).unwrap_or_default();
@@ -254,7 +294,7 @@ fn restore_session(
     });
     let sid = srv.new_session(
         Some(s.name.clone()),
-        existing_dir(&s.cwd),
+        existing_dir(&s.cwd, missing),
         Vec::new(),
         (!first.auto_name).then(|| first.name.clone()),
         argv(&first_pane),
@@ -280,7 +320,7 @@ fn restore_session(
                 sid,
                 Some(w.index),
                 (!w.auto_name).then(|| w.name.clone()),
-                Some(existing_dir(&p0.cwd)),
+                Some(existing_dir(&p0.cwd, missing)),
                 argv(&p0),
                 size,
                 false,
@@ -296,7 +336,7 @@ fn restore_session(
                 true,
                 false,
                 None,
-                existing_dir(&p.cwd),
+                existing_dir(&p.cwd, missing),
                 argv(p),
                 false,
             )?;
@@ -326,7 +366,7 @@ fn restore_session(
 }
 
 /// `resurrect-restore`.
-pub fn restore(srv: &mut Server, size: (u16, u16)) -> Result<usize, String> {
+pub fn restore(srv: &mut Server, size: (u16, u16)) -> Result<Restored, String> {
     match read_last(&dir(&srv.endpoint)?)? {
         Some(save) => apply(srv, &save, size),
         None => Err("no saved sessions".into()),
@@ -336,8 +376,11 @@ pub fn restore(srv: &mut Server, size: (u16, u16)) -> Result<usize, String> {
 /// Restore when the server starts (`resurrect.restore-on-start`).
 pub fn restore_on_start(srv: &mut Server) -> Result<(), String> {
     if let Some(save) = read_last(&dir(&srv.endpoint)?)? {
-        let n = apply(srv, &save, (80, 23))?;
-        srv.restored_pending = n > 0;
+        let done = apply(srv, &save, (80, 23))?;
+        srv.restored_pending = done.sessions > 0;
+        if !done.missing_dirs.is_empty() {
+            srv.log_message(format!("resurrect: {}", done.message()));
+        }
     }
     Ok(())
 }
