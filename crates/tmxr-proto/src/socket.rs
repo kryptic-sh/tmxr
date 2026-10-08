@@ -196,13 +196,18 @@ fn current_uid() -> u32 {
     unsafe { libc::getuid() }
 }
 
-/// Create `dir` with mode `0700` if missing, then insist it is a directory
+/// Create `dir` (and any missing parents) with mode `0700` if missing, then
+/// insist it is a directory
 /// (not a symlink) owned by us with no group or other permissions — the same
 /// checks tmux applies to its socket directory.
 #[cfg(unix)]
 fn ensure_private_dir(dir: &Path) -> io::Result<()> {
     use std::os::unix::fs::{DirBuilderExt, MetadataExt};
-    match std::fs::DirBuilder::new().mode(0o700).create(dir) {
+    match std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(dir)
+    {
         Ok(()) => {}
         Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
         Err(e) => return Err(e),
@@ -327,5 +332,14 @@ mod tests {
         assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
         ensure_private_dir(&dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn missing_parent_directories_are_created() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("a").join("b").join("tmxr-1");
+        ensure_private_dir(&dir).unwrap();
+        assert!(dir.is_dir());
     }
 }
