@@ -129,9 +129,9 @@ pub(super) fn run(
         }
         "respawn-pane" => {
             let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
-            // Panes close when their program exits (no remain-on-exit), so
-            // the program is always still running and -k is required.
-            if !a.has('k') {
+            // A running program is only replaced with -k; a dead pane (kept
+            // by remain-on-exit) is respawned as is.
+            if !a.has('k') && srv.panes[&pid].dead.is_none() {
                 return Err(format!("respawn pane failed: pane %{pid} still active"));
             }
             let cwd = cwd_arg(srv, ctx, Some(pid), a);

@@ -77,6 +77,7 @@ impl Server {
                 copy: None,
                 spawn,
                 argv,
+                dead: None,
             },
         );
         Ok(())
@@ -280,7 +281,14 @@ impl Server {
             }
             PtyEvent::Exited(code) => {
                 debug!(pane = pid, ?code, "pane exited");
-                if self.panes.contains_key(&pid) {
+                if self.cfg.remain_on_exit
+                    && let Some(p) = self.panes.get_mut(&pid)
+                {
+                    p.dead = Some(code);
+                    let window = p.window;
+                    self.commands.remove(&pid);
+                    self.mark_window_dirty(window);
+                } else if self.panes.contains_key(&pid) {
                     self.panes.remove(&pid);
                     self.commands.remove(&pid);
                     let wid = self

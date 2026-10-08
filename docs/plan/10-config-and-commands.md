@@ -93,11 +93,11 @@ A tmux-compatible parser shared by config binds, the command prompt
 `run-shell`, `if-shell`, `choose-tree` (→ picker), `list-commands`; plus tmxr's
 own `navigate-pane`, `resurrect-save`, `resurrect-restore`.
 
-Every command in the MVP set is implemented. Panes close when their program
-exits (there is no `remain-on-exit`), so `respawn-pane` always needs `-k`;
-without a command it re-runs the one the pane started with. Each start of a pane
-gets a spawn number carried in its PTY events, so the old program's exit cannot
-close the respawned pane.
+Every command in the MVP set is implemented. `respawn-pane` needs `-k` to
+replace a running program; a pane kept dead by `remain-on-exit` respawns without
+it. Without a command it re-runs the one the pane started with. Each start of a
+pane gets a spawn number carried in its PTY events, so the old program's exit
+cannot close the respawned pane.
 
 Without `-s`, `join-pane`, `swap-pane` and `swap-window` take the marked pane
 (`select-pane -m`, `prefix m`), as in tmux. `move-window` refuses an index in

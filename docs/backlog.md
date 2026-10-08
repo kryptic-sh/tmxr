@@ -50,9 +50,9 @@ what was not.
 
 ## Known gaps and follow-ups
 
-- **Not implemented**: `remain-on-exit`, emacs copy mode, `move-window -k` /
-  `-r`. The marked pane has no border highlight (tmux draws it reversed); it
-  shows as the window's `M` flag and `#{pane_marked}`.
+- **Not implemented**: emacs copy mode, `move-window -k` / `-r`. The marked pane
+  has no border highlight (tmux draws it reversed); it shows as the window's `M`
+  flag and `#{pane_marked}`.
 - **tmux default binds without a tmxr command yet**: `prefix t` (clock-mode),
   `D` (choose-client), `/` (describe-key), `C-z` (suspend-client). Alerts for
   `M-n` / `M-p` are bells only (no `monitor-activity` / `monitor-silence`).

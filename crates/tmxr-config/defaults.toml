@@ -24,6 +24,7 @@ extended-keys = "always"
 set-clipboard = "on"
 # tmux.conf: set -g allow-passthrough on
 allow-passthrough = true
+remain-on-exit = false
 update-environment = [
   "DISPLAY",
   "SSH_ASKPASS",

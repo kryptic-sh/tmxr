@@ -40,6 +40,9 @@ pub struct Config {
     /// Forward programs' `ESC P tmux; … ESC \` passthrough to the outer
     /// terminal (inline images and the like), as tmux's `allow-passthrough`.
     pub allow_passthrough: bool,
+    /// Keep a pane whose program exited, shown as dead, until it is
+    /// respawned or killed (tmux's `remain-on-exit`).
+    pub remain_on_exit: bool,
     pub update_environment: Vec<String>,
     pub navigator: Navigator,
     pub status: Status,

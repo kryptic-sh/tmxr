@@ -1156,3 +1156,49 @@ fn session_picker_previews_the_highlighted_session() {
         text.contains("sessions 2/2") && !text.contains("preview-marker")
     });
 }
+
+#[test]
+fn remain_on_exit_keeps_a_dead_pane_until_respawned() {
+    let t = Tmxr::new("remain");
+    #[cfg(unix)]
+    let (exits, lasts): (&[&str], &[&str]) = (&["/bin/sh", "-c", "exit 3"], &["/bin/sleep", "30"]);
+    #[cfg(windows)]
+    let (exits, lasts): (&[&str], &[&str]) = (
+        &["cmd.exe", "/d", "/c", "exit 3"],
+        &["ping.exe", "-n", "30", "127.0.0.1"],
+    );
+    t.run(&["new-session", "-d", "-s", "rm"]);
+    t.run(&["set-option", "-g", "remain-on-exit", "on"]);
+    let mut split = vec!["split-window", "-d", "-t", "rm"];
+    split.extend(exits);
+    t.run(&split);
+    let dead = |t: &Tmxr| {
+        t.run(&[
+            "display-message",
+            "-p",
+            "-t",
+            "rm.1",
+            "#{pane_dead}:#{pane_dead_status}",
+        ])
+        .trim()
+        .to_owned()
+    };
+    t.wait_run(
+        &["display-message", "-p", "-t", "rm.1", "#{pane_dead}"],
+        "pane dead",
+        |o| o.trim() == "1",
+    );
+    assert_eq!(dead(&t), "1:3");
+    assert_eq!(t.run(&["list-panes", "-t", "rm"]).lines().count(), 2);
+
+    // A dead pane respawns without -k.
+    let mut respawn = vec!["respawn-pane", "-t", "rm.1"];
+    respawn.extend(lasts);
+    let out = t.output(&respawn);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(dead(&t), "0:");
+}

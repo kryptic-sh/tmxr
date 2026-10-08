@@ -32,6 +32,9 @@ pub struct Pane {
     pub spawn: u64,
     /// The command the pane was started with, for `respawn-pane`.
     pub argv: Vec<String>,
+    /// Set when the program exited and `remain-on-exit` kept the pane: the
+    /// exit code, if the program had one.
+    pub dead: Option<Option<u32>>,
 }
 
 pub struct Window {

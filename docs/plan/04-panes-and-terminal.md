@@ -93,4 +93,6 @@ in the README that emits OSC 7, and records the gap in the backlog.
   `exit-empty on`).
 - Resize → `MasterPty::resize` + `Parser::set_size`. Coalesced: one resize per
   render, not per drag event.
-- `respawn-pane`, `remain-on-exit` are post-MVP.
+- With `remain-on-exit on` an exited pane stays, dead: its last row reads "Pane
+  is dead (status N)" and `#{pane_dead}` is 1, until `respawn-pane` restarts it
+  or `kill-pane` closes it. tmxr's option is global; tmux's is per window.
