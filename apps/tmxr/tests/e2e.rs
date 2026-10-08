@@ -1204,3 +1204,28 @@ fn remain_on_exit_keeps_a_dead_pane_until_respawned() {
     );
     assert_eq!(dead(&t), "0:");
 }
+
+#[test]
+fn describe_key_shows_a_binds_note() {
+    let t = Tmxr::new("describe");
+    let s = t.attach(&["new", "-s", "dk"]);
+    s.wait_for("status line", |text| text.contains("dk"));
+    let describe = |s: &Screen, key: &[u8]| {
+        s.send(PREFIX);
+        s.send(b"/");
+        s.wait_for("key prompt", |text| text.contains("key "));
+        s.send(key);
+    };
+    describe(&s, b"z");
+    s.wait_for("zoom note", |text| text.contains("Zoom pane"));
+    // A key press clears the message, so the next prompt shows at once
+    // rather than after display-time.
+    let start = Instant::now();
+    describe(&s, b"\x1b[15~");
+    assert!(
+        start.elapsed() < Duration::from_secs(2),
+        "prompt hidden by the message for {:?}",
+        start.elapsed()
+    );
+    s.wait_for("unbound key", |text| text.contains("F5 is not bound"));
+}

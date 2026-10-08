@@ -99,6 +99,10 @@ it. Without a command it re-runs the one the pane started with. Each start of a
 pane gets a spawn number carried in its PTY events, so the old program's exit
 cannot close the respawned pane.
 
+`command-prompt -k` takes one key press as its input, substituted as the key's
+tmux name in quotes so any key stays one argument; `prefix /` uses it with
+`list-keys -1N key` to describe a key.
+
 Without `-s`, `join-pane`, `swap-pane` and `swap-window` take the marked pane
 (`select-pane -m`, `prefix m`), as in tmux. `move-window` refuses an index in
 use (no `-k`) and has no `-r`; moving a session's last window away ends that

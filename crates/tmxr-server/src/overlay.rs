@@ -52,6 +52,9 @@ pub struct Prompt {
     /// `%%` in the template is replaced by the input; no template runs the
     /// input itself.
     pub template: Option<String>,
+    /// `command-prompt -k`: the next key pressed is the input, as its tmux
+    /// name, quoted so any key stays one argument.
+    pub key: bool,
 }
 
 impl Overlay {
@@ -63,6 +66,18 @@ impl Overlay {
             input,
             cursor,
             template,
+            key: false,
+        })
+    }
+
+    /// A prompt answered by one key press (`command-prompt -k`).
+    pub fn key_prompt(prompt: String, template: String) -> Self {
+        Self::Prompt(Prompt {
+            prompt,
+            input: Vec::new(),
+            cursor: 0,
+            template: Some(template),
+            key: true,
         })
     }
 
@@ -240,6 +255,11 @@ impl Overlay {
 
 impl Prompt {
     fn key(&mut self, ev: &KeyEvent) -> OverlayAction {
+        if self.key {
+            let name = join_args(&[tmxr_command::Key::from_event(ev).to_string()]);
+            let template = self.template.as_deref().unwrap_or("%%");
+            return OverlayAction::Run(template.replace("%%", &name));
+        }
         let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
         match ev.code {
             KeyCode::Esc => return OverlayAction::Close,

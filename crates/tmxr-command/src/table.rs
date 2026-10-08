@@ -78,10 +78,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "command-prompt",
         None,
-        "I:p:t:",
+        "I:kp:t:",
         0,
         1,
-        "[-I inputs] [-p prompts] [template]"
+        "[-k] [-I inputs] [-p prompts] [template]"
     ),
     cmd!(
         "confirm-before",
@@ -178,7 +178,14 @@ pub const COMMANDS: &[CommandSpec] = &[
     ),
     cmd!("list-buffers", Some("lsb"), "", 0, 0, ""),
     cmd!("list-commands", Some("lscm"), "", 0, 0, ""),
-    cmd!("list-keys", Some("lsk"), "NT:", 0, 0, "[-N] [-T key-table]"),
+    cmd!(
+        "list-keys",
+        Some("lsk"),
+        "1NT:",
+        0,
+        1,
+        "[-1N] [-T key-table] [key]"
+    ),
     cmd!(
         "list-panes",
         Some("lsp"),

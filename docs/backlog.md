@@ -54,10 +54,9 @@ what was not.
   has no border highlight (tmux draws it reversed); it shows as the window's `M`
   flag and `#{pane_marked}`.
 - **tmux default binds without a tmxr command yet**: `prefix t` (clock-mode),
-  `D` (choose-client), `/` (describe-key), `C-z` (suspend-client). Alerts for
-  `M-n` / `M-p` are bells only (no `monitor-activity` / `monitor-silence`).
-  `find-window` matches window names through the picker, not pane contents or
-  titles as tmux's does.
+  `D` (choose-client), `C-z` (suspend-client). Alerts for `M-n` / `M-p` are
+  bells only (no `monitor-activity` / `monitor-silence`). `find-window` matches
+  window names through the picker, not pane contents or titles as tmux's does.
 - **Copy mode gaps** (plan/08): marks, `%`, `copy-pipe*`, `copy-command`,
   `refresh-from-pane`. A pending count is not shown anywhere (tmux shows a
   `(repeat)` prompt).

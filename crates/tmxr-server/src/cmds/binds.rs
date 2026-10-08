@@ -75,7 +75,30 @@ pub(super) fn run(
         "list-keys" => {
             let only_notes = a.has('N');
             let table = a.value('T');
-            let binds = srv.keys.list(table);
+            let key = pos
+                .first()
+                .map(|k| k.parse::<Key>().map_err(|e| e.to_string()))
+                .transpose()?;
+            let mut binds = srv.keys.list(table);
+            if let Some(k) = key {
+                binds.retain(|(_, bk, _)| *bk == k);
+            }
+            if a.has('1') {
+                // The bind a key press reaches first: prefix, then root, then
+                // the rest (copy mode).
+                let rank = |t: &str| match t {
+                    "prefix" => 0,
+                    "root" => 1,
+                    _ => 2,
+                };
+                binds.sort_by_key(|(t, _, _)| rank(t));
+                binds.truncate(1);
+            }
+            if binds.is_empty()
+                && let Some(k) = key
+            {
+                let _ = writeln!(out.stdout, "{k} is not bound");
+            }
             let width = binds
                 .iter()
                 .map(|(_, k, _)| k.to_string().len())
