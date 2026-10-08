@@ -25,16 +25,17 @@ what was not.
 - **Verified end to end on Windows** by `apps/tmxr/tests/e2e.rs` (real binary in
   a ConPTY, shown to fail when an assertion is broken): attach, typing into the
   pane, `prefix %` split, `prefix h`, the `C-l` navigator in a plain shell,
-  `prefix d` detach, `ls`, reattach with output preserved, and command clients
-  starting and stopping a server.
+  `prefix d` detach, `ls`, reattach with output preserved, command clients
+  starting and stopping a server, and the `prefix s` picker switching to the
+  previous session with `Enter`.
 - **Not yet verified anywhere**: how the status line and borders look in a real
-  terminal emulator, mouse, copy mode by keyboard, the picker by keyboard
-  (unit-tested only), resurrect restore of multi-pane layouts, and the navigator
-  passing keys through to a real hjkl/vim.
+  terminal emulator, mouse, copy mode by keyboard, moving and filtering in the
+  picker by keyboard (unit-tested only), resurrect restore of multi-pane
+  layouts, and the navigator passing keys through to a real hjkl/vim.
 - **Not run on Linux/macOS locally**: the `cfg(unix)` arms (socket dir checks,
   peer uid, `setsid` spawn, `/proc` and `proc_pidinfo` inspection) are only
   compiled and tested by CI.
-- CI (commit a6648ab) runs the unit and e2e tests green on Linux, macOS and
+- CI (commit 4e6b778) runs the unit and e2e tests green on Linux, macOS and
   Windows; the Unix arms are exercised there, not locally.
 
 ## Known gaps and follow-ups

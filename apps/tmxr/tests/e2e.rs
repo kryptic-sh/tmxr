@@ -292,3 +292,23 @@ fn command_clients_start_and_stop_a_server() {
     t.run(&["kill-server"]);
     t.wait_run(&["ls"], "server gone", str::is_empty);
 }
+
+#[test]
+fn session_picker_enter_switches_to_the_previous_session() {
+    let t = Tmxr::new("picker");
+    t.run(&["new-session", "-d", "-s", "alpha"]);
+    let s = t.attach(&["new", "-s", "bravo"]);
+    s.wait_for("status line", |text| text.contains("bravo"));
+    let attached = |ls: &str, name: &str| {
+        ls.lines()
+            .any(|l| l.starts_with(&format!("{name}:")) && l.contains("(attached)"))
+    };
+
+    // prefix s opens the picker on the previous session; Enter switches.
+    s.send(PREFIX);
+    s.send(b"s");
+    s.wait_for("picker", |text| text.contains("sessions 2/2"));
+    s.send(b"\r");
+    let ls = t.wait_run(&["ls"], "alpha attached", |o| attached(o, "alpha"));
+    assert!(!attached(&ls, "bravo"), "{ls}");
+}
