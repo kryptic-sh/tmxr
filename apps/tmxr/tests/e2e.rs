@@ -1128,3 +1128,31 @@ fn resurrect_skips_unchanged_saves_and_reports_missing_dirs() {
     assert!(messages.contains("missing, started in $HOME"), "{messages}");
     assert!(messages.contains("soon-gone"), "{messages}");
 }
+
+#[test]
+fn session_picker_previews_the_highlighted_session() {
+    let t = Tmxr::new("preview");
+    t.run(&["new-session", "-d", "-s", "alpha"]);
+    t.run(&["send-keys", "-t", "alpha", "echo preview-marker", "Enter"]);
+    t.wait_run(
+        &["capture-pane", "-p", "-t", "alpha"],
+        "marker in alpha",
+        |o| o.matches("preview-marker").count() >= 2,
+    );
+    let s = t.attach(&["new", "-s", "bravo"]);
+    s.wait_for("status line", |text| text.contains("bravo"));
+    assert!(!s.text().contains("preview-marker"));
+
+    // The picker opens on alpha: its pane shows under the list.
+    s.send(PREFIX);
+    s.send(b"s");
+    s.wait_for("alpha previewed", |text| {
+        text.contains("sessions 2/2") && text.contains("preview-marker")
+    });
+    // Moving to bravo previews bravo, which never printed the marker.
+    s.send(b"\x1b");
+    s.send(b"k");
+    s.wait_for("bravo previewed", |text| {
+        text.contains("sessions 2/2") && !text.contains("preview-marker")
+    });
+}

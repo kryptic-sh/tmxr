@@ -24,7 +24,9 @@ Replaces tmux's `choose-tree -Zs` on `prefix s` (and `choose-tree -Zw` on
   through a prompt, and `Enter` on a name no session matches creates that
   session and switches to it. Each runs as a command addressing the session by
   its `$id`.
-- Not implemented: a preview of the selected session's active window.
+- Preview: under the list, the highlighted session's (or window's) active pane
+  as it looks, colours included, cropped to the rows up to its cursor. Shown
+  when at least three rows are left for it.
 
 ## Implementation
 
@@ -32,12 +34,15 @@ Replaces tmux's `choose-tree -Zs` on `prefix s` (and `choose-tree -Zw` on
 
 - `Source: hjkl_picker::PickerLogic` holds a fixed list of rows built when the
   picker opens, with `preserve_source_order() = true` (so filtering keeps the
-  MRU order) and no preview. `select(idx)` →
-  `PickerAction::Custom(Box::new(Target::Session(id)))`.
+  MRU order) and no `hjkl-picker` preview: that one is a text buffer, and the
+  pane preview keeps its colours by copying the pane's cells instead.
+  `select(idx)` → `PickerAction::Custom(Box::new(Target::Session(id, name)))`.
+- `PickerOverlay` keeps each row's label and target, so the renderer can find
+  the highlighted row's target from its label (`previewed()`).
 - `PickerOverlay` wraps `hjkl_picker::Picker` and adds the insert / normal mode
   itself; keys arrive as the crossterm `KeyEvent`s the client already sends.
-- Rendering: the list and input row are drawn by tmxr (`render.rs`) with the
-  `mode-style` for the selected row.
+- Rendering: the list, input row and preview are drawn by tmxr (`draw_picker` in
+  `render.rs`) with the `mode-style` for the selected row.
 - The same overlay backs the window picker (`prefix w`, `choose-tree -w`: every
   session's windows, the current session's first), `find-window` (`prefix f`:
   the window picker opened with the prompt's text as its query) and the buffer

@@ -11,7 +11,7 @@ use tmxr_command::format::{self, Colour};
 use crate::backend::AnsiBackend;
 use crate::copy::cell_style;
 use crate::model::{ClientId, PaneId, WindowId};
-use crate::overlay::Overlay;
+use crate::overlay::{Overlay, PickerOverlay, Previewed};
 use crate::server::{STATUS_ROWS, Server};
 use crate::vars::Vars;
 
@@ -438,79 +438,167 @@ fn draw_overlay(
             }
             None
         }
-        Overlay::Picker(p) => {
-            let picker = &p.picker;
-            let w = cols.saturating_sub(4).clamp(10, 70);
-            let list_rows = picker.matched().clamp(1, 15) as u16;
-            let h = (list_rows + 3).min(y.saturating_sub(2)).max(4);
-            let area = Rect::new(
-                (cols.saturating_sub(w)) / 2,
-                y.saturating_sub(h) / 2,
-                w.min(cols),
-                h,
-            );
-            Clear.render(area, buf);
-            let mode = if p.insert { "" } else { " [normal]" };
-            let block = Block::default()
-                .borders(Borders::ALL)
-                .border_style(border)
-                .title(format!(
-                    " {} {}/{}{mode} ",
-                    picker.title(),
-                    picker.matched(),
-                    picker.total()
-                ));
-            let inner = block.inner(area);
-            block.render(area, buf);
-            if inner.height == 0 {
-                return None;
-            }
-            let query = p.query();
-            Paragraph::new(Line::from(vec![
-                Span::styled("> ", border),
-                Span::raw(query.clone()),
-            ]))
-            .render(Rect::new(inner.x, inner.y, inner.width, 1), buf);
-            let visible = usize::from(inner.height.saturating_sub(1));
-            let matched = picker.matched();
-            let start = picker
-                .selected
-                .saturating_sub(visible.saturating_sub(1))
-                .min(matched.saturating_sub(visible.min(matched)));
-            let end = (start + visible).min(matched);
-            // Matched characters take the picker's accent: the active border
-            // colour, like its frame and prompt.
-            let highlight = border.add_modifier(Modifier::BOLD);
-            for (i, (label, hits, _)) in picker.visible_rows(start..end).into_iter().enumerate() {
-                let row = inner.y + 1 + i as u16;
-                let selected = start + i == picker.selected;
-                let base = if selected {
-                    mode_style
+        Overlay::Picker(p) => draw_picker(srv, p, buf, cols, y, border, mode_style),
+    }
+}
+
+/// Most rows the picker list takes when a preview sits under it.
+const PICKER_LIST_ROWS: u16 = 15;
+/// Fewest rows worth giving a preview.
+const PREVIEW_MIN_ROWS: u16 = 3;
+
+/// The picker overlay: query row, matches, and for sessions and windows a
+/// preview of the highlighted entry's active pane. `y` is the first row
+/// below the window area. Returns the query cursor in insert mode.
+fn draw_picker(
+    srv: &Server,
+    p: &PickerOverlay,
+    buf: &mut Buffer,
+    cols: u16,
+    y: u16,
+    border: Style,
+    mode_style: Style,
+) -> Option<Position> {
+    let picker = &p.picker;
+    let preview_pane = p.previewed().and_then(|v| {
+        let window = match v {
+            Previewed::Session(s) => srv.sessions.get(&s)?.current_window()?,
+            Previewed::Window(s, i) => *srv.sessions.get(&s)?.windows.get(&i)?,
+        };
+        srv.windows.get(&window).map(|w| w.active)
+    });
+    let w = cols
+        .saturating_sub(4)
+        .clamp(10, if preview_pane.is_some() { 100 } else { 70 });
+    let list_rows = (picker.matched() as u16).clamp(1, PICKER_LIST_ROWS);
+    let list_h = list_rows + 3;
+    let room = y.saturating_sub(2);
+    let preview_rows = match preview_pane {
+        Some(_) => room.saturating_sub(list_h + 1),
+        None => 0,
+    };
+    let preview_rows = if preview_rows >= PREVIEW_MIN_ROWS {
+        preview_rows
+    } else {
+        0
+    };
+    let h = if preview_rows > 0 {
+        list_h + 1 + preview_rows
+    } else {
+        list_h
+    }
+    .min(room)
+    .max(4);
+    let area = Rect::new(
+        (cols.saturating_sub(w)) / 2,
+        y.saturating_sub(h) / 2,
+        w.min(cols),
+        h,
+    );
+    Clear.render(area, buf);
+    let mode = if p.insert { "" } else { " [normal]" };
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(border)
+        .title(format!(
+            " {} {}/{}{mode} ",
+            picker.title(),
+            picker.matched(),
+            picker.total()
+        ));
+    let inner = block.inner(area);
+    block.render(area, buf);
+    if inner.height == 0 {
+        return None;
+    }
+    let query = p.query();
+    Paragraph::new(Line::from(vec![
+        Span::styled("> ", border),
+        Span::raw(query.clone()),
+    ]))
+    .render(Rect::new(inner.x, inner.y, inner.width, 1), buf);
+    let list_space = if preview_rows > 0 {
+        list_rows
+    } else {
+        inner.height.saturating_sub(1)
+    };
+    let visible = usize::from(list_space);
+    let matched = picker.matched();
+    let start = picker
+        .selected
+        .saturating_sub(visible.saturating_sub(1))
+        .min(matched.saturating_sub(visible.min(matched)));
+    let end = (start + visible).min(matched);
+    // Matched characters take the picker's accent: the active border
+    // colour, like its frame and prompt.
+    let highlight = border.add_modifier(Modifier::BOLD);
+    for (i, (label, hits, _)) in picker.visible_rows(start..end).into_iter().enumerate() {
+        let row = inner.y + 1 + i as u16;
+        let selected = start + i == picker.selected;
+        let base = if selected {
+            mode_style
+        } else {
+            Style::default()
+        };
+        let spans: Vec<Span> = label
+            .chars()
+            .enumerate()
+            .map(|(ci, ch)| {
+                let st = if hits.contains(&ci) {
+                    base.patch(highlight)
                 } else {
-                    Style::default()
+                    base
                 };
-                let spans: Vec<Span> = label
-                    .chars()
-                    .enumerate()
-                    .map(|(ci, ch)| {
-                        let st = if hits.contains(&ci) {
-                            base.patch(highlight)
-                        } else {
-                            base
-                        };
-                        Span::styled(ch.to_string(), st)
-                    })
-                    .collect();
-                if selected {
-                    buf.set_style(Rect::new(inner.x, row, inner.width, 1), mode_style);
-                }
-                Paragraph::new(Line::from(spans))
-                    .render(Rect::new(inner.x, row, inner.width, 1), buf);
-            }
-            p.insert.then(|| {
-                let x = inner.x + 2 + Line::raw(query).width() as u16;
-                Position::new(x.min(inner.x + inner.width.saturating_sub(1)), inner.y)
+                Span::styled(ch.to_string(), st)
             })
+            .collect();
+        if selected {
+            buf.set_style(Rect::new(inner.x, row, inner.width, 1), mode_style);
+        }
+        Paragraph::new(Line::from(spans)).render(Rect::new(inner.x, row, inner.width, 1), buf);
+    }
+    if let Some(pid) = preview_pane.filter(|_| preview_rows > 0) {
+        let sep = inner.y + 1 + list_rows;
+        buf.set_string(
+            inner.x,
+            sep,
+            "\u{2500}".repeat(usize::from(inner.width)),
+            border,
+        );
+        let rows = preview_rows.min(inner.y + inner.height - sep - 1);
+        draw_preview(
+            srv,
+            pid,
+            buf,
+            Rect::new(inner.x, sep + 1, inner.width, rows),
+        );
+    }
+    p.insert.then(|| {
+        let x = inner.x + 2 + Line::raw(query).width() as u16;
+        Position::new(x.min(inner.x + inner.width.saturating_sub(1)), inner.y)
+    })
+}
+
+/// A pane's screen in `area`: the rows up to its cursor (its latest output),
+/// cropped on the right.
+fn draw_preview(srv: &Server, pane: PaneId, buf: &mut Buffer, area: Rect) {
+    let Some(p) = srv.panes.get(&pane) else {
+        return;
+    };
+    let screen = p.emu.screen();
+    let (cursor_row, _) = screen.cursor_position();
+    let first = (cursor_row + 1).saturating_sub(area.height);
+    for row in 0..area.height {
+        for col in 0..area.width {
+            let cell = screen.cell(first + row, col);
+            let style = cell.map(cell_style).unwrap_or_default();
+            let sym = cell
+                .map(vt100::Cell::contents)
+                .filter(|s| !s.is_empty())
+                .unwrap_or(" ");
+            if let Some(out) = buf.cell_mut((area.x + col, area.y + row)) {
+                out.set_symbol(sym).set_style(style);
+            }
         }
     }
 }

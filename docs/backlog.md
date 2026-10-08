@@ -64,8 +64,6 @@ what was not.
 - **Key notation**: hjkl's `<C-x>` form is not accepted (plan/01 and plan/06
   once promised it); mouse events are built into `mouse.rs` and cannot be
   rebound (`MouseDown1Pane` and friends are not key names).
-- **Session picker preview** (plan/09): no preview of the selected session's
-  window. The picker's source reports `has_preview() = false`.
 - **Clock mode** (`prefix t`) is not implemented: it needs local time (the
   workspace has no date/time crate; `libc` `localtime_r` / `windows-sys`
   `GetLocalTime`, both already dependencies, would do) and a block-digit font.

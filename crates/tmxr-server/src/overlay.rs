@@ -372,6 +372,18 @@ impl PickerLogic for Source {
 pub struct PickerOverlay {
     pub picker: Picker,
     pub insert: bool,
+    /// Each row's label and target, to find the highlighted row's target
+    /// (the picker owns its source and exposes rows only by label).
+    rows: Vec<(String, Target)>,
+}
+
+/// What the highlighted picker row would show, for the preview.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Previewed {
+    /// A session's current window.
+    Session(SessionId),
+    /// A window, by session and index.
+    Window(SessionId, u32),
 }
 
 impl PickerOverlay {
@@ -382,6 +394,10 @@ impl PickerOverlay {
     /// A picker that opens already filtered by `query`.
     fn with_query(title: &'static str, items: Vec<Item>, query: &str) -> Self {
         let many = items.len() > 1 && title == "sessions";
+        let rows = items
+            .iter()
+            .map(|i| (i.label.clone(), i.target.clone()))
+            .collect();
         let mut picker = Picker::new(Box::new(Source { title, items }));
         if !query.is_empty() {
             // Typing after the query keeps refining it.
@@ -395,6 +411,22 @@ impl PickerOverlay {
         Self {
             picker,
             insert: true,
+            rows,
+        }
+    }
+
+    /// The window the highlighted row stands for, if it is a session or a
+    /// window.
+    pub fn previewed(&self) -> Option<Previewed> {
+        let sel = self.picker.selected;
+        if sel >= self.picker.matched() {
+            return None;
+        }
+        let label = self.picker.visible_rows(sel..sel + 1).into_iter().next()?.0;
+        match self.rows.iter().find(|(l, _)| *l == label)?.1 {
+            Target::Session(id, _) => Some(Previewed::Session(id)),
+            Target::Window(s, i) => Some(Previewed::Window(s, i)),
+            Target::Buffer(_) => None,
         }
     }
 
