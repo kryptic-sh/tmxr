@@ -54,6 +54,25 @@ what was not.
 
 ## Known gaps and follow-ups
 
+- **tmux command shorthand** (requested 2026-10-09: `tmux a` for
+  `attach-session` and the like). The lookup already works as tmux's does
+  (`tmxr_command::table::lookup`): exact name or alias first, then an
+  unambiguous prefix of a full name, so `tmxr a`, `ls`, `new`, `kill-ser` and
+  `splitw` resolve; unit-tested there. Every tmux alias on a list of tmux 3.x's
+  aliases written from memory is present; check it against a real
+  `tmux list-commands`. The gap is the 24 tmux commands tmxr does not have,
+  whose names and shorthands are therefore unknown: `clear-history`,
+  `customize-mode`, `display-menu`, `display-popup`, `link-window`,
+  `lock-client`, `lock-server`, `lock-session`, `move-pane`, `pipe-pane`,
+  `previous-layout`, `resize-window`, `respawn-window`, `server-access`,
+  `set-environment`, `set-hook`, `show-environment`, `show-hooks`,
+  `show-prompt-history`, `show-window-options`, `start-server`, `unlink-window`,
+  `wait-for`, `clear-prompt-history`. Checked against a running server on
+  2026-10-09: `ls`, `list-s`, `show` (`show-options`) and `kill-ser` resolve,
+  `displ` is ambiguous as in tmux, and `pipe` is an unknown command where
+  `tmux pipe` runs `pipe-pane`. Some are cheap aliases of what exists
+  (`show-window-options` → `show-options -w`, `move-pane` → `join-pane`,
+  `start-server`); the rest are real features.
 - **tmux default binds**: all of tmux's defaults are bound; `prefix C-z`
   (suspend-client) errors on Windows, which has no job control. Alerts for `M-n`
   / `M-p` are bells only (no `monitor-activity` / `monitor-silence`).

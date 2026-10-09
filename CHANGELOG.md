@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Windows: a 32-bit program's current directory was read from the WOW64 layer's
+  64-bit process block, which named another directory (`C:\WINDOWS` for a 32-bit
+  `cmd`), so splits from it opened there. It is now read from the program's own
+  32-bit block.
+
 ## [0.2.3] - 2026-10-09
 
 ### Added
