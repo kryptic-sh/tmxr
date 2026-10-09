@@ -96,6 +96,9 @@ pub struct Resurrect {
     pub restore_on_start: bool,
     pub keep: usize,
     pub processes: Vec<String>,
+    /// Programs from `processes` restored with their arguments, not just by
+    /// name (tmux-resurrect restores its default list this way).
+    pub restore_args: Vec<String>,
 }
 
 /// One entry in a key table: a bind, or `false` to remove a default bind.

@@ -57,6 +57,9 @@ pub struct SavedPane {
     pub cwd: PathBuf,
     /// Program to start again, when it is in `resurrect.processes`.
     pub command: Option<String>,
+    /// Its arguments, when it is in `resurrect.restore-args`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub args: Vec<String>,
 }
 
 /// Layout shape; leaves are positions in [`SavedWindow::panes`].
@@ -119,6 +122,49 @@ pub fn dir(endpoint: &Endpoint) -> Result<PathBuf, String> {
         .map_err(|e| e.to_string())
 }
 
+/// The pane's foreground program, read now: the cache `refresh_commands`
+/// keeps is only as fresh as the last status tick, which a save right after
+/// a program started would miss.
+fn foreground(srv: &Server, pane: PaneId) -> Option<String> {
+    srv.panes
+        .get(&pane)
+        .and_then(|p| tmxr_term::process::foreground_command(&p.pty))
+        .or_else(|| srv.commands.get(&pane).cloned())
+}
+
+/// The arguments of `command`, running in `pane`, when they are to be
+/// restored: it is in `resurrect.restore-args` and is still the pane's
+/// foreground program (the name was read earlier).
+fn saved_args(srv: &Server, pane: PaneId, command: &str) -> Vec<String> {
+    if !srv.cfg.resurrect.restore_args.iter().any(|c| c == command) {
+        return Vec::new();
+    }
+    let Some(argv) = srv
+        .panes
+        .get(&pane)
+        .and_then(|p| tmxr_term::process::foreground_args(&p.pty))
+    else {
+        return Vec::new();
+    };
+    match argv.split_first() {
+        Some((program, args)) if program_name(program).eq_ignore_ascii_case(command) => {
+            args.to_vec()
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// A program as `argv[0]` may give it (`/usr/bin/less`, `C:\…\hjkl.exe`) by
+/// the name `pane_current_command` reports.
+fn program_name(program: &str) -> &str {
+    let base = program.rsplit(['/', '\\']).next().unwrap_or(program);
+    let len = base.len();
+    match base.get(len.saturating_sub(4)..) {
+        Some(ext) if len > 4 && ext.eq_ignore_ascii_case(".exe") => &base[..len - 4],
+        _ => base,
+    }
+}
+
 /// Capture the server's sessions.
 pub fn capture(srv: &Server) -> Save {
     let keep = &srv.cfg.resurrect.processes;
@@ -147,9 +193,17 @@ pub fn capture(srv: &Server) -> Save {
                         layout: save_layout(&w.layout, &panes),
                         panes: panes
                             .iter()
-                            .map(|p| SavedPane {
-                                cwd: crate::vars::pane_current_path(srv, *p).unwrap_or_default(),
-                                command: srv.commands.get(p).filter(|c| keep.contains(c)).cloned(),
+                            .map(|p| {
+                                let command = foreground(srv, *p).filter(|c| keep.contains(c));
+                                SavedPane {
+                                    cwd: crate::vars::pane_current_path(srv, *p)
+                                        .unwrap_or_default(),
+                                    args: command
+                                        .as_deref()
+                                        .map(|c| saved_args(srv, *p, c))
+                                        .unwrap_or_default(),
+                                    command,
+                                }
                             })
                             .collect(),
                     })
@@ -292,10 +346,17 @@ fn restore_session(
     missing: &mut Vec<PathBuf>,
 ) -> Result<SessionId, String> {
     let first = &s.windows[0];
-    let argv = |p: &SavedPane| p.command.clone().map(|c| vec![c]).unwrap_or_default();
+    let argv = |p: &SavedPane| {
+        p.command
+            .iter()
+            .chain(p.command.is_some().then_some(&p.args).into_iter().flatten())
+            .cloned()
+            .collect::<Vec<_>>()
+    };
     let first_pane = first.panes.first().cloned().unwrap_or_else(|| SavedPane {
         cwd: s.cwd.clone(),
         command: None,
+        args: Vec::new(),
     });
     let sid = srv.new_session(
         Some(s.name.clone()),
@@ -320,6 +381,7 @@ fn restore_session(
             let p0 = w.panes.first().cloned().unwrap_or_else(|| SavedPane {
                 cwd: s.cwd.clone(),
                 command: None,
+                args: Vec::new(),
             });
             srv.new_window(
                 sid,
@@ -421,10 +483,12 @@ mod tests {
                         SavedPane {
                             cwd: "/home/u/src".into(),
                             command: Some("hjkl".into()),
+                            args: vec!["notes.md".into()],
                         },
                         SavedPane {
                             cwd: "/tmp".into(),
                             command: None,
+                            args: Vec::new(),
                         },
                     ],
                 }],
@@ -465,6 +529,25 @@ mod tests {
         assert!(window.as_object_mut().unwrap().remove("last").is_some());
         let old: Save = serde_json::from_value(json).unwrap();
         assert_eq!(old.sessions[0].windows[0].last, None);
+    }
+
+    #[test]
+    fn saves_without_args_still_load() {
+        let mut json: serde_json::Value = serde_json::to_value(sample()).unwrap();
+        let panes = &mut json["sessions"][0]["windows"][0]["panes"];
+        assert!(panes[1].get("args").is_none(), "empty args are not written");
+        assert!(panes[0].as_object_mut().unwrap().remove("args").is_some());
+        let old: Save = serde_json::from_value(json).unwrap();
+        assert!(old.sessions[0].windows[0].panes[0].args.is_empty());
+    }
+
+    #[test]
+    fn program_names_drop_their_directory_and_exe_suffix() {
+        assert_eq!(program_name("/usr/bin/less"), "less");
+        assert_eq!(program_name(r"C:\Tools\hjkl.exe"), "hjkl");
+        assert_eq!(program_name("PING.EXE"), "PING");
+        assert_eq!(program_name("nvim"), "nvim");
+        assert_eq!(program_name(".exe"), ".exe");
     }
 
     #[test]

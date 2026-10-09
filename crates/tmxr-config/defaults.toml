@@ -74,6 +74,11 @@ auto-save-minutes = 15
 restore-on-start = true
 keep = 20
 processes = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "top", "htop", "irssi", "weechat", "mutt", "hjkl", "sqeel"]
+# Of those, the ones restored with their arguments (`less app.log`, not
+# `less`): tmux-resurrect's default list and hjkl. Arguments are saved in the
+# plain-text save file, so leave out programs whose arguments can hold
+# secrets (sqeel's connection strings).
+restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "top", "htop", "irssi", "weechat", "mutt", "hjkl"]
 
 # User options (`@name`), readable in formats as #{@name}.
 [options]

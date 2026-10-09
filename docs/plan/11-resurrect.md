@@ -13,10 +13,16 @@ Stretch goal for the MVP; designed now so the model keeps what it needs.
 - Every pane: current directory, and the **foreground program's name** if it is
   in `resurrect.processes` (tmux-resurrect's default list:
   `vi vim nvim emacs man less more tail top htop irssi weechat mutt`, plus
-  `hjkl` and `sqeel`). Anything else restores as a shell in the same directory.
+  `hjkl` and `sqeel`), read when the save is made. Its **arguments** too, if it
+  is also in `resurrect.restore-args` (the same list without `sqeel`, whose
+  arguments can hold a connection string's password): `/proc/<pid>/cmdline` on
+  Linux, `KERN_PROCARGS2` on macOS, the process's command line split by
+  `CommandLineToArgvW` on Windows. Anything else restores as a shell in the same
+  directory.
 
-Each window's last pane is saved too. Not saved: pane titles, program arguments,
-pane contents (tmux-resurrect's `capture-pane-contents`).
+Each window's last pane is saved too. Not saved: pane titles, arguments of
+programs outside `restore-args`, pane contents (tmux-resurrect's
+`capture-pane-contents`).
 
 ## Format and location
 
@@ -55,8 +61,8 @@ server never touches the main one's:
   same), so restore is safe to run twice.
 - A directory that no longer exists falls back to `$HOME`, and the restore
   message lists the missing directories.
-- A saved program is started by name as the pane's command, in the pane's
-  directory, so `hjkl` comes back as `hjkl` in the right place. Arguments are
-  never saved, because blindly re-running a saved command line is how restore
-  runs something destructive twice; an allowlist of programs whose arguments are
-  safe to restore (resurrect's `~vim` strategies) is backlog.
+- A saved program is started by name, with its saved arguments, as the pane's
+  command in the pane's directory, so `less app.log` comes back as
+  `less app.log` in the right place. Only allowlisted programs keep their
+  arguments, because blindly re-running any saved command line is how restore
+  runs something destructive twice.

@@ -20,6 +20,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Emacs copy mode**: `mode-keys emacs` switches copy mode to tmux's emacs
   table (`copy-mode`: `C-Space`, `M-w`, `C-s` / `C-r`, `M-1`… counts, …).
   `mode-keys` now rejects values other than `vi` and `emacs`.
+- **Resurrect restores arguments** for programs in the new
+  `resurrect.restore-args` list (tmux-resurrect's defaults and `hjkl`), so
+  `less app.log` comes back as `less app.log`, not `less`.
 
 ### Fixed
 
@@ -29,6 +32,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   server repaints during a flood.
 - `C-Space` binds now fire on Windows, where the terminal reports the key (byte
   0x00) as `C-2`; `C-@` names the same key, as in tmux.
+- A save made right after a program started (`prefix C-s`) now records it; saves
+  used to read a list of foreground programs refreshed only on the status tick.
 
 ## [0.1.0] - 2026-10-09
 

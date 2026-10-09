@@ -1695,3 +1695,81 @@ fn emacs_copy_mode_selects_with_its_own_keys() {
         o.trim_end() == "@emacs-copy"
     });
 }
+
+#[test]
+fn resurrect_restores_allowlisted_programs_with_their_arguments() {
+    // A program with arguments; on Windows the pane's cmd runs it as a child.
+    #[cfg(unix)]
+    let (program, start, args) = ("sleep", vec!["sleep", "300"], vec!["300"]);
+    #[cfg(windows)]
+    let (program, start, args) = (
+        "PING",
+        vec!["cmd.exe", "/d", "/c", "ping -n 300 127.0.0.1 >NUL"],
+        vec!["-n", "300", "127.0.0.1"],
+    );
+    let t = Tmxr::new("resargs");
+    let config = std::fs::read_to_string(&t.config).unwrap();
+    std::fs::write(
+        &t.config,
+        format!("{config}processes = [{program:?}]\nrestore-args = [{program:?}]\n"),
+    )
+    .unwrap();
+    let mut new = vec!["new-session", "-d", "-s", "main"];
+    new.extend(&start);
+    t.run(&new);
+    let running = |t: &Tmxr| {
+        t.wait_run(
+            &[
+                "display-message",
+                "-p",
+                "-t",
+                "main",
+                "#{pane_current_command}",
+            ],
+            "the program running",
+            |o| o.trim().eq_ignore_ascii_case(program),
+        );
+    };
+    // The first `args` list in the newest save (only one pane has any).
+    let saved_args = |t: &Tmxr| -> Vec<String> {
+        let dir = t.dir.path().join("data").join("tmxr").join("resurrect");
+        let newest = std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .flat_map(|server| std::fs::read_dir(server.path()).unwrap().flatten())
+            .map(|f| f.path())
+            .filter(|p| p.extension().is_some_and(|e| e == "json"))
+            .max()
+            .expect("a save");
+        let save = std::fs::read_to_string(newest).unwrap();
+        let Some((_, rest)) = save.split_once("\"args\": [") else {
+            return Vec::new();
+        };
+        let list = rest.split(']').next().unwrap();
+        list.split('"')
+            .skip(1)
+            .step_by(2)
+            .map(str::to_owned)
+            .collect()
+    };
+    running(&t);
+    t.run(&["resurrect-save"]);
+    assert_eq!(saved_args(&t), args);
+
+    t.run(&["kill-server"]);
+    t.wait_run(&["ls"], "server gone", str::is_empty);
+    let config = std::fs::read_to_string(&t.config).unwrap();
+    std::fs::write(
+        &t.config,
+        config.replace("restore-on-start = false", "restore-on-start = true"),
+    )
+    .unwrap();
+    t.run(&["new-session", "-d", "-s", "other"]);
+    // The restored program got its arguments back: a fresh save reads them
+    // from the running process again.
+    running(&t);
+    std::thread::sleep(Duration::from_millis(5));
+    t.run(&["resurrect-save"]);
+    assert_eq!(saved_args(&t), args);
+    t.run(&["kill-server"]);
+}

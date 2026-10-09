@@ -1,10 +1,10 @@
 //! What is running in a pane, and where.
 //!
-//! | Platform | Foreground process                                   | Directory                 |
-//! | -------- | ---------------------------------------------------- | ------------------------- |
-//! | Linux    | the terminal's foreground process group leader       | `/proc/<pid>/cwd`         |
-//! | macOS    | the terminal's foreground process group leader       | `proc_pidinfo` vnode path |
-//! | Windows  | the newest settled direct child of the pane's process, else the process itself | not available (`None`) |
+//! | Platform | Foreground process                                   | Directory                 | Arguments |
+//! | -------- | ---------------------------------------------------- | ------------------------- | --------- |
+//! | Linux    | the terminal's foreground process group leader       | `/proc/<pid>/cwd`         | `/proc/<pid>/cmdline` |
+//! | macOS    | the terminal's foreground process group leader       | `proc_pidinfo` vnode path | `sysctl` `KERN_PROCARGS2` |
+//! | Windows  | the newest settled direct child of the pane's process, else the process itself | not available (`None`) | `NtQueryInformationProcess` command line, split by `CommandLineToArgvW` |
 //!
 //! Windows has no foreground process group; the pane's program is usually a
 //! shell and whatever it runs is its child, so the child is what the user sees.
@@ -28,6 +28,13 @@ pub fn foreground_command(pty: &Pty) -> Option<String> {
     {
         process_name(foreground_pid(pty)?)
     }
+}
+
+/// The pane's foreground process's command line, program first, as it was
+/// started. `None` when it cannot be read, or an argument is not UTF-8 (it
+/// could not be restored as it was).
+pub fn foreground_args(pty: &Pty) -> Option<Vec<String>> {
+    process_args(foreground_pid(pty)?)
 }
 
 /// Working directory of the pane's foreground process. `None` where the
@@ -66,6 +73,21 @@ fn process_name(pid: u32) -> Option<String> {
 }
 
 #[cfg(target_os = "linux")]
+fn process_args(pid: u32) -> Option<Vec<String>> {
+    parse_cmdline(&std::fs::read(format!("/proc/{pid}/cmdline")).ok()?)
+}
+
+/// `/proc/<pid>/cmdline`: each argument followed by a NUL. Empty for a
+/// process with no command line (a zombie, a kernel thread).
+#[cfg(any(target_os = "linux", test))]
+fn parse_cmdline(raw: &[u8]) -> Option<Vec<String>> {
+    let body = raw.strip_suffix(&[0])?;
+    body.split(|b| *b == 0)
+        .map(|a| String::from_utf8(a.to_vec()).ok())
+        .collect()
+}
+
+#[cfg(target_os = "linux")]
 fn process_cwd(pid: u32) -> Option<PathBuf> {
     std::fs::read_link(format!("/proc/{pid}/cwd")).ok()
 }
@@ -81,6 +103,64 @@ fn process_name(pid: u32) -> Option<String> {
         return None;
     }
     Some(String::from_utf8_lossy(&buf[..n as usize]).into_owned())
+}
+
+#[cfg(target_os = "macos")]
+fn process_args(pid: u32) -> Option<Vec<String>> {
+    let pid = libc::c_int::try_from(pid).ok()?;
+    let mut mib = [libc::CTL_KERN, libc::KERN_PROCARGS2, pid];
+    let mut size: libc::size_t = 0;
+    // SAFETY: `mib` names three valid integers; a null output buffer asks
+    // only for the size, written to `size`.
+    let rc = unsafe {
+        libc::sysctl(
+            mib.as_mut_ptr(),
+            3,
+            std::ptr::null_mut(),
+            &mut size,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    if rc != 0 || size == 0 {
+        return None;
+    }
+    let mut buf = vec![0u8; size];
+    // SAFETY: `buf` is valid for `size` bytes, which sysctl writes at most,
+    // updating `size` to the count written.
+    let rc = unsafe {
+        libc::sysctl(
+            mib.as_mut_ptr(),
+            3,
+            buf.as_mut_ptr().cast(),
+            &mut size,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    if rc != 0 {
+        return None;
+    }
+    buf.truncate(size);
+    parse_procargs2(&buf)
+}
+
+/// `KERN_PROCARGS2`: `argc` as a native-endian `int`, the executable's path,
+/// NUL padding, then `argc` NUL-terminated arguments (the environment
+/// follows, and is ignored).
+#[cfg(any(target_os = "macos", test))]
+fn parse_procargs2(buf: &[u8]) -> Option<Vec<String>> {
+    let argc = i32::from_ne_bytes(buf.get(..4)?.try_into().ok()?);
+    let argc = usize::try_from(argc).ok()?;
+    let rest = &buf[4..];
+    let rest = &rest[rest.iter().position(|b| *b == 0)?..];
+    let rest = &rest[rest.iter().position(|b| *b != 0)?..];
+    let args: Vec<String> = rest
+        .split(|b| *b == 0)
+        .take(argc)
+        .map(|a| String::from_utf8(a.to_vec()).ok())
+        .collect::<Option<_>>()?;
+    (args.len() == argc).then_some(args)
 }
 
 #[cfg(target_os = "macos")]
@@ -127,6 +207,11 @@ fn process_name(_pid: u32) -> Option<String> {
 
 #[cfg(all(unix, not(any(target_os = "linux", target_os = "macos"))))]
 fn process_cwd(_pid: u32) -> Option<PathBuf> {
+    None
+}
+
+#[cfg(all(unix, not(any(target_os = "linux", target_os = "macos"))))]
+fn process_args(_pid: u32) -> Option<Vec<String>> {
     None
 }
 
@@ -206,6 +291,106 @@ mod win {
         unsafe { GetSystemTimeAsFileTime(&mut now) };
         ok.then(|| ticks(now).saturating_sub(ticks(created)))
     }
+
+    /// The command line `pid` was started with, as one string.
+    pub fn command_line(pid: u32) -> Option<Vec<u16>> {
+        use windows_sys::Wdk::System::Threading::{
+            NtQueryInformationProcess, ProcessCommandLineInformation,
+        };
+        use windows_sys::Win32::Foundation::UNICODE_STRING;
+        // SAFETY: OpenProcess takes no pointers; the handle is checked and
+        // closed below.
+        let h = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+        if h.is_null() {
+            return None;
+        }
+        let mut needed = 0u32;
+        // SAFETY: a null buffer of length 0 only asks for the size, which is
+        // written to `needed`; `h` has the query rights this class needs.
+        unsafe {
+            NtQueryInformationProcess(
+                h,
+                ProcessCommandLineInformation,
+                std::ptr::null_mut(),
+                0,
+                &mut needed,
+            )
+        };
+        // u64 words, so the UNICODE_STRING at the start is aligned.
+        let mut buf = vec![0u64; (needed as usize).div_ceil(8).max(1)];
+        let len = u32::try_from(buf.len() * 8).unwrap_or(0);
+        // SAFETY: `buf` is valid and writable for `len` bytes, and `needed`
+        // is a live u32.
+        let status = unsafe {
+            NtQueryInformationProcess(
+                h,
+                ProcessCommandLineInformation,
+                buf.as_mut_ptr().cast(),
+                len,
+                &mut needed,
+            )
+        };
+        // SAFETY: `h` is valid and closed exactly once.
+        unsafe { CloseHandle(h) };
+        if status < 0 || (needed as usize) < std::mem::size_of::<UNICODE_STRING>() {
+            return None;
+        }
+        // SAFETY: the call succeeded and wrote at least a UNICODE_STRING at
+        // the start of `buf`, which is 8-aligned.
+        let us = unsafe { &*buf.as_ptr().cast::<UNICODE_STRING>() };
+        let start = buf.as_ptr() as usize;
+        let end = start + buf.len() * 8;
+        let text = us.Buffer as usize;
+        let bytes = usize::from(us.Length);
+        // The text lives in `buf`, after the header; refuse anything else.
+        let inside = text >= start && text.checked_add(bytes).is_some_and(|e| e <= end);
+        if us.Buffer.is_null() || !text.is_multiple_of(2) || !inside {
+            return None;
+        }
+        // SAFETY: just checked that [text, text + bytes) lies inside `buf`
+        // and is u16-aligned.
+        Some(unsafe { std::slice::from_raw_parts(us.Buffer, bytes / 2) }.to_vec())
+    }
+
+    /// Split a command line into arguments as a C program's startup code
+    /// would (`CommandLineToArgvW`).
+    pub fn split_command_line(line: &[u16]) -> Option<Vec<String>> {
+        use windows_sys::Win32::Foundation::LocalFree;
+        use windows_sys::Win32::UI::Shell::CommandLineToArgvW;
+        if line.iter().all(|c| *c == u16::from(b' ')) {
+            // An empty line would give the calling program's own path.
+            return None;
+        }
+        let mut z = line.to_vec();
+        z.push(0);
+        let mut n = 0i32;
+        // SAFETY: `z` is NUL-terminated; `n` is a live i32.
+        let argv = unsafe { CommandLineToArgvW(z.as_ptr(), &mut n) };
+        if argv.is_null() {
+            return None;
+        }
+        let count = usize::try_from(n).unwrap_or(0);
+        let args = (0..count)
+            .map(|i| {
+                // SAFETY: CommandLineToArgvW returned `n` pointers, each to a
+                // NUL-terminated string, all alive until the LocalFree below.
+                unsafe {
+                    let p = *argv.add(i);
+                    let len = (0..).take_while(|&j| *p.add(j) != 0).count();
+                    String::from_utf16(std::slice::from_raw_parts(p, len)).ok()
+                }
+            })
+            .collect();
+        // SAFETY: `argv` came from CommandLineToArgvW, which documents
+        // LocalFree as how to release it; freed exactly once.
+        unsafe { LocalFree(argv.cast()) };
+        args
+    }
+}
+
+#[cfg(windows)]
+fn process_args(pid: u32) -> Option<Vec<String>> {
+    win::split_command_line(&win::command_line(pid)?)
 }
 
 /// Minimum age of a child process before it counts as the pane's foreground
@@ -251,12 +436,12 @@ mod tests {
     use std::sync::{Arc, Mutex, mpsc};
     use std::time::{Duration, Instant};
 
-    /// A command that stays alive long enough to be inspected, and the name
-    /// the inspection should report.
-    fn long_running() -> (Vec<String>, &'static str) {
+    /// A command that stays alive long enough to be inspected, the name the
+    /// inspection should report, and the arguments after the program.
+    fn long_running() -> (Vec<String>, &'static str, &'static [&'static str]) {
         #[cfg(unix)]
         {
-            (vec!["sleep".into(), "30".into()], "sleep")
+            (vec!["sleep".into(), "30".into()], "sleep", &["30"])
         }
         #[cfg(windows)]
         {
@@ -269,13 +454,40 @@ mod tests {
                     "ping -n 30 127.0.0.1 >NUL".into(),
                 ],
                 "PING",
+                &["-n", "30", "127.0.0.1"],
             )
         }
     }
 
     #[test]
+    fn cmdline_and_procargs2_parse_into_arguments() {
+        assert_eq!(
+            parse_cmdline(b"less\0-R\0\0a b.log\0"),
+            Some(vec![
+                "less".into(),
+                "-R".into(),
+                String::new(),
+                "a b.log".into()
+            ])
+        );
+        assert_eq!(parse_cmdline(b""), None);
+        assert_eq!(parse_cmdline(b"bad\xff\0"), None);
+
+        let mut buf = 2i32.to_ne_bytes().to_vec();
+        buf.extend_from_slice(b"/usr/bin/less\0\0\0\0less\0x.log\0HOME=/home/u\0");
+        assert_eq!(
+            parse_procargs2(&buf),
+            Some(vec!["less".into(), "x.log".into()])
+        );
+        // Fewer arguments than argc says: refused, not truncated.
+        let mut short = 3i32.to_ne_bytes().to_vec();
+        short.extend_from_slice(b"/bin/x\0x\0");
+        assert_eq!(parse_procargs2(&short), None);
+    }
+
+    #[test]
     fn foreground_command_names_the_running_program() {
-        let (argv, want) = long_running();
+        let (argv, want, want_args) = long_running();
         let dir = std::env::temp_dir();
         let (tx, rx) = mpsc::channel();
         let tx = Mutex::new(tx);
@@ -318,6 +530,8 @@ mod tests {
             got.eq_ignore_ascii_case(want),
             "foreground command {got:?}, want {want:?}"
         );
+        let args = foreground_args(&pty).expect("foreground arguments");
+        assert_eq!(&args[1..], want_args, "{args:?}");
         #[cfg(target_os = "linux")]
         assert_eq!(
             current_dir(&pty).map(|p| p.canonicalize().unwrap()),
