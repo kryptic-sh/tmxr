@@ -1924,3 +1924,28 @@ fn panes_inherit_the_servers_path() {
         |o| o.lines().any(|l| l.starts_with(&want)),
     );
 }
+
+#[test]
+fn select_pane_z_keeps_a_zoomed_window_zoomed() {
+    let t = Tmxr::new("selz");
+    t.run(&["new-session", "-d", "-s", "z"]);
+    t.run(&["split-window", "-h", "-t", "z"]);
+    let state = |t: &Tmxr| {
+        t.run(&[
+            "display-message",
+            "-p",
+            "-t",
+            "z",
+            "#{pane_index} #{window_zoomed_flag}",
+        ])
+        .trim()
+        .to_owned()
+    };
+    t.run(&["resize-pane", "-Z", "-t", "z"]);
+    assert_eq!(state(&t), "1 1");
+    t.run(&["select-pane", "-Z", "-L", "-t", "z"]);
+    assert_eq!(state(&t), "0 1", "moved and still zoomed");
+    // Without -Z, selecting another pane unzooms, as in tmux.
+    t.run(&["select-pane", "-R", "-t", "z"]);
+    assert_eq!(state(&t), "1 0");
+}

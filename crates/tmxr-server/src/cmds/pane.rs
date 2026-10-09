@@ -75,7 +75,15 @@ pub(super) fn run(
             } else {
                 pid
             };
+            let zoomed = srv.windows[&wid].zoomed;
             srv.select_pane(to);
+            // -Z: a zoomed window stays zoomed, now on the selected pane.
+            if a.has('Z') && zoomed {
+                if let Some(w) = srv.windows.get_mut(&wid) {
+                    w.zoomed = true;
+                }
+                srv.relayout(wid);
+            }
         }
         "last-pane" => {
             let (_, wid, _) = target::window(srv, ctx, a.value('t'))?;

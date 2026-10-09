@@ -355,10 +355,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "select-pane",
         Some("selectp"),
-        "DLlMmRt:U",
+        "DLlMmRt:UZ",
         0,
         0,
-        "[-DLlMmRU] [-t target-pane]"
+        "[-DLlMmRUZ] [-t target-pane]"
     ),
     cmd!(
         "select-window",

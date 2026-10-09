@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `select-pane -Z` keeps a zoomed window zoomed on the pane it selects, as in
+  tmux (tmxr-navigator.nvim's `preserve_zoom` uses it).
+
 ## [0.2.1] - 2026-10-09
 
 ### Fixed
