@@ -164,8 +164,8 @@ Every channel of hrdr's pipeline is in CI from 2026-10-09 (`publish-crates`,
 to the org secrets `AUR_SSH_KEY` and `BREW_SSH_KEY` (`SCOOP_SSH_KEY` and
 `CARGO_REGISTRY_TOKEN` are shared with every org repo). crates.io's `tmxr` is
 another project (crates.io owner `slaptijack`), so the app crate is `tmxr-cli`,
-installing the `tmxr` binary. Still to do: the site entry on
-kryptic-sh.github.io (plan/14 lists the files).
+installing the `tmxr` binary. The kryptic.sh page (`/projects/tmxr/`) went live
+the same day.
 
 ## Cross-repo work
 
