@@ -2156,3 +2156,38 @@ fn environment_commands_set_show_and_reach_new_panes() {
             .success()
     );
 }
+
+#[test]
+fn clear_history_and_respawn_window() {
+    let t = Tmxr::new("clearhist");
+    #[cfg(unix)]
+    let (lines, done) = ("seq 1 80; echo printed-all", "printed-all");
+    #[cfg(windows)]
+    let (lines, done) = ("for /l %i in (1,1,80) do @echo %i", "80");
+    t.run(&["new-session", "-d", "-s", "ch"]);
+    t.run(&["send-keys", "-t", "ch", lines, "Enter"]);
+    let history = |t: &Tmxr| -> usize {
+        t.run(&["display-message", "-p", "-t", "ch", "#{history_size}"])
+            .trim()
+            .parse()
+            .unwrap()
+    };
+    t.wait_run(
+        &["capture-pane", "-p", "-t", "ch"],
+        "the lines printed",
+        |o| o.lines().any(|l| l.trim_end() == done),
+    );
+    assert!(history(&t) > 0, "nothing scrolled into history");
+    t.run(&["clearhist", "-t", "ch"]);
+    assert_eq!(history(&t), 0);
+
+    // respawnw: back to one pane, refused while a program runs, unless -k.
+    t.run(&["split-window", "-t", "ch"]);
+    let refused = t.output(&["respawnw", "-t", "ch"]);
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains("still active"),
+        "{refused:?}"
+    );
+    t.run(&["respawnw", "-k", "-t", "ch"]);
+    assert_eq!(t.run(&["list-panes", "-t", "ch"]).lines().count(), 1);
+}

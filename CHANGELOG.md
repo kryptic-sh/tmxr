@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- tmux's `clear-history` (`clearhist`), which drops a pane's history and keeps
+  its screen, and `respawn-window` (`respawnw`), which takes a window back to
+  its first pane and restarts it (`-k` when a program still runs). The
+  `#{history_size}` format reports a pane's lines of history.
+
 ## [0.2.4] - 2026-10-09
 
 ### Added

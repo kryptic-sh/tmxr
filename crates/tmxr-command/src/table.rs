@@ -76,6 +76,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         0,
         "[-swZ] [-t target-pane]"
     ),
+    cmd!(
+        "clear-history",
+        Some("clearhist"),
+        "Ht:",
+        0,
+        0,
+        "[-H] [-t target-pane]"
+    ),
     cmd!("clock-mode", None, "t:", 0, 0, "[-t target-pane]"),
     cmd!(
         "command-prompt",
@@ -333,6 +341,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         0,
         ANY,
         "[-k] [-c start-directory] [-t target-pane] [command]"
+    ),
+    cmd!(
+        "respawn-window",
+        Some("respawnw"),
+        "c:kt:",
+        0,
+        ANY,
+        "[-k] [-c start-directory] [-t target-window] [command]"
     ),
     cmd!("resurrect-restore", None, "", 0, 0, ""),
     cmd!("resurrect-save", None, "", 0, 0, ""),

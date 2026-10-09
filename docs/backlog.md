@@ -61,16 +61,16 @@ what was not.
   `splitw` resolve; unit-tested there. Every tmux alias on a list of tmux 3.x's
   aliases written from memory is present; check it against a real
   `tmux list-commands`. The gap is the tmux commands tmxr does not have, whose
-  names and shorthands are therefore unknown: `clear-history`, `customize-mode`,
-  `display-menu`, `display-popup`, `link-window`, `lock-client`, `lock-server`,
-  `lock-session`, `pipe-pane`, `resize-window`, `respawn-window`,
-  `server-access`, `set-hook`, `show-hooks`, `show-prompt-history`,
-  `unlink-window`, `wait-for`, `clear-prompt-history` (`move-pane`,
-  `previous-layout`, `show-window-options`, `start-server`, `set-environment`
-  and `show-environment` were added on 2026-10-09). Checked against a running
-  server on 2026-10-09: `ls`, `list-s`, `show` (`show-options`) and `kill-ser`
-  resolve, `displ` is ambiguous as in tmux, and `pipe` is an unknown command
-  where `tmux pipe` runs `pipe-pane`.
+  names and shorthands are therefore unknown: `customize-mode`, `display-menu`,
+  `display-popup`, `link-window`, `lock-client`, `lock-server`, `lock-session`,
+  `pipe-pane`, `resize-window`, `server-access`, `set-hook`, `show-hooks`,
+  `show-prompt-history`, `unlink-window`, `wait-for`, `clear-prompt-history`
+  (`move-pane`, `previous-layout`, `show-window-options`, `start-server`,
+  `set-environment`, `show-environment`, `clear-history` and `respawn-window`
+  were added on 2026-10-09). Checked against a running server on 2026-10-09:
+  `ls`, `list-s`, `show` (`show-options`) and `kill-ser` resolve, `displ` is
+  ambiguous as in tmux, and `pipe` is an unknown command where `tmux pipe` runs
+  `pipe-pane`.
 - **tmux default binds**: all of tmux's defaults are bound; `prefix C-z`
   (suspend-client) errors on Windows, which has no job control. Alerts for `M-n`
   / `M-p` are bells only (no `monitor-activity` / `monitor-silence`).

@@ -154,6 +154,8 @@ pub struct Emulator {
     passthrough: Vec<Vec<u8>>,
     /// [`passthrough_supported`], read once.
     split: bool,
+    /// The history limit, for a fresh parser.
+    scrollback: usize,
 }
 
 impl Emulator {
@@ -163,7 +165,29 @@ impl Emulator {
             dcs: DcsSplitter::default(),
             passthrough: Vec::new(),
             split: passthrough_supported(),
+            scrollback,
         }
+    }
+
+    /// Lines of history above the screen (tmux's `#{history_size}`). vt100
+    /// tells only by moving its scrollback view, so a copy is measured.
+    pub fn history_size(&self) -> usize {
+        let mut screen = self.parser.screen().clone();
+        screen.set_scrollback(usize::MAX);
+        screen.scrollback()
+    }
+
+    /// Drop the history above the screen (tmux's `clear-history`), keeping
+    /// the screen, cursor and modes. vt100 has no way to empty its
+    /// scrollback, so a fresh parser replays the old screen's state; the
+    /// hooks (title, directory, pending output) move over as they are.
+    pub fn clear_history(&mut self) {
+        let (rows, cols) = self.parser.screen().size();
+        let state = self.parser.screen().state_formatted();
+        let hooks = std::mem::take(self.parser.callbacks_mut());
+        let mut fresh = vt100::Parser::new_with_callbacks(rows, cols, self.scrollback, hooks);
+        fresh.process(&state);
+        self.parser = fresh;
     }
 
     /// Feed program output. Returns bytes that must be written back to the
@@ -267,6 +291,31 @@ fn hex(b: u8) -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clearing_history_keeps_the_screen() {
+        let mut emu = Emulator::new(3, 20, 100);
+        let lines: String = (0..10).map(|i| format!("line{i}\r\n")).collect();
+        emu.process(lines.as_bytes());
+        emu.process(b"\x1b[1mbold");
+        let history = |emu: &mut Emulator| {
+            emu.screen_mut().set_scrollback(usize::MAX);
+            let n = emu.screen().scrollback();
+            emu.screen_mut().set_scrollback(0);
+            n
+        };
+        assert!(history(&mut emu) > 0);
+        assert_eq!(emu.history_size(), history(&mut emu));
+        let (screen, cursor) = (emu.screen().contents(), emu.screen().cursor_position());
+        emu.clear_history();
+        assert_eq!(history(&mut emu), 0);
+        assert_eq!(emu.screen().contents(), screen);
+        assert_eq!(emu.screen().cursor_position(), cursor);
+        assert!(emu.screen().cell(2, 0).unwrap().bold(), "attributes kept");
+        // New output still scrolls into a history again.
+        emu.process(b"\r\nmore\r\nlines\r\n");
+        assert!(history(&mut emu) > 0);
+    }
 
     #[test]
     fn cursor_position_and_device_attribute_queries_are_answered() {

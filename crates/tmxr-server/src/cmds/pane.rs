@@ -148,6 +148,28 @@ pub(super) fn run(
             let cwd = cwd_arg(srv, ctx, Some(pid), a);
             srv.respawn_pane(pid, pos.to_vec(), cwd)?;
         }
+        "respawn-window" => {
+            // tmux: the window goes back to one pane, its first, respawned.
+            let (_, wid, _) = target::window(srv, ctx, a.value('t'))?;
+            let panes = srv.windows.get(&wid).ok_or("no window")?.panes();
+            let first = *panes.first().ok_or("window has no panes")?;
+            if !a.has('k') && panes.iter().any(|p| srv.panes[p].dead.is_none()) {
+                return Err(format!("respawn window failed: window @{wid} still active"));
+            }
+            for p in &panes[1..] {
+                srv.kill_pane(*p);
+            }
+            let cwd = cwd_arg(srv, ctx, Some(first), a);
+            srv.respawn_pane(first, pos.to_vec(), cwd)?;
+        }
+        "clear-history" => {
+            // -H also drops hyperlinks in tmux; tmxr keeps none.
+            let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
+            let p = srv.panes.get_mut(&pid).ok_or("no such pane")?;
+            p.emu.clear_history();
+            let window = p.window;
+            srv.mark_window_dirty(window);
+        }
         // tmux's move-pane is join-pane under another name.
         "join-pane" | "move-pane" => {
             let src = match (a.value('s'), srv.marked_pane()) {
