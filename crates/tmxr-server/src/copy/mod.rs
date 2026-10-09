@@ -731,6 +731,24 @@ impl CopyMode {
                 self.anchor = Some((self.cy, 0));
                 self.kind = SelKind::Line;
             }
+            "select-word" => {
+                // The run of same-class cells (word, punctuation or blank)
+                // under the cursor, on its line.
+                let class = self.class(self.cy, self.cx, false);
+                let len = self.line_len(self.cy).max(self.cx + 1);
+                let start = (0..self.cx)
+                    .rev()
+                    .take_while(|&x| self.class(self.cy, x, false) == class)
+                    .last()
+                    .unwrap_or(self.cx);
+                let end = (self.cx..len)
+                    .take_while(|&x| self.class(self.cy, x, false) == class)
+                    .last()
+                    .unwrap_or(self.cx);
+                self.anchor = Some((self.cy, start));
+                self.kind = SelKind::Char;
+                self.cx = end;
+            }
             "rectangle-toggle" => {
                 self.kind = if self.kind == SelKind::Rect {
                     SelKind::Char

@@ -125,6 +125,8 @@ restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "to
 "WheelUpPane" = { cmd = "if-shell -F '#{mouse_any_flag}' 'send-keys -M' 'copy-mode -e ; send-keys -X -N 5 scroll-up'", note = "Scroll up into copy mode" }
 "MouseDrag1Border" = { cmd = "resize-pane -M", note = "Resize panes by dragging a border" }
 "MouseDown1Status" = { cmd = "select-window -t =", note = "Select the window clicked" }
+"DoubleClick1Pane" = { cmd = "select-pane -t = ; if-shell -F '#{mouse_any_flag}' 'send-keys -M' 'copy-mode ; send-keys -X select-word ; send-keys -X copy-selection-and-cancel'", note = "Copy the word double-clicked" }
+"TripleClick1Pane" = { cmd = "select-pane -t = ; if-shell -F '#{mouse_any_flag}' 'send-keys -M' 'copy-mode ; send-keys -X select-line ; send-keys -X copy-selection-and-cancel'", note = "Copy the line triple-clicked" }
 
 [keys.prefix]
 # tmux.conf: vim style pane selection.
@@ -300,6 +302,8 @@ restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "to
 "MouseDragEnd1Pane" = { cmd = "send-keys -X copy-selection-and-cancel", note = "Copy the dragged selection" }
 "WheelUpPane" = { cmd = "select-pane ; send-keys -X -N 5 scroll-up", note = "Scroll up" }
 "WheelDownPane" = { cmd = "select-pane ; send-keys -X -N 5 scroll-down", note = "Scroll down" }
+"DoubleClick1Pane" = { cmd = "select-pane ; send-keys -X select-word ; send-keys -X copy-selection-and-cancel", note = "Copy the word double-clicked" }
+"TripleClick1Pane" = { cmd = "select-pane ; send-keys -X select-line ; send-keys -X copy-selection-and-cancel", note = "Copy the line triple-clicked" }
 
 # Copy mode with `mode-keys emacs`: tmux's own copy-mode table, with
 # non-incremental search. Counts are M-1 … M-9.
@@ -364,3 +368,5 @@ restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "to
 "MouseDragEnd1Pane" = { cmd = "send-keys -X copy-selection-and-cancel", note = "Copy the dragged selection" }
 "WheelUpPane" = { cmd = "select-pane ; send-keys -X -N 5 scroll-up", note = "Scroll up" }
 "WheelDownPane" = { cmd = "select-pane ; send-keys -X -N 5 scroll-down", note = "Scroll down" }
+"DoubleClick1Pane" = { cmd = "select-pane ; send-keys -X select-word ; send-keys -X copy-selection-and-cancel", note = "Copy the word double-clicked" }
+"TripleClick1Pane" = { cmd = "select-pane ; send-keys -X select-line ; send-keys -X copy-selection-and-cancel", note = "Copy the line triple-clicked" }

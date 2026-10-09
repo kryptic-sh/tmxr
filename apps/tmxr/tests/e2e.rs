@@ -1795,3 +1795,35 @@ fn copy_end_of_line_takes_the_rest_of_the_line() {
         o.trim_end() == "@eol-copy tail"
     });
 }
+
+#[test]
+fn double_and_triple_clicks_copy_a_word_and_a_line() {
+    let t = Tmxr::new("clicks");
+    let s = t.attach(&["new", "-s", "ck"]);
+    s.wait_for("status line", |text| text.contains("ck"));
+    s.wait_mouse(true);
+    s.send(b"echo head @clicked tail\r");
+    s.wait_for("echoed", |text| {
+        text.lines().any(|l| l.trim_end() == "head @clicked tail")
+    });
+    let row = s
+        .text()
+        .lines()
+        .position(|l| l.trim_end() == "head @clicked tail")
+        .expect("output line");
+    let row = u16::try_from(row).unwrap();
+    // DoubleClick1Pane: the word under the mouse (cols 6..=12, "clicked";
+    // the @ is punctuation, its own word).
+    s.click(0, 8, row);
+    s.click(0, 8, row);
+    t.wait_run(&["show-buffer"], "the word copied", |o| {
+        o.trim_end() == "clicked"
+    });
+    // TripleClick1Pane: the whole line.
+    s.click(0, 2, row);
+    s.click(0, 2, row);
+    s.click(0, 2, row);
+    t.wait_run(&["show-buffer"], "the line copied", |o| {
+        o.trim_end() == "head @clicked tail"
+    });
+}

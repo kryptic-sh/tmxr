@@ -119,6 +119,21 @@ fn previous_matching_bracket_looks_back_from_the_cursor() {
 }
 
 #[test]
+fn select_word_takes_the_word_under_the_cursor() {
+    let mut cm = at_start("foo bar_baz.qux");
+    cm.cx = 6;
+    cm.apply("select-word", None);
+    assert_eq!(cm.selection_text().unwrap(), "bar_baz");
+    cm.cx = 12;
+    cm.apply("select-word", None);
+    assert_eq!(
+        cm.selection_text().unwrap(),
+        "qux",
+        "at the end of the line"
+    );
+}
+
+#[test]
 fn paragraphs_move_between_blank_lines() {
     let mut cm = at_start("one\r\ntwo\r\n\r\nthree\r\n\r\n\r\nfour");
     cm.apply("next-paragraph", None);

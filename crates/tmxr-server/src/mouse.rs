@@ -11,6 +11,8 @@
 //! A drag those commands start then follows the mouse until the button is
 //! released.
 
+use std::time::{Duration, Instant};
+
 use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use tmxr_command::{MouseAction, MouseKey, MouseLocation};
 
@@ -40,6 +42,21 @@ pub struct Press {
     pub row: u16,
     pub dragged: bool,
 }
+
+/// A press, and how many presses in a row it ends: a press in the same
+/// cell with the same button within [`CLICK_TIME`] of the last counts on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Click {
+    pub at: Instant,
+    pub col: u16,
+    pub row: u16,
+    pub button: u8,
+    pub count: u8,
+}
+
+/// How soon a press must follow the last to count as a double or triple
+/// click (tmux's fixed `KEYC_CLICK_TIMEOUT`).
+const CLICK_TIME: Duration = Duration::from_millis(300);
 
 /// What a mouse bind acts on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,7 +103,13 @@ pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
                     dragged: false,
                 }),
             );
-            (MouseAction::Down(button(b)), here)
+            let n = button(b);
+            let action = match count_click(srv, id, m, n) {
+                2 => MouseAction::DoubleClick(n),
+                3 => MouseAction::TripleClick(n),
+                _ => MouseAction::Down(n),
+            };
+            (action, here)
         }
         MouseEventKind::Up(b) => {
             set_press(srv, id, None);
@@ -116,6 +139,34 @@ pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
     if matches!(action, MouseAction::Drag(_)) {
         follow_drag(srv, id, m);
     }
+}
+
+/// Record a press of `button` and return how many presses in a row it
+/// makes: 1, 2 (a double click) or 3; a fourth starts over.
+fn count_click(srv: &mut Server, id: ClientId, m: MouseEvent, button: u8) -> u8 {
+    let Some(att) = srv.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
+        return 1;
+    };
+    let now = Instant::now();
+    let count = match att.click {
+        Some(c)
+            if c.button == button
+                && (c.col, c.row) == (m.column, m.row)
+                && now.duration_since(c.at) <= CLICK_TIME
+                && c.count < 3 =>
+        {
+            c.count + 1
+        }
+        _ => 1,
+    };
+    att.click = Some(Click {
+        at: now,
+        col: m.column,
+        row: m.row,
+        button,
+        count,
+    });
+    count
 }
 
 /// tmux's button numbers: 1 left, 2 middle, 3 right.
@@ -335,9 +386,10 @@ pub fn resize_drag(srv: &mut Server, ctx: &Ctx) -> Result<(), String> {
     Ok(())
 }
 
-/// `send-keys -X begin-selection` / `clear-selection` from a mouse bind on a
-/// pane in copy mode act at the mouse, as in tmux: begin starts a drag
-/// selection there, clear moves the cursor there. Whether it was handled.
+/// `send-keys -X begin-selection` / `clear-selection` / `select-word` /
+/// `select-line` from a mouse bind on a pane in copy mode act at the mouse,
+/// as in tmux: begin starts a drag selection there, the others move the
+/// cursor there first. Whether it was handled in full.
 pub fn copy_command_at_mouse(srv: &mut Server, ctx: &Ctx, pane: PaneId, name: &str) -> bool {
     let Some(t) = ctx.mouse.filter(|t| t.pane == Some(pane)) else {
         return false;
@@ -347,6 +399,12 @@ pub fn copy_command_at_mouse(srv: &mut Server, ctx: &Ctx, pane: PaneId, name: &s
     }
     match name {
         "begin-selection" => start_selection(srv, ctx, pane, t),
+        // Select the word or line under the mouse: move there, then let the
+        // command run as usual.
+        "select-word" | "select-line" => {
+            move_copy_cursor(srv, pane, t.col, t.row);
+            return false;
+        }
         "clear-selection" => {
             move_copy_cursor(srv, pane, t.col, t.row);
             if let Some(cm) = srv.panes.get_mut(&pane).and_then(|p| p.copy.as_mut()) {

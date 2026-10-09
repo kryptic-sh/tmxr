@@ -27,6 +27,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `previous-paragraph`, `goto-line` and `copy-end-of-line` (with its
   `-and-cancel` and `copy-pipe-` forms), bound as in tmux: `{` `}` `:` `D` in vi
   mode, `C-M-b` `M-{` `M-}` `g` `C-k` in emacs mode.
+- `DoubleClick1Pane` / `TripleClick1Pane` mouse keys, bound by default to copy
+  the word or line clicked (the copy-mode `select-word` command is new too).
 
 ### Fixed
 

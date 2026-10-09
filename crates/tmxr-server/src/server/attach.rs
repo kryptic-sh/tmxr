@@ -42,6 +42,7 @@ impl Server {
             last_input: Instant::now(),
             drag: None,
             press: None,
+            click: None,
             status_ranges: Vec::new(),
             mouse: false,
         });

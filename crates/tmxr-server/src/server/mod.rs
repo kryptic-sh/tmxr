@@ -80,6 +80,8 @@ pub struct Attached {
     pub drag: Option<crate::mouse::Drag>,
     /// The mouse button being held, if any.
     pub press: Option<crate::mouse::Press>,
+    /// The last button press, to count double and triple clicks.
+    pub click: Option<crate::mouse::Click>,
     pub status_ranges: crate::render::StatusRanges,
     /// Whether this client was last told to capture the mouse.
     pub mouse: bool,

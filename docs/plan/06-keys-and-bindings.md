@@ -34,7 +34,8 @@ under it, `send-keys -M` passes the event to the program, `copy-mode -M` starts
 a drag selection and `resize-pane -M` drags a border;
 `send-keys -X begin-selection` / `clear-selection` from a mouse bind act at the
 mouse. `defaults.toml` binds tmux's defaults plus tmux-yank's
-`MouseDragEnd1Pane`. `DoubleClick` / `TripleClick` keys are not recognised.
+`MouseDragEnd1Pane`. `DoubleClick1Pane` / `TripleClick1Pane` (presses in the
+same cell within 300 ms) copy the word or line under the mouse by default.
 
 `list-keys -N` (bound to `prefix ?`) shows every bind that has a note — the
 default config gives every bind a note, matching what `plugin-notes.sh` does for
