@@ -62,6 +62,14 @@ impl Pty {
             spec.argv.iter().map(OsString::from).collect()
         };
         let mut cmd = CommandBuilder::from_argv(argv);
+        // A pane inherits the server's environment, as in tmux. On Windows
+        // portable-pty lays the registry's variables over it (a fresh login's
+        // PATH, losing what the shell that started tmxr added); setting each
+        // of the server's own values again puts them back. On Unix the values
+        // are the ones already there.
+        for (k, v) in std::env::vars_os() {
+            cmd.env(k, v);
+        }
         if let Some(cwd) = &spec.cwd {
             cmd.cwd(cwd);
         }

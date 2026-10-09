@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Windows panes keep the environment of the shell that started tmxr. They used
+  to get the registry's variables in its place, so a `PATH` extended before
+  starting tmxr (a venv, a toolchain, a dev build) was lost in every pane.
+
 ## [0.2.0] - 2026-10-09
 
 ### Added

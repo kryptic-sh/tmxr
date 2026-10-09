@@ -1891,3 +1891,36 @@ fn emacs_search_moves_as_you_type() {
         o.trim_end() == "@inc-search"
     });
 }
+
+#[test]
+fn panes_inherit_the_servers_path() {
+    let t = Tmxr::new("path");
+    let extra = t.dir.path().join("extra-bin");
+    std::fs::create_dir(&extra).unwrap();
+    let inherited = std::env::var_os("PATH").unwrap_or_default();
+    let path = std::env::join_paths(
+        std::iter::once(extra.clone()).chain(std::env::split_paths(&inherited)),
+    )
+    .unwrap();
+    // The server starts with the extended PATH, as from a shell that set it.
+    let started = Command::new(env!("CARGO_BIN_EXE_tmxr"))
+        .args(t.args(&["new-session", "-d", "-s", "pa"]))
+        .envs(t.env())
+        .env("PATH", &path)
+        .output()
+        .unwrap();
+    assert!(started.status.success(), "{started:?}");
+    // Only the start of PATH, so it fits on the screen.
+    let echo = if cfg!(windows) {
+        "echo %PATH:~0,200%"
+    } else {
+        "echo ${PATH%%:*}"
+    };
+    t.run(&["send-keys", "-t", "pa", echo, "Enter"]);
+    let want = extra.display().to_string();
+    t.wait_run(
+        &["capture-pane", "-p", "-t", "pa"],
+        "the pane's PATH",
+        |o| o.lines().any(|l| l.starts_with(&want)),
+    );
+}
