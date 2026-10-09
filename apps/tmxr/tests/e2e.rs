@@ -389,14 +389,12 @@ fn session_picker_switches_by_enter_filter_and_jk() {
     s.send(b"\r");
     t.wait_run(&["ls"], "charlie attached", |o| attached(o, "charlie"));
 
-    // Escape to normal mode, j moves down a row: charlie (current), alpha
+    // Down moves a row, as in hjkl's pickers: charlie (current), alpha
     // (where the picker opens), then bravo.
     s.send(PREFIX);
     s.send(b"s");
     s.wait_for("picker", |text| text.contains("sessions 3/3"));
-    s.send(b"\x1b");
-    s.wait_for("normal mode", |text| text.contains("[normal]"));
-    s.send(b"j");
+    s.send(b"\x1b[B");
     std::thread::sleep(Duration::from_millis(200));
     s.send(b"\r");
     t.wait_run(&["ls"], "bravo attached", |o| attached(o, "bravo"));
@@ -1301,11 +1299,8 @@ fn session_picker_previews_the_highlighted_session() {
     s.wait_for("alpha previewed", |text| {
         text.contains("sessions 2/2") && text.contains("preview-marker")
     });
-    // Moving to bravo previews bravo, which never printed the marker. Wait
-    // for normal mode first: ESC and k sent together read as Alt-k on Unix.
-    s.send(b"\x1b");
-    s.wait_for("normal mode", |text| text.contains("[normal]"));
-    s.send(b"k");
+    // Up moves to bravo, which never printed the marker.
+    s.send(b"\x1b[A");
     s.wait_for("bravo previewed", |text| {
         text.contains("sessions 2/2") && !text.contains("preview-marker")
     });

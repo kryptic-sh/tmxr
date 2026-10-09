@@ -30,6 +30,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `DoubleClick1Pane` / `TripleClick1Pane` mouse keys, bound by default to copy
   the word or line clicked (the copy-mode `select-word` command is new too).
 
+### Changed
+
+- **Pickers work like hjkl's**: one mode, where typing always filters, arrows
+  and `C-n` / `C-p` move and `Escape` closes. The vi-style normal mode (`j` /
+  `k`, `g` / `G`, `C-j` / `C-k`) is gone.
+
 ### Fixed
 
 - A pane printing faster than the server can parse (`seq` on Linux) no longer

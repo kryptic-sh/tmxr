@@ -13,12 +13,8 @@ Replaces tmux's `choose-tree -Zs` on `prefix s` (and `choose-tree -Zw` on
   the _previous_ session (fast toggle, like `switch-client -l`).
 - **Typing filters** on the session name with `hjkl-picker`'s fuzzy scoring;
   matched characters highlighted.
-- **Moving**: `j`/`k`, `Down`/`Up`, `C-n`/`C-p`, `C-j`/`C-k`. Because typing
-  must also work, the picker is modal the way hjkl's pickers are: it opens in
-  insert (query) mode where letters go to the query and arrows / `C-n` / `C-p` /
-  `C-j` / `C-k` move; `Escape` switches to normal mode where `j`/`k` move
-  (`g`/`G` to the ends), `/`, `i` or `a` returns to the query, and `Escape` or
-  `q` closes.
+- **Moving**: `Down`/`Up` and `C-n`/`C-p`, as in hjkl's pickers: there is one
+  mode, so letters (`j` and `k` too) always go to the query.
 - `Enter` switches the client to the selected session; `Escape`/`C-c` cancels.
 - Actions: `C-x` kills the highlighted session after a y/n, `C-r` renames it
   through a prompt, and `Enter` on a name no session matches creates that
@@ -39,8 +35,10 @@ Replaces tmux's `choose-tree -Zs` on `prefix s` (and `choose-tree -Zw` on
   `select(idx)` → `PickerAction::Custom(Box::new(Target::Session(id, name)))`.
 - `PickerOverlay` keeps each row's label and target, so the renderer can find
   the highlighted row's target from its label (`previewed()`).
-- `PickerOverlay` wraps `hjkl_picker::Picker` and adds the insert / normal mode
-  itself; keys arrive as the crossterm `KeyEvent`s the client already sends.
+- `PickerOverlay` wraps `hjkl_picker::Picker` and hands keys to
+  `hjkl_picker_tui::handle_key`, as hjkl does, after taking the session picker's
+  `C-x` / `C-r`; keys arrive as the crossterm `KeyEvent`s the client already
+  sends.
 - Rendering: the list, input row and preview are drawn by tmxr (`draw_picker` in
   `render.rs`) with the `mode-style` for the selected row.
 - The same overlay backs the window picker (`prefix w`, `choose-tree -w`: every

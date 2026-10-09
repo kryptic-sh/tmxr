@@ -521,12 +521,11 @@ fn draw_picker(
         h,
     );
     Clear.render(area, buf);
-    let mode = if p.insert { "" } else { " [normal]" };
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(border)
         .title(format!(
-            " {} {}/{}{mode} ",
+            " {} {}/{} ",
             picker.title(),
             picker.matched(),
             picker.total()
@@ -598,10 +597,11 @@ fn draw_picker(
             Rect::new(inner.x, sep + 1, inner.width, rows),
         );
     }
-    p.insert.then(|| {
-        let x = inner.x + 2 + Line::raw(query).width() as u16;
-        Position::new(x.min(inner.x + inner.width.saturating_sub(1)), inner.y)
-    })
+    let x = inner.x + 2 + Line::raw(query).width() as u16;
+    Some(Position::new(
+        x.min(inner.x + inner.width.saturating_sub(1)),
+        inner.y,
+    ))
 }
 
 /// A pane's screen in `area`: the rows up to its cursor (its latest output),
