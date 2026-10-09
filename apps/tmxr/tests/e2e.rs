@@ -1454,7 +1454,11 @@ fn suspend_client_stops_and_fg_resumes() {
         .chain(t.args(&["new", "-s", "sus"]))
         .collect();
     sh.send(format!("{}\r", line.join(" ")).as_bytes());
-    sh.wait_for("attached", |text| text.contains("sus"));
+    // The typed command line holds "sus" too: attached means tmxr has taken
+    // the screen, so the line is gone and the status line shows the session.
+    sh.wait_for("attached", |text| {
+        text.contains("sus") && !text.contains("new -s sus")
+    });
     sh.send(PREFIX);
     sh.send(b"\x1a");
     sh.wait_for("stopped job", |text| {
