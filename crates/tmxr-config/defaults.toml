@@ -14,6 +14,7 @@ renumber-windows = true
 mode-keys = "vi"
 # tmux-sensible values.
 history-limit = 50000
+prompt-history-limit = 100
 escape-time = 0
 display-time = 4000
 display-panes-time = 1000
@@ -277,8 +278,8 @@ restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "to
 "NPage" = { cmd = "send-keys -X page-down", note = "Page down" }
 "C-y" = { cmd = "send-keys -X scroll-up", note = "Scroll up" }
 "C-e" = { cmd = "send-keys -X scroll-down", note = "Scroll down" }
-"/" = { cmd = 'command-prompt -p "(search down)" "send-keys -X search-forward \"%%\""', note = "Search down" }
-"?" = { cmd = 'command-prompt -p "(search up)" "send-keys -X search-backward \"%%\""', note = "Search up" }
+"/" = { cmd = 'command-prompt -T search -p "(search down)" "send-keys -X search-forward \"%%\""', note = "Search down" }
+"?" = { cmd = 'command-prompt -T search -p "(search up)" "send-keys -X search-backward \"%%\""', note = "Search up" }
 "n" = { cmd = "send-keys -X search-again", note = "Next match" }
 "N" = { cmd = "send-keys -X search-reverse", note = "Previous match" }
 "f" = { cmd = "send-keys -X jump-forward", note = "Jump to the next char typed" }
@@ -350,8 +351,8 @@ restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "to
 "M-Down" = { cmd = "send-keys -X halfpage-down", note = "Half page down" }
 "C-Up" = { cmd = "send-keys -X scroll-up", note = "Scroll up" }
 "C-Down" = { cmd = "send-keys -X scroll-down", note = "Scroll down" }
-"C-s" = { cmd = 'command-prompt -i -p "(search down)" "send-keys -X search-forward-incremental \"%%\""', note = "Search down as you type" }
-"C-r" = { cmd = 'command-prompt -i -p "(search up)" "send-keys -X search-backward-incremental \"%%\""', note = "Search up as you type" }
+"C-s" = { cmd = 'command-prompt -i -T search -p "(search down)" "send-keys -X search-forward-incremental \"%%\""', note = "Search down as you type" }
+"C-r" = { cmd = 'command-prompt -i -T search -p "(search up)" "send-keys -X search-backward-incremental \"%%\""', note = "Search up as you type" }
 "n" = { cmd = "send-keys -X search-again", note = "Next match" }
 "N" = { cmd = "send-keys -X search-reverse", note = "Previous match" }
 "f" = { cmd = "send-keys -X jump-forward", note = "Jump to the next char typed" }

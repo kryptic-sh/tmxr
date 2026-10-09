@@ -2230,3 +2230,52 @@ fn pipe_pane_copies_output_to_a_command() {
     let input = t.output(&["pipep", "-I", "-t", "pp", &command]);
     assert!(!input.status.success(), "-I is not supported: {input:?}");
 }
+
+#[test]
+fn prompt_history_is_kept_recalled_and_cleared() {
+    let t = Tmxr::new("phist");
+    let s = t.attach(&["new", "-s", "ph"]);
+    s.wait_for("status line", |text| text.contains("ph"));
+    let name = |t: &Tmxr| {
+        t.run(&["display-message", "-p", "-t", "ph", "#W"])
+            .trim()
+            .to_owned()
+    };
+    for entry in ["rename-window first", "rename-window second"] {
+        s.send(PREFIX);
+        s.send(b":");
+        s.wait_for("command prompt", |text| {
+            text.lines().last().is_some_and(|l| l.starts_with(':'))
+        });
+        s.send(format!("{entry}\r").as_bytes());
+        let want = entry.rsplit(' ').next().unwrap();
+        t.wait_run(
+            &["display-message", "-p", "-t", "ph", "#W"],
+            "renamed",
+            |o| o.trim() == want,
+        );
+    }
+    let shown = t.run(&["showphist", "-T", "command"]);
+    assert!(
+        shown.contains("1: rename-window first") && shown.contains("2: rename-window second"),
+        "{shown}"
+    );
+    // Up twice recalls the older entry; Enter runs it again.
+    s.send(PREFIX);
+    s.send(b":");
+    s.wait_for("command prompt", |text| {
+        text.lines().last().is_some_and(|l| l.starts_with(':'))
+    });
+    s.send(b"\x1b[A");
+    s.send(b"\x1b[A");
+    s.wait_for("recalled", |text| text.contains(":rename-window first"));
+    s.send(b"\r");
+    t.wait_run(
+        &["display-message", "-p", "-t", "ph", "#W"],
+        "renamed back",
+        |o| o.trim() == "first",
+    );
+    assert_eq!(name(&t), "first");
+    t.run(&["clearphist"]);
+    assert_eq!(t.run(&["showphist"]).trim(), "");
+}

@@ -129,6 +129,8 @@ pub struct Server {
     pub marked: Option<PaneId>,
     /// `set-environment -g` changes over the server's own environment.
     pub global_env: Environment,
+    /// Entries submitted at prompts, oldest first, by prompt type.
+    pub prompt_history: BTreeMap<String, Vec<String>>,
     last_save: Instant,
     /// What resurrect last wrote, so an unchanged layout is not saved again.
     pub last_saved: Option<crate::resurrect::Save>,
@@ -210,6 +212,7 @@ impl Server {
             restored_pending: false,
             marked: None,
             global_env: Environment::default(),
+            prompt_history: BTreeMap::new(),
             last_save: Instant::now(),
             last_saved: None,
             clock_shown: None,

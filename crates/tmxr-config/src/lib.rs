@@ -26,6 +26,8 @@ pub struct Config {
     pub renumber_windows: bool,
     pub mode_keys: String,
     pub history_limit: usize,
+    /// Entries kept per prompt type for Up/Down recall (tmux's default 100).
+    pub prompt_history_limit: usize,
     pub escape_time: u64,
     pub display_time: u64,
     /// How long `display-panes` shows pane numbers, in milliseconds.

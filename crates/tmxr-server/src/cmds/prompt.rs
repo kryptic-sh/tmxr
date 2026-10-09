@@ -35,11 +35,31 @@ pub(super) fn run(
             };
             if let Overlay::Prompt(p) = &mut overlay {
                 p.incremental = a.has('i');
+                a.value('T').unwrap_or("command").clone_into(&mut p.kind);
+                p.history = srv.prompt_history.get(&p.kind).cloned().unwrap_or_default();
             }
             if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
                 att.overlay = Some(overlay);
             }
         }
+        "show-prompt-history" => {
+            for (kind, list) in &srv.prompt_history {
+                if a.value('T').is_some_and(|t| t != kind) {
+                    continue;
+                }
+                let _ = writeln!(out.stdout, "History for {kind}:\n");
+                for (i, entry) in list.iter().enumerate() {
+                    let _ = writeln!(out.stdout, "{}: {entry}", i + 1);
+                }
+                let _ = writeln!(out.stdout);
+            }
+        }
+        "clear-prompt-history" => match a.value('T') {
+            Some(kind) => {
+                srv.prompt_history.remove(kind);
+            }
+            None => srv.prompt_history.clear(),
+        },
         "confirm-before" => {
             let c = attached_client(srv, ctx).ok_or("no current client")?;
             let cmd = if pos.len() == 1 {

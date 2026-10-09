@@ -53,6 +53,21 @@ impl Server {
         }
     }
 
+    /// Add a submitted prompt entry to its type's history: the same entry
+    /// twice in a row is kept once, and the oldest go past the limit.
+    pub fn remember_prompt(&mut self, kind: &str, entry: String) {
+        if entry.is_empty() {
+            return;
+        }
+        let limit = self.cfg.prompt_history_limit;
+        let list = self.prompt_history.entry(kind.to_owned()).or_default();
+        if list.last() != Some(&entry) {
+            list.push(entry);
+        }
+        let excess = list.len().saturating_sub(limit);
+        list.drain(..excess);
+    }
+
     /// The key table for a pane in copy mode.
     pub fn copy_table(&self) -> &'static str {
         if self.emacs_keys() {
@@ -83,6 +98,11 @@ impl Server {
         }
         if let Some(mut ov) = att.overlay.take() {
             let action = ov.key(&ev);
+            if let (Overlay::Prompt(p), OverlayAction::Run(_)) = (&ov, &action)
+                && !p.key
+            {
+                self.remember_prompt(&p.kind, p.text());
+            }
             match action {
                 OverlayAction::Keep => {
                     if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {

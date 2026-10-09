@@ -84,14 +84,22 @@ pub const COMMANDS: &[CommandSpec] = &[
         0,
         "[-H] [-t target-pane]"
     ),
+    cmd!(
+        "clear-prompt-history",
+        Some("clearphist"),
+        "T:",
+        0,
+        0,
+        "[-T prompt-type]"
+    ),
     cmd!("clock-mode", None, "t:", 0, 0, "[-t target-pane]"),
     cmd!(
         "command-prompt",
         None,
-        "iI:kp:t:",
+        "iI:kp:t:T:",
         0,
         1,
-        "[-ik] [-I inputs] [-p prompts] [template]"
+        "[-ik] [-I inputs] [-p prompts] [-T prompt-type] [template]"
     ),
     cmd!(
         "confirm-before",
@@ -466,6 +474,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         0,
         1,
         "[-gsvw] [-t target] [option]"
+    ),
+    cmd!(
+        "show-prompt-history",
+        Some("showphist"),
+        "T:",
+        0,
+        0,
+        "[-T prompt-type]"
     ),
     cmd!(
         "show-window-options",

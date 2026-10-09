@@ -61,6 +61,12 @@ pub struct Prompt {
     /// `command-prompt -i`: the template runs again after every edit, for
     /// incremental search.
     pub incremental: bool,
+    /// The prompt type (`command-prompt -T`) its history is kept under.
+    pub kind: String,
+    /// Earlier entries of this type, oldest first, for Up / Down.
+    pub history: Vec<String>,
+    /// Which entry Up / Down show, and the input typed before the first Up.
+    recall: Option<(usize, Vec<char>)>,
 }
 
 impl Overlay {
@@ -74,6 +80,9 @@ impl Overlay {
             template,
             key: false,
             incremental: false,
+            kind: "command".into(),
+            history: Vec::new(),
+            recall: None,
         })
     }
 
@@ -86,6 +95,9 @@ impl Overlay {
             template: Some(template),
             key: true,
             incremental: false,
+            kind: "command".into(),
+            history: Vec::new(),
+            recall: None,
         })
     }
 
@@ -306,6 +318,40 @@ impl Prompt {
         action
     }
 
+    /// Up (`older`) / Down through the history; Down past the newest entry
+    /// brings back what was typed.
+    fn recall(&mut self, older: bool) {
+        let n = self.history.len();
+        let next = match (&self.recall, older) {
+            (None, true) if n > 0 => Some(n - 1),
+            (Some((i, _)), true) => Some(i.saturating_sub(1)),
+            (Some((i, _)), false) if i + 1 < n => Some(i + 1),
+            _ => None,
+        };
+        match next {
+            Some(i) => {
+                let draft = match self.recall.take() {
+                    Some((_, draft)) => draft,
+                    None => self.input.clone(),
+                };
+                self.input = self.history[i].chars().collect();
+                self.recall = Some((i, draft));
+            }
+            None if !older => {
+                if let Some((_, draft)) = self.recall.take() {
+                    self.input = draft;
+                }
+            }
+            None => return,
+        }
+        self.cursor = self.input.len();
+    }
+
+    /// The text typed, for the history once the prompt is submitted.
+    pub fn text(&self) -> String {
+        self.input.iter().collect()
+    }
+
     fn edit(&mut self, ev: &KeyEvent) -> OverlayAction {
         if self.key {
             let name = join_args(&[tmxr_command::Key::from_event(ev).to_string()]);
@@ -333,6 +379,8 @@ impl Prompt {
                     self.input.remove(self.cursor);
                 }
             }
+            KeyCode::Up => self.recall(true),
+            KeyCode::Down => self.recall(false),
             KeyCode::Left => self.cursor = self.cursor.saturating_sub(1),
             KeyCode::Right => self.cursor = (self.cursor + 1).min(self.input.len()),
             KeyCode::Home => self.cursor = 0,
@@ -641,6 +689,30 @@ mod tests {
         let mut mru = vec!["work", "dots", "main"];
         current_first(&mut mru, |s| *s == "main");
         assert_eq!(mru, ["main", "work", "dots"]);
+    }
+
+    #[test]
+    fn prompt_history_recalls_older_and_newer_and_the_draft() {
+        let mut o = Overlay::prompt(":".into(), String::new(), None);
+        let Overlay::Prompt(p) = &mut o else {
+            unreachable!()
+        };
+        p.history = vec!["first".into(), "second".into()];
+        o.key(&k(KeyCode::Char('x')));
+        let text = |o: &Overlay| match o {
+            Overlay::Prompt(p) => p.text(),
+            _ => unreachable!(),
+        };
+        o.key(&k(KeyCode::Up));
+        assert_eq!(text(&o), "second");
+        o.key(&k(KeyCode::Up));
+        assert_eq!(text(&o), "first");
+        o.key(&k(KeyCode::Up));
+        assert_eq!(text(&o), "first", "the oldest stays");
+        o.key(&k(KeyCode::Down));
+        assert_eq!(text(&o), "second");
+        o.key(&k(KeyCode::Down));
+        assert_eq!(text(&o), "x", "the typed draft comes back");
     }
 
     #[test]

@@ -15,6 +15,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `pipe-pane` (`pipep`): copy a pane's output to a shell command
   (`pipep 'cat >> ~/pane.log'`), with `-o` to toggle and `#{pane_pipe}` to show
   it. `-I` (the command's output into the pane) is not supported.
+- **Prompt history**: Up / Down in a prompt recall earlier entries of its type
+  (`command-prompt -T`; the copy-mode search binds use `search`), kept up to
+  `prompt-history-limit`; `show-prompt-history` (`showphist`) and
+  `clear-prompt-history` (`clearphist`) list and clear them.
 
 ## [0.2.4] - 2026-10-09
 
