@@ -162,6 +162,24 @@ pub(super) fn run(
             let cwd = cwd_arg(srv, ctx, Some(first), a);
             srv.respawn_pane(first, pos.to_vec(), cwd)?;
         }
+        "pipe-pane" => {
+            let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
+            if a.has('I') {
+                return Err("pipe-pane -I is not supported: only output (-O) is piped".into());
+            }
+            let line = pos
+                .first()
+                .filter(|l| !l.is_empty())
+                .map(|l| super::expand_for(srv, ctx, Some(pid), l));
+            let p = srv.panes.get_mut(&pid).ok_or("no such pane")?;
+            // An open pipe always closes first; -o makes the command a toggle.
+            let had = p.pipe.take().is_some();
+            if let Some(line) = line.filter(|_| !(a.has('o') && had)) {
+                let pipe = crate::pipe::PanePipe::open(&line)
+                    .map_err(|e| format!("pipe-pane: {line}: {e}"))?;
+                p.pipe = Some(pipe);
+            }
+        }
         "clear-history" => {
             // -H also drops hyperlinks in tmux; tmxr keeps none.
             let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;

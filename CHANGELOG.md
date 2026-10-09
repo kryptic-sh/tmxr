@@ -12,6 +12,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   its screen, and `respawn-window` (`respawnw`), which takes a window back to
   its first pane and restarts it (`-k` when a program still runs). The
   `#{history_size}` format reports a pane's lines of history.
+- `pipe-pane` (`pipep`): copy a pane's output to a shell command
+  (`pipep 'cat >> ~/pane.log'`), with `-o` to toggle and `#{pane_pipe}` to show
+  it. `-I` (the command's output into the pane) is not supported.
 
 ## [0.2.4] - 2026-10-09
 

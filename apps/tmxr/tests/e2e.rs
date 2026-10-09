@@ -2191,3 +2191,42 @@ fn clear_history_and_respawn_window() {
     t.run(&["respawnw", "-k", "-t", "ch"]);
     assert_eq!(t.run(&["list-panes", "-t", "ch"]).lines().count(), 1);
 }
+
+#[test]
+fn pipe_pane_copies_output_to_a_command() {
+    let t = Tmxr::new("pipepane");
+    let log = t.dir.path().join("pane.log");
+    #[cfg(unix)]
+    let command = format!("cat >> '{}'", log.display());
+    #[cfg(windows)]
+    let command = format!(
+        "$input | ForEach-Object {{ Add-Content -LiteralPath '{}' -Value $_ }}",
+        log.display()
+    );
+    t.run(&["new-session", "-d", "-s", "pp"]);
+    let piped = |t: &Tmxr| t.run(&["display-message", "-p", "-t", "pp", "#{pane_pipe}"]);
+    t.run(&["pipep", "-t", "pp", &command]);
+    assert_eq!(piped(&t).trim(), "1");
+    t.run(&["send-keys", "-t", "pp", "echo @piped-text", "Enter"]);
+    t.wait_run(&["capture-pane", "-p", "-t", "pp"], "the echo", |o| {
+        o.lines().any(|l| l.trim_end() == "@piped-text")
+    });
+    // No command closes the pipe; the command then finishes its input.
+    t.run(&["pipep", "-t", "pp"]);
+    assert_eq!(piped(&t).trim(), "0");
+    let deadline = Instant::now() + TIMEOUT;
+    while !std::fs::read_to_string(&log).is_ok_and(|s| s.contains("@piped-text")) {
+        assert!(
+            Instant::now() < deadline,
+            "the output never reached the log"
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    // -o toggles: it opens a pipe when none is open, and closes an open one.
+    t.run(&["pipep", "-o", "-t", "pp", &command]);
+    assert_eq!(piped(&t).trim(), "1");
+    t.run(&["pipep", "-o", "-t", "pp", &command]);
+    assert_eq!(piped(&t).trim(), "0");
+    let input = t.output(&["pipep", "-I", "-t", "pp", &command]);
+    assert!(!input.status.success(), "-I is not supported: {input:?}");
+}

@@ -100,6 +100,7 @@ impl Server {
                 dead: None,
                 clock: false,
                 output,
+                pipe: None,
             },
         );
         Ok(())
@@ -276,6 +277,9 @@ impl Server {
                 let replies = p.emu.process(&bytes);
                 if !replies.is_empty() {
                     let _ = p.pty.write(&replies);
+                }
+                if let Some(pipe) = &p.pipe {
+                    pipe.send(&bytes);
                 }
                 let bell = p.emu.take_bell();
                 let clips = p.emu.take_clipboard();

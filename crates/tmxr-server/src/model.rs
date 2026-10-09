@@ -39,6 +39,8 @@ pub struct Pane {
     pub clock: bool,
     /// Output the reader thread has queued for this spawn.
     pub output: crate::output::OutputHandle,
+    /// `pipe-pane`: the command this pane's output is copied to.
+    pub pipe: Option<crate::pipe::PanePipe>,
 }
 
 /// An environment as tmux keeps one: variables set, and names removed from

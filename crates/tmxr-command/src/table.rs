@@ -294,6 +294,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         "[-dp] [-b buffer-name] [-t target-pane]"
     ),
     cmd!(
+        "pipe-pane",
+        Some("pipep"),
+        "IOot:",
+        0,
+        1,
+        "[-IOo] [-t target-pane] [shell-command]"
+    ),
+    cmd!(
         "previous-layout",
         Some("prevl"),
         "t:",

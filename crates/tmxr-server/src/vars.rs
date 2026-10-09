@@ -130,6 +130,7 @@ impl Context for Vars<'_> {
             "pane_pid" => pane?.pty.pid()?.to_string(),
             "pane_in_mode" => flag(pane?.copy.is_some()),
             "history_size" => pane?.emu.history_size().to_string(),
+            "pane_pipe" => flag(pane?.pipe.is_some()),
             "mouse_any_flag" => {
                 flag(pane?.emu.screen().mouse_protocol_mode() != vt100::MouseProtocolMode::None)
             }
