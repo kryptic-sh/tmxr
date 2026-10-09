@@ -159,8 +159,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'the owner was refused' }
 
           $name = 'tmxrother'
-          $password = 'Tmxr-' + [guid]::NewGuid().ToString('N').Substring(0, 12) + '!a1'
-          net user $name $password /add | Out-Null
+          # 14 characters: net user stops to ask about longer passwords.
+          $password = 'Tm-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '!a1'
+          net user $name $password /add
+          if ($LASTEXITCODE -ne 0) { throw 'could not create the second user' }
           $cred = [pscredential]::new($name, (ConvertTo-SecureString $password -AsPlainText -Force))
           $p = Start-Process -FilePath "$dir\tmxr.exe" -ArgumentList '-S', $pipe, 'ls' `
             -Credential $cred -WorkingDirectory $dir -Wait -PassThru `
