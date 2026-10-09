@@ -8,6 +8,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The server no longer keeps open what the program that started it inherited. A
+  script reading the output of something that ran `tmxr new -d` waited until the
+  tmxr server exited; on Windows the server got every inheritable handle, and on
+  Unix every descriptor not marked close-on-exec.
 - Windows: a 32-bit program's current directory was read from the WOW64 layer's
   64-bit process block, which named another directory (`C:\WINDOWS` for a 32-bit
   `cmd`), so splits from it opened there. It is now read from the program's own

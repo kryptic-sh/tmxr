@@ -31,6 +31,33 @@ use tmxr_proto::socket::Endpoint;
 
 pub use server::Server;
 
+/// Close every file descriptor the server inherited beyond stdin, stdout and
+/// stderr, as tmux's daemon does: one its starter left open (a pipe a script
+/// reads to end-of-file) would otherwise stay open as long as the server
+/// runs. Call first thing in the server process, before anything opens a
+/// descriptor of its own. On Windows the client starts the server inheriting
+/// no handles at all.
+#[cfg(unix)]
+pub fn close_inherited_fds() {
+    /// The highest descriptor tried when the limit is unknown or very large.
+    const SCAN_LIMIT: libc::c_long = 65_536;
+    // SAFETY: sysconf has no preconditions.
+    let open_max = unsafe { libc::sysconf(libc::_SC_OPEN_MAX) };
+    let limit = if open_max < 0 {
+        SCAN_LIMIT
+    } else {
+        open_max.min(SCAN_LIMIT)
+    };
+    for fd in 3..limit {
+        let Ok(fd) = libc::c_int::try_from(fd) else {
+            break;
+        };
+        // SAFETY: nothing in this process owns a descriptor yet; closing one
+        // that is not open fails harmlessly with EBADF.
+        unsafe { libc::close(fd) };
+    }
+}
+
 /// Bind `endpoint` and serve until the last session exits or `kill-server`.
 /// `config` is the `-f` path, if any.
 pub fn run(endpoint: Endpoint, config: Option<PathBuf>) -> std::io::Result<()> {

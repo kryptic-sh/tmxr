@@ -107,6 +107,8 @@ fn main() -> ExitCode {
         }
     };
     if cli.command.first().map(String::as_str) == Some(SERVER_ARG) {
+        #[cfg(unix)]
+        tmxr_server::close_inherited_fds();
         init_server_log(&endpoint);
         return match tmxr_server::run(endpoint, cli.config) {
             Ok(()) => ExitCode::SUCCESS,

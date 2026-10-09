@@ -2259,6 +2259,7 @@ dependencies = [
  "clap_complete_nushell",
  "clap_mangen",
  "hjkl-xdg",
+ "libc",
  "portable-pty",
  "tempfile",
  "tmxr-client",

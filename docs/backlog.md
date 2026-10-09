@@ -134,18 +134,19 @@ what was not.
   9;9), then reads the foreground process's directory from its PEB
   (`process::win::current_dir`, x64 offsets; tested with cmd's `cd /d`).
   PowerShell's `Set-Location` does not change its process's directory, so
-  PowerShell still needs the README's prompt snippet. The PEB read of a 32-bit
-  (WOW64) program is not verified, nor of an elevated one (expected to fail to
-  open, falling back to the start directory).
+  PowerShell still needs the README's prompt snippet. A 32-bit (WOW64) program's
+  directory is read from its 32-bit PEB (tested with `SysWOW64\cmd.exe`). An
+  elevated program's is not verified (expected to fail to open, falling back to
+  the start directory).
 
-- **One `leaky` test, unidentified.** A cold workspace `cargo nextest run` on
-  Windows on 2026-10-09 reported "80 passed (1 leaky)" (a test's child process
-  still held its output after it ended); four reruns that day and seven more
-  later were clean (those later runs did turn up a flaky test, since fixed), and
-  nextest's summary did not name the leaking test. Likely a server or pane
-  process outliving `kill-server` by a moment; not investigated further. It came
-  back once more on 2026-10-09 (143 tests, "1 leaky") and not in the 4 runs
-  after. Next time, run without filtering: nextest's `LEAK` line names the test.
+- **The `leaky` tests had a cause, fixed on 2026-10-09**: a server started by a
+  test inherited the test's own output pipe (Windows passes every inheritable
+  handle on), so a server still exiting after `kill-server` held it past the
+  test's end. The same leak made a script reading `tmxr new -d`'s caller's
+  output wait until the server exited (a cmd pipeline took 127 s instead of 1
+  s). Servers no longer inherit anything (`spawn::spawn_detached` on Windows,
+  `close_inherited_fds` on Unix). If nextest reports "leaky" again, its `LEAK`
+  line names the test; it would be a different cause.
 - **`session_picker_previews_the_highlighted_session` timed out once** (30 s) in
   a full Windows run on 2026-10-09 that took 50 s instead of the usual 20 s, and
   passed on nextest's retry. 15 isolated runs and 5 more full runs were clean.

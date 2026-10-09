@@ -2019,3 +2019,53 @@ fn windows_session_end_saves_and_exits() {
         "{saved:?}"
     );
 }
+
+/// A pipe the starter of `tmxr new -d` left inheritable (a script reading
+/// its output to the end) reaches end-of-file when the client exits, though
+/// the server it started keeps running.
+#[test]
+fn the_server_does_not_keep_its_starters_pipes_open() {
+    use std::io::Read;
+    let t = Tmxr::new("inherit");
+    let (mut reader, writer) = std::io::pipe().unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::fd::AsRawFd;
+        // SAFETY: clears close-on-exec on a descriptor this test owns.
+        assert_eq!(
+            unsafe { libc::fcntl(writer.as_raw_fd(), libc::F_SETFD, 0) },
+            0
+        );
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsRawHandle;
+        use windows_sys::Win32::Foundation::{HANDLE_FLAG_INHERIT, SetHandleInformation};
+        // SAFETY: sets the inherit flag on a handle this test owns.
+        let ok = unsafe {
+            SetHandleInformation(
+                writer.as_raw_handle(),
+                HANDLE_FLAG_INHERIT,
+                HANDLE_FLAG_INHERIT,
+            )
+        };
+        assert_ne!(ok, 0);
+    }
+    let started = t.output(&["new-session", "-d", "-s", "ih"]);
+    assert!(started.status.success(), "{started:?}");
+    drop(writer);
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut rest = Vec::new();
+        let _ = reader.read_to_end(&mut rest);
+        let _ = tx.send(());
+    });
+    assert!(
+        rx.recv_timeout(Duration::from_secs(10)).is_ok(),
+        "the server still holds its starter's pipe"
+    );
+    assert!(
+        t.run(&["ls"]).contains("ih:"),
+        "the server is still running"
+    );
+}

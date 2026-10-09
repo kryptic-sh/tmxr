@@ -67,3 +67,6 @@ tmxr-term.workspace = true
 
 [target."cfg(windows)".dev-dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+
+[target."cfg(unix)".dev-dependencies]
+libc = "0.2.190"
