@@ -50,11 +50,9 @@ what was not.
 
 ## Known gaps and follow-ups
 
-- **Emacs copy mode** (`mode-keys emacs`, the `copy-mode` table) leaves out
-  tmux's paragraph moves (`M-{` / `M-}`), `goto-line` (`g`),
-  `copy-pipe-end-of-line` (`C-k`), `previous-matching-bracket` (`C-M-b`) and
-  incremental search: tmxr has none of those commands. `C-s` / `C-r` prompt for
-  the whole term, as `/` and `?` do in vi mode.
+- **Copy-mode search is not incremental**: `C-s` / `C-r` (emacs) and `/` / `?`
+  (vi) prompt for the whole term, then search; tmux's emacs table searches as
+  you type.
 - **tmux default binds**: all of tmux's defaults are bound; `prefix C-z`
   (suspend-client) errors on Windows, which has no job control. Alerts for `M-n`
   / `M-p` are bells only (no `monitor-activity` / `monitor-silence`).

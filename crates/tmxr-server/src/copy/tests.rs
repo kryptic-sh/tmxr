@@ -108,6 +108,42 @@ fn percent_finds_the_matching_bracket_across_lines() {
 }
 
 #[test]
+fn previous_matching_bracket_looks_back_from_the_cursor() {
+    let mut cm = at_start("a (b [c] d) e");
+    cm.cx = 12;
+    cm.apply("previous-matching-bracket", None);
+    assert_eq!(cm.cx, 2, "from after the ) back to its (");
+    cm.cx = 7;
+    cm.apply("previous-matching-bracket", None);
+    assert_eq!(cm.cx, 5, "on a ] itself");
+}
+
+#[test]
+fn paragraphs_move_between_blank_lines() {
+    let mut cm = at_start("one\r\ntwo\r\n\r\nthree\r\n\r\n\r\nfour");
+    cm.apply("next-paragraph", None);
+    assert_eq!(cm.cy, 2);
+    cm.apply("next-paragraph", None);
+    assert_eq!(cm.cy, 4, "past the blank line, to the next one");
+    cm.apply("previous-paragraph", None);
+    assert_eq!(cm.cy, 2);
+    cm.apply("previous-paragraph", None);
+    assert_eq!(cm.cy, 0, "the first line when no blank is left");
+}
+
+#[test]
+fn goto_line_scrolls_that_far_above_the_bottom() {
+    let lines: String = (0..12).map(|i| format!("line{i}\r\n")).collect();
+    let mut cm = mode(&lines);
+    let (_, bottom_top) = cm.position();
+    assert!(cm.apply("goto-line", Some("3")));
+    assert_eq!(cm.position(), (3, bottom_top));
+    assert!(cm.apply("goto-line", Some("999")));
+    assert_eq!(cm.top, 0, "clamped to the top of the history");
+    assert!(!cm.apply("goto-line", Some("x")));
+}
+
+#[test]
 fn jump_to_mark_swaps_with_the_cursor() {
     let mut cm = at_start("abcdefgh");
     cm.cx = 2;

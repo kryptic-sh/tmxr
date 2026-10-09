@@ -1,8 +1,8 @@
 # 08 — Copy mode
 
 `mode-keys vi` (the config's setting) uses the `copy-mode-vi` table;
-`mode-keys emacs` uses `copy-mode`, tmux's emacs table less the commands tmxr
-does not have (see the backlog). Counts are digits in vi mode and `M-1`…`M-9` in
+`mode-keys emacs` uses `copy-mode`, tmux's emacs table (its search is not
+incremental; see the backlog). Counts are digits in vi mode and `M-1`…`M-9` in
 emacs mode.
 
 ## Entering

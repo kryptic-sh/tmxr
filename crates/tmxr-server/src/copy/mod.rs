@@ -282,15 +282,25 @@ impl CopyMode {
 
     /// vi's `%`: from the first bracket at or after the cursor on its line,
     /// to the bracket that matches it, across lines.
-    fn matching_bracket(&mut self) {
+    /// `previous-matching-bracket` (emacs `C-M-b`) looks for the bracket at
+    /// or before the cursor instead.
+    fn matching_bracket(&mut self, before: bool) {
         const PAIRS: [(char, char); 3] = [('(', ')'), ('[', ']'), ('{', '}')];
         let line = self.lines.get(self.cy).map(Line::chars).unwrap_or_default();
-        let Some((x, c)) = line
-            .iter()
-            .enumerate()
-            .skip(self.cx)
-            .find(|(_, c)| PAIRS.iter().any(|(o, cl)| *c == o || *c == cl))
-        else {
+        let is_bracket = |c: &char| PAIRS.iter().any(|(o, cl)| c == o || c == cl);
+        let found = if before {
+            line.iter()
+                .enumerate()
+                .take(self.cx + 1)
+                .rev()
+                .find(|(_, c)| is_bracket(c))
+        } else {
+            line.iter()
+                .enumerate()
+                .skip(self.cx)
+                .find(|(_, c)| is_bracket(c))
+        };
+        let Some((x, c)) = found else {
             return;
         };
         let (forward, open, close) = match PAIRS.iter().find(|(o, cl)| c == o || c == cl) {
@@ -453,6 +463,32 @@ impl CopyMode {
         } else {
             2
         }
+    }
+
+    /// vi's `}` / `{`: past the blank lines next to the cursor, then to the
+    /// next blank line that way (or the first / last line).
+    fn paragraph(&mut self, forward: bool) {
+        let last = self.last_line();
+        let step = |y: usize| {
+            if forward {
+                (y < last).then_some(y + 1)
+            } else {
+                y.checked_sub(1)
+            }
+        };
+        let blank = |y: usize| self.line_len(y) == 0;
+        let mut y = self.cy;
+        while blank(y)
+            && let Some(n) = step(y)
+        {
+            y = n;
+        }
+        while !blank(y)
+            && let Some(n) = step(y)
+        {
+            y = n;
+        }
+        (self.cy, self.cx) = (y, 0);
     }
 
     fn next_pos(&self, y: usize, x: usize) -> Option<(usize, usize)> {
@@ -725,7 +761,22 @@ impl CopyMode {
                     (self.cy, self.cx) = m;
                 }
             }
-            "next-matching-bracket" => self.matching_bracket(),
+            "next-matching-bracket" => self.matching_bracket(false),
+            "previous-matching-bracket" => self.matching_bracket(true),
+            "next-paragraph" => self.paragraph(true),
+            "previous-paragraph" => self.paragraph(false),
+            "goto-line" => {
+                // tmux's line number: how far above the bottom of the
+                // history the view starts, the cursor keeping its row.
+                let Some(n) = arg.and_then(|a| a.trim().parse::<usize>().ok()) else {
+                    return false;
+                };
+                let (_, bottom_top) = self.position();
+                let row = self.cy.saturating_sub(self.top);
+                self.top = bottom_top - n.min(bottom_top);
+                self.cy = (self.top + row).min(last);
+                return true;
+            }
             "jump-again" | "jump-reverse" => {
                 if let Some((jump, c)) = self.last_jump {
                     let jump = if name == "jump-again" {
@@ -803,8 +854,24 @@ pub fn command(
         | "copy-selection-and-cancel"
         | "copy-selection-no-newlines-and-cancel"
         | "copy-pipe"
-        | "copy-pipe-and-cancel" => {
-            let text = cm.selection_text();
+        | "copy-pipe-and-cancel"
+        | "copy-end-of-line"
+        | "copy-end-of-line-and-cancel"
+        | "copy-pipe-end-of-line"
+        | "copy-pipe-end-of-line-and-cancel" => {
+            let text = if name.contains("end-of-line") {
+                // From the cursor to the end of its line, leaving the
+                // cursor and any selection as they were.
+                let (cursor, anchor, kind) = ((cm.cy, cm.cx), cm.anchor, cm.kind);
+                cm.anchor = Some(cursor);
+                cm.kind = SelKind::Char;
+                cm.apply("end-of-line", None);
+                let text = cm.selection_text();
+                ((cm.cy, cm.cx), cm.anchor, cm.kind) = (cursor, anchor, kind);
+                text
+            } else {
+                cm.selection_text()
+            };
             let cancel = name.ends_with("-and-cancel");
             if let Some(mut text) = text {
                 if name.contains("no-newlines") {

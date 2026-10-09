@@ -1773,3 +1773,25 @@ fn resurrect_restores_allowlisted_programs_with_their_arguments() {
     assert_eq!(saved_args(&t), args);
     t.run(&["kill-server"]);
 }
+
+#[test]
+fn copy_end_of_line_takes_the_rest_of_the_line() {
+    let t = Tmxr::new("eol");
+    let s = t.attach(&["new", "-s", "eo"]);
+    s.wait_for("status line", |text| text.contains("eo"));
+    s.send(b"echo head @eol-copy tail\r");
+    s.wait_for("echoed", |text| {
+        text.lines().any(|l| l.trim_end() == "head @eol-copy tail")
+    });
+    s.send(PREFIX);
+    s.send(b"[");
+    s.send(b"?");
+    s.wait_for("search prompt", |text| text.contains("(search up)"));
+    // The output line is the nearest match above the prompt.
+    s.send(b"@eol-copy\r");
+    s.wait_for("search done", |text| !text.contains("(search up)"));
+    s.send(b"D");
+    t.wait_run(&["show-buffer"], "the rest of the line copied", |o| {
+        o.trim_end() == "@eol-copy tail"
+    });
+}

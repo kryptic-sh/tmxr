@@ -289,6 +289,10 @@ restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "to
 "M-x" = { cmd = "send-keys -X jump-to-mark", note = "Jump to the mark (and back)" }
 "%" = { cmd = "send-keys -X next-matching-bracket", note = "Matching bracket" }
 "r" = { cmd = "send-keys -X refresh-from-pane", note = "Refresh from the live pane" }
+"{" = { cmd = "send-keys -X previous-paragraph", note = "Previous paragraph" }
+"}" = { cmd = "send-keys -X next-paragraph", note = "Next paragraph" }
+":" = { cmd = 'command-prompt -p "(goto line)" "send-keys -X goto-line \"%%\""', note = "Go to a line" }
+"D" = { cmd = "send-keys -X copy-pipe-end-of-line-and-cancel", note = "Copy to the end of the line" }
 # The mouse in copy mode: click moves the cursor, a drag selects and its end
 # copies (tmux-yank's MouseDragEnd1Pane), the wheel scrolls.
 "MouseDown1Pane" = { cmd = "select-pane ; send-keys -X clear-selection", note = "Move the cursor to the click" }
@@ -297,9 +301,8 @@ restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "to
 "WheelUpPane" = { cmd = "select-pane ; send-keys -X -N 5 scroll-up", note = "Scroll up" }
 "WheelDownPane" = { cmd = "select-pane ; send-keys -X -N 5 scroll-down", note = "Scroll down" }
 
-# Copy mode with `mode-keys emacs`: tmux's own copy-mode table, less the
-# commands tmxr does not have (paragraphs, goto-line, copy-end-of-line).
-# Counts are M-1 … M-9.
+# Copy mode with `mode-keys emacs`: tmux's own copy-mode table, with
+# non-incremental search. Counts are M-1 … M-9.
 [keys.copy-mode]
 "Escape" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
 "C-c" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
@@ -325,6 +328,11 @@ restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "to
 "M-b" = { cmd = "send-keys -X previous-word", note = "Previous word" }
 "M-f" = { cmd = "send-keys -X next-word-end", note = "End of word" }
 "C-M-f" = { cmd = "send-keys -X next-matching-bracket", note = "Matching bracket" }
+"C-M-b" = { cmd = "send-keys -X previous-matching-bracket", note = "Matching bracket back" }
+"M-{" = { cmd = "send-keys -X previous-paragraph", note = "Previous paragraph" }
+"M-}" = { cmd = "send-keys -X next-paragraph", note = "Next paragraph" }
+"g" = { cmd = 'command-prompt -p "(goto line)" "send-keys -X goto-line \"%%\""', note = "Go to a line" }
+"C-k" = { cmd = "send-keys -X copy-pipe-end-of-line-and-cancel", note = "Copy to the end of the line" }
 "M-<" = { cmd = "send-keys -X history-top", note = "Top of history" }
 "M->" = { cmd = "send-keys -X history-bottom", note = "Bottom of history" }
 "M-R" = { cmd = "send-keys -X top-line", note = "Top of screen" }

@@ -23,6 +23,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Resurrect restores arguments** for programs in the new
   `resurrect.restore-args` list (tmux-resurrect's defaults and `hjkl`), so
   `less app.log` comes back as `less app.log`, not `less`.
+- Copy-mode commands `previous-matching-bracket`, `next-paragraph` /
+  `previous-paragraph`, `goto-line` and `copy-end-of-line` (with its
+  `-and-cancel` and `copy-pipe-` forms), bound as in tmux: `{` `}` `:` `D` in vi
+  mode, `C-M-b` `M-{` `M-}` `g` `C-k` in emacs mode.
 
 ### Fixed
 
