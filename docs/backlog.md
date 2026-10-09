@@ -105,6 +105,20 @@ what was not.
   build 26300), so `tmxr_term::emulator::PASSTHROUGH_SUPPORTED` is false there
   and `allow-passthrough` only logs that. Revisit if ConPTY changes. The Unix
   forwarding is exercised by CI only, and not with a real image protocol.
+  Experiments on 2026-10-09 (Windows 11 build 26300, PowerShell writing a
+  tmux-passthrough iTerm2 image, raw pane bytes compared):
+  - **Microsoft's newer ConPTY fixes it**: with `conpty.dll` and
+    `OpenConsole.exe` from NuGet `Microsoft.Windows.Console.ConPTY`
+    1.25.260930003 (MIT, Microsoft-signed) beside the program, the `ESC \`
+    arrived. portable-pty loads a `conpty.dll` found there by itself.
+  - **The inbox ConPTY's `PSEUDOCONSOLE_PASSTHROUGH_MODE` (0x8) changes
+    nothing**: `CreatePseudoConsole` accepts the flag and the terminator is
+    still dropped.
+  - Options left, the owner's call: bundle the newer ConPTY in the Windows zip
+    (about 1–2 MB, a pinned and signature-checked download in CI); repair the
+    stream in tmxr by taking the inner sequence's own end (BEL / `ESC \`) as the
+    passthrough's end (works for iTerm2 images, unproven for kitty graphics, and
+    a wrong guess swallows output); or wait for Windows to pick up the fix.
 - **Windows `pane_current_path`** prefers what the shell announces (OSC 7 / OSC
   9;9), then reads the foreground process's directory from its PEB
   (`process::win::current_dir`, x64 offsets; tested with cmd's `cd /d`).
