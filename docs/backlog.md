@@ -47,6 +47,10 @@ what was not.
   compiled and tested by CI.
 - CI (commit 7d26b7a) runs the unit and e2e tests green on Linux, macOS and
   Windows; the Unix arms are exercised there, not locally.
+- **The server's pipe refuses other Windows users**: CI's `pipe-acl` job makes a
+  second local account, whose `tmxr ls` on the owner's pipe fails with
+  `Access is denied. (os error 5)` while the owner's succeeds. Shown to go red
+  (2026-10-09) with Everyone added to the DACL.
 
 ## Known gaps and follow-ups
 
@@ -108,8 +112,6 @@ what was not.
   PowerShell still needs the README's prompt snippet. The PEB read of a 32-bit
   (WOW64) program is not verified, nor of an elevated one (expected to fail to
   open, falling back to the start directory).
-- **Windows pipe DACL** `D:P(A;;GA;;;OW)(A;;GA;;;SY)` was verified to admit the
-  owner; that it rejects another user is unverified.
 
 - **One `leaky` test, unidentified.** A cold workspace `cargo nextest run` on
   Windows on 2026-10-09 reported "80 passed (1 leaky)" (a test's child process
