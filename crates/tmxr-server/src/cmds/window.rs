@@ -57,30 +57,70 @@ pub(super) fn run(
             let sid = target::session(srv, ctx, a.value('t'))?;
             srv.renumber_windows(sid);
         }
-        "move-window" => {
-            let (_, _, wid) = target::window(srv, ctx, a.value('s'))?;
-            let (dst, index) = match a.value('t') {
+        "move-window" | "link-window" => {
+            let (src, _, wid) = target::window(srv, ctx, a.value('s'))?;
+            let (dst, mut index) = match a.value('t') {
                 Some(t) if !t.is_empty() => target::destination(srv, ctx, t)?,
                 _ => (target::session(srv, ctx, None)?, None),
             };
-            // -k: a window already at the index is killed to make room.
-            if a.has('k')
-                && let Some(i) = index
-                && let Some(&old) = srv.sessions[&dst].windows.get(&i)
-                && old != wid
-            {
-                srv.kill_window(old);
+            // -a: the first free index after the target.
+            if a.has('a') {
+                let s = &srv.sessions[&dst];
+                let after = index.unwrap_or(s.current);
+                index = ((after + 1)..).find(|i| !s.windows.contains_key(i));
             }
-            srv.move_window(wid, dst, index, !a.has('d'))?;
+            // -k: a window already at the index makes room. It is taken out
+            // of the map directly, not unlinked, so a session whose only
+            // window it is does not end before the new one arrives.
+            let replaced = match index {
+                Some(i) if a.has('k') => srv
+                    .sessions
+                    .get_mut(&dst)
+                    .and_then(|s| s.windows.remove_entry(&i))
+                    .filter(|(_, old)| *old != wid),
+                _ => None,
+            };
+            let placed = if p.name() == "link-window" {
+                srv.link_window(wid, dst, index, !a.has('d'))
+            } else {
+                srv.move_window(wid, src, dst, index, !a.has('d'))
+            };
+            if let Some((i, old)) = replaced {
+                if placed.is_err()
+                    && let Some(s) = srv.sessions.get_mut(&dst)
+                {
+                    s.windows.insert(i, old);
+                } else if srv.session_of_window(old).is_none() {
+                    srv.kill_window(old);
+                }
+            }
+            placed?;
+        }
+        "unlink-window" => {
+            let (sid, _, wid) = target::window(srv, ctx, a.value('t'))?;
+            if !a.has('k') && srv.sessions_of_window(wid).len() < 2 {
+                return Err("window only linked to one session".into());
+            }
+            srv.unlink_or_kill(sid, wid);
         }
         "swap-window" => {
             let src = match (a.value('s'), srv.marked_pane()) {
-                (Some(s), _) => target::window(srv, ctx, Some(s))?.2,
-                (None, Some(m)) => srv.panes[&m].window,
+                (Some(s), _) => {
+                    let (sid, idx, _) = target::window(srv, ctx, Some(s))?;
+                    (sid, idx)
+                }
+                (None, Some(m)) => {
+                    let w = srv.panes[&m].window;
+                    let sid = srv.session_of_window(w).ok_or("window has no session")?;
+                    let idx = srv.sessions[&sid]
+                        .index_of(w)
+                        .ok_or("window not in session")?;
+                    (sid, idx)
+                }
                 (None, None) => return Err("swap-window needs -s or a marked pane".into()),
             };
-            let (_, _, dst) = target::window(srv, ctx, a.value('t'))?;
-            srv.swap_windows(src, dst, a.has('d'))?;
+            let (sid, idx, _) = target::window(srv, ctx, a.value('t'))?;
+            srv.swap_windows(src, (sid, idx), a.has('d'))?;
         }
         "kill-window" => {
             let (sid, _, wid) = target::window(srv, ctx, a.value('t'))?;

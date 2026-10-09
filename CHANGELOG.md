@@ -41,6 +41,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   smallest client) that client resizes leave alone, until
   `set-window-option window-size latest`. The rest of the screen is filled with
   `·`. The `#{window_width}` and `#{window_height}` formats are new.
+- `link-window` (`linkw`) and `unlink-window` (`unlinkw`): one window shown in
+  several sessions, with `-k` to replace the window at the target index and
+  `unlink-window -k` to kill a window's last link. A linked window outlives a
+  killed session that held it, and `#{window_linked}` says whether it is linked.
+
+### Fixed
+
+- `move-window -k` onto the only window of a session ended that session first,
+  so the move then failed with `no such session`; the window is now replaced in
+  place, as in tmux.
 
 ### Changed
 

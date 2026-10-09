@@ -5,19 +5,12 @@ use crate::model::{PaneId, SessionId, WindowId};
 use crate::server::{Server, SplitSize};
 
 impl Server {
-    /// Move `wid` to `index` in session `dst` (the first free index when
-    /// `None`). Moving a session's last window elsewhere ends that session.
-    pub fn move_window(
-        &mut self,
-        wid: WindowId,
-        dst: SessionId,
-        index: Option<u32>,
-        select: bool,
-    ) -> Result<u32, String> {
-        let src = self.session_of_window(wid).ok_or("window has no session")?;
+    /// Where `wid` goes in `dst`: `index` when it is free (or `wid`'s own),
+    /// else the first free index.
+    fn place_in(&self, wid: WindowId, dst: SessionId, index: Option<u32>) -> Result<u32, String> {
         let base = self.cfg.base_index;
         let s = self.sessions.get(&dst).ok_or("no such session")?;
-        let index = match index {
+        Ok(match index {
             Some(i) if s.windows.get(&i).is_some_and(|w| *w != wid) => {
                 return Err(format!("index {i} in use"));
             }
@@ -25,7 +18,30 @@ impl Server {
             None => (base..)
                 .find(|i| !s.windows.contains_key(i))
                 .unwrap_or(base),
-        };
+        })
+    }
+
+    /// Move `wid` from session `src` to `index` in session `dst` (the first
+    /// free index when `None`). Moving a session's last window elsewhere
+    /// ends that session.
+    pub fn move_window(
+        &mut self,
+        wid: WindowId,
+        src: SessionId,
+        dst: SessionId,
+        index: Option<u32>,
+        select: bool,
+    ) -> Result<u32, String> {
+        if src != dst
+            && self
+                .sessions
+                .get(&dst)
+                .and_then(|s| s.index_of(wid))
+                .is_some()
+        {
+            return Err("window is already linked to that session".into());
+        }
+        let index = self.place_in(wid, dst, index)?;
         if src == dst {
             // Re-index in place: unlinking would end a one-window session.
             let s = self.sessions.get_mut(&dst).ok_or("no such session")?;
@@ -39,7 +55,7 @@ impl Server {
                 s.last = Some(index);
             }
         } else {
-            self.unlink_window(wid);
+            self.unlink_window_from(src, wid);
             self.sessions
                 .get_mut(&dst)
                 .ok_or("no such session")?
@@ -55,21 +71,55 @@ impl Server {
         Ok(index)
     }
 
-    /// Exchange two windows' places, which may be in different sessions.
-    /// Unless `keep`, the window moved into `b`'s place becomes current there.
-    pub fn swap_windows(&mut self, a: WindowId, b: WindowId, keep: bool) -> Result<(), String> {
+    /// Link `wid` into session `dst` as well, at `index` (the first free
+    /// index when `None`): one window, shown in both.
+    pub fn link_window(
+        &mut self,
+        wid: WindowId,
+        dst: SessionId,
+        index: Option<u32>,
+        select: bool,
+    ) -> Result<u32, String> {
+        if self
+            .sessions
+            .get(&dst)
+            .and_then(|s| s.index_of(wid))
+            .is_some()
+        {
+            return Err("window is already linked to that session".into());
+        }
+        let index = self.place_in(wid, dst, index)?;
+        self.sessions
+            .get_mut(&dst)
+            .ok_or("no such session")?
+            .windows
+            .insert(index, wid);
+        if select {
+            self.select_window(dst, index)?;
+        }
+        self.mark_session_dirty(dst);
+        Ok(index)
+    }
+
+    /// Exchange the windows at two places (session, index), which may be in
+    /// different sessions. Unless `keep`, the window moved into `b`'s place
+    /// becomes current there.
+    pub fn swap_windows(
+        &mut self,
+        (sa, ia): (SessionId, u32),
+        (sb, ib): (SessionId, u32),
+        keep: bool,
+    ) -> Result<(), String> {
+        let at = |srv: &Self, s: SessionId, i: u32| {
+            srv.sessions
+                .get(&s)
+                .and_then(|s| s.windows.get(&i).copied())
+                .ok_or_else(|| format!("window not found: {i}"))
+        };
+        let (a, b) = (at(self, sa, ia)?, at(self, sb, ib)?);
         if a == b {
             return Ok(());
         }
-        let place = |srv: &Self, w: WindowId| -> Result<(SessionId, u32), String> {
-            let s = srv.session_of_window(w).ok_or("window has no session")?;
-            let i = srv.sessions[&s]
-                .index_of(w)
-                .ok_or("window not in session")?;
-            Ok((s, i))
-        };
-        let (sa, ia) = place(self, a)?;
-        let (sb, ib) = place(self, b)?;
         if let Some(s) = self.sessions.get_mut(&sa) {
             s.windows.insert(ia, b);
         }

@@ -202,6 +202,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         0,
         "[-t target-session]"
     ),
+    cmd!(
+        "link-window",
+        Some("linkw"),
+        "adks:t:",
+        0,
+        0,
+        "[-adk] [-s src-window] [-t dst-window]"
+    ),
     cmd!("list-buffers", Some("lsb"), "", 0, 0, ""),
     cmd!(
         "list-clients",
@@ -589,6 +597,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         0,
         1,
         "[-an] [-T key-table] key"
+    ),
+    cmd!(
+        "unlink-window",
+        Some("unlinkw"),
+        "kt:",
+        0,
+        0,
+        "[-k] [-t target-window]"
     ),
     cmd!(
         "wait-for",

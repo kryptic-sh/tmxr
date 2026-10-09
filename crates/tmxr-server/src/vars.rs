@@ -20,7 +20,15 @@ impl<'a> Vars<'a> {
     /// Variables for `pane`, filling in its window and session.
     pub fn for_pane(srv: &'a Server, pane: Option<PaneId>, client: Option<ClientId>) -> Self {
         let window = pane.and_then(|p| srv.panes.get(&p)).map(|p| p.window);
-        let session = window.and_then(|w| srv.session_of_window(w));
+        // A linked window's session is the client's when it holds it.
+        let session = window.and_then(|w| {
+            client
+                .and_then(|c| srv.clients.get(&c))
+                .and_then(|c| c.att.as_ref())
+                .map(|a| a.session)
+                .filter(|s| srv.sessions.get(s).is_some_and(|s| s.index_of(w).is_some()))
+                .or_else(|| srv.session_of_window(w))
+        });
         Self {
             srv,
             session,
@@ -89,6 +97,7 @@ impl Context for Vars<'_> {
             "window_id" => format!("@{}", window?.id),
             "window_name" => window?.name.clone(),
             "window_panes" => window?.panes().len().to_string(),
+            "window_linked" => flag(srv.sessions_of_window(window?.id).len() > 1),
             "window_width" => window?.cols.to_string(),
             "window_height" => window?.rows.to_string(),
             "window_zoomed_flag" => flag(window?.zoomed),

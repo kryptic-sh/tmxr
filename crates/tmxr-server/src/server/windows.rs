@@ -138,11 +138,21 @@ impl Server {
         Ok(wid)
     }
 
+    /// A session holding `window`: the first of them for a linked window.
     pub fn session_of_window(&self, window: WindowId) -> Option<SessionId> {
         self.sessions
             .values()
             .find(|s| s.windows.values().any(|w| *w == window))
             .map(|s| s.id)
+    }
+
+    /// Every session holding `window` (more than one when it is linked).
+    pub fn sessions_of_window(&self, window: WindowId) -> Vec<SessionId> {
+        self.sessions
+            .values()
+            .filter(|s| s.windows.values().any(|w| *w == window))
+            .map(|s| s.id)
+            .collect()
     }
 
     /// Make window `index` current in `session`.
@@ -177,14 +187,31 @@ impl Server {
         self.unlink_window(wid);
     }
 
-    /// Take `wid` out of its session's window list, choosing the session's
-    /// next current window and renumbering like tmux. A session left without
-    /// windows is killed. The window itself and its panes are untouched.
+    /// Take `wid` out of every session holding it. The window itself and
+    /// its panes are untouched.
     pub fn unlink_window(&mut self, wid: WindowId) {
-        let Some(sid) = self.session_of_window(wid) else {
+        for sid in self.sessions_of_window(wid) {
+            self.unlink_window_from(sid, wid);
+        }
+    }
+
+    /// Take `wid` out of `sid`, and kill it when no other session holds it
+    /// (the `-k` of `move-window`, `link-window` and `unlink-window`).
+    pub fn unlink_or_kill(&mut self, sid: SessionId, wid: WindowId) {
+        if self.sessions_of_window(wid).len() > 1 {
+            self.unlink_window_from(sid, wid);
+        } else {
+            self.kill_window(wid);
+        }
+    }
+
+    /// Take `wid` out of `sid`'s window list, choosing the session's next
+    /// current window and renumbering like tmux. A session left without
+    /// windows is killed. The window itself and its panes are untouched.
+    pub fn unlink_window_from(&mut self, sid: SessionId, wid: WindowId) {
+        let Some(s) = self.sessions.get_mut(&sid) else {
             return;
         };
-        let s = self.sessions.get_mut(&sid).expect("session found above");
         let index = s.index_of(wid);
         if let Some(i) = index {
             s.windows.remove(&i);
@@ -240,6 +267,10 @@ impl Server {
         };
         self.queue_hook("session-closed", Ctx::default(), None);
         for w in s.windows.values().copied().collect::<Vec<_>>() {
+            // A window linked to another session lives on there.
+            if self.session_of_window(w).is_some() {
+                continue;
+            }
             if let Some(win) = self.windows.remove(&w) {
                 for p in win.panes() {
                     if let Some(mut pane) = self.panes.remove(&p) {

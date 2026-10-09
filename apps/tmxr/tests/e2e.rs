@@ -2580,3 +2580,93 @@ fn resize_window_fixes_the_size_until_window_size_latest() {
             .success()
     );
 }
+
+#[test]
+fn link_window_shows_one_window_in_two_sessions() {
+    let t = Tmxr::new("linkw");
+    t.run(&["new-session", "-d", "-s", "a"]);
+    t.run(&["new-window", "-d", "-t", "a", "-n", "shared"]);
+    t.run(&["new-session", "-d", "-s", "b"]);
+    let fmt = |t: &Tmxr, target: &str, f: &str| {
+        t.run(&["display-message", "-p", "-t", target, f])
+            .trim()
+            .to_owned()
+    };
+    // The window names, from list-windows' `0: name* (1 panes) [WxH]`.
+    let windows = |t: &Tmxr, s: &str| {
+        t.run(&["list-windows", "-t", s])
+            .lines()
+            .filter_map(|l| l.split_whitespace().nth(1))
+            .map(|n| n.trim_end_matches(['*', '-', 'Z', '#', '!']))
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+
+    t.run(&["link-window", "-d", "-s", "a:shared", "-t", "b:"]);
+    assert!(windows(&t, "b").contains("shared"), "{}", windows(&t, "b"));
+    assert_eq!(
+        fmt(&t, "a:shared", "#{window_id}"),
+        fmt(&t, "b:shared", "#{window_id}")
+    );
+    assert_eq!(fmt(&t, "b:shared", "#{window_linked}"), "1");
+    // Shown in b, its formats are b's (the status line's #S), not a's.
+    let screen = t.attach(&["attach", "-t", "b"]);
+    t.run(&["select-window", "-t", "b:shared"]);
+    t.run(&["set-option", "-g", "status-left", "[S=#S]"]);
+    screen.wait_for("b's name on the status line", |text| text.contains("[S=b]"));
+    drop(screen);
+    // One window: a rename shows in both.
+    t.run(&["rename-window", "-t", "b:shared", "both"]);
+    assert!(windows(&t, "a").contains("both"));
+    assert!(
+        !t.output(&["link-window", "-s", "a:both", "-t", "b:"])
+            .status
+            .success(),
+        "linked twice"
+    );
+
+    // Unlinking leaves it in the other session; the last link needs -k.
+    t.run(&["unlink-window", "-t", "b:both"]);
+    assert!(!windows(&t, "b").contains("both"));
+    assert!(windows(&t, "a").contains("both"));
+    assert_eq!(fmt(&t, "a:both", "#{window_linked}"), "0");
+    assert!(
+        !t.output(&["unlink-window", "-t", "a:both"])
+            .status
+            .success()
+    );
+
+    // A killed session's linked window lives on in the other.
+    t.run(&["link-window", "-d", "-s", "a:both", "-t", "b:"]);
+    t.run(&["kill-session", "-t", "a"]);
+    assert!(windows(&t, "b").contains("both"));
+    assert_eq!(fmt(&t, "b:both", "#{window_linked}"), "0");
+
+    // -k into a one-window session replaces its window, not the session.
+    t.run(&["new-session", "-d", "-s", "c", "-n", "lone"]);
+    let lone = fmt(&t, "c:lone", "#{window_index}");
+    t.run(&[
+        "link-window",
+        "-k",
+        "-s",
+        "b:both",
+        "-t",
+        &format!("c:{lone}"),
+    ]);
+    assert_eq!(windows(&t, "c").trim(), "both");
+    t.run(&["new-session", "-d", "-s", "d", "-n", "alone"]);
+    let alone = fmt(&t, "d:alone", "#{window_index}");
+    t.run(&[
+        "move-window",
+        "-k",
+        "-s",
+        "c:both",
+        "-t",
+        &format!("d:{alone}"),
+    ]);
+    assert_eq!(windows(&t, "d").trim(), "both");
+    // unlink-window -k kills the last link.
+    t.run(&["new-window", "-d", "-t", "d", "-n", "spare"]);
+    t.run(&["unlink-window", "-k", "-t", "d:both"]);
+    assert_eq!(windows(&t, "d").trim(), "spare");
+}
