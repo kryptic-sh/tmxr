@@ -19,6 +19,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`command-prompt -T`; the copy-mode search binds use `search`), kept up to
   `prompt-history-limit`; `show-prompt-history` (`showphist`) and
   `clear-prompt-history` (`clearphist`) list and clear them.
+- `wait-for` (`wait`): a command client blocks until another signals the channel
+  (`-S`), or takes turns at its lock (`-L` / `-U`), for scripts that synchronise
+  with tmxr.
 
 ## [0.2.4] - 2026-10-09
 

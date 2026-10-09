@@ -2279,3 +2279,58 @@ fn prompt_history_is_kept_recalled_and_cleared() {
     t.run(&["clearphist"]);
     assert_eq!(t.run(&["showphist"]).trim(), "");
 }
+
+#[test]
+fn wait_for_blocks_until_signalled_or_unlocked() {
+    let t = Tmxr::new("waitfor");
+    t.run(&["new-session", "-d", "-s", "wf"]);
+    let spawn = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_tmxr"))
+            .args(t.args(args))
+            .envs(t.env())
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .unwrap()
+    };
+    let exits_within = |child: &mut std::process::Child, d: Duration| {
+        let deadline = Instant::now() + d;
+        while Instant::now() < deadline {
+            if let Some(status) = child.try_wait().unwrap() {
+                return Some(status);
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        None
+    };
+
+    let mut waiter = spawn(&["wait", "done"]);
+    assert!(
+        exits_within(&mut waiter, Duration::from_millis(500)).is_none(),
+        "returned before the signal"
+    );
+    t.run(&["wait-for", "-S", "done"]);
+    let status = exits_within(&mut waiter, TIMEOUT).expect("not released by the signal");
+    assert!(status.success());
+
+    assert!(
+        t.output(&["wait-for", "-L", "lk"]).status.success(),
+        "a free lock is taken at once"
+    );
+    let mut second = spawn(&["wait-for", "-L", "lk"]);
+    assert!(
+        exits_within(&mut second, Duration::from_millis(500)).is_none(),
+        "took a held lock"
+    );
+    t.run(&["wait-for", "-U", "lk"]);
+    assert!(
+        exits_within(&mut second, TIMEOUT)
+            .expect("not handed the lock")
+            .success()
+    );
+
+    let chained = t.output(&["wait-for", "x", ";", "ls"]);
+    assert!(
+        String::from_utf8_lossy(&chained.stderr).contains("must end its command list"),
+        "{chained:?}"
+    );
+}

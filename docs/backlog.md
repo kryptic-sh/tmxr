@@ -63,14 +63,15 @@ what was not.
   `tmux list-commands`. The gap is the tmux commands tmxr does not have, whose
   names and shorthands are therefore unknown: `customize-mode`, `display-menu`,
   `display-popup`, `link-window`, `lock-client`, `lock-server`, `lock-session`,
-  `resize-window`, `server-access`, `set-hook`, `show-hooks`, `unlink-window`,
-  `wait-for` (`move-pane`, `previous-layout`, `show-window-options`,
-  `start-server`, `set-environment`, `show-environment`, `clear-history`,
-  `respawn-window` `pipe-pane` (output only; `-I` is an error),
-  `show-prompt-history` and `clear-prompt-history` were added on 2026-10-09).
-  Checked against a running server on 2026-10-09: `ls`, `list-s`, `show`
-  (`show-options`) and `kill-ser` resolve, `displ` is ambiguous as in tmux, and
-  `pipe` is an unknown command where `tmux pipe` runs `pipe-pane`.
+  `resize-window`, `server-access`, `set-hook`, `show-hooks`, `unlink-window`
+  (`move-pane`, `previous-layout`, `show-window-options`, `start-server`,
+  `set-environment`, `show-environment`, `clear-history`, `respawn-window`
+  `pipe-pane` (output only; `-I` is an error), `show-prompt-history`,
+  `clear-prompt-history` and `wait-for` (ending its command list, from a command
+  client) were added on 2026-10-09). Checked against a running server on
+  2026-10-09: `ls`, `list-s`, `show` (`show-options`) and `kill-ser` resolve,
+  `displ` is ambiguous as in tmux, and `pipe` is an unknown command where
+  `tmux pipe` runs `pipe-pane`.
 - **tmux default binds**: all of tmux's defaults are bound; `prefix C-z`
   (suspend-client) errors on Windows, which has no job control. Alerts for `M-n`
   / `M-p` are bells only (no `monitor-activity` / `monitor-silence`).

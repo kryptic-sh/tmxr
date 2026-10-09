@@ -24,6 +24,7 @@ pub mod server;
 pub mod target;
 pub mod util;
 pub mod vars;
+pub mod waits;
 
 use std::path::PathBuf;
 use std::sync::mpsc;

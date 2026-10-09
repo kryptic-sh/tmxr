@@ -541,6 +541,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         1,
         "[-an] [-T key-table] key"
     ),
+    cmd!(
+        "wait-for",
+        Some("wait"),
+        "LSU",
+        1,
+        1,
+        "[-L | -S | -U] channel"
+    ),
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

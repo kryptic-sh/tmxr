@@ -8,6 +8,7 @@ mod options;
 mod pane;
 mod prompt;
 mod session;
+mod wait;
 mod window;
 
 use std::path::PathBuf;
@@ -47,6 +48,8 @@ pub struct Outcome {
     pub stderr: String,
     /// Attach the client to this session when it can.
     pub attach: Option<SessionId>,
+    /// `wait-for`: hold the command client's reply until this happens.
+    pub wait: Option<crate::waits::Wait>,
 }
 
 impl Outcome {
@@ -65,7 +68,13 @@ type Res = Result<(), String>;
 pub fn run_string(srv: &mut Server, ctx: &Ctx, line: &str) -> Outcome {
     let env = |k: &str| std::env::var(k).ok();
     match tmxr_command::tokenize(line, &env) {
-        Ok(cmds) => run_list(srv, ctx, &cmds),
+        // Only a command client has a reply to hold back.
+        Ok(cmds) => match run_list(srv, ctx, &cmds) {
+            out if out.wait.is_some() => {
+                Outcome::error("wait-for: only a command client can wait".into())
+            }
+            out => out,
+        },
         Err(e) => Outcome::error(e.to_string()),
     }
 }
@@ -95,6 +104,12 @@ pub fn run_list(srv: &mut Server, ctx: &Ctx, cmds: &[Vec<String>]) -> Outcome {
         if let Err(e) = run_one(srv, ctx, &parsed, &mut out) {
             out.status = 1;
             out.stderr.push_str(&e);
+            return out;
+        }
+        if out.wait.is_some() && !std::ptr::eq(argv, cmds.last().expect("in cmds")) {
+            out.wait = None;
+            out.status = 1;
+            out.stderr.push_str("wait-for must end its command list");
             return out;
         }
     }
@@ -192,6 +207,7 @@ fn run_one(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res {
         env::run,
         options::run,
         prompt::run,
+        wait::run,
     ] {
         if family(srv, ctx, p, out)? {
             return Ok(());

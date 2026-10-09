@@ -131,6 +131,8 @@ pub struct Server {
     pub global_env: Environment,
     /// Entries submitted at prompts, oldest first, by prompt type.
     pub prompt_history: BTreeMap<String, Vec<String>>,
+    /// `wait-for` channels and the command clients waiting on them.
+    pub waits: crate::waits::Waits,
     last_save: Instant,
     /// What resurrect last wrote, so an unchanged layout is not saved again.
     pub last_saved: Option<crate::resurrect::Save>,
@@ -213,6 +215,7 @@ impl Server {
             marked: None,
             global_env: Environment::default(),
             prompt_history: BTreeMap::new(),
+            waits: crate::waits::Waits::default(),
             last_save: Instant::now(),
             last_saved: None,
             clock_shown: None,
@@ -279,6 +282,7 @@ impl Server {
                 );
             }
             Event::Disconnected(id) => {
+                self.waits.forget(id);
                 if let Some(c) = self.clients.remove(&id)
                     && c.att.is_some()
                 {
@@ -389,7 +393,12 @@ impl Server {
                     argv
                 };
                 let ctx = self.command_client_ctx(id);
-                let out = crate::cmds::run_argv_list(self, &ctx, &argv);
+                let mut out = crate::cmds::run_argv_list(self, &ctx, &argv);
+                // wait-for: the reply waits for a signal or the lock.
+                if let Some(wait) = out.wait.take() {
+                    self.waits.enqueue(id, &wait);
+                    return;
+                }
                 match out.attach {
                     Some(session) if self.client_terminal(id).is_some() => {
                         self.attach(id, session);
@@ -444,6 +453,11 @@ impl Server {
             env: hello.map(|h| h.env.clone()).unwrap_or_default(),
             mouse: None,
         }
+    }
+
+    /// A command client's `wait-for` is over: it gets its reply.
+    pub fn release_waiter(&mut self, id: ClientId) {
+        self.finish_command(id, Outcome::default());
     }
 
     fn finish_command(&mut self, id: ClientId, out: Outcome) {
