@@ -21,8 +21,8 @@ Decisions the plan made provisionally, and what the owner decided.
 6. **Windows current directory.** Read from the foreground process's PEB; what
    the shell announces (OSC 7 / OSC 9;9) still comes first, for PowerShell.
 
-## Open
-
 7. **vim (not hjkl) navigation.** vim-tmux-navigator in nvim calls `tmux`, so it
-   does not hand off to tmxr. Decided: a Lua nvim plugin in its own kryptic-sh
-   repo, doing for tmxr what vim-tmux-navigator does for tmux.
+   does not hand off to tmxr. Done as a Lua plugin in its own repo,
+   [tmxr-navigator.nvim](https://github.com/kryptic-sh/tmxr-navigator.nvim).
+
+Nothing is open.

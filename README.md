@@ -34,7 +34,9 @@ listed in [docs/backlog.md](docs/backlog.md).
   table with `mode-keys emacs`), tmux-sensible and tmux-yank binds, and tmux's
   own default binds. `prefix ?` lists every bind with a note.
 - **vim / hjkl navigation built in**: `C-h/j/k/l` move between panes, or go to
-  the program in front when it is vim, hjkl or fzf — no plugin needed.
+  the program in front when it is vim, hjkl or fzf. hjkl hands the keys back at
+  its edge by itself; for nvim, install
+  [tmxr-navigator.nvim](https://github.com/kryptic-sh/tmxr-navigator.nvim).
 - **Fuzzy pickers** on `hjkl-picker`: sessions (`prefix s`), windows
   (`prefix w`), paste buffers (`prefix =`), and `prefix f` to find a window. As
   in hjkl: type to filter, arrows or `C-n` / `C-p` to move, `Escape` to close.

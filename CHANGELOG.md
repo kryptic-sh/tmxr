@@ -36,6 +36,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Incremental search**: emacs copy mode's `C-s` / `C-r` move to the match as
   you type, through `command-prompt -i` and the `search-forward-incremental` /
   `search-backward-incremental` copy commands.
+- nvim support for `C-h/j/k/l` lives in the new
+  [tmxr-navigator.nvim](https://github.com/kryptic-sh/tmxr-navigator.nvim)
+  plugin, tmxr's vim-tmux-navigator.
 
 ### Changed
 

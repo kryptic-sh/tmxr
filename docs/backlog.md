@@ -45,7 +45,7 @@ what was not.
 - **Not run on Linux/macOS locally**: the `cfg(unix)` arms (socket dir checks,
   peer uid, `setsid` spawn, `/proc` and `proc_pidinfo` inspection) are only
   compiled and tested by CI.
-- CI (commit ba06cf6) runs the unit and e2e tests green on Linux, macOS and
+- CI (commit 7d26b7a) runs the unit and e2e tests green on Linux, macOS and
   Windows; the Unix arms are exercised there, not locally.
 
 ## Known gaps and follow-ups
@@ -153,8 +153,9 @@ hrdr's pipeline, with what each needs:
   2026-10-09) but not in an hjkl release yet: `dispatch_tmux_navigate` runs
   `tmxr select-pane` when `$TMXR` is set. Not tested end to end with a real hjkl
   in a tmxr pane.
-- **nvim navigation.** vim-tmux-navigator shells out to `tmux`; a snippet or
-  plugin option calling `tmxr select-pane` is needed for plain nvim.
+- **nvim navigation** is the separate
+  [tmxr-navigator.nvim](https://github.com/kryptic-sh/tmxr-navigator.nvim)
+  plugin (CI green on Linux, macOS and Windows, nvim stable and nightly).
 
 ## Not yet verified
 
