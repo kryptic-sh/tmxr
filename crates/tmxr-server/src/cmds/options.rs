@@ -18,7 +18,8 @@ pub(super) fn run(
     let pos = a.positional();
     match p.name() {
         "set-option" | "set-window-option" => set_option(srv, ctx, p, out)?,
-        "show-options" => {
+        // Window options live with the rest in one table.
+        "show-options" | "show-window-options" => {
             let c = &srv.cfg;
             let lines = [
                 format!("prefix {}", c.prefix),

@@ -148,7 +148,8 @@ pub(super) fn run(
             let cwd = cwd_arg(srv, ctx, Some(pid), a);
             srv.respawn_pane(pid, pos.to_vec(), cwd)?;
         }
-        "join-pane" => {
+        // tmux's move-pane is join-pane under another name.
+        "join-pane" | "move-pane" => {
             let src = match (a.value('s'), srv.marked_pane()) {
                 (Some(s), _) => target::pane(srv, ctx, Some(s))?.2,
                 (None, Some(m)) => m,

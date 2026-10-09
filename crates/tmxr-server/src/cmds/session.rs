@@ -109,6 +109,8 @@ pub(super) fn run(
                 srv.kill_session(sid);
             }
         }
+        // The client started the server to run this; nothing is left to do.
+        "start-server" => {}
         "suspend-client" => {
             let c = match a.value('t') {
                 Some(t) => target_client(srv, t)?,

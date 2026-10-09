@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- tmux's `move-pane` (`movep`), `previous-layout` (`prevl`),
+  `show-window-options` (`showw`) and `start-server` (`start`), so their names
+  and shorthands work as in tmux.
+
 ### Fixed
 
 - The server no longer keeps open what the program that started it inherited. A

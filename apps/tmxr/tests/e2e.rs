@@ -2069,3 +2069,32 @@ fn the_server_does_not_keep_its_starters_pipes_open() {
         "the server is still running"
     );
 }
+
+#[test]
+fn tmux_commands_move_pane_previous_layout_show_window_options_start_server() {
+    let t = Tmxr::new("aliases");
+    // start: a server with no sessions, which `ls` reaches.
+    let started = t.output(&["start"]);
+    assert!(started.status.success(), "{started:?}");
+    let ls = t.output(&["ls"]);
+    assert!(ls.status.success(), "no server after start: {ls:?}");
+
+    t.run(&["new-session", "-d", "-s", "m"]);
+    t.run(&["new-window", "-d", "-t", "m"]);
+    // movep: window 1's pane joins window 0, and window 1 goes.
+    t.run(&["movep", "-s", "m:1.0", "-t", "m:0"]);
+    assert_eq!(t.run(&["list-panes", "-t", "m:0"]).lines().count(), 2);
+    assert_eq!(t.run(&["list-windows", "-t", "m"]).lines().count(), 1);
+
+    // prevl undoes nextl: side by side, then stacked, then side by side.
+    let geometry = |t: &Tmxr| t.run(&["list-panes", "-t", "m:0"]);
+    t.run(&["select-layout", "-t", "m:0", "even-horizontal"]);
+    let before = geometry(&t);
+    t.run(&["nextl", "-t", "m:0"]);
+    assert_ne!(geometry(&t), before, "nextl changed nothing");
+    t.run(&["prevl", "-t", "m:0"]);
+    assert_eq!(geometry(&t), before);
+
+    let showw = t.run(&["showw"]);
+    assert!(showw.contains("mode-keys"), "{showw}");
+}

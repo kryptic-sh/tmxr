@@ -43,7 +43,7 @@ fn starts_server(args: &[String]) -> bool {
     };
     matches!(
         tmxr_command::lookup(name).map(|c| c.name),
-        Ok("new-session" | "resurrect-restore")
+        Ok("new-session" | "resurrect-restore" | "start-server")
     )
 }
 

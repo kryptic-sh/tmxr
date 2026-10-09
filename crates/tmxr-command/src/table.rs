@@ -222,6 +222,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         "[-w] [-b buffer-name] path"
     ),
     cmd!(
+        "move-pane",
+        Some("movep"),
+        "bdhl:s:t:v",
+        0,
+        0,
+        "[-bdhv] [-l size] [-s src-pane] [-t dst-pane]"
+    ),
+    cmd!(
         "move-window",
         Some("movew"),
         "dkrs:t:",
@@ -276,6 +284,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         0,
         0,
         "[-dp] [-b buffer-name] [-t target-pane]"
+    ),
+    cmd!(
+        "previous-layout",
+        Some("prevl"),
+        "t:",
+        0,
+        0,
+        "[-t target-window]"
     ),
     cmd!(
         "previous-window",
@@ -411,6 +427,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         1,
         "[-gsvw] [-t target] [option]"
     ),
+    cmd!(
+        "show-window-options",
+        Some("showw"),
+        "gt:v",
+        0,
+        1,
+        "[-gv] [-t target-window] [option]"
+    ),
     cmd!("source-file", Some("source"), "q", 0, 1, "[-q] [path]"),
     cmd!(
         "split-window",
@@ -420,6 +444,7 @@ pub const COMMANDS: &[CommandSpec] = &[
         ANY,
         "[-bdfhv] [-c start-directory] [-l size] [-t target-pane] [command]"
     ),
+    cmd!("start-server", Some("start"), "", 0, 0, ""),
     cmd!(
         "suspend-client",
         Some("suspendc"),

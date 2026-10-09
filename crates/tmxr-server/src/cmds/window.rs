@@ -178,13 +178,13 @@ pub(super) fn run(
             win.zoomed = false;
             srv.relayout(wid);
         }
-        "next-layout" | "select-layout" => {
+        "next-layout" | "previous-layout" | "select-layout" => {
             let (_, _, wid) = target::window(srv, ctx, a.value('t'))?;
             let win = srv.windows.get_mut(&wid).ok_or("no window")?;
             let name = if p.name() == "next-layout" || a.has('n') {
                 win.preset = (win.preset + 1) % crate::layout::PRESETS.len();
                 crate::layout::PRESETS[win.preset].to_owned()
-            } else if a.has('p') {
+            } else if p.name() == "previous-layout" || a.has('p') {
                 let n = crate::layout::PRESETS.len();
                 win.preset = (win.preset + n - 1) % n;
                 crate::layout::PRESETS[win.preset].to_owned()
