@@ -36,9 +36,10 @@ repos' schedule), `.github/dependabot.yml` (the standard cargo + actions form),
 
 ## Phase 2 — first release (M8)
 
-State: v0.1.0 adopts `build`, `publish-github-release` and `tag-release-status`
-and the `--completions` / `--man` flags. crates.io, the AUR, Homebrew, Scoop and
-Alpine are deferred; [the backlog](../backlog.md) says what each needs.
+State: v0.1.0 shipped `build`, `publish-github-release` and `tag-release-status`
+with the `--completions` / `--man` flags; the crates.io, AUR, Homebrew, Scoop
+and Alpine jobs followed after v0.2.3. The app crate is `tmxr-cli` on crates.io
+(`tmxr` is taken there); the binary, `.deb` and `.rpm` are still `tmxr`.
 
 Add hrdr's release jobs verbatim in shape, renamed for tmxr:
 

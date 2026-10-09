@@ -114,7 +114,24 @@ wins over what tmxr reads from the process.
 
 ## Installing
 
-Download the archive for your platform from
+```sh
+# AUR (Arch Linux)
+yay -S tmxr-bin
+
+# Homebrew (macOS)
+brew install kryptic-sh/tap/tmxr
+
+# Scoop (Windows)
+scoop bucket add kryptic-sh https://github.com/kryptic-sh/scoop-bucket
+scoop install tmxr
+
+# crates.io (the package is tmxr-cli; the binary is tmxr)
+cargo install tmxr-cli
+
+# Debian/Ubuntu, Fedora, Alpine: the .deb / .rpm / .apk from the latest release
+```
+
+Or download the archive for your platform from
 [GitHub Releases](https://github.com/kryptic-sh/tmxr/releases) and put `tmxr`
 (`tmxr.exe` on Windows) on your `PATH`. Each file has a `.sha256` beside it.
 There are builds for Linux (x86_64 and aarch64, glibc 2.28+ or static musl, and
@@ -124,13 +141,11 @@ There are builds for Linux (x86_64 and aarch64, glibc 2.28+ or static musl, and
 The Windows zip also carries `conpty.dll` and `OpenConsole.exe`, Microsoft's
 ConPTY (MIT, `ConPTY-LICENSE.txt`); keep them beside `tmxr.exe`. Windows' own
 ConPTY drops the end of a program's tmux passthrough, so without them inline
-images stay off. tmxr built from source uses Windows' own.
+images stay off. The Scoop package includes them; tmxr built from source
+(`cargo install tmxr-cli`) uses Windows' own.
 
 Shell completions and the man page come from the binary itself:
 `tmxr --completions <bash|zsh|fish|powershell|elvish|nushell>` and `tmxr --man`.
-
-Package managers (AUR, Homebrew, Scoop, Alpine) and crates.io are not set up
-yet.
 
 ## Building
 

@@ -16,6 +16,6 @@ pty-e2e = { max-threads = 1 }
 slow-timeout = { period = "120s", terminate-after = 4 }
 
 [[profile.default.overrides]]
-filter = 'package(tmxr) & binary(e2e)'
+filter = 'package(tmxr-cli) & binary(e2e)'
 test-group = 'pty-e2e'
 retries = 2

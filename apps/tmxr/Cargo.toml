@@ -1,5 +1,6 @@
 [package]
-name = "tmxr"
+# `tmxr` on crates.io is another project; the binary is still `tmxr`.
+name = "tmxr-cli"
 description = "A tmux-style terminal multiplexer for Linux, macOS and Windows."
 keywords = ["tmux", "terminal", "multiplexer", "tui", "pty"]
 categories = ["command-line-utilities"]
@@ -13,6 +14,7 @@ authors.workspace = true
 readme.workspace = true
 
 [package.metadata.deb]
+name = "tmxr"
 maintainer = "mxaddict <mxaddict@kryptic.sh>"
 copyright = "2026, mxaddict <mxaddict@kryptic.sh>"
 extended-description = "tmxr: a tmux-style terminal multiplexer with tmux's commands and key bindings, a client/server design, session save and restore, and a vi copy mode."
@@ -30,6 +32,7 @@ assets = [
 ]
 
 [package.metadata.generate-rpm]
+name = "tmxr"
 assets = [
   { source = "target/release/tmxr", dest = "/usr/bin/tmxr", mode = "755" },
   { source = "README.md", dest = "/usr/share/doc/tmxr/README.md", mode = "644", doc = true },

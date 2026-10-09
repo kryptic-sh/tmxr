@@ -8,6 +8,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Package channels**: releases now publish to the AUR (`tmxr-bin`), the
+  kryptic-sh Homebrew tap and Scoop bucket, Alpine (`.apk` on the release) and
+  crates.io, as `tmxr-cli` (the name `tmxr` is another project's there); the
+  binary is still `tmxr`.
 - tmux's `move-pane` (`movep`), `previous-layout` (`prevl`),
   `show-window-options` (`showw`) and `start-server` (`start`), so their names
   and shorthands work as in tmux.

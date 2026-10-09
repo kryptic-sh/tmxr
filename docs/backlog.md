@@ -157,23 +157,15 @@ The provisional decisions in
 kill-pane, theme, config format, vim navigation, picker mode, Windows current
 directory) are defaults the implementation follows until answered.
 
-## Release channels not set up
+## Release channels
 
-v0.1.0 ships to GitHub Releases only (the owner's call, 2026-10-09). Left out of
-hrdr's pipeline, with what each needs:
-
-- **crates.io**: the name `tmxr` belongs to another project (slaptijack's tmux
-  workspace launcher, crates.io owner `slaptijack`); `tmxr-proto` …
-  `tmxr-client` were free. Needs a package name decided (e.g. `tmxr-cli`
-  installing the `tmxr` binary) plus hrdr's `publish-crates` job with its
-  topological order.
-- **AUR (`tmxr-bin`), Homebrew tap, Scoop bucket**: need kryptic-sh/tmxr added
-  to the org secrets `AUR_SSH_KEY`, `BREW_SSH_KEY` and `SCOOP_SSH_KEY`, which
-  are limited to selected repos (changing that needs `admin:org`), then hrdr's
-  `aur-bin`, `brew-tap`, `scoop-bucket` jobs and `pkg/` templates renamed.
-- **Alpine `.apk`**: needs only hrdr's `alpine` job and
-  `pkg/alpine/APKBUILD.in`.
-- **Site entry** on kryptic-sh.github.io (plan/14 lists the files).
+Every channel of hrdr's pipeline is in CI from 2026-10-09 (`publish-crates`,
+`aur-bin`, `brew-tap`, `scoop-bucket`, `alpine`), and kryptic-sh/tmxr was added
+to the org secrets `AUR_SSH_KEY` and `BREW_SSH_KEY` (`SCOOP_SSH_KEY` and
+`CARGO_REGISTRY_TOKEN` are shared with every org repo). crates.io's `tmxr` is
+another project (crates.io owner `slaptijack`), so the app crate is `tmxr-cli`,
+installing the `tmxr` binary. Still to do: the site entry on
+kryptic-sh.github.io (plan/14 lists the files).
 
 ## Cross-repo work
 

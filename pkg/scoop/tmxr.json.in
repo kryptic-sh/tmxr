@@ -1,0 +1,27 @@
+{
+  "version": "{VERSION}",
+  "description": "A tmux-style terminal multiplexer for Linux, macOS and Windows",
+  "homepage": "https://github.com/kryptic-sh/tmxr",
+  "license": "MIT",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/kryptic-sh/tmxr/releases/download/v{VERSION}/tmxr-v{VERSION}-x86_64-pc-windows-msvc.zip",
+      "hash": "{SHA256_X86_64_WINDOWS}"
+    }
+  },
+  "bin": "tmxr.exe",
+  "notes": "Enable PowerShell completions: add 'tmxr --completions powershell | Out-String | Invoke-Expression' to your $PROFILE.",
+  "checkver": {
+    "github": "https://github.com/kryptic-sh/tmxr"
+  },
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/kryptic-sh/tmxr/releases/download/v$version/tmxr-v$version-x86_64-pc-windows-msvc.zip"
+      }
+    },
+    "hash": {
+      "url": "$url.sha256"
+    }
+  }
+}
