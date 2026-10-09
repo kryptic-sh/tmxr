@@ -116,7 +116,9 @@ what was not.
   still held its output after it ended); four reruns that day and seven more
   later were clean (those later runs did turn up a flaky test, since fixed), and
   nextest's summary did not name the leaking test. Likely a server or pane
-  process outliving `kill-server` by a moment; not investigated further.
+  process outliving `kill-server` by a moment; not investigated further. It came
+  back once more on 2026-10-09 (143 tests, "1 leaky") and not in the 4 runs
+  after. Next time, run without filtering: nextest's `LEAK` line names the test.
 - **`session_picker_previews_the_highlighted_session` timed out once** (30 s) in
   a full Windows run on 2026-10-09 that took 50 s instead of the usual 20 s, and
   passed on nextest's retry. 15 isolated runs and 5 more full runs were clean.
