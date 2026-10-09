@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-09
+
 ### Added
 
 - `select-pane -Z` keeps a zoomed window zoomed on the pane it selects, as in
@@ -107,7 +109,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   published to GitHub Releases with `.sha256` files, and shell completions and a
   man page from the hidden `tmxr --completions <shell>` and `tmxr --man`.
 
-[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/kryptic-sh/tmxr/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/kryptic-sh/tmxr/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/kryptic-sh/tmxr/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kryptic-sh/tmxr/releases/tag/v0.1.0
