@@ -28,11 +28,14 @@ pub(super) fn run(
                 .value('p')
                 .map_or_else(|| ":".to_owned(), |p| format!("{p} "));
             let template = pos.first().cloned();
-            let overlay = if a.has('k') {
+            let mut overlay = if a.has('k') {
                 Overlay::key_prompt(prompt, template.unwrap_or_else(|| "%%".into()))
             } else {
                 Overlay::prompt(prompt, initial, template)
             };
+            if let Overlay::Prompt(p) = &mut overlay {
+                p.incremental = a.has('i');
+            }
             if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
                 att.overlay = Some(overlay);
             }

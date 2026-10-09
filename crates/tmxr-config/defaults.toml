@@ -305,8 +305,8 @@ restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "to
 "DoubleClick1Pane" = { cmd = "select-pane ; send-keys -X select-word ; send-keys -X copy-selection-and-cancel", note = "Copy the word double-clicked" }
 "TripleClick1Pane" = { cmd = "select-pane ; send-keys -X select-line ; send-keys -X copy-selection-and-cancel", note = "Copy the line triple-clicked" }
 
-# Copy mode with `mode-keys emacs`: tmux's own copy-mode table, with
-# non-incremental search. Counts are M-1 … M-9.
+# Copy mode with `mode-keys emacs`: tmux's own copy-mode table. Counts are
+# M-1 … M-9.
 [keys.copy-mode]
 "Escape" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
 "C-c" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
@@ -350,8 +350,8 @@ restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "to
 "M-Down" = { cmd = "send-keys -X halfpage-down", note = "Half page down" }
 "C-Up" = { cmd = "send-keys -X scroll-up", note = "Scroll up" }
 "C-Down" = { cmd = "send-keys -X scroll-down", note = "Scroll down" }
-"C-s" = { cmd = 'command-prompt -p "(search down)" "send-keys -X search-forward \"%%\""', note = "Search down" }
-"C-r" = { cmd = 'command-prompt -p "(search up)" "send-keys -X search-backward \"%%\""', note = "Search up" }
+"C-s" = { cmd = 'command-prompt -i -p "(search down)" "send-keys -X search-forward-incremental \"%%\""', note = "Search down as you type" }
+"C-r" = { cmd = 'command-prompt -i -p "(search up)" "send-keys -X search-backward-incremental \"%%\""', note = "Search up as you type" }
 "n" = { cmd = "send-keys -X search-again", note = "Next match" }
 "N" = { cmd = "send-keys -X search-reverse", note = "Previous match" }
 "f" = { cmd = "send-keys -X jump-forward", note = "Jump to the next char typed" }

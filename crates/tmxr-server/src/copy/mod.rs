@@ -763,6 +763,15 @@ impl CopyMode {
                 self.find(&needle, forward, true);
                 self.search = Some((needle, forward));
             }
+            // Run again as each character is typed: a match at the cursor
+            // counts, so the cursor stays while the longer text still
+            // matches there.
+            "search-forward-incremental" | "search-backward-incremental" => {
+                let forward = name == "search-forward-incremental";
+                let needle = arg.unwrap_or_default().to_owned();
+                self.find(&needle, forward, false);
+                self.search = Some((needle, forward));
+            }
             "jump-forward" | "jump-backward" | "jump-to-forward" | "jump-to-backward" => {
                 let jump = Jump::from_command(name).expect("matched a jump command");
                 match arg.and_then(|a| a.chars().next()) {

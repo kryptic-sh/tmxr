@@ -33,6 +33,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   any shell integration: tmxr reads the directory from the program's process
   (its PEB). What a shell announces (OSC 7 / OSC 9;9) still comes first, which
   PowerShell needs.
+- **Incremental search**: emacs copy mode's `C-s` / `C-r` move to the match as
+  you type, through `command-prompt -i` and the `search-forward-incremental` /
+  `search-backward-incremental` copy commands.
 
 ### Changed
 

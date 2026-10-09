@@ -25,6 +25,9 @@ pub enum OverlayAction {
     Switch(SessionId),
     /// Close, switch to the session and select the window index.
     SwitchWindow(SessionId, u32),
+    /// Run this command list and keep the overlay open
+    /// (`command-prompt -i`, after each edit).
+    Preview(String),
 }
 
 pub enum Overlay {
@@ -55,6 +58,9 @@ pub struct Prompt {
     /// `command-prompt -k`: the next key pressed is the input, as its tmux
     /// name, quoted so any key stays one argument.
     pub key: bool,
+    /// `command-prompt -i`: the template runs again after every edit, for
+    /// incremental search.
+    pub incremental: bool,
 }
 
 impl Overlay {
@@ -67,6 +73,7 @@ impl Overlay {
             cursor,
             template,
             key: false,
+            incremental: false,
         })
     }
 
@@ -78,6 +85,7 @@ impl Overlay {
             cursor: 0,
             template: Some(template),
             key: true,
+            incremental: false,
         })
     }
 
@@ -275,7 +283,30 @@ impl Overlay {
 }
 
 impl Prompt {
+    /// The command the input runs: the template with `%%` (and `%1`)
+    /// replaced, or the input itself.
+    fn command(&self) -> String {
+        let input: String = self.input.iter().collect();
+        match &self.template {
+            Some(t) => t.replace("%%", &input).replace("%1", &input),
+            None => input,
+        }
+    }
+
     fn key(&mut self, ev: &KeyEvent) -> OverlayAction {
+        let before = self.input.clone();
+        let action = self.edit(ev);
+        if self.incremental
+            && action == OverlayAction::Keep
+            && self.input != before
+            && !self.input.is_empty()
+        {
+            return OverlayAction::Preview(self.command());
+        }
+        action
+    }
+
+    fn edit(&mut self, ev: &KeyEvent) -> OverlayAction {
         if self.key {
             let name = join_args(&[tmxr_command::Key::from_event(ev).to_string()]);
             let template = self.template.as_deref().unwrap_or("%%");
@@ -286,15 +317,10 @@ impl Prompt {
             KeyCode::Esc => return OverlayAction::Close,
             KeyCode::Char('c' | 'g') if ctrl => return OverlayAction::Close,
             KeyCode::Enter => {
-                let input: String = self.input.iter().collect();
-                if input.is_empty() && self.template.is_none() {
+                if self.input.is_empty() && self.template.is_none() {
                     return OverlayAction::Close;
                 }
-                let cmd = match &self.template {
-                    Some(t) => t.replace("%%", &input).replace("%1", &input),
-                    None => input,
-                };
-                return OverlayAction::Run(cmd);
+                return OverlayAction::Run(self.command());
             }
             KeyCode::Backspace | KeyCode::Char('h') if ctrl || ev.code == KeyCode::Backspace => {
                 if self.cursor > 0 {

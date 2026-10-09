@@ -91,6 +91,16 @@ impl Server {
                 }
                 OverlayAction::Close => {}
                 OverlayAction::Run(cmd) => self.run_bind(id, &cmd, None),
+                OverlayAction::Preview(cmd) => {
+                    self.run_bind(id, &cmd, None);
+                    // The prompt stays, unless the command opened something
+                    // in its place.
+                    if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut())
+                        && a.overlay.is_none()
+                    {
+                        a.overlay = Some(ov);
+                    }
+                }
                 OverlayAction::Switch(sid) => self.switch_client(id, sid),
                 OverlayAction::SwitchWindow(sid, idx) => {
                     self.switch_client(id, sid);

@@ -1860,3 +1860,34 @@ fn pane_current_path_follows_the_shells_cd() {
     );
     in_sub("the new window in the directory");
 }
+
+#[test]
+fn emacs_search_moves_as_you_type() {
+    let t = Tmxr::new("incsearch");
+    let s = t.attach(&["new", "-s", "is"]);
+    s.wait_for("status line", |text| text.contains("is"));
+    t.run(&["set-option", "-g", "mode-keys", "emacs"]);
+    s.send(b"echo @inc-search\r");
+    s.wait_for("echoed", |text| {
+        text.lines().any(|l| l.trim_end() == "@inc-search")
+    });
+    s.send(PREFIX);
+    s.send(b"[");
+    s.send(b"\x12");
+    s.wait_for("search prompt", |text| text.contains("(search up)"));
+    // Typed, never entered: Escape leaves the prompt with the cursor where
+    // the typing took it.
+    s.send(b"@inc-search");
+    s.wait_for("typed", |text| text.contains("(search up) @inc-search"));
+    s.send(b"\x1b");
+    s.wait_for("prompt closed", |text| !text.contains("(search up)"));
+    // C-Space, M-1 M-0 C-f, M-w: the eleven cells from the match.
+    s.send(b"\x00");
+    s.send(b"\x1b1");
+    s.send(b"\x1b0");
+    s.send(b"\x06");
+    s.send(b"\x1bw");
+    t.wait_run(&["show-buffer"], "the match copied", |o| {
+        o.trim_end() == "@inc-search"
+    });
+}
