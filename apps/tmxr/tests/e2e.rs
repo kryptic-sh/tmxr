@@ -2415,3 +2415,64 @@ fn hooks_run_after_commands_and_events() {
     let after = t.run(&["list-windows", "-t", "hk"]).lines().count();
     assert_eq!(after, before + 2, "the command and its hook's window");
 }
+
+#[test]
+fn display_menu_runs_the_item_picked() {
+    let t = Tmxr::new("menu");
+    let s = t.attach(&["new", "-s", "mn"]);
+    s.wait_for("status line", |text| text.contains("mn"));
+    let open = |t: &Tmxr| {
+        t.run(&[
+            "display-menu",
+            "-t",
+            "mn",
+            "-T",
+            "Tools",
+            "Rename one",
+            "o",
+            "rename-window one",
+            "",
+            "Rename two",
+            "w",
+            "rename-window two",
+        ]);
+    };
+    let name = |want: &'static str| move |o: &str| o.trim() == want;
+    let opened = Instant::now();
+    open(&t);
+    s.wait_for("the menu", |text| {
+        text.contains("Tools") && text.contains("Rename two") && text.contains("(w)")
+    });
+    // Shown at once, not at the next periodic repaint (up to 5 s later).
+    assert!(
+        opened.elapsed() < Duration::from_secs(3),
+        "the menu took {:?} to show",
+        opened.elapsed()
+    );
+    // An item's key runs it.
+    s.send(b"w");
+    t.wait_run(
+        &["display-message", "-p", "-t", "mn", "#W"],
+        "renamed by key",
+        name("two"),
+    );
+    s.wait_for("the menu closed", |text| !text.contains("Rename two"));
+    // Down skips the separator; Enter runs the selection.
+    open(&t);
+    s.wait_for("the menu again", |text| text.contains("Rename one"));
+    s.send(b"\x1b[B");
+    s.send(b"\r");
+    t.wait_run(
+        &["display-message", "-p", "-t", "mn", "#W"],
+        "renamed by Enter",
+        name("two"),
+    );
+    open(&t);
+    s.wait_for("the menu a third time", |text| text.contains("Rename one"));
+    s.send(b"\r");
+    t.wait_run(
+        &["display-message", "-p", "-t", "mn", "#W"],
+        "the first item",
+        name("one"),
+    );
+}

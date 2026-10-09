@@ -42,6 +42,37 @@ pub(super) fn run(
                 att.overlay = Some(overlay);
             }
         }
+        "display-menu" => {
+            // tmux's -b/-H/-s/-S styles, -O and -x/-y placement are accepted and
+            // not followed: the menu is centred in tmxr's own colours.
+            let c = match a.value('c') {
+                Some(name) => srv
+                    .clients
+                    .values()
+                    .find(|cl| cl.att.is_some() && cl.id.to_string() == name)
+                    .map(|cl| cl.id)
+                    .ok_or_else(|| format!("can't find client: {name}"))?,
+                None => super::display_client(srv, ctx).ok_or("no current client")?,
+            };
+            let pane = a
+                .value('t')
+                .map(|t| crate::target::pane(srv, ctx, Some(t)).map(|(_, _, p)| p))
+                .transpose()?
+                .or(ctx.pane);
+            let words: Vec<String> = pos.iter().map(|w| expand_for(srv, ctx, pane, w)).collect();
+            let title = a
+                .value('T')
+                .map(|t| expand_for(srv, ctx, pane, t))
+                .unwrap_or_default();
+            let start = a.value('C').and_then(|n| n.parse().ok()).unwrap_or(0);
+            let menu = crate::menu::Menu::parse(title, &words, start)?;
+            if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
+                att.overlay = Some(Overlay::Menu(Box::new(menu)));
+            }
+            // Shown now, not at the next repaint: from a command client
+            // nothing else marks the attached client.
+            srv.mark_client_dirty(c);
+        }
         "show-prompt-history" => {
             for (kind, list) in &srv.prompt_history {
                 if a.value('T').is_some_and(|t| t != kind) {

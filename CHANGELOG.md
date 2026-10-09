@@ -27,6 +27,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   for every command, in the session it targeted, and `client-attached`,
   `client-detached`, `pane-exited`, `session-closed` and `session-created` for
   those events. Pane and window hooks (`-p`, `-w`) are not supported.
+- `display-menu` (`menu`): a menu of commands, picked with the arrows and Enter
+  or by an item's key; empty names are separators and `-` names are shown
+  disabled. tmxr centres it; tmux's placement and style flags are accepted and
+  not followed.
 
 ## [0.2.4] - 2026-10-09
 

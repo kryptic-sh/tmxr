@@ -464,6 +464,10 @@ fn draw_overlay(
             None
         }
         Overlay::Picker(p) => draw_picker(srv, p, buf, cols, y, border, mode_style),
+        Overlay::Menu(m) => {
+            m.draw(buf, cols, y, border, mode_style);
+            None
+        }
     }
 }
 

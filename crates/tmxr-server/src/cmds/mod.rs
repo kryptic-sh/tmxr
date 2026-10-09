@@ -131,6 +131,19 @@ fn attached_client(srv: &Server, ctx: &Ctx) -> Option<ClientId> {
         .filter(|c| srv.clients.get(c).is_some_and(|c| c.att.is_some()))
 }
 
+/// The client to show something on: the caller when it is attached, else
+/// (a command client) the attached client typed into most recently, as tmux
+/// picks its "best" client.
+fn display_client(srv: &Server, ctx: &Ctx) -> Option<ClientId> {
+    attached_client(srv, ctx).or_else(|| {
+        srv.clients
+            .values()
+            .filter_map(|c| c.att.as_ref().map(|a| (c.id, a.last_input)))
+            .max_by_key(|(_, t)| *t)
+            .map(|(id, _)| id)
+    })
+}
+
 fn client_size(srv: &Server, ctx: &Ctx) -> (u16, u16) {
     let from_client = ctx.client.and_then(|c| srv.clients.get(&c)).and_then(|c| {
         c.att.as_ref().map(|a| (a.cols, a.rows)).or_else(|| {

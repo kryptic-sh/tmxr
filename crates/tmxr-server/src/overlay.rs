@@ -31,6 +31,8 @@ pub enum OverlayAction {
 }
 
 pub enum Overlay {
+    /// `display-menu`.
+    Menu(Box<crate::menu::Menu>),
     Prompt(Prompt),
     Confirm {
         prompt: String,
@@ -233,6 +235,7 @@ impl Overlay {
         let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
         match self {
             Self::Prompt(p) => p.key(ev),
+            Self::Menu(m) => m.key(ev),
             Self::Confirm { cmd, .. } => match ev.code {
                 KeyCode::Char('y' | 'Y') => OverlayAction::Run(cmd.clone()),
                 _ => OverlayAction::Close,
