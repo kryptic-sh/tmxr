@@ -404,14 +404,25 @@ mod win {
         if status < 0 || info.PebBaseAddress.is_null() {
             return None;
         }
-        let peb = info.PebBaseAddress as usize;
-        let params = read_usize(h, peb + std::mem::offset_of!(PEB, ProcessParameters))?;
         // UNICODE_STRING: Length (bytes) and MaximumLength as u16, then the
-        // buffer pointer, 8-aligned.
-        let mut header = [0u8; 16];
-        read(h, params + CURRENT_DIRECTORY, &mut header)?;
-        let len = usize::from(u16::from_ne_bytes([header[0], header[1]]));
-        let buffer = usize::from_ne_bytes(header[8..].try_into().ok()?);
+        // buffer pointer, aligned to the pointer size.
+        let (len, buffer) = if let Some(peb32) = wow64_peb(h) {
+            // A 32-bit program: its 64-bit PEB's parameters are the WOW64
+            // layer's, not its own, and name a different directory.
+            let params = read_u32(h, peb32 + PEB32_PROCESS_PARAMETERS)?;
+            let mut header = [0u8; 8];
+            read(h, params as usize + CURRENT_DIRECTORY_32, &mut header)?;
+            let buffer = u32::from_ne_bytes(header[4..].try_into().ok()?);
+            (u16::from_ne_bytes([header[0], header[1]]), buffer as usize)
+        } else {
+            let peb = info.PebBaseAddress as usize;
+            let params = read_usize(h, peb + std::mem::offset_of!(PEB, ProcessParameters))?;
+            let mut header = [0u8; 16];
+            read(h, params + CURRENT_DIRECTORY, &mut header)?;
+            let buffer = usize::from_ne_bytes(header[8..].try_into().ok()?);
+            (u16::from_ne_bytes([header[0], header[1]]), buffer)
+        };
+        let len = usize::from(len);
         if len == 0 || buffer == 0 || !len.is_multiple_of(2) {
             return None;
         }
@@ -438,6 +449,44 @@ mod win {
     #[cfg(not(target_pointer_width = "64"))]
     fn read_current_dir(_h: windows_sys::Win32::Foundation::HANDLE) -> Option<std::path::PathBuf> {
         None
+    }
+
+    /// In a 32-bit `PEB` (a WOW64 program's): the `ProcessParameters` pointer.
+    #[cfg(target_pointer_width = "64")]
+    const PEB32_PROCESS_PARAMETERS: usize = 0x10;
+
+    /// In a 32-bit `RTL_USER_PROCESS_PARAMETERS`: `CurrentDirectory.DosPath`
+    /// (the same phnt / psutil layout as [`CURRENT_DIRECTORY`]).
+    #[cfg(target_pointer_width = "64")]
+    const CURRENT_DIRECTORY_32: usize = 0x24;
+
+    /// The 32-bit PEB's address when the process is a WOW64 (32-bit) one.
+    #[cfg(target_pointer_width = "64")]
+    fn wow64_peb(h: windows_sys::Win32::Foundation::HANDLE) -> Option<usize> {
+        use windows_sys::Wdk::System::Threading::{
+            NtQueryInformationProcess, ProcessWow64Information,
+        };
+        let mut peb32 = 0usize;
+        let mut written = 0u32;
+        // SAFETY: this class writes one pointer-sized value, the 32-bit
+        // PEB's address or 0, into `peb32`; `h` has query rights.
+        let status = unsafe {
+            NtQueryInformationProcess(
+                h,
+                ProcessWow64Information,
+                (&raw mut peb32).cast(),
+                std::mem::size_of::<usize>() as u32,
+                &mut written,
+            )
+        };
+        (status >= 0 && peb32 != 0).then_some(peb32)
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    fn read_u32(h: windows_sys::Win32::Foundation::HANDLE, addr: usize) -> Option<u32> {
+        let mut b = [0u8; 4];
+        read(h, addr, &mut b)?;
+        Some(u32::from_ne_bytes(b))
     }
 
     #[cfg(target_pointer_width = "64")]
@@ -600,6 +649,55 @@ mod tests {
         let mut short = 3i32.to_ne_bytes().to_vec();
         short.extend_from_slice(b"/bin/x\0x\0");
         assert_eq!(parse_procargs2(&short), None);
+    }
+
+    /// A 32-bit program's directory comes from its own (32-bit) PEB: the
+    /// 64-bit one's names another directory.
+    #[cfg(windows)]
+    #[test]
+    fn a_32_bit_programs_directory_is_read() {
+        let dir = std::env::temp_dir();
+        let (tx, rx) = mpsc::channel();
+        let tx = Mutex::new(tx);
+        let sink: Arc<dyn Fn(PtyEvent) + Send + Sync> =
+            Arc::new(move |e| drop(tx.lock().unwrap().send(e)));
+        let mut pty = crate::Pty::spawn(
+            &SpawnSpec {
+                argv: vec![
+                    r"C:\Windows\SysWOW64\cmd.exe".into(),
+                    "/d".into(),
+                    "/k".into(),
+                ],
+                cwd: Some(dir.clone()),
+                rows: 24,
+                cols: 80,
+                ..SpawnSpec::default()
+            },
+            sink,
+        )
+        .unwrap();
+        let mut emu = Emulator::new(24, 80, 0);
+        let want = dir.canonicalize().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let mut got = None;
+        while Instant::now() < deadline {
+            while let Ok(ev) = rx.try_recv() {
+                if let PtyEvent::Output(b) = ev {
+                    let r = emu.process(&b);
+                    if !r.is_empty() {
+                        pty.write(&r).unwrap();
+                    }
+                }
+            }
+            got = current_dir(&pty).map(|p| p.canonicalize().unwrap());
+            if got.as_ref() == Some(&want) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        assert_eq!(got, Some(want));
+        // Cleanup only; dropping the pty closes the terminal either way.
+        let _ = pty.kill();
     }
 
     #[test]
