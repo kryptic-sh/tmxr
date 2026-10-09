@@ -2267,6 +2267,7 @@ dependencies = [
  "tmxr-term",
  "tracing",
  "tracing-subscriber",
+ "windows-sys",
 ]
 
 [[package]]
@@ -2337,6 +2338,7 @@ dependencies = [
  "tmxr-term",
  "tracing",
  "vt100",
+ "windows-sys",
 ]
 
 [[package]]

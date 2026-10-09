@@ -82,7 +82,7 @@ what was not.
   Arguments are restored only for programs in `resurrect.restore-args`;
   tmux-resurrect's `~` (match anywhere in the command line) and `->` (restore a
   different command) strategies are not implemented. Arguments that are not
-  UTF-8 are not saved. On Windows nothing saves when the machine shuts down.
+  UTF-8 are not saved.
 - **tmux-yank `prefix y`** (copy the shell's command line) is not bound, on
   purpose for now. tmux-yank's `copy_line.sh` sends `C-a` to the shell, enters
   copy mode at the shell's cursor, selects to the end of the command and sends

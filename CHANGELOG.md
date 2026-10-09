@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Windows: sessions are saved at logoff and shutdown**, as SIGTERM / SIGHUP
+  already did on Unix. The server keeps a hidden window for Windows' session-end
+  message; before, only the periodic auto-save protected them.
+
 ## [0.2.2] - 2026-10-09
 
 ### Added

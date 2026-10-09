@@ -236,7 +236,7 @@ impl Server {
             self.tick();
             self.render_all();
             if signals::exit_requested() {
-                info!("exit requested by a signal");
+                info!("exit requested by the system");
                 self.exiting = true;
             }
             if self.exiting {
@@ -246,6 +246,7 @@ impl Server {
         if let Err(e) = crate::resurrect::save_if_changed(&mut self) {
             warn!("resurrect save on exit failed: {e}");
         }
+        signals::mark_saved();
         for c in self.clients.values() {
             let _ = c.tx.try_send(ServerMsg::Detached {
                 reason: "server exited".into(),

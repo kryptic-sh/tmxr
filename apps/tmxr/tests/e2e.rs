@@ -1949,3 +1949,65 @@ fn select_pane_z_keeps_a_zoomed_window_zoomed() {
     t.run(&["select-pane", "-R", "-t", "z"]);
     assert_eq!(state(&t), "1 0");
 }
+
+/// What Windows sends at logoff or shutdown, sent by hand: the server saves
+/// its sessions and exits.
+#[cfg(windows)]
+#[test]
+fn windows_session_end_saves_and_exits() {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        FindWindowW, SMTO_BLOCK, SendMessageTimeoutW, WM_ENDSESSION,
+    };
+    let wide = |s: &str| -> Vec<u16> { s.encode_utf16().chain(Some(0)).collect() };
+    let t = Tmxr::new("sessend");
+    t.run(&["new-session", "-d", "-s", "kept-at-logoff"]);
+    let pid = t
+        .run(&["display-message", "-p", "#{pid}"])
+        .trim()
+        .to_owned();
+    let (class, title) = (wide("tmxr-server"), wide(&format!("tmxr-server {pid}")));
+    let deadline = Instant::now() + TIMEOUT;
+    let hwnd = loop {
+        // SAFETY: both strings are NUL-terminated and outlive the call.
+        let h = unsafe { FindWindowW(class.as_ptr(), title.as_ptr()) };
+        if !h.is_null() {
+            break h;
+        }
+        assert!(Instant::now() < deadline, "no session-end window for {pid}");
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    let mut result = 0usize;
+    // ENDSESSION_LOGOFF; the call returns once the server's handler has.
+    // SAFETY: `hwnd` is a window handle, `result` a live usize.
+    let sent = unsafe {
+        SendMessageTimeoutW(
+            hwnd,
+            WM_ENDSESSION,
+            1,
+            0x8000_0000,
+            SMTO_BLOCK,
+            10_000,
+            &mut result,
+        )
+    };
+    assert_ne!(sent, 0, "WM_ENDSESSION was not delivered");
+    t.wait_run(&["ls"], "server gone", str::is_empty);
+    let root = t.dir.path().join("data").join("tmxr").join("resurrect");
+    let saved: Vec<String> = std::fs::read_dir(&root)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .flat_map(|server| {
+            std::fs::read_dir(server.path())
+                .into_iter()
+                .flatten()
+                .flatten()
+        })
+        .filter(|f| f.file_name().to_string_lossy().ends_with(".json"))
+        .map(|f| std::fs::read_to_string(f.path()).unwrap_or_default())
+        .collect();
+    assert!(
+        saved.iter().any(|s| s.contains("kept-at-logoff")),
+        "{saved:?}"
+    );
+}

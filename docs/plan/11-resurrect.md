@@ -48,8 +48,9 @@ server never touches the main one's:
   since the last save (an explicit `prefix C-s` always writes).
 - Save when the server exits (last session closed or `kill-server`), again only
   when something changed. On Unix, SIGTERM and SIGHUP end the server through
-  that same exit, so a logout or shutdown saves; the detached Windows server
-  receives no such signal.
+  that same exit, so a logout or shutdown saves. On Windows the server keeps a
+  hidden window for `WM_ENDSESSION` (logoff, shutdown), which ends it the same
+  way and waits up to five seconds for the save.
 - **Auto-restore**: with `resurrect.restore-on-start = true`, a newly started
   server restores the last save before handling any client. When the restore
   produced sessions, the first bare `tmxr` attaches instead of creating a new
