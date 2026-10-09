@@ -25,7 +25,7 @@ use tracing::{debug, info, warn};
 use crate::backend::AnsiBackend;
 use crate::cmds::{Ctx, Outcome};
 use crate::keys::KeyTables;
-use crate::model::{ClientId, Pane, PaneId, Session, SessionId, Window, WindowId};
+use crate::model::{ClientId, Environment, Pane, PaneId, Session, SessionId, Window, WindowId};
 use crate::overlay::Overlay;
 
 /// Everything that can wake the server.
@@ -127,6 +127,8 @@ pub struct Server {
     /// `join-pane`, `swap-pane` and `swap-window`. Read it through
     /// [`Server::marked_pane`], which forgets a pane that has closed.
     pub marked: Option<PaneId>,
+    /// `set-environment -g` changes over the server's own environment.
+    pub global_env: Environment,
     last_save: Instant,
     /// What resurrect last wrote, so an unchanged layout is not saved again.
     pub last_saved: Option<crate::resurrect::Save>,
@@ -207,6 +209,7 @@ impl Server {
             commands: HashMap::new(),
             restored_pending: false,
             marked: None,
+            global_env: Environment::default(),
             last_save: Instant::now(),
             last_saved: None,
             clock_shown: None,

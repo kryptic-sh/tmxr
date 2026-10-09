@@ -53,7 +53,7 @@ impl Server {
                 current: self.cfg.base_index,
                 last: None,
                 cwd: cwd.clone(),
-                env,
+                env: env.into_iter().collect(),
                 created: SystemTime::now(),
                 last_used: Instant::now(),
             },
@@ -87,7 +87,6 @@ impl Server {
                 .unwrap_or(self.cfg.base_index),
         };
         let cwd = cwd.unwrap_or_else(|| s.cwd.clone());
-        let env = s.env.clone();
         let wid = self.next_window;
         self.next_window += 1;
         let pid = self.next_pane;
@@ -110,7 +109,7 @@ impl Server {
                 preset: 0,
             },
         );
-        if let Err(e) = self.spawn_pane(pid, wid, session, &argv, cwd, &env, cols, rows) {
+        if let Err(e) = self.spawn_pane(pid, wid, session, &argv, cwd, cols, rows) {
             self.windows.remove(&wid);
             return Err(e);
         }

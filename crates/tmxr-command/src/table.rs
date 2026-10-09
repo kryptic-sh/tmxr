@@ -402,6 +402,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         "[-aw] [-b buffer-name] data"
     ),
     cmd!(
+        "set-environment",
+        Some("setenv"),
+        "Fghrt:u",
+        1,
+        2,
+        "[-Fghru] [-t target-session] name [value]"
+    ),
+    cmd!(
         "set-option",
         Some("set"),
         "agost:uw",
@@ -418,6 +426,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         "[-agou] [-t target-window] option [value]"
     ),
     cmd!("show-buffer", Some("showb"), "b:", 0, 0, "[-b buffer-name]"),
+    cmd!(
+        "show-environment",
+        Some("showenv"),
+        "ghst:",
+        0,
+        1,
+        "[-ghs] [-t target-session] [name]"
+    ),
     cmd!("show-messages", Some("showmsgs"), "", 0, 0, ""),
     cmd!(
         "show-options",

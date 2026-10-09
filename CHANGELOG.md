@@ -11,6 +11,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - tmux's `move-pane` (`movep`), `previous-layout` (`prevl`),
   `show-window-options` (`showw`) and `start-server` (`start`), so their names
   and shorthands work as in tmux.
+- `set-environment` (`setenv`) and `show-environment` (`showenv`): a global
+  environment (`-g`) over the server's own and one per session, with `-u` to
+  forget a value and `-r` to keep a variable out of new panes; `-s` prints shell
+  commands.
 
 ### Fixed
 

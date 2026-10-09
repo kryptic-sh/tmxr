@@ -16,6 +16,8 @@ pub struct SpawnSpec {
     pub cwd: Option<PathBuf>,
     /// Variables set on top of the server's environment.
     pub env: Vec<(String, String)>,
+    /// Variables taken out of it (tmux's `set-environment -r`).
+    pub env_remove: Vec<String>,
     pub rows: u16,
     pub cols: u16,
 }
@@ -69,6 +71,9 @@ impl Pty {
         // are the ones already there.
         for (k, v) in std::env::vars_os() {
             cmd.env(k, v);
+        }
+        for k in &spec.env_remove {
+            cmd.env_remove(k);
         }
         if let Some(cwd) = &spec.cwd {
             cmd.cwd(cwd);

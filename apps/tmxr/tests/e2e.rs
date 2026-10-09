@@ -2098,3 +2098,61 @@ fn tmux_commands_move_pane_previous_layout_show_window_options_start_server() {
     let showw = t.run(&["showw"]);
     assert!(showw.contains("mode-keys"), "{showw}");
 }
+
+#[test]
+fn environment_commands_set_show_and_reach_new_panes() {
+    let t = Tmxr::new("env");
+    t.run(&["new-session", "-d", "-s", "ev"]);
+    t.run(&["setenv", "-g", "TMXR_GLOBAL", "from-global"]);
+    t.run(&["setenv", "-t", "ev", "TMXR_SESSION", "from-session"]);
+    // A variable the server has (the test harness sets it): kept out of new
+    // panes.
+    t.run(&["setenv", "-r", "-t", "ev", "TMXR_TMPDIR"]);
+
+    let session = t.run(&["showenv", "-t", "ev"]);
+    assert!(
+        session.lines().any(|l| l == "TMXR_SESSION=from-session")
+            && session.lines().any(|l| l == "-TMXR_TMPDIR"),
+        "{session}"
+    );
+    assert_eq!(
+        t.run(&["showenv", "-g", "TMXR_GLOBAL"]).trim(),
+        "TMXR_GLOBAL=from-global"
+    );
+    assert_eq!(
+        t.run(&["showenv", "-g", "-s", "TMXR_GLOBAL"]).trim(),
+        r#"TMXR_GLOBAL="from-global"; export TMXR_GLOBAL;"#
+    );
+    let unknown = t.output(&["showenv", "-t", "ev", "TMXR_NOPE"]);
+    assert!(
+        String::from_utf8_lossy(&unknown.stderr).contains("unknown variable"),
+        "{unknown:?}"
+    );
+
+    // A new pane gets the global and session values, without the removed one.
+    t.run(&["new-window", "-t", "ev"]);
+    #[cfg(windows)]
+    let (echo, want) = (
+        "echo [%TMXR_GLOBAL%][%TMXR_SESSION%][%TMXR_TMPDIR%]",
+        "[from-global][from-session][%TMXR_TMPDIR%]",
+    );
+    #[cfg(unix)]
+    let (echo, want) = (
+        r#"echo "[$TMXR_GLOBAL][$TMXR_SESSION][$TMXR_TMPDIR]""#,
+        "[from-global][from-session][]",
+    );
+    t.run(&["send-keys", "-t", "ev:1", echo, "Enter"]);
+    t.wait_run(
+        &["capture-pane", "-p", "-t", "ev:1"],
+        "the pane's view",
+        |o| o.lines().any(|l| l.trim_end() == want),
+    );
+
+    // -u forgets the session's value.
+    t.run(&["setenv", "-u", "-t", "ev", "TMXR_SESSION"]);
+    assert!(
+        !t.output(&["showenv", "-t", "ev", "TMXR_SESSION"])
+            .status
+            .success()
+    );
+}

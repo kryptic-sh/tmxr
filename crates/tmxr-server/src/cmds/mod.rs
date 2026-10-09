@@ -3,6 +3,7 @@
 
 mod binds;
 mod buffer;
+mod env;
 mod options;
 mod pane;
 mod prompt;
@@ -188,6 +189,7 @@ fn run_one(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res {
         pane::run,
         binds::run,
         buffer::run,
+        env::run,
         options::run,
         prompt::run,
     ] {

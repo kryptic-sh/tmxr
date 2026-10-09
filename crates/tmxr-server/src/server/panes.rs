@@ -19,11 +19,23 @@ impl Server {
         session: SessionId,
         argv: &[String],
         cwd: PathBuf,
-        session_env: &[(String, String)],
         cols: u16,
         rows: u16,
     ) -> Result<(), String> {
-        let mut env: Vec<(String, String)> = session_env.to_vec();
+        // The server's environment, then the global changes, then the
+        // session's, as tmux layers them.
+        let layered = self
+            .sessions
+            .get(&session)
+            .map_or_else(|| self.global_env.clone(), |s| s.env.over(&self.global_env));
+        let mut env: Vec<(String, String)> = Vec::new();
+        let mut env_remove = Vec::new();
+        for (k, v) in layered.iter() {
+            match v {
+                Some(v) => env.push((k.to_owned(), v.to_owned())),
+                None => env_remove.push(k.to_owned()),
+            }
+        }
         env.push((
             "TERM".into(),
             crate::util::pane_term(&self.cfg.default_terminal),
@@ -54,6 +66,7 @@ impl Server {
             argv: argv.clone(),
             cwd: Some(cwd.clone()),
             env,
+            env_remove,
             rows,
             cols,
         };
@@ -109,12 +122,11 @@ impl Server {
         };
         let cwd = cwd.unwrap_or_else(|| p.start_cwd.clone());
         let session = self.session_of_window(wid).ok_or("window has no session")?;
-        let env = self.sessions[&session].env.clone();
         if let Some(mut old) = self.panes.remove(&pid) {
             let _ = old.pty.kill();
         }
         self.commands.remove(&pid);
-        if let Err(e) = self.spawn_pane(pid, wid, session, &argv, cwd, &env, rect.w, rect.h) {
+        if let Err(e) = self.spawn_pane(pid, wid, session, &argv, cwd, rect.w, rect.h) {
             // The old program is gone: take its cell out of the layout too.
             self.remove_pane_from_window(wid, pid);
             return Err(e);
@@ -138,11 +150,6 @@ impl Server {
     ) -> Result<PaneId, String> {
         let wid = self.panes.get(&target).ok_or("no such pane")?.window;
         let session = self.session_of_window(wid).ok_or("window has no session")?;
-        let env = self
-            .sessions
-            .get(&session)
-            .map(|s| s.env.clone())
-            .unwrap_or_default();
         let new = self.next_pane;
         self.insert_leaf(target, new, horizontal, before, size)?;
         let win = self.windows.get_mut(&wid).ok_or("no such window")?;
@@ -152,7 +159,7 @@ impl Server {
             .find(|(p, _)| *p == new)
             .map(|(_, r)| *r)
             .unwrap_or_default();
-        if let Err(e) = self.spawn_pane(new, wid, session, &argv, cwd, &env, r.w, r.h) {
+        if let Err(e) = self.spawn_pane(new, wid, session, &argv, cwd, r.w, r.h) {
             if let Some(win) = self.windows.get_mut(&wid) {
                 let _ = win.layout.remove_leaf(new as usize);
             }

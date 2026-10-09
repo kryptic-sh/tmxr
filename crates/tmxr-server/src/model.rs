@@ -41,6 +41,41 @@ pub struct Pane {
     pub output: crate::output::OutputHandle,
 }
 
+/// An environment as tmux keeps one: variables set, and names removed from
+/// new processes (`set-environment -r`, shown as `-NAME`).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Environment(std::collections::BTreeMap<String, Option<String>>);
+
+impl Environment {
+    /// Set `name`, or with `None` mark it removed.
+    pub fn set(&mut self, name: &str, value: Option<String>) {
+        self.0.insert(name.to_owned(), value);
+    }
+
+    /// Forget `name` here, so an outer environment's value shows through.
+    pub fn unset(&mut self, name: &str) {
+        self.0.remove(name);
+    }
+
+    /// Every entry, by name: `Some(value)` set, `None` removed.
+    pub fn iter(&self) -> impl Iterator<Item = (&str, Option<&str>)> {
+        self.0.iter().map(|(k, v)| (k.as_str(), v.as_deref()))
+    }
+
+    /// `outer` with this environment's entries over it.
+    pub fn over(&self, outer: &Self) -> Self {
+        let mut all = outer.0.clone();
+        all.extend(self.0.clone());
+        Self(all)
+    }
+}
+
+impl FromIterator<(String, String)> for Environment {
+    fn from_iter<I: IntoIterator<Item = (String, String)>>(iter: I) -> Self {
+        Self(iter.into_iter().map(|(k, v)| (k, Some(v))).collect())
+    }
+}
+
 pub struct Window {
     pub id: WindowId,
     pub name: String,
@@ -105,8 +140,9 @@ pub struct Session {
     pub current: u32,
     pub last: Option<u32>,
     pub cwd: PathBuf,
-    /// Variables from `update-environment`, captured from the creating client.
-    pub env: Vec<(String, String)>,
+    /// The session environment: `update-environment` variables captured from
+    /// the creating client, and `set-environment` changes.
+    pub env: Environment,
     pub created: std::time::SystemTime,
     pub last_used: Instant,
 }
