@@ -151,7 +151,11 @@ what was not.
 - **`session_picker_previews_the_highlighted_session` timed out once** (30 s) in
   a full Windows run on 2026-10-09 that took 50 s instead of the usual 20 s, and
   passed on nextest's retry. 15 isolated runs and 5 more full runs were clean.
-  Not investigated; the timeout message was not captured.
+  Not investigated; the timeout message was not captured. It timed out once more
+  on 2026-10-09, again in a slow (57 s) full run, and passed on retry; 8 full
+  runs after it were clean (26 s each). Both failures came under load. The panic
+  message names the `wait_for` step that timed out; next time, keep the whole
+  failure output rather than filtering it.
 
 ## Decisions awaiting the owner
 
