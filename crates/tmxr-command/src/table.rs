@@ -376,6 +376,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         "[-DLMRUZ] [-x width] [-y height] [-t target-pane] [adjustment]"
     ),
     cmd!(
+        "resize-window",
+        Some("resizew"),
+        "aADLRt:Ux:y:",
+        0,
+        1,
+        "[-aADLRU] [-x width] [-y height] [-t target-window] [adjustment]"
+    ),
+    cmd!(
         "respawn-pane",
         Some("respawnp"),
         "c:kt:",

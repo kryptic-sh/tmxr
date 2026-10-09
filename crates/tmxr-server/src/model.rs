@@ -94,6 +94,9 @@ pub struct Window {
     pub rows: u16,
     /// Position in `layout::PRESETS` for `next-layout`.
     pub preset: usize,
+    /// Set by `resize-window` (tmux's `window-size manual`): clients no
+    /// longer size the window until `window-size latest`.
+    pub manual_size: bool,
 }
 
 impl Window {

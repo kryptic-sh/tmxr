@@ -4,10 +4,15 @@ use std::fmt::Write as _;
 
 use tmxr_command::Parsed;
 
-use super::{Ctx, Outcome, client_size, cwd_arg};
+use super::{Ctx, Outcome, client_size, cwd_arg, dir_flag};
+use crate::layout::Dir;
 use crate::model::SessionId;
+use crate::server::STATUS_ROWS;
 use crate::server::Server;
 use crate::target;
+
+/// Largest `resize-window` size, tmux's `WINDOW_MAXIMUM`.
+const WINDOW_MAXIMUM: u16 = 10_000;
 
 pub(super) fn run(
     srv: &mut Server,
@@ -131,6 +136,50 @@ pub(super) fn run(
             let name = srv.sessions[&sid].name.clone();
             let (_, idx, _) = target::window(srv, ctx, Some(&format!("{name}:{spec}")))?;
             srv.select_window(sid, idx)?;
+        }
+        "resize-window" => {
+            let (sid, _, wid) = target::window(srv, ctx, a.value('t'))?;
+            let win = srv.windows.get(&wid).ok_or("no window")?;
+            let (mut cols, mut rows) = (win.cols, win.rows);
+            if a.has('A') || a.has('a') {
+                let sizes: Vec<(u16, u16)> = srv
+                    .clients
+                    .values()
+                    .filter_map(|c| c.att.as_ref())
+                    .filter(|att| att.session == sid)
+                    .map(|att| (att.cols, att.rows.saturating_sub(STATUS_ROWS)))
+                    .collect();
+                // The largest (-A) or smallest (-a) client, each way.
+                let both = if a.has('A') {
+                    |x: (u16, u16), y: (u16, u16)| (x.0.max(y.0), x.1.max(y.1))
+                } else {
+                    |x: (u16, u16), y: (u16, u16)| (x.0.min(y.0), x.1.min(y.1))
+                };
+                (cols, rows) = sizes
+                    .into_iter()
+                    .reduce(both)
+                    .ok_or("resize-window: no client attached")?;
+            }
+            let number = |v: &str| v.parse::<u16>().map_err(|_| format!("bad size: {v}"));
+            if let Some(x) = a.value('x') {
+                cols = number(x)?;
+            }
+            if let Some(y) = a.value('y') {
+                rows = number(y)?;
+            }
+            let n = pos.first().map_or(Ok(1), |n| number(n))?;
+            match dir_flag(a) {
+                Some(Dir::Left) => cols = cols.saturating_sub(n),
+                Some(Dir::Right) => cols = cols.saturating_add(n),
+                Some(Dir::Up) => rows = rows.saturating_sub(n),
+                Some(Dir::Down) => rows = rows.saturating_add(n),
+                None => {}
+            }
+            let win = srv.windows.get_mut(&wid).ok_or("no window")?;
+            win.manual_size = true;
+            win.cols = cols.clamp(1, WINDOW_MAXIMUM);
+            win.rows = rows.clamp(1, WINDOW_MAXIMUM);
+            srv.relayout(wid);
         }
         "rename-window" => {
             let (_, _, wid) = target::window(srv, ctx, a.value('t'))?;

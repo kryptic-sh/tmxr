@@ -93,6 +93,24 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
     let name = pos[0].as_str();
     let value = pos.get(1).map(String::as_str);
     let _ = out;
+    if name == "window-size" {
+        // Only per window, to undo `resize-window`: tmxr's sizing is always
+        // tmux's `latest`.
+        let (sid, _, wid) = target::window(srv, ctx, a.value('t'))?;
+        let w = srv.windows.get_mut(&wid).ok_or("no window")?;
+        match value {
+            Some("latest") => w.manual_size = false,
+            Some("manual") => w.manual_size = true,
+            v => {
+                return Err(format!(
+                    "window-size: {}: tmxr has latest and manual",
+                    v.unwrap_or("no value")
+                ));
+            }
+        }
+        srv.size_session(sid);
+        return Ok(());
+    }
     if name == "synchronize-panes" || name == "automatic-rename" {
         let (_, _, wid) = target::window(srv, ctx, a.value('t'))?;
         let w = srv.windows.get_mut(&wid).ok_or("no window")?;

@@ -89,6 +89,8 @@ impl Context for Vars<'_> {
             "window_id" => format!("@{}", window?.id),
             "window_name" => window?.name.clone(),
             "window_panes" => window?.panes().len().to_string(),
+            "window_width" => window?.cols.to_string(),
+            "window_height" => window?.rows.to_string(),
             "window_zoomed_flag" => flag(window?.zoomed),
             "window_bell_flag" => flag(window?.bell),
             "window_active" => flag(session?.current_window() == Some(window?.id)),

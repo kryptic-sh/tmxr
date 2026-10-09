@@ -129,6 +129,7 @@ impl Server {
             .unwrap_or_default();
         for w in windows {
             if let Some(win) = self.windows.get_mut(&w)
+                && !win.manual_size
                 && (win.cols, win.rows) != (cols, rows)
             {
                 win.cols = cols;

@@ -69,6 +69,11 @@ Window size follows tmux 3.x defaults (`window-size latest`): the window takes
 the size of the client that most recently had input; smaller clients see it
 cropped. `aggressive-resize on` (tmux-sensible) is the behaviour.
 
+`resize-window` gives a window a manual size (tmux's `window-size manual`) that
+clients no longer change; `set-window-option window-size latest` hands it back
+to them. Around a window smaller than the client the screen is filled with `·`,
+as tmux does. `window-size` takes only `latest` and `manual`, per window.
+
 ## Synchronize panes
 
 `set-window-option synchronize-panes` (bound to `prefix x`) toggles a window

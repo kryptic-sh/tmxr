@@ -114,6 +114,7 @@ impl Server {
                 cols,
                 rows,
                 preset: 0,
+                manual_size: false,
             },
         );
         if let Err(e) = self.spawn_pane(pid, wid, session, &argv, cwd, cols, rows) {
@@ -303,6 +304,7 @@ impl Server {
                 cols,
                 rows,
                 preset: 0,
+                manual_size: false,
             },
         );
         if let Some(p) = self.panes.get_mut(&pane) {

@@ -151,7 +151,7 @@ impl Tmxr {
             });
         }
         Screen {
-            _master: pair.master,
+            master: pair.master,
             writer,
             emu,
             raw,
@@ -170,7 +170,7 @@ impl Drop for Tmxr {
 }
 
 struct Screen {
-    _master: Box<dyn portable_pty::MasterPty + Send>,
+    master: Box<dyn portable_pty::MasterPty + Send>,
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
     emu: Arc<Mutex<Emulator>>,
     raw: Arc<Mutex<Vec<u8>>>,
@@ -178,6 +178,19 @@ struct Screen {
 }
 
 impl Screen {
+    /// Resize the terminal, as a user resizing the window.
+    fn resize(&self, rows: u16, cols: u16) {
+        self.emu.lock().unwrap().resize(rows, cols);
+        self.master
+            .resize(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .unwrap();
+    }
+
     fn text(&self) -> String {
         self.emu.lock().unwrap().screen().contents()
     }
@@ -2510,4 +2523,60 @@ fn lock_hands_the_keys_to_the_lock_command() {
     t.wait_run(&["show-messages"], "the failure", |o| o.contains("exit 3"));
     t.run(&["set-option", "-g", "lock-command", ""]);
     assert!(!t.output(&["lock-server"]).status.success());
+}
+
+#[test]
+fn resize_window_fixes_the_size_until_window_size_latest() {
+    let t = Tmxr::new("resizew");
+    let s = t.attach(&["new", "-s", "rw"]);
+    s.wait_for("status line", |text| text.contains("rw"));
+    let size = |t: &Tmxr| {
+        t.run(&[
+            "display-message",
+            "-p",
+            "-t",
+            "rw",
+            "#{window_width}x#{window_height}",
+        ])
+        .trim()
+        .to_owned()
+    };
+    let auto = size(&t);
+    t.run(&["resize-window", "-t", "rw", "-x", "40", "-y", "10"]);
+    assert_eq!(size(&t), "40x10");
+    t.run(&["resize-window", "-t", "rw", "-R", "5"]);
+    t.run(&["resize-window", "-t", "rw", "-U"]);
+    assert_eq!(size(&t), "45x9");
+    // The pane follows, and the rest of the screen is filled.
+    assert_eq!(
+        t.run(&[
+            "display-message",
+            "-p",
+            "-t",
+            "rw",
+            "#{pane_width}x#{pane_height}"
+        ])
+        .trim(),
+        "45x9"
+    );
+    s.wait_for("the fill", |text| {
+        text.lines().nth(3).is_some_and(|l| l.contains("···"))
+    });
+    // A client resize leaves a manual size alone.
+    s.resize(20, 70);
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(size(&t), "45x9");
+    // -A takes the attached client's size; window-size latest goes back to
+    // following it.
+    t.run(&["resize-window", "-t", "rw", "-A"]);
+    assert_eq!(size(&t), "70x19");
+    t.run(&["resize-window", "-t", "rw", "-x", "20"]);
+    t.run(&["set-window-option", "-t", "rw", "window-size", "latest"]);
+    assert_eq!(size(&t), "70x19");
+    assert_ne!(auto, "70x19", "the client resize took effect");
+    assert!(
+        !t.output(&["set-window-option", "-t", "rw", "window-size", "largest"])
+            .status
+            .success()
+    );
 }

@@ -36,6 +36,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `lock -np` by default) and takes it back when that exits. The client reads no
   keys meanwhile, so a password goes to the lock command, not a pane. A lock
   command that fails or exits non-zero is reported in the status line.
+- `resize-window` (`resizew`): give a window a size of its own (`-x` / `-y`,
+  `-L` / `-R` / `-U` / `-D` by an amount, `-A` / `-a` for the largest or
+  smallest client) that client resizes leave alone, until
+  `set-window-option window-size latest`. The rest of the screen is filled with
+  `·`. The `#{window_width}` and `#{window_height}` formats are new.
 
 ### Changed
 

@@ -206,6 +206,16 @@ fn draw_window(
             }
         }
     }
+    // Beyond a window smaller than the client (`resize-window`), as tmux.
+    for y in 0..rows {
+        for x in 0..cols {
+            if (x >= w || y >= h)
+                && let Some(cell) = buf.cell_mut((x, y))
+            {
+                cell.set_symbol("·").set_style(border);
+            }
+        }
+    }
     cursor
 }
 
