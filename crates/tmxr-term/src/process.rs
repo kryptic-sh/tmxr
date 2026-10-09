@@ -623,7 +623,7 @@ mod tests {
         .unwrap();
         let mut emu = Emulator::new(24, 80, 0);
         let deadline = Instant::now() + Duration::from_secs(20);
-        let mut seen = None;
+        let (mut seen, mut args) = (None, None);
         while Instant::now() < deadline {
             while let Ok(ev) = rx.try_recv() {
                 if let PtyEvent::Output(b) = ev {
@@ -634,9 +634,14 @@ mod tests {
                 }
             }
             seen = foreground_command(&pty);
+            // While Linux is in the middle of exec'ing the program, its
+            // name is already new but its command line is still empty: wait
+            // for both.
+            args = foreground_args(&pty);
             if seen
                 .as_deref()
                 .is_some_and(|s| s.eq_ignore_ascii_case(want))
+                && args.is_some()
             {
                 break;
             }
@@ -647,7 +652,7 @@ mod tests {
             got.eq_ignore_ascii_case(want),
             "foreground command {got:?}, want {want:?}"
         );
-        let args = foreground_args(&pty).expect("foreground arguments");
+        let args = args.expect("foreground arguments");
         assert_eq!(&args[1..], want_args, "{args:?}");
         #[cfg(any(target_os = "linux", windows))]
         assert_eq!(
