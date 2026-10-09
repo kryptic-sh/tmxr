@@ -153,7 +153,7 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
         "remain-on-exit" => c.remain_on_exit = on_off(value, c.remain_on_exit)?,
         "allow-passthrough" => {
             let on = on_off(value, c.allow_passthrough)?;
-            if on && !tmxr_term::emulator::PASSTHROUGH_SUPPORTED {
+            if on && !tmxr_term::emulator::passthrough_supported() {
                 return Err(crate::server::PASSTHROUGH_UNSUPPORTED.into());
             }
             c.allow_passthrough = on;

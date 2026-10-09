@@ -50,7 +50,8 @@ listed in [docs/backlog.md](docs/backlog.md).
 - Mouse (click to focus, drag borders, wheel into copy mode, drag to copy), all
   rebindable as tmux's mouse keys (`MouseDown1Pane`, `WheelUpPane`, …), OSC 52
   and the local clipboard, and tmux passthrough (`allow-passthrough`) for inline
-  images — Unix only; see the backlog for why not Windows.
+  images. On Windows this needs the `conpty.dll` and `OpenConsole.exe` the
+  release zip ships beside `tmxr.exe` (see Installing).
 
 ## Using it
 
@@ -119,6 +120,11 @@ Download the archive for your platform from
 There are builds for Linux (x86_64 and aarch64, glibc 2.28+ or static musl, and
 `.deb` / `.rpm` packages, which install completions and a man page), macOS
 (Apple silicon and Intel) and Windows (x86_64).
+
+The Windows zip also carries `conpty.dll` and `OpenConsole.exe`, Microsoft's
+ConPTY (MIT, `ConPTY-LICENSE.txt`); keep them beside `tmxr.exe`. Windows' own
+ConPTY drops the end of a program's tmux passthrough, so without them inline
+images stay off. tmxr built from source uses Windows' own.
 
 Shell completions and the man page come from the binary itself:
 `tmxr --completions <bash|zsh|fish|powershell|elvish|nushell>` and `tmxr --man`.

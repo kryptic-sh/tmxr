@@ -100,25 +100,17 @@ what was not.
 - **Windows foreground process** = newest direct child of the pane's process
   that is ≥ 0.5 s old (skips prompt helpers like starship). A program launched
   less than 0.5 s before `C-h` is not yet seen as in front.
-- **Passthrough on Windows is unsupported.** ConPTY forwards a program's DCS but
-  drops its `ESC \` terminator (seen with PowerShell writing one on Windows 11
-  build 26300), so `tmxr_term::emulator::PASSTHROUGH_SUPPORTED` is false there
-  and `allow-passthrough` only logs that. Revisit if ConPTY changes. The Unix
-  forwarding is exercised by CI only, and not with a real image protocol.
-  Experiments on 2026-10-09 (Windows 11 build 26300, PowerShell writing a
-  tmux-passthrough iTerm2 image, raw pane bytes compared):
-  - **Microsoft's newer ConPTY fixes it**: with `conpty.dll` and
-    `OpenConsole.exe` from NuGet `Microsoft.Windows.Console.ConPTY`
-    1.25.260930003 (MIT, Microsoft-signed) beside the program, the `ESC \`
-    arrived. portable-pty loads a `conpty.dll` found there by itself.
-  - **The inbox ConPTY's `PSEUDOCONSOLE_PASSTHROUGH_MODE` (0x8) changes
-    nothing**: `CreatePseudoConsole` accepts the flag and the terminator is
-    still dropped.
-  - Options left, the owner's call: bundle the newer ConPTY in the Windows zip
-    (about 1–2 MB, a pinned and signature-checked download in CI); repair the
-    stream in tmxr by taking the inner sequence's own end (BEL / `ESC \`) as the
-    passthrough's end (works for iTerm2 images, unproven for kitty graphics, and
-    a wrong guess swallows output); or wait for Windows to pick up the fix.
+- **Passthrough on Windows needs the bundled ConPTY.** Windows' built-in ConPTY
+  forwards a program's DCS but drops its `ESC \` terminator (Windows 11 build
+  26300), with or without `PSEUDOCONSOLE_PASSTHROUGH_MODE`, which it accepts and
+  ignores. Microsoft's newer ConPTY keeps it, so the Windows release ships its
+  `conpty.dll` and `OpenConsole.exe` (NuGet `Microsoft.Windows.Console.ConPTY`
+  1.25.260930003, pinned by SHA-256 and signature-checked in
+  `pkg/windows/fetch-conpty.sh`) and `emulator::passthrough_supported` turns
+  passthrough on when both sit beside `tmxr.exe`. Builds from source use the
+  built-in ConPTY and keep it off. CI's `test-conpty` job runs the Windows suite
+  on the bundled one. Not tried with a real image protocol on the outer
+  terminal, on any platform.
 - **Windows `pane_current_path`** prefers what the shell announces (OSC 7 / OSC
   9;9), then reads the foreground process's directory from its PEB
   (`process::win::current_dir`, x64 offsets; tested with cmd's `cd /d`).

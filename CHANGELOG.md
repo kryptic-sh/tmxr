@@ -8,6 +8,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Inline images on Windows**: the Windows release bundles Microsoft's ConPTY
+  (`conpty.dll`, `OpenConsole.exe`, MIT), which keeps the end of a program's
+  tmux passthrough that Windows' own ConPTY drops; tmxr turns passthrough on
+  when they sit beside `tmxr.exe`.
 - **Windows: sessions are saved at logoff and shutdown**, as SIGTERM / SIGHUP
   already did on Unix. The server keeps a hidden window for Windows' session-end
   message; before, only the periodic auto-save protected them.

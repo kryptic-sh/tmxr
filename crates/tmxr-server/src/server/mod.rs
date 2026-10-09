@@ -142,8 +142,9 @@ fn navigator_regex(pattern: &str) -> Result<regex::Regex, String> {
 }
 
 /// Why `allow-passthrough` does nothing on this platform.
-pub const PASSTHROUGH_UNSUPPORTED: &str =
-    "allow-passthrough: not supported on Windows (ConPTY drops the DCS terminator)";
+pub const PASSTHROUGH_UNSUPPORTED: &str = "allow-passthrough: needs the conpty.dll and \
+     OpenConsole.exe tmxr's Windows release ships beside tmxr.exe (Windows' own ConPTY drops \
+     the DCS terminator)";
 
 /// How long one pass of the loop handles queued events before it renders,
 /// so a pane flooding output still repaints.
@@ -169,7 +170,7 @@ impl Server {
                 crossterm::event::KeyModifiers::CONTROL,
             )
         });
-        if cfg.allow_passthrough && !tmxr_term::emulator::PASSTHROUGH_SUPPORTED {
+        if cfg.allow_passthrough && !tmxr_term::emulator::passthrough_supported() {
             key_errors.push(PASSTHROUGH_UNSUPPORTED.to_owned());
         }
         let navigator = match navigator_regex(&cfg.navigator.pattern) {

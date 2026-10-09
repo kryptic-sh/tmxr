@@ -111,6 +111,26 @@ jobs:
           --no-tests=warn
       - run: cargo test --workspace --doc --all-features --locked
 
+  # The Windows suite again, with Microsoft's ConPTY beside tmxr.exe as the
+  # release ships it (the job above covers Windows' built-in ConPTY).
+  test-conpty:
+    name: test windows-latest, bundled ConPTY
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          toolchain: stable
+          cache: false
+      - run: rustup update --no-self-update stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@nextest
+      - run: bash pkg/windows/fetch-conpty.sh target/debug
+        shell: bash
+      - run:
+          cargo nextest run --workspace --all-features --locked --no-fail-fast
+          --no-tests=warn
+
   smoke:
     name: build + smoke ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -318,6 +338,10 @@ jobs:
           else
             shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
           fi
+      - name: Bundle Microsoft's ConPTY (Windows)
+        if: matrix.archive == 'zip'
+        shell: bash
+        run: bash pkg/windows/fetch-conpty.sh dist
       - name: Package (Windows)
         if: matrix.archive == 'zip'
         shell: pwsh
@@ -326,7 +350,7 @@ jobs:
           $archive = "tmxr-$tag-${{ matrix.target }}.zip"
           New-Item -ItemType Directory -Force dist | Out-Null
           Copy-Item target/${{ matrix.target }}/release/tmxr.exe dist/
-          Copy-Item README.md, LICENSE dist/
+          Copy-Item README.md, LICENSE, pkg/windows/ConPTY-LICENSE.txt dist/
           Compress-Archive -Path dist/* -DestinationPath $archive
           $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLower()
           # An LF line, as sha256sum writes: Out-File's CRLF breaks
@@ -381,7 +405,19 @@ jobs:
 
   publish-github-release:
     name: Publish GitHub Release
-    needs: [build, fmt, clippy, deny, audit, machete, smoke, test]
+    needs:
+      [
+        build,
+        fmt,
+        clippy,
+        deny,
+        audit,
+        machete,
+        smoke,
+        test,
+        test-conpty,
+        pipe-acl,
+      ]
     if: >-
       github.event_name == 'workflow_dispatch' || (github.event_name == 'push'
       && startsWith(github.ref, 'refs/tags/v'))
@@ -416,7 +452,18 @@ jobs:
   tag-release-status:
     name: tag-release status
     needs:
-      [fmt, clippy, machete, deny, test, smoke, build, publish-github-release]
+      [
+        fmt,
+        clippy,
+        machete,
+        deny,
+        test,
+        test-conpty,
+        pipe-acl,
+        smoke,
+        build,
+        publish-github-release,
+      ]
     if:
       always() && github.event_name == 'push' && startsWith(github.ref,
       'refs/tags/v')

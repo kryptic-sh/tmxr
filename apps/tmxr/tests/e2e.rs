@@ -988,9 +988,13 @@ fn passthrough_is_forwarded_where_the_platform_allows() {
     assert!(!s.text().contains("tmux;"), "{}", s.text());
 
     let forwarded = s.raw_text().contains("\x1b]1337;tmxr-pt-marker\x07");
-    if cfg!(windows) {
-        // ConPTY drops the DCS terminator, so tmxr leaves passthrough alone
-        // there and says so.
+    // On Windows passthrough needs Microsoft's ConPTY beside tmxr.exe (the
+    // release ships it; CI's conpty job adds it): with it the payload is
+    // forwarded, without it tmxr leaves passthrough alone and says so.
+    let bin = std::path::Path::new(env!("CARGO_BIN_EXE_tmxr"));
+    let bundled = bin.with_file_name("conpty.dll").is_file()
+        && bin.with_file_name("OpenConsole.exe").is_file();
+    if cfg!(windows) && !bundled {
         assert!(!forwarded);
         let messages = t.run(&["show-messages"]);
         assert!(messages.contains("allow-passthrough"), "{messages}");

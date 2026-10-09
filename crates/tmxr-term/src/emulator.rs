@@ -113,13 +113,37 @@ impl vt100::Callbacks for Hooks {
     }
 }
 
-/// Whether panes' tmux passthrough can be taken out and forwarded. ConPTY
-/// forwards a program's DCS but drops its closing `ESC \` (seen on Windows 11
-/// build 26300), so the end of a passthrough cannot be found there and the
-/// splitter would hide the pane's later output; on Windows the output goes to
-/// vt100 unsplit, as it would without passthrough. Verified on Windows; the
-/// Unix side is exercised by CI.
-pub const PASSTHROUGH_SUPPORTED: bool = !cfg!(windows);
+/// Whether panes' tmux passthrough can be taken out and forwarded.
+///
+/// Windows' built-in ConPTY forwards a program's DCS but drops its closing
+/// `ESC \` (seen on Windows 11 build 26300), so the end of a passthrough
+/// cannot be found and the splitter would hide the pane's later output; there
+/// the output goes to vt100 unsplit, as it would without passthrough.
+/// Microsoft's newer ConPTY keeps the terminator, and portable-pty loads it
+/// when its `conpty.dll` (with the `OpenConsole.exe` it starts) sits beside
+/// the program, which is how tmxr's Windows release ships it.
+pub fn passthrough_supported() -> bool {
+    #[cfg(windows)]
+    {
+        static BUNDLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        *BUNDLED.get_or_init(bundled_conpty)
+    }
+    #[cfg(not(windows))]
+    {
+        true
+    }
+}
+
+/// Whether Microsoft's ConPTY sits beside this program.
+#[cfg(windows)]
+fn bundled_conpty() -> bool {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(std::path::Path::to_path_buf))
+        .is_some_and(|dir| {
+            dir.join("conpty.dll").is_file() && dir.join("OpenConsole.exe").is_file()
+        })
+}
 
 /// One pane's emulator.
 pub struct Emulator {
@@ -128,6 +152,8 @@ pub struct Emulator {
     /// tmux passthrough payloads (`ESC P tmux; … ESC \`) waiting to be
     /// forwarded to the outer terminal.
     passthrough: Vec<Vec<u8>>,
+    /// [`passthrough_supported`], read once.
+    split: bool,
 }
 
 impl Emulator {
@@ -136,13 +162,14 @@ impl Emulator {
             parser: vt100::Parser::new_with_callbacks(rows, cols, scrollback, Hooks::default()),
             dcs: DcsSplitter::default(),
             passthrough: Vec::new(),
+            split: passthrough_supported(),
         }
     }
 
     /// Feed program output. Returns bytes that must be written back to the
     /// program (answers to queries such as cursor-position reports).
     pub fn process(&mut self, bytes: &[u8]) -> Vec<u8> {
-        if PASSTHROUGH_SUPPORTED {
+        if self.split {
             let split = self.dcs.split(bytes);
             self.parser.process(&split.text);
             self.passthrough.extend(split.passthrough);
