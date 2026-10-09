@@ -2252,7 +2252,7 @@ checksum = "9e1c906769ad99c88eaa54e728060edef082f8e358ff32030cb7c7d315e81109"
 
 [[package]]
 name = "tmxr"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "clap",
  "clap_complete",
@@ -2272,7 +2272,7 @@ dependencies = [
 
 [[package]]
 name = "tmxr-client"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "crossterm",
  "interprocess",
@@ -2284,7 +2284,7 @@ dependencies = [
 
 [[package]]
 name = "tmxr-command"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "crossterm",
  "thiserror 2.0.21",
@@ -2292,7 +2292,7 @@ dependencies = [
 
 [[package]]
 name = "tmxr-config"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "hjkl-config",
  "serde",
@@ -2303,7 +2303,7 @@ dependencies = [
 
 [[package]]
 name = "tmxr-proto"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "crossterm",
  "interprocess",
@@ -2317,7 +2317,7 @@ dependencies = [
 
 [[package]]
 name = "tmxr-server"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "crossterm",
  "hjkl-clipboard",
@@ -2343,7 +2343,7 @@ dependencies = [
 
 [[package]]
 name = "tmxr-term"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "crossterm",
  "libc",
