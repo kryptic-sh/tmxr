@@ -87,10 +87,12 @@ x = false                                                  # remove a default
 
 ## Windows: the current directory
 
-Windows offers no reliable way to read another program's working directory, so
-`#{pane_current_path}` (and with it "split in the current directory") relies on
-the shell announcing it. For PowerShell, put this in your `$PROFILE`; it is
-Windows Terminal's prompt snippet, and tmxr reads the same OSC 9;9 sequence:
+New panes and windows open in the current pane's directory (`prefix "` `%` `'`
+`;` `c` pass `-c "#{pane_current_path}"`, as the tmux config does). tmxr reads
+that directory from the program in front: cmd's `cd` is picked up by itself.
+PowerShell's `Set-Location` does not change its process's directory, so
+PowerShell has to announce it; put this in your `$PROFILE` (Windows Terminal's
+prompt snippet; tmxr reads the same OSC 9;9 sequence):
 
 ```powershell
 function prompt {
@@ -104,8 +106,8 @@ function prompt {
 }
 ```
 
-Shells that emit OSC 7 (`file://host/path`) work too. Without either, splits
-open in the directory the pane started in.
+Shells that emit OSC 7 (`file://host/path`) work too. What a shell announces
+wins over what tmxr reads from the process.
 
 ## Installing
 

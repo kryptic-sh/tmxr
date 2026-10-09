@@ -18,11 +18,11 @@ Decisions the plan made provisionally, and what the owner decided.
    `C-n`/`C-p` move, `Escape` closes. (The vi-style normal mode with `j`/`k`
    that tmxr had first was dropped.)
 
+6. **Windows current directory.** Read from the foreground process's PEB; what
+   the shell announces (OSC 7 / OSC 9;9) still comes first, for PowerShell.
+
 ## Open
 
-6. **vim (not hjkl) navigation.** vim-tmux-navigator in nvim calls `tmux`, so it
+7. **vim (not hjkl) navigation.** vim-tmux-navigator in nvim calls `tmux`, so it
    does not hand off to tmxr. Decided: a Lua nvim plugin in its own kryptic-sh
    repo, doing for tmxr what vim-tmux-navigator does for tmux.
-7. **Windows current directory.** Without shell integration (OSC 7 / OSC 9;9)
-   `#{pane_current_path}` on Windows is the pane's start directory. Decided:
-   read the foreground process's directory from its PEB.

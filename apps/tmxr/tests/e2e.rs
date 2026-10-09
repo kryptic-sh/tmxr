@@ -1822,3 +1822,41 @@ fn double_and_triple_clicks_copy_a_word_and_a_line() {
         o.trim_end() == "head @clicked tail"
     });
 }
+
+#[test]
+fn pane_current_path_follows_the_shells_cd() {
+    let t = Tmxr::new("cwd");
+    let sub = t.dir.path().join("moved-here");
+    std::fs::create_dir(&sub).unwrap();
+    let s = t.attach(&["new", "-s", "cw"]);
+    s.wait_for("status line", |text| text.contains("cw"));
+    // cmd reports no directory itself, so on Windows this is read from the
+    // shell's process (its PEB); on Unix from /proc or proc_pidinfo.
+    let cd = if cfg!(windows) { "cd /d" } else { "cd" };
+    s.send(format!("{cd} \"{}\"\r", sub.display()).as_bytes());
+    let want = sub.canonicalize().unwrap();
+    let in_sub = |what: &str| {
+        t.wait_run(
+            &["display-message", "-p", "-t", "cw", "#{pane_current_path}"],
+            what,
+            |o| std::path::Path::new(o.trim()).canonicalize().ok() == Some(want.clone()),
+        );
+    };
+    in_sub("the new directory");
+    // The tmux config's binds open new panes and windows there: prefix %
+    // splits, prefix c makes a window, each started in the pane's directory.
+    s.send(PREFIX);
+    s.send(b"%");
+    t.wait_run(&["list-panes", "-t", "cw"], "the split", |o| {
+        o.lines().count() == 2
+    });
+    in_sub("the split pane in the directory");
+    s.send(PREFIX);
+    s.send(b"c");
+    t.wait_run(
+        &["display-message", "-p", "-t", "cw", "#{window_index}"],
+        "the new window",
+        |o| o.trim() == "1",
+    );
+    in_sub("the new window in the directory");
+}

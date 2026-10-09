@@ -4,7 +4,7 @@
 //! | -------- | ---------------------------------------------------- | ------------------------- | --------- |
 //! | Linux    | the terminal's foreground process group leader       | `/proc/<pid>/cwd`         | `/proc/<pid>/cmdline` |
 //! | macOS    | the terminal's foreground process group leader       | `proc_pidinfo` vnode path | `sysctl` `KERN_PROCARGS2` |
-//! | Windows  | the newest settled direct child of the pane's process, else the process itself | not available (`None`) | `NtQueryInformationProcess` command line, split by `CommandLineToArgvW` |
+//! | Windows  | the newest settled direct child of the pane's process, else the process itself | the process's PEB (`CurrentDirectory`) | `NtQueryInformationProcess` command line, split by `CommandLineToArgvW` |
 //!
 //! Windows has no foreground process group; the pane's program is usually a
 //! shell and whatever it runs is its child, so the child is what the user sees.
@@ -37,9 +37,9 @@ pub fn foreground_args(pty: &Pty) -> Option<Vec<String>> {
     process_args(foreground_pid(pty)?)
 }
 
-/// Working directory of the pane's foreground process. `None` where the
-/// platform offers no way to read it (Windows); callers fall back to what the
-/// shell reported (OSC 7) or the pane's start directory.
+/// Working directory of the pane's foreground process. `None` when it
+/// cannot be read; callers fall back to what the shell reported (OSC 7) or
+/// the pane's start directory.
 pub fn current_dir(pty: &Pty) -> Option<PathBuf> {
     let pid = foreground_pid(pty)?;
     process_cwd(pid)
@@ -352,6 +352,123 @@ mod win {
         Some(unsafe { std::slice::from_raw_parts(us.Buffer, bytes / 2) }.to_vec())
     }
 
+    /// The current directory of `pid`, read from its process parameters
+    /// the way psutil and Process Explorer do: the PEB's `ProcessParameters`
+    /// pointer, then that block's `CurrentDirectory.DosPath`. `None` when
+    /// the process cannot be opened for reading (another user's, elevated)
+    /// or is gone.
+    pub fn current_dir(pid: u32) -> Option<std::path::PathBuf> {
+        use windows_sys::Win32::System::Threading::{PROCESS_QUERY_INFORMATION, PROCESS_VM_READ};
+        // SAFETY: OpenProcess takes no pointers; the handle is checked and
+        // closed below.
+        let h = unsafe { OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, pid) };
+        if h.is_null() {
+            return None;
+        }
+        let dir = read_current_dir(h);
+        // SAFETY: `h` is valid and closed exactly once.
+        unsafe { CloseHandle(h) };
+        dir
+    }
+
+    /// Offset of `CurrentDirectory` (a `CURDIR`, whose first field is the
+    /// `DosPath` UNICODE_STRING) in a 64-bit `RTL_USER_PROCESS_PARAMETERS`.
+    /// windows-sys hides it in `Reserved2`; the layout is the one ReactOS
+    /// and phnt publish and psutil reads.
+    #[cfg(target_pointer_width = "64")]
+    const CURRENT_DIRECTORY: usize = 0x38;
+
+    #[cfg(target_pointer_width = "64")]
+    fn read_current_dir(h: windows_sys::Win32::Foundation::HANDLE) -> Option<std::path::PathBuf> {
+        use std::os::windows::ffi::OsStringExt;
+        use windows_sys::Wdk::System::Threading::{
+            NtQueryInformationProcess, ProcessBasicInformation,
+        };
+        use windows_sys::Win32::System::Threading::{PEB, PROCESS_BASIC_INFORMATION};
+        // SAFETY: PROCESS_BASIC_INFORMATION is integers and a raw pointer,
+        // for which all-zero is a valid value.
+        let mut info: PROCESS_BASIC_INFORMATION = unsafe { std::mem::zeroed() };
+        let size = std::mem::size_of::<PROCESS_BASIC_INFORMATION>() as u32;
+        let mut written = 0u32;
+        // SAFETY: `info` is a live PROCESS_BASIC_INFORMATION of `size`
+        // bytes, the struct this class fills; `h` has query rights.
+        let status = unsafe {
+            NtQueryInformationProcess(
+                h,
+                ProcessBasicInformation,
+                (&raw mut info).cast(),
+                size,
+                &mut written,
+            )
+        };
+        if status < 0 || info.PebBaseAddress.is_null() {
+            return None;
+        }
+        let peb = info.PebBaseAddress as usize;
+        let params = read_usize(h, peb + std::mem::offset_of!(PEB, ProcessParameters))?;
+        // UNICODE_STRING: Length (bytes) and MaximumLength as u16, then the
+        // buffer pointer, 8-aligned.
+        let mut header = [0u8; 16];
+        read(h, params + CURRENT_DIRECTORY, &mut header)?;
+        let len = usize::from(u16::from_ne_bytes([header[0], header[1]]));
+        let buffer = usize::from_ne_bytes(header[8..].try_into().ok()?);
+        if len == 0 || buffer == 0 || !len.is_multiple_of(2) {
+            return None;
+        }
+        let mut bytes = vec![0u8; len];
+        read(h, buffer, &mut bytes)?;
+        let wide: Vec<u16> = bytes
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|c| u16::from_ne_bytes(*c))
+            .collect();
+        let mut dir = std::ffi::OsString::from_wide(&wide)
+            .to_string_lossy()
+            .into_owned();
+        // `C:\work\` → `C:\work`, but a drive root keeps its slash.
+        if dir.ends_with('\\') && !dir.ends_with(":\\") {
+            dir.pop();
+        }
+        Some(dir.into())
+    }
+
+    /// Only 64-bit tmxr is built; a 32-bit build would need the 32-bit
+    /// offsets, and reports nothing rather than reading the wrong ones.
+    #[cfg(not(target_pointer_width = "64"))]
+    fn read_current_dir(_h: windows_sys::Win32::Foundation::HANDLE) -> Option<std::path::PathBuf> {
+        None
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    fn read_usize(h: windows_sys::Win32::Foundation::HANDLE, addr: usize) -> Option<usize> {
+        let mut b = [0u8; std::mem::size_of::<usize>()];
+        read(h, addr, &mut b)?;
+        Some(usize::from_ne_bytes(b))
+    }
+
+    /// Copy `buf.len()` bytes at `addr` in the process into `buf`, all or
+    /// nothing.
+    #[cfg(target_pointer_width = "64")]
+    fn read(h: windows_sys::Win32::Foundation::HANDLE, addr: usize, buf: &mut [u8]) -> Option<()> {
+        use windows_sys::Win32::System::Diagnostics::Debug::ReadProcessMemory;
+        let mut got = 0usize;
+        // SAFETY: `buf` is writable for `buf.len()` bytes, which is all
+        // ReadProcessMemory writes; `addr` is in the other process, which the
+        // call validates (it fails rather than faulting); `h` has VM-read
+        // rights.
+        let ok = unsafe {
+            ReadProcessMemory(
+                h,
+                addr as *const core::ffi::c_void,
+                buf.as_mut_ptr().cast(),
+                buf.len(),
+                &mut got,
+            )
+        } != 0;
+        (ok && got == buf.len()).then_some(())
+    }
+
     /// Split a command line into arguments as a C program's startup code
     /// would (`CommandLineToArgvW`).
     pub fn split_command_line(line: &[u16]) -> Option<Vec<String>> {
@@ -425,8 +542,8 @@ fn process_name(pid: u32) -> Option<String> {
 }
 
 #[cfg(windows)]
-fn process_cwd(_pid: u32) -> Option<PathBuf> {
-    None
+fn process_cwd(pid: u32) -> Option<PathBuf> {
+    win::current_dir(pid)
 }
 
 #[cfg(test)]
@@ -532,7 +649,7 @@ mod tests {
         );
         let args = foreground_args(&pty).expect("foreground arguments");
         assert_eq!(&args[1..], want_args, "{args:?}");
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", windows))]
         assert_eq!(
             current_dir(&pty).map(|p| p.canonicalize().unwrap()),
             Some(dir.canonicalize().unwrap())

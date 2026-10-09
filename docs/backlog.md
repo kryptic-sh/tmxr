@@ -104,10 +104,13 @@ what was not.
   build 26300), so `tmxr_term::emulator::PASSTHROUGH_SUPPORTED` is false there
   and `allow-passthrough` only logs that. Revisit if ConPTY changes. The Unix
   forwarding is exercised by CI only, and not with a real image protocol.
-- **Windows `pane_current_path`** relies on shell integration (OSC 7 / OSC 9;9);
-  without it splits open in the pane's start directory. The README's PowerShell
-  prompt snippet provides it (verified by hand: after `cd C:\Windows` in such a
-  pane, `#{pane_current_path}` read `C:\Windows`); cmd.exe has no such hook.
+- **Windows `pane_current_path`** prefers what the shell announces (OSC 7 / OSC
+  9;9), then reads the foreground process's directory from its PEB
+  (`process::win::current_dir`, x64 offsets; tested with cmd's `cd /d`).
+  PowerShell's `Set-Location` does not change its process's directory, so
+  PowerShell still needs the README's prompt snippet. The PEB read of a 32-bit
+  (WOW64) program is not verified, nor of an elevated one (expected to fail to
+  open, falling back to the start directory).
 - **Windows pipe DACL** `D:P(A;;GA;;;OW)(A;;GA;;;SY)` was verified to admit the
   owner; that it rejects another user is unverified.
 

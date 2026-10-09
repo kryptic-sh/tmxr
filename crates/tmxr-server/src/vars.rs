@@ -36,11 +36,17 @@ impl<'a> Vars<'a> {
 /// else where the pane started.
 pub fn pane_current_path(srv: &Server, pane: PaneId) -> Option<PathBuf> {
     let p = srv.panes.get(&pane)?;
-    Some(
-        tmxr_term::process::current_dir(&p.pty)
-            .or_else(|| p.emu.cwd().map(PathBuf::from))
-            .unwrap_or_else(|| p.start_cwd.clone()),
-    )
+    let process = || tmxr_term::process::current_dir(&p.pty);
+    let reported = || p.emu.cwd().map(PathBuf::from);
+    // On Unix a shell's `cd` changes its process's directory, the surest
+    // source. On Windows PowerShell's `Set-Location` does not, so what the
+    // shell reports (OSC 7 / OSC 9;9) comes first there.
+    let dir = if cfg!(windows) {
+        reported().or_else(process)
+    } else {
+        process().or_else(reported)
+    };
+    Some(dir.unwrap_or_else(|| p.start_cwd.clone()))
 }
 
 fn flag(b: bool) -> String {

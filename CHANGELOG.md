@@ -29,6 +29,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   mode, `C-M-b` `M-{` `M-}` `g` `C-k` in emacs mode.
 - `DoubleClick1Pane` / `TripleClick1Pane` mouse keys, bound by default to copy
   the word or line clicked (the copy-mode `select-word` command is new too).
+- **Windows: splits and new windows open in cmd's current directory** without
+  any shell integration: tmxr reads the directory from the program's process
+  (its PEB). What a shell announces (OSC 7 / OSC 9;9) still comes first, which
+  PowerShell needs.
 
 ### Changed
 
