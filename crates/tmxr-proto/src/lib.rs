@@ -15,7 +15,7 @@ pub use codec::{ProtoError, read_msg, write_msg};
 
 /// Bumped on any change to a type in this module. Client and server refuse to
 /// talk across a mismatch rather than mis-decode each other.
-pub const PROTOCOL_VERSION: u32 = 3;
+pub const PROTOCOL_VERSION: u32 = 4;
 
 /// First message a client sends.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -55,9 +55,12 @@ pub enum ClientMsg {
     Input(crossterm::event::Event),
     /// The client wants to detach (sent on terminal hangup).
     Detach,
-    /// The client is back from `suspend-client`; its terminal was handed to
-    /// the shell meanwhile and needs a full redraw.
+    /// The client is back from `suspend-client` or a lock; its terminal was
+    /// handed to another program meanwhile and needs a full redraw.
     Resumed,
+    /// The lock command could not run or did not exit cleanly: why. The
+    /// client has its terminal back, as after [`ClientMsg::Resumed`].
+    LockFailed(String),
 }
 
 /// Messages from the server to a client.
@@ -86,4 +89,7 @@ pub enum ServerMsg {
     Mouse(bool),
     /// Stop the client process (`suspend-client`), as `C-z` stops a program.
     Suspend,
+    /// Lock the client (`lock-client`): hand the terminal to this shell
+    /// command (`lock-command`) and take it back when the command exits.
+    Lock { command: String },
 }

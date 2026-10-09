@@ -40,6 +40,7 @@ impl Server {
             last_session: None,
             dirty: true,
             full_redraw: true,
+            locked: false,
             last_input: Instant::now(),
             drag: None,
             press: None,

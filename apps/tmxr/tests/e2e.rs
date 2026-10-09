@@ -2476,3 +2476,36 @@ fn display_menu_runs_the_item_picked() {
         name("one"),
     );
 }
+
+#[test]
+fn lock_hands_the_keys_to_the_lock_command() {
+    let t = Tmxr::new("lock");
+    let s = t.attach(&["new", "-s", "lk"]);
+    s.wait_for("status line", |text| text.contains("lk"));
+    // Prints a marker, then waits for a line from the terminal.
+    let lock = if cfg!(windows) {
+        "echo LOCKED-NOW& set /p x="
+    } else {
+        "echo LOCKED-NOW; read x"
+    };
+    t.run(&["set-option", "-g", "lock-command", lock]);
+    t.run(&["lock-session", "-t", "lk"]);
+    s.wait_for("the lock command", |text| text.contains("LOCKED-NOW"));
+    // The lock command gets the line, so it exits and the client is back.
+    s.send(b"secret\r");
+    s.wait_for("the client back", |text| {
+        text.contains("lk") && !text.contains("LOCKED-NOW")
+    });
+    let pane = t.run(&["capture-pane", "-p", "-t", "lk"]);
+    assert!(
+        !pane.contains("secret"),
+        "the pane got the lock's keys:\n{pane}"
+    );
+
+    // A lock command that fails says so, and the client is back.
+    t.run(&["set-option", "-g", "lock-command", "exit 3"]);
+    t.run(&["lock-client"]);
+    t.wait_run(&["show-messages"], "the failure", |o| o.contains("exit 3"));
+    t.run(&["set-option", "-g", "lock-command", ""]);
+    assert!(!t.output(&["lock-server"]).status.success());
+}

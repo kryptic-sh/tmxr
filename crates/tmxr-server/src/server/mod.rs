@@ -76,6 +76,8 @@ pub struct Attached {
     pub dirty: bool,
     /// The last frame was dropped (slow client); repaint everything.
     pub full_redraw: bool,
+    /// Running the lock command (`lock-client`) until it reports back.
+    pub locked: bool,
     pub last_input: Instant,
     pub drag: Option<crate::mouse::Drag>,
     /// The mouse button being held, if any.
@@ -422,13 +424,17 @@ impl Server {
             }
             ClientMsg::Input(ev) => self.input(id, ev),
             ClientMsg::Detach => self.detach(id, "detached"),
-            ClientMsg::Resumed => {
+            ClientMsg::Resumed | ClientMsg::LockFailed(_) => {
                 // The shell had the terminal: repaint everything, and tell
                 // the client its mouse mode again.
                 if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
                     a.full_redraw = true;
                     a.mouse = false;
                     a.dirty = true;
+                    a.locked = false;
+                }
+                if let ClientMsg::LockFailed(why) = msg {
+                    self.show_message(id, why);
                 }
             }
         }

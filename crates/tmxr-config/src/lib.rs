@@ -47,6 +47,9 @@ pub struct Config {
     pub remain_on_exit: bool,
     /// Shell command `copy-pipe` sends the copied text to when it names none.
     pub copy_command: String,
+    /// Shell command a locked client runs in its terminal; the client is
+    /// unlocked when it exits.
+    pub lock_command: String,
     pub update_environment: Vec<String>,
     pub navigator: Navigator,
     pub status: Status,

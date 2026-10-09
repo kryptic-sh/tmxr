@@ -27,6 +27,8 @@ set-clipboard = "on"
 allow-passthrough = true
 remain-on-exit = false
 copy-command = ""
+# tmux's default; `lock-client` runs it in the client's terminal.
+lock-command = "lock -np"
 update-environment = [
   "DISPLAY",
   "SSH_ASKPASS",

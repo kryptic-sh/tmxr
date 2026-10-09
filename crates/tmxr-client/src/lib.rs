@@ -141,6 +141,7 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
     let mut send = Some(send);
     // Shared with the input thread once attached, to report a resume.
     let mut writer: Option<Arc<Mutex<SendHalf>>> = None;
+    let mut input: Option<terminal::Input> = None;
     let mut term: Option<terminal::Guard> = None;
     let mut stdout = io::stdout().lock();
     loop {
@@ -168,7 +169,7 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                 term = Some(terminal::Guard::enter()?);
                 if let Some(s) = send.take() {
                     let shared = Arc::new(Mutex::new(s));
-                    terminal::spawn_input(Arc::clone(&shared));
+                    input = Some(terminal::spawn_input(Arc::clone(&shared)));
                     writer = Some(shared);
                 }
             }
@@ -205,6 +206,25 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                         .lock()
                         .map_err(|_| io::Error::other("input thread panicked"))?;
                     write_msg(&mut *w, &ClientMsg::Resumed).map_err(to_io)?;
+                }
+            }
+            ServerMsg::Lock { command } => {
+                // The lock command reads the keys (a password), so the
+                // input thread must not.
+                let paused = input.as_ref().map(terminal::Input::pause).transpose()?;
+                drop(term.take());
+                let locked = terminal::run_lock(&command);
+                term = Some(terminal::Guard::enter()?);
+                drop(paused);
+                if let Some(w) = &writer {
+                    let mut w = w
+                        .lock()
+                        .map_err(|_| io::Error::other("input thread panicked"))?;
+                    let msg = match locked {
+                        Ok(()) => ClientMsg::Resumed,
+                        Err(why) => ClientMsg::LockFailed(why),
+                    };
+                    write_msg(&mut *w, &msg).map_err(to_io)?;
                 }
             }
             ServerMsg::Mouse(on) => {

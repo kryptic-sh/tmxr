@@ -31,6 +31,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or by an item's key; empty names are separators and `-` names are shown
   disabled. tmxr centres it; tmux's placement and style flags are accepted and
   not followed.
+- `lock-client` (`lockc`), `lock-session` (`locks`) and `lock-server` (`lock`):
+  the client hands its terminal to the new `lock-command` option (tmux's
+  `lock -np` by default) and takes it back when that exits. The client reads no
+  keys meanwhile, so a password goes to the lock command, not a pane. A lock
+  command that fails or exits non-zero is reported in the status line.
+
+### Changed
+
+- The client/server protocol is now version 4, for locking: after upgrading,
+  restart a running server (`tmxr kill-server`) before attaching.
 
 ## [0.2.4] - 2026-10-09
 

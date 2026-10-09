@@ -246,6 +246,23 @@ pub const COMMANDS: &[CommandSpec] = &[
         "[-w] [-b buffer-name] path"
     ),
     cmd!(
+        "lock-client",
+        Some("lockc"),
+        "t:",
+        0,
+        0,
+        "[-t target-client]"
+    ),
+    cmd!("lock-server", Some("lock"), "", 0, 0, ""),
+    cmd!(
+        "lock-session",
+        Some("locks"),
+        "t:",
+        0,
+        0,
+        "[-t target-session]"
+    ),
+    cmd!(
         "move-pane",
         Some("movep"),
         "bdhl:s:t:v",
