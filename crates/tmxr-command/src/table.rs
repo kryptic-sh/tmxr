@@ -442,6 +442,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         "[-Fghru] [-t target-session] name [value]"
     ),
     cmd!(
+        "set-hook",
+        None,
+        "agpRt:uw",
+        1,
+        2,
+        "[-agpRuw] [-t target-session] hook [command]"
+    ),
+    cmd!(
         "set-option",
         Some("set"),
         "agost:uw",
@@ -465,6 +473,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         0,
         1,
         "[-ghs] [-t target-session] [name]"
+    ),
+    cmd!(
+        "show-hooks",
+        None,
+        "gpt:w",
+        0,
+        0,
+        "[-gpw] [-t target-session]"
     ),
     cmd!("show-messages", Some("showmsgs"), "", 0, 0, ""),
     cmd!(

@@ -301,6 +301,11 @@ impl Server {
             }
             PtyEvent::Exited(code) => {
                 debug!(pane = pid, ?code, "pane exited");
+                let ctx = crate::cmds::Ctx {
+                    pane: Some(pid),
+                    ..crate::cmds::Ctx::default()
+                };
+                self.queue_hook("pane-exited", ctx, None);
                 if self.cfg.remain_on_exit
                     && let Some(p) = self.panes.get_mut(&pid)
                 {

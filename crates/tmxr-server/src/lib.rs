@@ -10,6 +10,7 @@ pub mod backend;
 pub mod cmds;
 pub mod conn;
 pub mod copy;
+pub mod hooks;
 pub mod keys;
 pub mod layout;
 pub mod model;

@@ -133,6 +133,12 @@ pub struct Server {
     pub prompt_history: BTreeMap<String, Vec<String>>,
     /// `wait-for` channels and the command clients waiting on them.
     pub waits: crate::waits::Waits,
+    /// Global hooks (`set-hook -g`).
+    pub hooks: crate::hooks::HookTable,
+    /// Events whose hooks run once the current event is handled.
+    pub pending_hooks: Vec<(String, Ctx, Option<SessionId>)>,
+    /// A hook's commands are running: they fire no further hooks.
+    pub in_hook: bool,
     last_save: Instant,
     /// What resurrect last wrote, so an unchanged layout is not saved again.
     pub last_saved: Option<crate::resurrect::Save>,
@@ -216,6 +222,9 @@ impl Server {
             global_env: Environment::default(),
             prompt_history: BTreeMap::new(),
             waits: crate::waits::Waits::default(),
+            hooks: crate::hooks::HookTable::new(),
+            pending_hooks: Vec::new(),
+            in_hook: false,
             last_save: Instant::now(),
             last_saved: None,
             clock_shown: None,
@@ -233,11 +242,13 @@ impl Server {
             match rx.recv_timeout(tick) {
                 Ok(ev) => {
                     self.handle(ev);
+                    self.run_pending_hooks();
                     let until = Instant::now() + DRAIN_BUDGET;
                     while Instant::now() < until
                         && let Ok(ev) = rx.try_recv()
                     {
                         self.handle(ev);
+                        self.run_pending_hooks();
                     }
                 }
                 Err(RecvTimeoutError::Timeout) => {}

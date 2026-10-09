@@ -1,5 +1,6 @@
 //! Attaching clients, and sizing sessions to them.
 
+use crate::cmds::Ctx;
 use std::time::Instant;
 
 use ratatui::{Terminal, TerminalOptions, Viewport, layout::Rect};
@@ -50,6 +51,12 @@ impl Server {
         self.send(id, ServerMsg::Attached);
         self.touch_session(session);
         self.size_session(session);
+        let ctx = Ctx {
+            client: Some(id),
+            pane: self.active_pane_of_session(session),
+            ..Ctx::default()
+        };
+        self.queue_hook("client-attached", ctx, None);
     }
 
     pub fn detach(&mut self, id: ClientId, reason: &str) {
@@ -73,6 +80,11 @@ impl Server {
         // restores its own terminal modes on receiving this.
         self.send(id, ServerMsg::Detached { reason });
         self.clients.remove(&id);
+        let ctx = Ctx {
+            pane: self.active_pane_of_session(att.session),
+            ..Ctx::default()
+        };
+        self.queue_hook("client-detached", ctx, None);
     }
 
     /// Point an attached client at another session.

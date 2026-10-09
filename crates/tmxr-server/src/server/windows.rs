@@ -1,5 +1,6 @@
 //! Creating, selecting and closing sessions and windows.
 
+use crate::cmds::Ctx;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::{Instant, SystemTime};
@@ -54,6 +55,7 @@ impl Server {
                 last: None,
                 cwd: cwd.clone(),
                 env: env.into_iter().collect(),
+                hooks: crate::hooks::HookTable::new(),
                 created: SystemTime::now(),
                 last_used: Instant::now(),
             },
@@ -63,6 +65,11 @@ impl Server {
             return Err(e);
         }
         self.had_session = true;
+        let ctx = Ctx {
+            pane: self.active_pane_of_session(id),
+            ..Ctx::default()
+        };
+        self.queue_hook("session-created", ctx, None);
         Ok(id)
     }
 
@@ -230,6 +237,7 @@ impl Server {
         let Some(s) = self.sessions.remove(&sid) else {
             return;
         };
+        self.queue_hook("session-closed", Ctx::default(), None);
         for w in s.windows.values().copied().collect::<Vec<_>>() {
             if let Some(win) = self.windows.remove(&w) {
                 for p in win.panes() {

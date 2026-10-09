@@ -4,6 +4,7 @@
 mod binds;
 mod buffer;
 mod env;
+mod hook;
 mod options;
 mod pane;
 mod prompt;
@@ -106,6 +107,15 @@ pub fn run_list(srv: &mut Server, ctx: &Ctx, cmds: &[Vec<String>]) -> Outcome {
             out.stderr.push_str(&e);
             return out;
         }
+        // The session the command acted on, by its -t target.
+        let session = parsed.args.value('t').and_then(|t| {
+            crate::target::pane(srv, ctx, Some(t))
+                .map(|(s, _, _)| s)
+                .or_else(|_| crate::target::window(srv, ctx, Some(t)).map(|(s, _, _)| s))
+                .or_else(|_| crate::target::session(srv, ctx, Some(t)))
+                .ok()
+        });
+        srv.queue_hook(&format!("after-{}", parsed.name()), ctx.clone(), session);
         if out.wait.is_some() && !std::ptr::eq(argv, cmds.last().expect("in cmds")) {
             out.wait = None;
             out.status = 1;
@@ -205,6 +215,7 @@ fn run_one(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res {
         binds::run,
         buffer::run,
         env::run,
+        hook::run,
         options::run,
         prompt::run,
         wait::run,

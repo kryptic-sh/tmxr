@@ -22,6 +22,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `wait-for` (`wait`): a command client blocks until another signals the channel
   (`-S`), or takes turns at its lock (`-L` / `-U`), for scripts that synchronise
   with tmxr.
+- **Hooks**: `set-hook` and `show-hooks`, global (`-g`) or per session, with
+  `-a` to append, `-u` to remove and `-R` to run now. `after-<command>` fires
+  for every command, in the session it targeted, and `client-attached`,
+  `client-detached`, `pane-exited`, `session-closed` and `session-created` for
+  those events. Pane and window hooks (`-p`, `-w`) are not supported.
 
 ## [0.2.4] - 2026-10-09
 

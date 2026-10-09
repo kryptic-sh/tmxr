@@ -145,6 +145,8 @@ pub struct Session {
     /// The session environment: `update-environment` variables captured from
     /// the creating client, and `set-environment` changes.
     pub env: Environment,
+    /// This session's hooks, in place of the global ones of the same name.
+    pub hooks: crate::hooks::HookTable,
     pub created: std::time::SystemTime,
     pub last_used: Instant,
 }

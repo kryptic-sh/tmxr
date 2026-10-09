@@ -2334,3 +2334,84 @@ fn wait_for_blocks_until_signalled_or_unlocked() {
         "{chained:?}"
     );
 }
+
+#[test]
+fn hooks_run_after_commands_and_events() {
+    let t = Tmxr::new("hooks");
+    t.run(&["new-session", "-d", "-s", "hk"]);
+    let opt = |t: &Tmxr, name: &str| {
+        t.run(&[
+            "display-message",
+            "-p",
+            "-t",
+            "hk",
+            &format!("#{{@{name}}}"),
+        ])
+        .trim()
+        .to_owned()
+    };
+    // A global after-<command> hook, then a session one in its place.
+    t.run(&[
+        "set-hook",
+        "-g",
+        "after-new-window",
+        "set-option -g @who global",
+    ]);
+    t.run(&["new-window", "-d", "-t", "hk"]);
+    assert_eq!(opt(&t, "who"), "global");
+    t.run(&[
+        "set-hook",
+        "-t",
+        "hk",
+        "after-new-window",
+        "set-option -g @who session",
+    ]);
+    t.run(&["new-window", "-d", "-t", "hk"]);
+    assert_eq!(opt(&t, "who"), "session");
+
+    // A named event.
+    t.run(&[
+        "set-hook",
+        "-g",
+        "session-created",
+        "set-option -g @created yes",
+    ]);
+    t.run(&["new-session", "-d", "-s", "other"]);
+    assert_eq!(opt(&t, "created"), "yes");
+
+    // -a appends; show-hooks lists; -u removes.
+    t.run(&[
+        "set-hook",
+        "-ga",
+        "session-created",
+        "set-option -g @second yes",
+    ]);
+    let shown = t.run(&["show-hooks", "-g"]);
+    assert!(
+        shown.contains("session-created[0] set-option -g @created yes")
+            && shown.contains("session-created[1] set-option -g @second yes"),
+        "{shown}"
+    );
+    t.run(&["set-hook", "-gu", "session-created"]);
+    assert!(!t.run(&["show-hooks", "-g"]).contains("session-created"));
+
+    for bad in [
+        &["set-hook", "-g", "no-such-hook", "ls"][..],
+        &["set-hook", "-p", "after-new-window", "ls"],
+    ] {
+        assert!(!t.output(bad).status.success(), "{bad:?} was accepted");
+    }
+
+    // A hook's own commands fire no hooks: one extra window, not a loop.
+    t.run(&[
+        "set-hook",
+        "-t",
+        "hk",
+        "after-new-window",
+        "new-window -d -t hk",
+    ]);
+    let before = t.run(&["list-windows", "-t", "hk"]).lines().count();
+    t.run(&["new-window", "-d", "-t", "hk"]);
+    let after = t.run(&["list-windows", "-t", "hk"]).lines().count();
+    assert_eq!(after, before + 2, "the command and its hook's window");
+}
