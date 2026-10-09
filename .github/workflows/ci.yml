@@ -130,6 +130,51 @@ jobs:
       - run: cargo run --locked -p tmxr -- --version
       - run: cargo run --locked -p tmxr -- --help
 
+  # The server's named pipe admits its owner and refuses other users (its
+  # DACL is owner + SYSTEM only). Needs a second account, which only CI has.
+  pipe-acl:
+    name: pipe refuses other users (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          toolchain: stable
+          cache: false
+      - run: rustup update --no-self-update stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --locked -p tmxr
+      - name: Connect as the owner and as another user
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # A directory every user can read, so the other user can run tmxr.
+          $dir = 'C:\Users\Public\tmxr-acl'
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Copy-Item target\debug\tmxr.exe "$dir\tmxr.exe"
+          $pipe = '\\.\pipe\tmxr-acl-check'
+          & "$dir\tmxr.exe" -S $pipe new-session -d -s owner
+          if ($LASTEXITCODE -ne 0) { throw 'the server did not start' }
+          & "$dir\tmxr.exe" -S $pipe ls
+          if ($LASTEXITCODE -ne 0) { throw 'the owner was refused' }
+
+          $name = 'tmxrother'
+          $password = 'Tmxr-' + [guid]::NewGuid().ToString('N').Substring(0, 12) + '!a1'
+          net user $name $password /add | Out-Null
+          $cred = [pscredential]::new($name, (ConvertTo-SecureString $password -AsPlainText -Force))
+          $p = Start-Process -FilePath "$dir\tmxr.exe" -ArgumentList '-S', $pipe, 'ls' `
+            -Credential $cred -WorkingDirectory $dir -Wait -PassThru `
+            -RedirectStandardOutput "$dir\out.txt" -RedirectStandardError "$dir\err.txt"
+          $err = Get-Content -Raw "$dir\err.txt"
+          Write-Output "other user: exit $($p.ExitCode), stderr: $err"
+          # tmxr itself must have run and been refused (os error 5 is
+          # ERROR_ACCESS_DENIED), not merely failed to start.
+          if ($p.ExitCode -eq 0) { throw 'another user listed the sessions' }
+          if ($err -notmatch 'os error 5') { throw "not an access-denied refusal: $err" }
+
+          & "$dir\tmxr.exe" -S $pipe kill-server
+          net user $name /delete | Out-Null
+
   build:
     name: Build ${{ matrix.target }}
     needs: [test]
