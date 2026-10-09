@@ -2482,11 +2482,13 @@ fn lock_hands_the_keys_to_the_lock_command() {
     let t = Tmxr::new("lock");
     let s = t.attach(&["new", "-s", "lk"]);
     s.wait_for("status line", |text| text.contains("lk"));
-    // Prints a marker, then waits for a line from the terminal.
+    // Prints a marker, then waits for a line from the terminal, after a
+    // pause: the keys arrive while nothing but the client could read them,
+    // which is when a client still reading would take them.
     let lock = if cfg!(windows) {
-        "echo LOCKED-NOW& set /p x="
+        "echo LOCKED-NOW& ping -n 3 127.0.0.1 >nul& set /p x="
     } else {
-        "echo LOCKED-NOW; read x"
+        "echo LOCKED-NOW; sleep 2; read x"
     };
     t.run(&["set-option", "-g", "lock-command", lock]);
     t.run(&["lock-session", "-t", "lk"]);
