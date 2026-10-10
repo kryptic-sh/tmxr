@@ -43,11 +43,6 @@ table. What has been verified, and how:
   placed at the mouse (`-x M`) or by the pane (`P`) uses client cells, so with
   the view panned it lands off by the offset, and a border drag (`follow_drag`)
   reads client cells too.
-- **An odd column goes to the new pane**: splitting a 100-column pane gives tmxr
-  49 + 50 columns and tmux 50 + 49 (tmux 3.6's `layout_split_pane`: the new pane
-  gets `(size + 1) / 2 - 1`). tmxr's splits are ratios in `hjkl-layout`
-  (`split_geometry`), so matching tmux cell for cell means changing how that
-  crate rounds, or splitting by cells; not started.
 - **tmux default binds tmxr lacks** (compared with tmux 3.6's `list-keys` on
   2026-10-10; 21 of its 267). Each needs something tmxr does not have yet:
   - Menus: all of tmux's are bound (`prefix <` / `>`, the right button over a

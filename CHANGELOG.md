@@ -117,6 +117,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Splits size panes as tmux does**: the new pane gets the smaller half (a
+  100-column split is 50 + 49, not 49 + 50), and `-l` / `-b -l` sizes and their
+  limits follow tmux 3.6's `layout_split_pane`; tmxr also kept a split between
+  5% and 95%, which tmux does not.
 - **`-t =` off a pane or window** (a click on the status line) means the
   window's active pane, or the session's current window, as tmux's does; it
   failed with "no pane under the mouse".

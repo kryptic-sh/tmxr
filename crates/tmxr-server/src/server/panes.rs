@@ -249,14 +249,26 @@ impl Server {
         if len < 3 {
             return Err("pane too small".into());
         }
-        // Fraction of the split given to the *first* child.
-        let new_cells = match size {
-            Some(SplitSize::Cells(n)) => f32::from(n.min(len - 2)),
-            Some(SplitSize::Percent(p)) => f32::from(len) * f32::from(p.min(100)) / 100.0,
-            None => f32::from(len) / 2.0,
+        // Cells for each side as tmux 3.6's layout_split_pane: `second` is
+        // the bottom / right pane, the border one cell between them. With no
+        // size the new pane gets the smaller half.
+        let asked = match size {
+            Some(SplitSize::Cells(n)) => Some(n),
+            Some(SplitSize::Percent(p)) => {
+                Some(u16::try_from(u32::from(len) * u32::from(p.min(100)) / 100).unwrap_or(len))
+            }
+            None => None,
         };
-        let new_frac = (new_cells / f32::from(len)).clamp(0.05, 0.95);
-        let ratio = if before { new_frac } else { 1.0 - new_frac };
+        let second = match asked {
+            None => len.div_ceil(2) - 1,
+            Some(n) if before => len.saturating_sub(n).saturating_sub(1),
+            Some(n) => n,
+        }
+        .clamp(1, len - 2);
+        let first = len - 1 - second;
+        // hjkl-layout gives the first child round(len × ratio) cells, its
+        // border among them.
+        let ratio = f32::from(first + 1) / f32::from(len);
         let t = target as usize;
         let n = new as usize;
         win.layout.replace_leaf(t, move |id| {

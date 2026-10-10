@@ -3954,6 +3954,9 @@ fn popups_and_menus_are_placed_where_tmux_places_them() {
         ("#{pane_index}", "3", (1, 0)),
         ("3", "12", (3, 7)),
         ("C", "C", (39, 11)),
+        // The target pane's left edge and bottom: tmux's split gives the
+        // left pane 50 columns, so the right one starts at 51.
+        ("P", "P", (51, 24)),
         ("#{popup_pane_right}", "#{popup_centre_y}", (80, 11)),
         // No mouse event: the variables are empty, which is 0.
         ("M", "M", (0, 0)),
@@ -3978,33 +3981,6 @@ fn popups_and_menus_are_placed_where_tmux_places_them() {
         t.run(&["display-popup", "-C"]);
         s.wait_for("closed", |text| !text.contains("PLACED"));
     }
-    // P: the target pane's left edge and bottom. tmux's panes were 50 and 49
-    // wide, putting the box at (51, 24); tmxr splits an odd column the other
-    // way, so the edge comes from tmxr's own layout.
-    let left: u16 = t
-        .run(&["display-message", "-p", "-t", "pl:0.0", "#{pane_width}"])
-        .trim()
-        .parse::<u16>()
-        .unwrap()
-        + 1;
-    t.run(&[
-        "display-popup",
-        "-x",
-        "P",
-        "-y",
-        "P",
-        "-w",
-        "20",
-        "-h",
-        "5",
-        hold,
-    ]);
-    s.wait_for("the popup, drawn", |text| {
-        text.contains("PLACED") && corner(&s).is_some()
-    });
-    assert_eq!(corner(&s), Some((left, 24)), "popup -x P -y P");
-    t.run(&["display-popup", "-C"]);
-    s.wait_for("closed", |text| !text.contains("PLACED"));
     let menus: &[(&str, &str, (u16, u16))] = &[
         ("3", "12", (3, 8)),
         ("C", "C", (44, 12)),
@@ -4525,6 +4501,31 @@ fn refresh_client_pans_a_window_larger_than_the_client() {
     t.run(&["select-pane", "-t", "pa:0.0"]);
     t.run(&["refresh-client", "-c"]);
     border_at(&s, left, "following the cursor again");
+}
+
+#[test]
+fn splits_size_panes_as_tmux_does() {
+    let t = Tmxr::new("splitsize");
+    // Each as tmux 3.6 split the same 100x30 window.
+    let cases: &[(&[&str], &str, &str)] = &[
+        (&["-h"], "#{pane_left}+#{pane_width}", "0+50 51+49"),
+        (&["-v"], "#{pane_top}+#{pane_height}", "0+15 16+14"),
+        (&["-h", "-l", "30"], "#{pane_width}", "69 30"),
+        (&["-h", "-b", "-l", "30"], "#{pane_width}", "30 69"),
+    ];
+    for (i, (flags, format, tmux)) in cases.iter().enumerate() {
+        let name = format!("s{i}");
+        t.run(&["new-session", "-d", "-s", &name, "-x", "100", "-y", "30"]);
+        let mut split = vec!["split-window", "-t", name.as_str()];
+        split.extend_from_slice(flags);
+        t.run(&split);
+        let got = t.run(&["list-panes", "-t", &name, "-F", format]);
+        assert_eq!(
+            got.split_whitespace().collect::<Vec<_>>().join(" "),
+            *tmux,
+            "{flags:?}"
+        );
+    }
 }
 
 #[test]
