@@ -55,6 +55,7 @@ pub(super) fn run(
             let mut menu =
                 crate::menu::Menu::parse(title, pos, start, &|w| expand_for(srv, ctx, pane, w))?;
             menu.look = crate::overlay::BoxLook::from_args(a)?;
+            (menu.pane, menu.mouse) = (pane, ctx.mouse);
             let (cols, rows) = client_size(srv, c)?;
             let places = places(srv, ctx, c, pane);
             menu.at = Some(place(a, (cols, rows), menu.size(), places, |v| {

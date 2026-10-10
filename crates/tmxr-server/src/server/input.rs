@@ -101,6 +101,16 @@ impl Server {
         }
         if let Some(mut ov) = att.overlay.take() {
             let action = ov.key(&ev);
+            // A menu's item runs against the menu's target, as tmux's.
+            let menu_ctx = match &ov {
+                Overlay::Menu(m) => Some(Ctx {
+                    client: Some(id),
+                    pane: m.pane,
+                    mouse: m.mouse,
+                    ..Ctx::default()
+                }),
+                _ => None,
+            };
             if let (Overlay::Prompt(p), OverlayAction::Run(_)) = (&ov, &action)
                 && !p.key
             {
@@ -113,7 +123,10 @@ impl Server {
                     }
                 }
                 OverlayAction::Close => {}
-                OverlayAction::Run(cmd) => self.run_bind(id, &cmd, None),
+                OverlayAction::Run(cmd) => match menu_ctx {
+                    Some(ctx) => self.run_bind_ctx(id, &ctx, &cmd),
+                    None => self.run_bind(id, &cmd, None),
+                },
                 OverlayAction::Preview(cmd) => {
                     self.run_bind(id, &cmd, None);
                     // The prompt stays, unless the command opened something

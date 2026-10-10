@@ -44,16 +44,16 @@ table. What has been verified, and how:
   (`split_geometry`), so matching tmux cell for cell means changing how that
   crate rounds, or splitting by cells; not started.
 - **tmux default binds tmxr lacks** (compared with tmux 3.6's `list-keys` on
-  2026-10-10; 34 of its 267). Each needs something tmxr does not have yet:
-  - Menus: `prefix <` is bound to tmux's window menu (works as tmux's,
-    `tmuxs_window_menu_works`). Left: `prefix >` and `MouseDown3Pane` (the pane
-    menu) need `pane_mode`, `mouse_word`, `mouse_line` and `mouse_hyperlink`;
-    `MouseDown3Status` / `MouseDown3StatusLeft` and their `M-` forms pass
-    `-t =`, and tmux then runs the chosen item against the window or session
-    clicked: whether tmxr's menus run items against `-t` is not checked.
+  2026-10-10; 32 of its 267). Each needs something tmxr does not have yet:
+  - Menus: `prefix <`, `prefix >` and `MouseDown3Pane` are tmux's own window and
+    pane menus (`tmuxs_window_menu_works`,
+    `tmuxs_pane_menu_works_from_the_prefix_and_the_right_button`). Left:
+    `MouseDown3Status` / `MouseDown3StatusLeft` and their `M-` forms (not
+    tried); the pane menu's hyperlink items never show, as tmxr keeps no OSC 8
+    links.
   - `customize-mode -Z` (`prefix C`), `refresh-client -c` and `-D` / `-L` / `-R`
     / `-U` panning (`prefix DC`, `S-arrows`), and tmux's pane scrollbars
-    (`MouseDown1Scrollbar*`).
+    (`MouseDown1Scrollbar*`, which also use `copy-mode -S`).
   - Declined: the digit binds (`1`-`9` in vi, `M-1`-`M-9` in emacs) that open a
     "(repeat)" prompt: tmxr's copy mode takes counts directly (`5j`).
 - **`paste-buffer` without `-p` still brackets** a paste when the program asked

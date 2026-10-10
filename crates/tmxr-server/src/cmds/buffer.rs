@@ -25,11 +25,30 @@ pub(super) fn run(
                 return crate::mouse::copy_mode_drag(srv, ctx).map(|()| true);
             }
             let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
+            // -q: out of copy mode (and clock mode), as tmux's.
+            if a.has('q') {
+                if let Some(p) = srv.panes.get_mut(&pid) {
+                    p.copy = None;
+                    p.clock = false;
+                    let window = p.window;
+                    srv.mark_window_dirty(window);
+                }
+                return Ok(true);
+            }
+            let entering = srv.panes.get(&pid).is_some_and(|p| p.copy.is_none());
             crate::copy::enter(srv, pid, a.has('u'));
-            if a.has('e')
-                && let Some(cm) = srv.panes.get_mut(&pid).and_then(|p| p.copy.as_mut())
-            {
-                cm.scroll_exit = true;
+            if let Some(cm) = srv.panes.get_mut(&pid).and_then(|p| p.copy.as_mut()) {
+                if a.has('e') {
+                    cm.scroll_exit = true;
+                }
+                // tmux reads -H as the mode starts.
+                if a.has('H') && entering {
+                    cm.hide_position = true;
+                }
+            }
+            // -d: a page down, which with -e may leave copy mode again.
+            if a.has('d') {
+                crate::copy::command(srv, ctx, pid, "page-down", &[])?;
             }
         }
         "paste-buffer" => {

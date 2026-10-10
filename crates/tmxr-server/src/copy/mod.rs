@@ -114,6 +114,29 @@ fn is_word_separator(c: char) -> bool {
     c == ' ' || c == '\t' || (c.is_ascii_punctuation() && c != '_')
 }
 
+/// The word at column `x` of `line` as tmux 3.6's `format_grid_word`
+/// finds it: the run of non-separators around `x`, or on a separator the
+/// word just after it. tmux also follows a word across a wrapped line; this
+/// keeps to `line`.
+pub fn word_at(line: &[char], x: usize) -> String {
+    let separator = |x: usize| line.get(x).is_none_or(|c| is_word_separator(*c));
+    let mut start = x;
+    if separator(start) {
+        start += 1;
+    } else {
+        while start > 0 && !separator(start - 1) {
+            start -= 1;
+        }
+    }
+    let mut end = start;
+    while !separator(end) {
+        end += 1;
+    }
+    line.get(start..end)
+        .map(String::from_iter)
+        .unwrap_or_default()
+}
+
 /// Largest repeat count, so a stray run of digits cannot spin the server.
 pub const MAX_COUNT: usize = 9999;
 
@@ -433,22 +456,12 @@ impl CopyMode {
     /// word across a wrapped line; this keeps to the cursor's line.
     pub fn cursor_word(&self) -> String {
         let line = self.lines.get(self.cy).map(Line::chars).unwrap_or_default();
-        let separator = |x: usize| line.get(x).is_none_or(|c| is_word_separator(*c));
-        let mut start = self.cx;
-        if separator(start) {
-            start += 1;
-        } else {
-            while start > 0 && !separator(start - 1) {
-                start -= 1;
-            }
-        }
-        let mut end = start;
-        while !separator(end) {
-            end += 1;
-        }
-        line.get(start..end)
-            .map(String::from_iter)
-            .unwrap_or_default()
+        word_at(&line, self.cx)
+    }
+
+    /// The text of the line shown `row` rows down the view.
+    pub fn view_line(&self, row: usize) -> Option<Vec<char>> {
+        self.lines.get(self.top + row).map(Line::chars)
     }
 
     fn last_line(&self) -> usize {

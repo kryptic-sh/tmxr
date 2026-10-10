@@ -8,7 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **tmux's window menu on `prefix <`**, bound as tmux 3.6 binds it.
+- **tmux's window and pane menus** on `prefix <`, `prefix >` and the right
+  button over a pane, bound as tmux 3.6 binds them. A menu item runs against the
+  menu's target and the mouse event that opened it, as tmux's: a right-click's
+  items act on the pane clicked.
+- **`mouse_word`, `mouse_line`, `mouse_x`, `mouse_y` and `pane_mode`** for
+  commands a mouse event runs, and **`copy-mode -q`, `-d` and `-H`**.
 - **More of tmux's format language**: `#{<:…}`, `#{>:…}`, `#{<=:…}`, `#{>=:…}`
   (string comparisons, as tmux's), `#{m:glob,text}` and `#{m/r:regex,text}`
   (with `i` for any case), `#{q:…}` and `#{q/e:…}` quoting, and
@@ -108,8 +113,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **`display-menu` follows tmux's item rules**: an item whose name expands to
   nothing is left out (tmxr showed a separator), and a separator at the top or
-  after another is dropped. A menu title's `#[…]` styles are applied, and
-  `#[align=centre]` centres it, instead of being shown as text.
+  after another is dropped. `#[…]` styles in a menu's title and items are
+  applied, and `#[align=centre]` centres the title, instead of being shown as
+  text.
 - **`swap-window`, `join-pane` and `move-pane` without `-s`** use the current
   window or pane when none is marked, as tmux's do; they failed with "needs -s
   or a marked pane".

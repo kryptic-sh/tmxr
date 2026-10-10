@@ -57,6 +57,42 @@ pub fn pane_current_path(srv: &Server, pane: PaneId) -> Option<PathBuf> {
     Some(dir.unwrap_or_else(|| p.start_cwd.clone()))
 }
 
+/// tmux's `mouse_*` variables for a command a mouse event ran: where in its
+/// pane the mouse was, and the word and line under it (in copy mode, as the
+/// view shows them). `None` for other names, or away from a pane.
+/// `mouse_hyperlink` is empty: tmxr keeps no OSC 8 links.
+pub fn mouse_var(srv: &Server, mouse: &crate::mouse::MouseTarget, name: &str) -> Option<String> {
+    if !name.starts_with("mouse_") || name == "mouse_any_flag" {
+        return None;
+    }
+    let p = srv.panes.get(&mouse.pane?)?;
+    let (x, y) = (
+        mouse.col.checked_sub(p.rect.x)?,
+        mouse.row.checked_sub(p.rect.y)?,
+    );
+    let line = || -> Vec<char> {
+        match &p.copy {
+            Some(cm) => cm.view_line(usize::from(y)).unwrap_or_default(),
+            None => p
+                .emu
+                .screen()
+                .rows(0, p.rect.w)
+                .nth(usize::from(y))
+                .unwrap_or_default()
+                .chars()
+                .collect(),
+        }
+    };
+    Some(match name {
+        "mouse_x" => x.to_string(),
+        "mouse_y" => y.to_string(),
+        "mouse_word" => crate::copy::word_at(&line(), usize::from(x)),
+        "mouse_line" => String::from_iter(line()).trim_end().to_owned(),
+        "mouse_hyperlink" => String::new(),
+        _ => return None,
+    })
+}
+
 fn flag(b: bool) -> String {
     if b { "1" } else { "0" }.to_owned()
 }
@@ -160,6 +196,13 @@ impl Context for Vars<'_> {
             "copy_cursor_y" => {
                 let cm = pane?.copy.as_ref()?;
                 cm.cy.saturating_sub(cm.top).to_string()
+            }
+            "pane_mode" => {
+                if pane?.copy.is_some() {
+                    "copy-mode".to_owned()
+                } else {
+                    String::new()
+                }
             }
             "pane_in_mode" => flag(pane?.copy.is_some()),
             "history_size" => pane?.emu.history_size().to_string(),

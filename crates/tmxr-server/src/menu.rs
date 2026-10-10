@@ -32,6 +32,10 @@ pub struct Menu {
     pub look: crate::overlay::BoxLook,
     /// The box's top-left cell; centred when `None`.
     pub at: Option<(u16, u16)>,
+    /// What a chosen item runs against, as tmux's: the menu's target pane
+    /// and the mouse event that opened it (for `-t =` in its commands).
+    pub pane: Option<crate::model::PaneId>,
+    pub mouse: Option<crate::mouse::MouseTarget>,
 }
 
 impl Menu {
@@ -89,6 +93,8 @@ impl Menu {
             selected: 0,
             look: crate::overlay::BoxLook::default(),
             at: None,
+            pane: None,
+            mouse: None,
         };
         if !(0..menu.items.len()).any(|i| menu.selectable(i)) {
             return Err("display-menu: no items to choose".into());
@@ -170,7 +176,7 @@ impl Menu {
             .iter()
             .map(|i| {
                 let (name, key) = Self::label(i);
-                name.chars().count() + key.chars().count() + 3
+                usize::from(crate::render::runs_width(&name)) + key.chars().count() + 3
             })
             .chain(std::iter::once(
                 usize::from(crate::render::runs_width(&self.title)) + 2,
@@ -251,7 +257,9 @@ impl Menu {
                 base
             };
             buf.set_style(Rect::new(inner.x, y, inner.width, 1), style);
-            buf.set_stringn(inner.x + 1, y, &name, usize::from(inner.width), style);
+            // tmux applies an item's `#[…]` styles (its pane menu
+            // underlines the word it offers).
+            crate::render::draw_runs(buf, inner.x + 1, y, inner.x + inner.width, style, &name);
             let kw = u16::try_from(key.chars().count()).unwrap_or(0);
             if kw + 2 < inner.width {
                 buf.set_stringn(

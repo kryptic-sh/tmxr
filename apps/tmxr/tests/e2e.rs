@@ -4360,6 +4360,75 @@ fn tmuxs_window_menu_works() {
 }
 
 #[test]
+fn tmuxs_pane_menu_works_from_the_prefix_and_the_right_button() {
+    let t = Tmxr::new("panemenu");
+    let s = t.attach(&["new", "-s", "pn"]);
+    s.wait_for("status line", |text| text.contains("pn"));
+    s.wait_mouse(true);
+    t.wait_prompt("pn");
+    t.run(&["send-keys", "-t", "pn", "echo rightword", "Enter"]);
+    s.wait_for("the output", |text| {
+        text.lines().any(|l| l.trim_end() == "rightword")
+    });
+    // prefix >: copy-mode and mouse items are hidden (no mode, no mouse).
+    s.send(PREFIX);
+    s.send(b">");
+    s.wait_for("the menu", |text| text.contains("Horizontal Split"));
+    let text = s.text();
+    assert!(!text.contains("Go To Top"), "{text}");
+    assert!(!text.contains("Search For"), "{text}");
+    s.send(b"");
+    s.wait_for("closed", |text| !text.contains("Horizontal Split"));
+    // The right button on a word: the menu offers that word, and Copy
+    // puts it in a buffer.
+    let text = s.text();
+    let (row, line) = text
+        .lines()
+        .enumerate()
+        .find(|(_, l)| l.trim_end() == "rightword")
+        .unwrap();
+    let col = line.find("rightword").unwrap() + 3;
+    s.click(2, u16::try_from(col).unwrap(), u16::try_from(row).unwrap());
+    s.wait_for("the menu with the word", |text| {
+        text.contains("Copy rightword")
+    });
+    s.send(b"c");
+    t.wait_run(&["show-buffer"], "the word copied", |o| o == "rightword");
+    // Horizontal Split from the menu splits the pane.
+    s.send(PREFIX);
+    s.send(b">");
+    s.wait_for("the menu", |text| text.contains("Horizontal Split"));
+    s.send(b"h");
+    t.wait_run(
+        &["display-message", "-p", "-t", "pn", "#{window_panes}"],
+        "split",
+        |o| o.trim() == "2",
+    );
+    // The new right pane is active; a right-click on the left one runs the
+    // chosen item against the pane clicked, as tmux's: Mark marks it. The
+    // narrower pane rewrapped, so the word is found again.
+    s.wait_for("the left pane redrawn", |text| {
+        text.lines()
+            .any(|l| l.starts_with("rightword") && l.contains('│'))
+    });
+    let row = s
+        .text()
+        .lines()
+        .position(|l| l.starts_with("rightword") && l.contains('│'))
+        .expect("the word in the left pane");
+    // Another cell of the word: a second press in the same cell this soon
+    // is a double click, which tmux binds to nothing either.
+    s.click(2, 6, u16::try_from(row).unwrap());
+    s.wait_for("the menu again", |text| text.contains("Copy rightword"));
+    s.send(b"m");
+    t.wait_run(
+        &["display-message", "-p", "-t", "pn:0.0", "#{pane_marked}"],
+        "the clicked pane marked",
+        |o| o.trim() == "1",
+    );
+}
+
+#[test]
 fn select_pane_titles_a_pane_and_resurrect_keeps_it() {
     let t = Tmxr::new("titles");
     t.run(&["new-session", "-d", "-s", "ti"]);
