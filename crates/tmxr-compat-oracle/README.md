@@ -54,10 +54,10 @@ checks = [
 ]
 ```
 
-Mouse actions: `click`, `down`, `up`, `drag` (`at` to `to`), `wheel-up`,
-`wheel-down`; `button` 1, 2 or 3. `at` is `[col, row]` or
-`{ text = "first", row = -1, dx = 0 }` (where the text shows; row -1 is the
-last).
+Mouse actions: `click`, `double-click`, `triple-click`, `down`, `up`, `drag`
+(`at` to `to`), `wheel-up`, `wheel-down`; `button` 1, 2 or 3. `at` is
+`[col, row]` or `{ text = "first", row = -1, dx = 0 }` (where the text shows;
+row -1 is the last).
 
 ## Known divergences
 

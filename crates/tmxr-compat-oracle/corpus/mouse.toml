@@ -25,8 +25,7 @@ attach = true
 program = "printf 'alpha beta gamma\n'; exec sleep 1000"
 steps = [
   { wait_text = "alpha beta gamma" },
-  { mouse = { action = "click", at = [7, 0] } },
-  { mouse = { action = "click", at = [7, 0] } },
+  { mouse = { action = "double-click", at = [7, 0] } },
   { sleep = 1.0 },
 ]
 checks = [{ command = "show-buffer" }, { format = "#{pane_in_mode}" }]
@@ -37,9 +36,7 @@ attach = true
 program = "printf 'alpha beta gamma\n'; exec sleep 1000"
 steps = [
   { wait_text = "alpha beta gamma" },
-  { mouse = { action = "click", at = [7, 0] } },
-  { mouse = { action = "click", at = [7, 0] } },
-  { mouse = { action = "click", at = [7, 0] } },
+  { mouse = { action = "triple-click", at = [7, 0] } },
   { sleep = 1.0 },
 ]
 checks = [{ command = "show-buffer" }, { format = "#{pane_in_mode}" }]
@@ -128,8 +125,7 @@ steps = [
   { run = "bind -n SecondClick1Pane set -ga @seen S" },
   { run = "bind -n DoubleClick1Pane set -ga @seen 2" },
   { run = "bind -n TripleClick1Pane set -ga @seen 3" },
-  { mouse = { action = "click", at = [7, 0] } },
-  { mouse = { action = "click", at = [7, 0] } },
+  { mouse = { action = "double-click", at = [7, 0] } },
   { sleep = 1.0 },
 ]
 # tmux 3.6 sends these for two quick clicks (checked with a pty client).

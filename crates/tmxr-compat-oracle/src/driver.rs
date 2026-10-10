@@ -209,6 +209,14 @@ impl Server {
                 c.sgr(b, at, true)?;
                 c.sgr(b, at, false)
             }
+            // Every press and release in one write: how quickly the presses
+            // arrive decides a double click, and a busy runner must not.
+            "double-click" | "triple-click" => {
+                let n = if m.action == "double-click" { 2 } else { 3 };
+                let (col, row) = (at.0 + 1, at.1 + 1);
+                let bytes = format!("\x1b[<{b};{col};{row}M\x1b[<{b};{col};{row}m").repeat(n);
+                c.send(bytes.as_bytes())
+            }
             "down" => c.sgr(b, at, true),
             "up" => c.sgr(b, at, false),
             "wheel-up" => c.sgr(64, at, true),
