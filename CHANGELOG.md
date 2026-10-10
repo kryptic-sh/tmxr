@@ -58,6 +58,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Popup and menu placement is tmux's**: `-x` / `-y` are worked out as tmux 3.6
+  does, checked against a running tmux. A number for `-y` is now the box's
+  bottom edge, not its top; `C` centres as tmux does; `-x R` is the target
+  pane's right edge, not the client's; `M` centres the box on the mouse; `-y W`
+  works; tmux's `popup_*` variables (`#{popup_pane_right}` and the rest) can be
+  used; a letter with nothing to place by (`M` with no mouse event) is 0 instead
+  of an error. `display-menu` now follows `-x` / `-y` too; it was always
+  centred.
 - `wait-for` works anywhere a command list runs, as in tmux: in the middle of a
   list (the rest waits) and from binds, hooks and the prompt. It had to end its
   list and come from a script.

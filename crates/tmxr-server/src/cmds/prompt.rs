@@ -5,6 +5,7 @@ use std::fmt::Write as _;
 use tmxr_command::Parsed;
 
 use super::{Ctx, Outcome, Res, attached_client, expand_for, join_args};
+use crate::model::{ClientId, PaneId};
 use crate::overlay::Overlay;
 use crate::server::Server;
 use crate::target;
@@ -43,8 +44,7 @@ pub(super) fn run(
             }
         }
         "display-menu" => {
-            // tmux's -O and -x/-y placement are accepted and not followed: the
-            // menu is centred.
+            // tmux's -O is accepted and not followed.
             let (c, pane) = shown_on(srv, ctx, a)?;
             let words: Vec<String> = pos.iter().map(|w| expand_for(srv, ctx, pane, w)).collect();
             let title = a
@@ -54,6 +54,11 @@ pub(super) fn run(
             let start = a.value('C').and_then(|n| n.parse().ok()).unwrap_or(0);
             let mut menu = crate::menu::Menu::parse(title, &words, start)?;
             menu.look = crate::overlay::BoxLook::from_args(a)?;
+            let (cols, rows) = client_size(srv, c)?;
+            let places = places(srv, ctx, c, pane);
+            menu.at = Some(place(a, (cols, rows), menu.size(), places, |v| {
+                expand_for(srv, ctx, pane, v)
+            })?);
             if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
                 att.overlay = Some(Overlay::Menu(Box::new(menu)));
             }
@@ -73,23 +78,13 @@ pub(super) fn run(
                 srv.mark_client_dirty(c);
                 return Ok(true);
             }
-            let (cols, rows) = srv.clients[&c]
-                .att
-                .as_ref()
-                .map(|att| (att.cols, att.rows))
-                .ok_or("no current client")?;
-            let places = Places {
-                pane: pane
-                    .and_then(|p| srv.panes.get(&p))
-                    .map(|p| ratatui::layout::Rect::new(p.rect.x, p.rect.y, p.rect.w, p.rect.h)),
-                mouse: ctx.mouse.map(|m| (m.col, m.row)),
-                window: srv.clients[&c].att.as_ref().and_then(|att| {
-                    let current = srv.sessions.get(&att.session)?.current;
-                    let ranges = &att.status_ranges.windows;
-                    ranges.iter().find(|r| r.2 == current).map(|r| r.0)
-                }),
-            };
-            let rect = popup_rect(a, (cols, rows), places, |v| expand_for(srv, ctx, pane, v))?;
+            let (cols, rows) = client_size(srv, c)?;
+            let places = places(srv, ctx, c, pane);
+            let (w, h) = popup_size(a, (cols, rows))?;
+            let (x, y) = place(a, (cols, rows), (w, h), places, |v| {
+                expand_for(srv, ctx, pane, v)
+            })?;
+            let rect = ratatui::layout::Rect::new(x, y, w, h);
             let sid = pane
                 .and_then(|p| srv.panes.get(&p))
                 .and_then(|p| srv.session_of_window(p.window))
@@ -369,8 +364,36 @@ fn shown_on(
     Ok((c, pane))
 }
 
-/// Where a popup may be put besides numbers, as tmux's position letters
-/// name them.
+/// Client `c`'s size.
+fn client_size(srv: &Server, c: ClientId) -> Result<(u16, u16), String> {
+    srv.clients
+        .get(&c)
+        .and_then(|c| c.att.as_ref())
+        .map(|att| (att.cols, att.rows))
+        .ok_or_else(|| "no current client".into())
+}
+
+/// What a menu or popup on client `c` for `pane` may be placed by.
+fn places(srv: &Server, ctx: &Ctx, c: ClientId, pane: Option<PaneId>) -> Places {
+    Places {
+        pane: pane
+            .and_then(|p| srv.panes.get(&p))
+            .map(|p| ratatui::layout::Rect::new(p.rect.x, p.rect.y, p.rect.w, p.rect.h)),
+        mouse: ctx.mouse.map(|m| (m.col, m.row)),
+        window: srv
+            .clients
+            .get(&c)
+            .and_then(|c| c.att.as_ref())
+            .and_then(|att| {
+                let current = srv.sessions.get(&att.session)?.current;
+                let ranges = &att.status_ranges.windows;
+                ranges.iter().find(|r| r.2 == current).map(|r| r.0)
+            }),
+    }
+}
+
+/// Where a popup or menu may be put besides numbers, as tmux's position
+/// letters and `popup_*` variables name them.
 #[derive(Debug, Clone, Copy, Default)]
 struct Places {
     /// The target pane, in client cells (`P`).
@@ -381,19 +404,9 @@ struct Places {
     window: Option<u16>,
 }
 
-/// A popup's box in a `cols` x `rows` client: `-w` / `-h` in cells or
-/// percent (half the client by default), at `-x` / `-y`. Those take a number
-/// (the box's left or top), formats expanded first, or tmux's letters: `C`
-/// centre; for `-x` `R` the right edge, `P` the pane's left, `M` the mouse,
-/// `W` the window's name on the status line; for `-y` `P` the pane's bottom,
-/// `M` the mouse, `S` just above the status line (these place the box's
-/// bottom, as tmux's do).
-fn popup_rect(
-    a: &tmxr_command::Args,
-    (cols, rows): (u16, u16),
-    places: Places,
-    expand: impl Fn(&str) -> String,
-) -> Result<ratatui::layout::Rect, String> {
+/// A popup's size in a `cols` x `rows` client: `-w` / `-h` in cells or
+/// percent, half the client by default.
+fn popup_size(a: &tmxr_command::Args, (cols, rows): (u16, u16)) -> Result<(u16, u16), String> {
     let size = |flag: char, total: u16| -> Result<u16, String> {
         let n = match a.value(flag) {
             None => total / 2,
@@ -407,42 +420,106 @@ fn popup_rect(
         };
         Ok(n.clamp(1, total.max(1)))
     };
-    let (w, h) = (size('w', cols)?, size('h', rows)?);
-    let missing = |flag: char, v: &str| format!("-{flag} {v}: nothing to place it by here");
-    let x = match a.value('x').map(&expand).as_deref() {
-        None | Some("C") => cols.saturating_sub(w) / 2,
-        Some("R") => cols.saturating_sub(w),
-        Some("P") => places.pane.map(|r| r.x).ok_or_else(|| missing('x', "P"))?,
-        Some("M") => places.mouse.map(|m| m.0).ok_or_else(|| missing('x', "M"))?,
-        Some("W") => places.window.ok_or_else(|| missing('x', "W"))?,
-        Some(v) => v
-            .parse::<u16>()
-            .map_err(|_| format!("-x {v}: a number, C, R, P, M or W"))?,
+    Ok((size('w', cols)?, size('h', rows)?))
+}
+
+/// Where a `w` x `h` box goes in a `cols` x `rows` client, from `-x` and
+/// `-y`, transcribed from tmux 3.6's `cmd_display_menu_get_pos`. Each is a
+/// number or a format, which may use tmux's `popup_*` variables, or a
+/// letter standing for one of them: `-x` `C` centre, `R` the pane's right
+/// edge, `P` its left, `M` centred on the mouse, `W` the window's name on
+/// the status line; `-y` `C`, `P` the pane's bottom, `M` the mouse, `S` the
+/// status line, `W` the window's name. `-y` gives the box's bottom edge. A
+/// variable this client lacks (no mouse event, say) is empty, and empty is
+/// 0, as tmux's `strtol` makes it.
+fn place(
+    a: &tmxr_command::Args,
+    (cols, rows): (u16, u16),
+    (w, h): (u16, u16),
+    places: Places,
+    expand: impl Fn(&str) -> String,
+) -> Result<(u16, u16), String> {
+    let (sx, sy) = (i64::from(cols), i64::from(rows));
+    let (w, h) = (i64::from(w), i64::from(h));
+    let lines = i64::from(crate::server::STATUS_ROWS);
+    let mut vars: Vec<(&str, i64)> = vec![
+        ("popup_width", w),
+        ("popup_height", h),
+        ("popup_centre_x", ((sx - 1) / 2 - w / 2).max(0)),
+        ("popup_status_line_y", sy - lines),
+    ];
+    let n = (sy - 1) / 2 + h / 2;
+    vars.push(("popup_centre_y", if n >= sy { sy - h } else { n }));
+    if let Some(x) = places.window {
+        vars.push(("popup_window_status_line_x", i64::from(x)));
+        vars.push(("popup_window_status_line_y", sy - lines));
+    }
+    if let Some((mx, my)) = places.mouse {
+        let (mx, my) = (i64::from(mx), i64::from(my));
+        vars.push(("popup_mouse_x", mx));
+        vars.push(("popup_mouse_y", my));
+        vars.push(("popup_mouse_centre_x", (mx - w / 2).max(0)));
+        let n = my - h / 2;
+        vars.push(("popup_mouse_centre_y", if n + h >= sy { sy - h } else { n }));
+        vars.push(("popup_mouse_top", (my + h).min(sy - 1)));
+        vars.push(("popup_mouse_bottom", (my - h).max(0)));
+    }
+    if let Some(r) = places.pane {
+        let (x, y) = (i64::from(r.x), i64::from(r.y));
+        let (pw, ph) = (i64::from(r.width), i64::from(r.height));
+        vars.push(("popup_pane_top", if y + h >= sy { sy - h } else { y + h }));
+        vars.push(("popup_pane_bottom", y + ph));
+        vars.push(("popup_pane_left", x));
+        vars.push(("popup_pane_right", (x + pw - w).max(0)));
+    }
+    let resolve = |flag: char, letters: &[(&str, &str)]| -> Result<i64, String> {
+        let given = a.value(flag).unwrap_or("C");
+        let format = letters
+            .iter()
+            .find(|(l, _)| *l == given)
+            .map_or(given, |(_, f)| f);
+        // tmxr's formats do not know the popup_* variables: those first.
+        let mut text = format.to_owned();
+        for (name, value) in &vars {
+            text = text.replace(&format!("#{{{name}}}"), &value.to_string());
+        }
+        let text = expand(&text);
+        let text = text.trim();
+        if text.is_empty() {
+            return Ok(0);
+        }
+        text.parse()
+            .map_err(|_| format!("-{flag} {given}: not a number ({text})"))
     };
-    let status_top = rows.saturating_sub(crate::server::STATUS_ROWS);
-    // The letters give the box's bottom row.
-    let bottom = |row: u16| row.saturating_sub(h);
-    let y = match a.value('y').map(&expand).as_deref() {
-        None | Some("C") => rows.saturating_sub(h) / 2,
-        Some("P") => places
-            .pane
-            .map(|r| bottom(r.y + r.height))
-            .ok_or_else(|| missing('y', "P"))?,
-        Some("M") => places
-            .mouse
-            .map(|m| bottom(m.1))
-            .ok_or_else(|| missing('y', "M"))?,
-        Some("S") => bottom(status_top),
-        Some(v) => v
-            .parse::<u16>()
-            .map_err(|_| format!("-y {v}: a number, C, P, M or S"))?,
-    };
-    Ok(ratatui::layout::Rect::new(
-        x.min(cols.saturating_sub(w)),
-        y.min(rows.saturating_sub(h)),
-        w,
-        h,
-    ))
+    let mut x = resolve(
+        'x',
+        &[
+            ("C", "#{popup_centre_x}"),
+            ("R", "#{popup_pane_right}"),
+            ("P", "#{popup_pane_left}"),
+            ("M", "#{popup_mouse_centre_x}"),
+            ("W", "#{popup_window_status_line_x}"),
+        ],
+    )?;
+    if x + w >= sx {
+        x = sx - w;
+    }
+    let mut y = resolve(
+        'y',
+        &[
+            ("C", "#{popup_centre_y}"),
+            ("P", "#{popup_pane_bottom}"),
+            ("M", "#{popup_mouse_top}"),
+            ("S", "#{popup_status_line_y}"),
+            ("W", "#{popup_window_status_line_y}"),
+        ],
+    )?;
+    y = if y < h { 0 } else { y - h };
+    if y + h >= sy {
+        y = sy - h;
+    }
+    let cell = |n: i64| u16::try_from(n.max(0)).unwrap_or(u16::MAX);
+    Ok((cell(x), cell(y)))
 }
 
 /// `find-window`'s test: `text` in a window's name (`-N`), a pane's title

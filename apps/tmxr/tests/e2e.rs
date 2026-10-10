@@ -3924,29 +3924,68 @@ fn menu_and_popup_take_tmux_style_flags() {
 }
 
 #[test]
-fn display_popup_takes_tmux_position_letters() {
+fn popups_and_menus_are_placed_where_tmux_places_them() {
     let t = Tmxr::new("popplace");
     let s = t.attach(&["new", "-s", "pl"]);
     s.wait_for("status line", |text| text.contains("pl"));
+    // Two panes side by side; the right one, active, is the target.
+    t.run(&["split-window", "-h", "-t", "pl"]);
     let hold = if cfg!(windows) {
         "echo PLACED& ping -n 30 127.0.0.1 >NUL"
     } else {
         "echo PLACED; sleep 30"
     };
-    // A row's cell symbols, blanks as spaces, indexed by column.
-    let row = |s: &Screen, row: u16| -> Vec<String> {
-        s.row_cells(row)
-            .into_iter()
-            .map(|(c, _, _)| if c.is_empty() { " ".into() } else { c })
-            .collect()
+    // The box's top-left corner.
+    let corner = |s: &Screen| -> Option<(u16, u16)> {
+        (0..ROWS).find_map(|r| {
+            let col = s.row_cells(r).iter().position(|(c, _, _)| c == "┌")?;
+            Some((u16::try_from(col).unwrap(), r))
+        })
     };
-    // R: the right edge; S: the bottom just above the status line.
+    // Where tmux 3.6 drew each, recorded from a running tmux with the same
+    // client size and panes.
+    let popups: &[(&str, &str, (u16, u16))] = &[
+        ("R", "S", (80, 24)),
+        ("#{pane_index}", "3", (1, 0)),
+        ("3", "12", (3, 7)),
+        ("C", "C", (39, 11)),
+        ("#{popup_pane_right}", "#{popup_centre_y}", (80, 11)),
+        // No mouse event: the variables are empty, which is 0.
+        ("M", "M", (0, 0)),
+    ];
+    for &(x, y, want) in popups {
+        t.run(&[
+            "display-popup",
+            "-x",
+            x,
+            "-y",
+            y,
+            "-w",
+            "20",
+            "-h",
+            "5",
+            hold,
+        ]);
+        s.wait_for("the popup", |text| text.contains("PLACED"));
+        assert_eq!(corner(&s), Some(want), "popup -x {x} -y {y}");
+        t.run(&["display-popup", "-C"]);
+        s.wait_for("closed", |text| !text.contains("PLACED"));
+    }
+    // P: the target pane's left edge and bottom. tmux's panes were 50 and 49
+    // wide, putting the box at (51, 24); tmxr splits an odd column the other
+    // way, so the edge comes from tmxr's own layout.
+    let left: u16 = t
+        .run(&["display-message", "-p", "-t", "pl:0.0", "#{pane_width}"])
+        .trim()
+        .parse::<u16>()
+        .unwrap()
+        + 1;
     t.run(&[
         "display-popup",
         "-x",
-        "R",
+        "P",
         "-y",
-        "S",
+        "P",
         "-w",
         "20",
         "-h",
@@ -3954,28 +3993,35 @@ fn display_popup_takes_tmux_position_letters() {
         hold,
     ]);
     s.wait_for("the popup", |text| text.contains("PLACED"));
-    let status = ROWS - 1;
-    let bottom = row(&s, status - 1);
-    assert_eq!(bottom[usize::from(COLS - 1)], "┘", "{bottom:?}");
-    assert_eq!(bottom[usize::from(COLS - 20)], "└", "{bottom:?}");
+    assert_eq!(corner(&s), Some((left, 24)), "popup -x P -y P");
     t.run(&["display-popup", "-C"]);
     s.wait_for("closed", |text| !text.contains("PLACED"));
-    // A number, after its formats are expanded.
-    t.run(&[
-        "display-popup",
-        "-x",
-        "#{pane_index}",
-        "-y",
-        "3",
-        "-w",
-        "20",
-        "-h",
-        "5",
-        hold,
-    ]);
-    s.wait_for("the popup", |text| text.contains("PLACED"));
-    assert_eq!(row(&s, 3)[0], "┌", "{:?}", row(&s, 3));
-    t.run(&["display-popup", "-C"]);
+    let menus: &[(&str, &str, (u16, u16))] = &[
+        ("3", "12", (3, 8)),
+        ("C", "C", (44, 12)),
+        ("R", "S", (89, 25)),
+    ];
+    for &(x, y, want) in menus {
+        t.run(&[
+            "display-menu",
+            "-T",
+            "t",
+            "-x",
+            x,
+            "-y",
+            y,
+            "aaa",
+            "a",
+            "",
+            "bbb",
+            "b",
+            "",
+        ]);
+        s.wait_for("the menu", |text| text.contains("aaa"));
+        assert_eq!(corner(&s), Some(want), "menu -x {x} -y {y}");
+        s.send(b"\x1b");
+        s.wait_for("closed", |text| !text.contains("aaa"));
+    }
     assert!(
         !t.output(&["display-popup", "-x", "Q", "echo"])
             .status

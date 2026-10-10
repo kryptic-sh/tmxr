@@ -38,6 +38,19 @@ table. What has been verified, and how:
 
 ## Known gaps and follow-ups
 
+- **An odd column goes to the new pane**: splitting a 100-column pane gives tmxr
+  49 + 50 columns and tmux 50 + 49 (tmux 3.6's `layout_split_pane`: the new pane
+  gets `(size + 1) / 2 - 1`). tmxr's splits are ratios in `hjkl-layout`
+  (`split_geometry`), so matching tmux cell for cell means changing how that
+  crate rounds, or splitting by cells; not started.
+- **`list-panes -F` and `pane_left` / `pane_top`**: tmxr's `list-panes` has no
+  `-F`, and `#{pane_left}` and `#{pane_top}` (and likely the other pane geometry
+  variables) expand to nothing; found while comparing with tmux (2026-10-10),
+  not looked at further.
+- **tmux's default menus are not bound**: tmux binds `prefix <` and `prefix >`
+  and right-click on a pane or the status line to `display-menu`; tmxr's
+  defaults have none of them, so "all of tmux's defaults are bound" below is
+  wrong for those. Compare with tmux's `list-keys` before fixing.
 - **Windows: an Enter sent before the shell's first read can stall**
   (2026-10-10). Probing with the real binary, `new-window -d` then at once
   `send-keys 'echo markN' Enter`, about 1 in 100 cmd panes showed the text but
@@ -66,17 +79,18 @@ table. What has been verified, and how:
   connecting and being checked is refused. A label's socket on Unix sits in
   tmxr's private directory, unreachable by other users whatever `socket-access`
   says; `server-access -a` then says to use `-S`, as tmux documents.
-- **`display-popup` gaps.** `-x` / `-y` take a number (formats expanded) or
-  tmux's `C`, `R`, `P`, `M`, `W` and `S` letters, not its `popup_` / `menu_`
-  placement formats; `-b` draws single, rounded, double, heavy or no lines
-  (tmux's `simple` and `padded` are errors); `-k` and `-N` are accepted and
-  ignored. A menu's `-O` and `-x` / `-y` are accepted and not followed: it is
-  centred. Closing a running popup kills its command (`Popup`'s `Drop`, as
-  `kill-pane` does). On Windows closing the ConPTY ends the program anyway, so
-  removing the kill leaves the e2e test green there; on Linux and macOS it is
-  what ends it: without it `display_popup_runs_a_command_over_the_panes` failed
-  on both ("the popup's command outlived it"; CI run 38060138527, a throwaway
-  branch, 2026-10-10).
+- **`display-popup` / `display-menu` gaps.** Placement (`-x` / `-y`, letters,
+  numbers and the `popup_*` variables) is transcribed from tmux 3.6's
+  `cmd_display_menu_get_pos` and checked against a running tmux
+  (`popups_and_menus_are_placed_where_tmux_places_them`); tmux's `menu_*`
+  variables are not defined. `-b` draws single, rounded, double, heavy or no
+  lines (tmux's `simple` and `padded` are errors); `-k` and `-N` are accepted
+  and ignored, as is a menu's `-O`. Closing a running popup kills its command
+  (`Popup`'s `Drop`, as `kill-pane` does). On Windows closing the ConPTY ends
+  the program anyway, so removing the kill leaves the e2e test green there; on
+  Linux and macOS it is what ends it: without it
+  `display_popup_runs_a_command_over_the_panes` failed on both ("the popup's
+  command outlived it"; CI run 38060138527, a throwaway branch, 2026-10-10).
 - **tmux command shorthand** (requested 2026-10-09: `tmux a` for
   `attach-session` and the like). The lookup works as tmux's does
   (`tmxr_command::table::lookup`): exact name or alias first, then an

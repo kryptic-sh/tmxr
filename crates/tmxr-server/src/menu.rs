@@ -1,6 +1,6 @@
 //! `display-menu`: a box of commands, each picked with the arrows and Enter
-//! or by its own key, as tmux draws them (centred here; tmux's `-x` / `-y`
-//! placement and styles are not followed).
+//! or by its own key, as tmux draws them, placed by `-x` / `-y` as a popup
+//! is.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::buffer::Buffer;
@@ -30,6 +30,8 @@ pub struct Menu {
     pub items: Vec<MenuItem>,
     pub selected: usize,
     pub look: crate::overlay::BoxLook,
+    /// The box's top-left cell; centred when `None`.
+    pub at: Option<(u16, u16)>,
 }
 
 impl Menu {
@@ -72,6 +74,7 @@ impl Menu {
             items,
             selected: 0,
             look: crate::overlay::BoxLook::default(),
+            at: None,
         };
         if !(0..menu.items.len()).any(|i| menu.selectable(i)) {
             return Err("display-menu: no items to choose".into());
@@ -136,8 +139,37 @@ impl Menu {
         OverlayAction::Keep
     }
 
-    /// Draw the menu centred in the `cols` × `rows` pane area: items in
-    /// `base`, the selected one in `selected`, the border in `border`.
+    fn label(item: &MenuItem) -> (String, String) {
+        match item {
+            MenuItem::Command { name, key, .. } => match key {
+                Some(k) => (name.clone(), format!("({k})")),
+                None => (name.clone(), String::new()),
+            },
+            MenuItem::Separator => (String::new(), String::new()),
+        }
+    }
+
+    /// The box's width and height, border included.
+    pub fn size(&self) -> (u16, u16) {
+        let inner_w = self
+            .items
+            .iter()
+            .map(|i| {
+                let (name, key) = Self::label(i);
+                name.chars().count() + key.chars().count() + 3
+            })
+            .chain(std::iter::once(self.title.chars().count() + 2))
+            .max()
+            .unwrap_or(0);
+        (
+            u16::try_from(inner_w + 2).unwrap_or(u16::MAX),
+            u16::try_from(self.items.len() + 2).unwrap_or(u16::MAX),
+        )
+    }
+
+    /// Draw the menu at [`Menu::at`] (or centred) in the `cols` × `rows`
+    /// area: items in `base`, the selected one in `selected`, the border in
+    /// `border`.
     pub fn draw(
         &self,
         buf: &mut Buffer,
@@ -145,28 +177,18 @@ impl Menu {
         rows: u16,
         (base, border, selected): (Style, Style, Style),
     ) {
-        let label = |item: &MenuItem| match item {
-            MenuItem::Command { name, key, .. } => match key {
-                Some(k) => (name.clone(), format!("({k})")),
-                None => (name.clone(), String::new()),
-            },
-            MenuItem::Separator => (String::new(), String::new()),
-        };
-        let inner_w = self
-            .items
-            .iter()
-            .map(|i| {
-                let (name, key) = label(i);
-                name.chars().count() + key.chars().count() + 3
-            })
-            .chain(std::iter::once(self.title.chars().count() + 2))
-            .max()
-            .unwrap_or(0);
-        let w = u16::try_from(inner_w + 2).unwrap_or(u16::MAX).min(cols);
-        let h = u16::try_from(self.items.len() + 2)
-            .unwrap_or(u16::MAX)
-            .min(rows);
-        let area = Rect::new(cols.saturating_sub(w) / 2, rows.saturating_sub(h) / 2, w, h);
+        let (w, h) = self.size();
+        let (w, h) = (w.min(cols), h.min(rows));
+        let (x, y) = self
+            .at
+            .unwrap_or_else(|| (cols.saturating_sub(w) / 2, rows.saturating_sub(h) / 2));
+        // Kept inside the area should the client have shrunk since.
+        let area = Rect::new(
+            x.min(cols.saturating_sub(w)),
+            y.min(rows.saturating_sub(h)),
+            w,
+            h,
+        );
         Clear.render(area, buf);
         buf.set_style(area, base);
         let block = match self.look.lines {
@@ -191,7 +213,7 @@ impl Menu {
                 buf.set_stringn(inner.x, y, &line, usize::from(inner.width), border);
                 continue;
             }
-            let (name, key) = label(item);
+            let (name, key) = Self::label(item);
             let style = if row == self.selected {
                 selected
             } else if !self.selectable(row) {
