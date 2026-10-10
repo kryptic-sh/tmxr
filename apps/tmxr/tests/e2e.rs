@@ -535,16 +535,62 @@ fn if_shell_picks_a_command_by_status_or_format() {
     t.run(&["if-shell", "-F", "0", "new -d -s z-yes", "new -d -s z-no"]);
     t.run(&["if-shell", "exit 0", "new -d -s s-yes", "new -d -s s-no"]);
     t.run(&["if-shell", "exit 1", "new -d -s e-yes", "new -d -s e-no"]);
-    // The shell runs in the background; wait for both chosen sessions.
-    let ls = t.wait_run(&["ls"], "if-shell sessions", |o| {
-        o.contains("s-yes:") && o.contains("e-no:")
-    });
+    // Each if-shell finished before its command returned.
+    let ls = t.run(&["ls"]);
     for want in ["f-yes:", "z-no:", "s-yes:", "e-no:"] {
         assert!(ls.contains(want), "{want} missing:\n{ls}");
     }
     for unwanted in ["f-no:", "z-yes:", "s-no:", "e-yes:"] {
         assert!(!ls.contains(unwanted), "{unwanted} present:\n{ls}");
     }
+    // The rest of the list waits for the choice, and a script gets its
+    // output, as from a run-shell inside a branch.
+    let lines = |out: &str| {
+        out.lines()
+            .map(str::trim)
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+    };
+    let out = t.run(&[
+        "if-shell",
+        "exit 1",
+        "display -p yes",
+        "display -p no",
+        ";",
+        "display",
+        "-p",
+        "after",
+    ]);
+    assert_eq!(lines(&out), ["no", "after"], "{out:?}");
+    let out = t.run(&[
+        "if-shell",
+        "-F",
+        "1",
+        "run-shell 'echo inner'",
+        ";",
+        "display",
+        "-p",
+        "after",
+    ]);
+    assert_eq!(lines(&out), ["inner", "after"], "{out:?}");
+    // A run-shell in the branch a shell test chose holds the rest too.
+    let out = t.run(&[
+        "if-shell",
+        "exit 0",
+        "run-shell 'echo deep'",
+        ";",
+        "display",
+        "-p",
+        "after",
+    ]);
+    assert_eq!(lines(&out), ["deep", "after"], "{out:?}");
+    // -b: in the background.
+    t.run(&["if-shell", "-b", "exit 0", "set-option -g @bg yes"]);
+    t.wait_run(
+        &["display-message", "-p", "#{@bg}"],
+        "the background choice",
+        |o| o.trim() == "yes",
+    );
 }
 
 #[test]

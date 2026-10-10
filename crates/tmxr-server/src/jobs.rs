@@ -16,6 +16,13 @@ pub enum Work {
     Shell { line: String, cwd: Option<PathBuf> },
     /// A tmux command line (`run-shell -C`), run on the server thread.
     Command(String),
+    /// `if-shell`: run `line`, then `then` if it succeeded, else
+    /// `otherwise`, on the server thread.
+    If {
+        line: String,
+        then: String,
+        otherwise: Option<String>,
+    },
     /// Only the delay (`run-shell -d` with no command).
     Wait,
 }
@@ -36,10 +43,12 @@ pub struct Then {
     pub reply: Option<(ClientId, Outcome)>,
 }
 
-/// A finished job, with its shell command's output.
+/// A finished job, with its shell command's output and whether it
+/// succeeded.
 pub struct Done {
     pub job: Job,
     pub output: String,
+    pub ok: bool,
     pub then: Then,
 }
 
@@ -53,13 +62,24 @@ impl Server {
             .name("tmxr-run-shell".into())
             .spawn(move || {
                 std::thread::sleep(job.delay);
-                let output = match &job.work {
-                    Work::Shell { line, cwd } => {
-                        crate::server::shell_text(line, cwd.as_deref(), shell.as_deref())
-                    }
-                    Work::Command(_) | Work::Wait => String::new(),
+                let (output, ok) = match &job.work {
+                    Work::Shell { line, cwd } => (
+                        crate::server::shell_text(line, cwd.as_deref(), shell.as_deref()),
+                        true,
+                    ),
+                    Work::If { line, .. } => (
+                        String::new(),
+                        crate::server::shell_succeeds(line, shell.as_deref()),
+                    ),
+                    Work::Command(_) | Work::Wait => (String::new(), true),
                 };
-                let _ = events.send(Event::JobDone(Box::new(Done { job, output, then })));
+                let done = Done {
+                    job,
+                    output,
+                    ok,
+                    then,
+                };
+                let _ = events.send(Event::JobDone(Box::new(done)));
             });
         if let Err(e) = started {
             tracing::warn!("run-shell: could not start a thread for the job: {e}");
@@ -67,24 +87,58 @@ impl Server {
     }
 
     /// A job finished: deliver its output, then run the rest of its list.
-    pub fn job_done(&mut self, Done { job, output, then }: Done) {
-        let done = match &job.work {
-            Work::Command(cmd) => crate::cmds::run_string(self, &then.ctx, cmd),
-            _ => Outcome {
+    pub fn job_done(
+        &mut self,
+        Done {
+            job,
+            output,
+            ok,
+            then,
+        }: Done,
+    ) {
+        let ctx = &then.ctx;
+        let mut done = match &job.work {
+            Work::Command(cmd) => crate::cmds::run_line(self, ctx, cmd),
+            Work::If {
+                then: yes,
+                otherwise,
+                ..
+            } => match if ok { Some(yes) } else { otherwise.as_ref() } {
+                Some(cmd) => crate::cmds::run_line(self, ctx, cmd),
+                None => Outcome::default(),
+            },
+            Work::Shell { .. } | Work::Wait => Outcome {
                 stdout: output,
                 ..Outcome::default()
             },
         };
+        // A run-shell in what ran just now holds the rest of the list too.
+        let rest = match done.job.as_mut() {
+            Some(inner) => {
+                inner.rest.extend(job.rest);
+                Vec::new()
+            }
+            None => job.rest,
+        };
         match then.reply {
             Some((id, mut out)) => {
                 append(&mut out, done);
-                let rest = crate::cmds::run_list(self, &then.ctx, &job.rest);
+                let rest = crate::cmds::run_list(self, ctx, &rest);
                 append(&mut out, rest);
-                self.conclude_command(id, &then.ctx, out);
+                self.conclude_command(id, ctx, out);
             }
             None => {
-                let rest = crate::cmds::run_detached(self, &then.ctx, &job.rest);
-                if let Some(c) = then.ctx.client {
+                if let Some(inner) = done.job.take() {
+                    self.start_job(
+                        inner,
+                        Then {
+                            ctx: ctx.clone(),
+                            reply: None,
+                        },
+                    );
+                }
+                let rest = crate::cmds::run_detached(self, ctx, &rest);
+                if let Some(c) = ctx.client {
                     for out in [done, rest] {
                         if !out.stdout.is_empty() || !out.stderr.is_empty() {
                             self.report(c, &out);
@@ -105,8 +159,12 @@ fn append(out: &mut Outcome, more: Outcome) {
     if more.status != 0 {
         out.status = more.status;
     }
-    out.job = more.job;
-    out.wait = more.wait;
+    if more.job.is_some() {
+        out.job = more.job;
+    }
+    if more.wait.is_some() {
+        out.wait = more.wait;
+    }
     if more.attach.is_some() {
         out.attach = more.attach;
     }

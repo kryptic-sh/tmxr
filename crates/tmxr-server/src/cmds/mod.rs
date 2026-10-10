@@ -72,11 +72,25 @@ type Res = Result<(), String>;
 
 /// Run a command line written in tmux's language (a bind, the prompt).
 pub fn run_string(srv: &mut Server, ctx: &Ctx, line: &str) -> Outcome {
-    let env = |k: &str| std::env::var(k).ok();
-    match tmxr_command::tokenize(line, &env) {
+    match tokenize(line) {
         Ok(cmds) => run_detached(srv, ctx, &cmds),
-        Err(e) => Outcome::error(e.to_string()),
+        Err(e) => Outcome::error(e),
     }
+}
+
+/// Run a command line as part of the list that runs it (an `if-shell`
+/// branch): a `run-shell` job in it is left in the outcome, for the outer
+/// list to wait on.
+pub fn run_line(srv: &mut Server, ctx: &Ctx, line: &str) -> Outcome {
+    match tokenize(line) {
+        Ok(cmds) => run_list(srv, ctx, &cmds),
+        Err(e) => Outcome::error(e),
+    }
+}
+
+fn tokenize(line: &str) -> Result<Vec<Vec<String>>, String> {
+    let env = |k: &str| std::env::var(k).ok();
+    tmxr_command::tokenize(line, &env).map_err(|e| e.to_string())
 }
 
 /// Run commands with no command client waiting on them: a `run-shell` job
@@ -137,7 +151,8 @@ pub fn run_list(srv: &mut Server, ctx: &Ctx, cmds: &[Vec<String>]) -> Outcome {
         srv.queue_hook(&format!("after-{}", parsed.name()), ctx.clone(), session);
         // run-shell: the rest of the list waits for its job.
         if let Some(job) = out.job.as_mut() {
-            job.rest = cmds[i + 1..].to_vec();
+            // After what an inner list (an if-shell branch) left waiting.
+            job.rest.extend_from_slice(&cmds[i + 1..]);
             return out;
         }
         if out.wait.is_some() && !std::ptr::eq(argv, cmds.last().expect("in cmds")) {

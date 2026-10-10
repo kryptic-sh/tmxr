@@ -54,11 +54,6 @@ what was not.
 
 ## Known gaps and follow-ups
 
-- **`run-shell` inside a nested list** (`if-shell`'s branch, `run-shell -C`, a
-  hook): its job holds the rest of that inner list only. The outer list goes on
-  at once, and a command client's reply does not carry the job's output, which
-  goes to the attached client instead. tmux's queue holds the outer list too.
-  Hoisting the job out of `run_nested` into the outer `Outcome` would close it.
 - **`display-popup` gaps.** The box keeps the size it opened with when the
   client resizes; `-x` / `-y` take a number or `C` (tmux's other position forms
   and formats are errors); `-e` may be given once; `-b`, `-s`, `-S`, `-k` and

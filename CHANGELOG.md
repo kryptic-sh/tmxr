@@ -74,10 +74,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- `run-shell` waits, as tmux's does unless `-b`: the commands after it in its
-  list run once it finishes, and run from a script its output goes to the
-  script's standard output (it used to be shown on the attached client, with the
-  rest of the list already run). `-b` keeps it in the background.
+- `run-shell` and `if-shell` wait, as tmux's do unless `-b`: the commands after
+  them in their list run once they finish (for `if-shell`, after the command it
+  chose, and a `run-shell` in that command is waited for too), and run from a
+  script its output goes to the script's standard output (it used to be shown on
+  the attached client, with the rest of the list already run). `-b` keeps them
+  in the background.
 - The default double- and triple-click binds show the selection for 0.3 s before
   copying it, as tmux's do.
 - `find-window` (`prefix f`) matches as tmux's does: the text in window names,

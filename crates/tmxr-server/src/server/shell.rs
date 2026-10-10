@@ -3,7 +3,6 @@
 use std::path::Path;
 
 use super::{Event, Server};
-use crate::cmds::Ctx;
 
 /// `run-shell`'s output: what `line` printed (standard output, then error),
 /// or a line saying it failed, as tmux reports a command that printed
@@ -22,19 +21,10 @@ pub fn shell_text(line: &str, cwd: Option<&Path>, shell: Option<&str>) -> String
     }
 }
 
-/// `if-shell`: run `line` in the background, then run `then` if it exited
-/// successfully, else `otherwise`, with `ctx` as the command context.
-pub fn if_shell(srv: &Server, ctx: Ctx, line: String, then: String, otherwise: Option<String>) {
-    let events = srv.events.clone();
-    let shell = srv.cfg.default_shell.clone();
-    let _ = std::thread::Builder::new()
-        .name("tmxr-if-shell".into())
-        .spawn(move || {
-            let ok = shell_output(&line, None, shell.as_deref()).is_ok_and(|o| o.status.success());
-            if let Some(cmd) = if ok { Some(then) } else { otherwise } {
-                let _ = events.send(Event::Run { ctx, cmd });
-            }
-        });
+/// `if-shell`'s test: whether `line` ran and exited successfully. Run on
+/// the calling thread.
+pub fn shell_succeeds(line: &str, shell: Option<&str>) -> bool {
+    shell_output(line, None, shell).is_ok_and(|o| o.status.success())
 }
 
 /// `copy-pipe`: run `line` with the shell, `input` on its standard input,

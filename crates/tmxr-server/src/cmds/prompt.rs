@@ -265,10 +265,22 @@ pub(super) fn run(
                     run_nested(srv, &ctx, &cmd, out)?;
                 }
             } else {
-                // tmux blocks the client until the shell command finishes
-                // unless -b; tmxr always runs it in the background, so the
-                // chosen command runs after this command list has returned.
-                crate::server::if_shell(srv, ctx, cond, then, otherwise);
+                // The rest of the list waits for the choice, unless -b.
+                let job = crate::jobs::Job {
+                    delay: std::time::Duration::ZERO,
+                    work: crate::jobs::Work::If {
+                        line: cond,
+                        then,
+                        otherwise,
+                    },
+                    rest: Vec::new(),
+                };
+                if a.has('b') {
+                    let then = crate::jobs::Then { ctx, reply: None };
+                    srv.start_job(job, then);
+                } else {
+                    out.job = Some(job);
+                }
             }
         }
         // tmux's -f is a format filter; tmxr opens the picker with it as the
@@ -313,9 +325,14 @@ pub(super) fn run(
 /// Run a command line as part of the current command: its output joins
 /// `out`, and its failure fails the current command.
 fn run_nested(srv: &mut Server, ctx: &Ctx, line: &str, out: &mut Outcome) -> Res {
-    let inner = super::run_string(srv, ctx, line);
+    let inner = super::run_line(srv, ctx, line);
+    if inner.wait.is_some() {
+        return Err("wait-for must end its command list".into());
+    }
     out.stdout.push_str(&inner.stdout);
     out.attach = inner.attach.or(out.attach);
+    // A run-shell in it: the outer list waits for it too.
+    out.job = inner.job;
     if inner.status == 0 {
         Ok(())
     } else {
