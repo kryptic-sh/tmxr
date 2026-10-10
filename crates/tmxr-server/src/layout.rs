@@ -285,7 +285,9 @@ pub const PRESETS: &[&str] = &[
     "even-horizontal",
     "even-vertical",
     "main-horizontal",
+    "main-horizontal-mirrored",
     "main-vertical",
+    "main-vertical-mirrored",
     "tiled",
 ];
 
@@ -308,8 +310,13 @@ pub fn preset(name: &str, panes: &[PaneId]) -> Option<LayoutTree> {
     if ids.is_empty() {
         return None;
     }
-    let main = |dir: SplitDir, rest_dir: SplitDir| match ids.as_slice() {
+    // The first pane is the main one; mirrored, it goes below or to the
+    // right of the rest instead of above or to the left.
+    let main = |dir: SplitDir, rest_dir: SplitDir, mirrored: bool| match ids.as_slice() {
         [one] => LayoutTree::Leaf(*one),
+        [first, rest @ ..] if mirrored => {
+            LayoutTree::split(dir, 0.4, even(rest_dir, rest), LayoutTree::Leaf(*first))
+        }
         [first, rest @ ..] => {
             LayoutTree::split(dir, 0.6, LayoutTree::Leaf(*first), even(rest_dir, rest))
         }
@@ -318,8 +325,10 @@ pub fn preset(name: &str, panes: &[PaneId]) -> Option<LayoutTree> {
     Some(match name {
         "even-horizontal" => even(SplitDir::Vertical, &ids),
         "even-vertical" => even(SplitDir::Horizontal, &ids),
-        "main-horizontal" => main(SplitDir::Horizontal, SplitDir::Vertical),
-        "main-vertical" => main(SplitDir::Vertical, SplitDir::Horizontal),
+        "main-horizontal" => main(SplitDir::Horizontal, SplitDir::Vertical, false),
+        "main-horizontal-mirrored" => main(SplitDir::Horizontal, SplitDir::Vertical, true),
+        "main-vertical" => main(SplitDir::Vertical, SplitDir::Horizontal, false),
+        "main-vertical-mirrored" => main(SplitDir::Vertical, SplitDir::Horizontal, true),
         "tiled" => {
             let n = ids.len();
             let cols = (1..=n).find(|c| c * c >= n).unwrap_or(1);
@@ -451,6 +460,27 @@ mod tests {
         assert!((ratio - 0.7).abs() < f32::EPSILON);
         // A lone pane has nothing to spread.
         assert_eq!(spread(&LayoutTree::Leaf(0), 0).leaves(), vec![0]);
+    }
+
+    #[test]
+    fn mirrored_presets_put_the_main_pane_below_or_right() {
+        let rects = |name: &str| pane_rects(&preset(name, &[1, 2, 3]).unwrap(), 100, 40);
+        let main = |name: &str| rects(name).into_iter().find(|(p, _)| *p == 1).unwrap().1;
+        // main-horizontal: the main pane across the top; mirrored, the bottom.
+        let (top, bottom) = (main("main-horizontal"), main("main-horizontal-mirrored"));
+        assert_eq!((top.y, top.w), (0, 100));
+        assert_eq!((bottom.y + bottom.h, bottom.w), (40, 100));
+        assert!(
+            rects("main-horizontal-mirrored")
+                .iter()
+                .all(|(_, r)| r.y <= bottom.y)
+        );
+        // main-vertical: the main pane down the left; mirrored, the right.
+        let (left, right) = (main("main-vertical"), main("main-vertical-mirrored"));
+        assert_eq!((left.x, left.h), (0, 40));
+        assert_eq!((right.x + right.w, right.h), (100, 40));
+        // Still the larger share.
+        assert!(right.w >= 50, "{right:?}");
     }
 
     #[test]

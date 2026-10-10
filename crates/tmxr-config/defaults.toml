@@ -234,6 +234,8 @@ restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "to
 "M-3" = { cmd = "select-layout main-horizontal", note = "Layout: main horizontal" }
 "M-4" = { cmd = "select-layout main-vertical", note = "Layout: main vertical" }
 "M-5" = { cmd = "select-layout tiled", note = "Layout: tiled" }
+"M-6" = { cmd = "select-layout main-horizontal-mirrored", note = "Layout: main horizontal, mirrored" }
+"M-7" = { cmd = "select-layout main-vertical-mirrored", note = "Layout: main vertical, mirrored" }
 "Up" = { cmd = "select-pane -U", note = "Focus pane up" }
 "Down" = { cmd = "select-pane -D", note = "Focus pane down" }
 "Left" = { cmd = "select-pane -L", note = "Focus pane left" }

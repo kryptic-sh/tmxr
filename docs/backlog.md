@@ -44,14 +44,13 @@ table. What has been verified, and how:
   (`split_geometry`), so matching tmux cell for cell means changing how that
   crate rounds, or splitting by cells; not started.
 - **tmux default binds tmxr lacks** (compared with tmux 3.6's `list-keys` on
-  2026-10-10; 37 of its 267). Each needs something tmxr does not have yet:
+  2026-10-10; 35 of its 267). Each needs something tmxr does not have yet:
   - Menus: `prefix <` / `>`, `MouseDown3Pane`, `MouseDown3Status`,
     `MouseDown3StatusLeft` and their `M-` forms. Their items use `-t =`, `#{?…}`
     conditionals and `{ … }` blocks (now parsed); not tried.
-  - `select-layout main-horizontal-mirrored` / `main-vertical-mirrored`
-    (`prefix M-6` / `M-7`), `customize-mode -Z` (`prefix C`),
-    `refresh-client -c` and `-D` / `-L` / `-R` / `-U` panning (`prefix DC`,
-    `S-arrows`), and tmux's pane scrollbars (`MouseDown1Scrollbar*`).
+  - `customize-mode -Z` (`prefix C`), `refresh-client -c` and `-D` / `-L` / `-R`
+    / `-U` panning (`prefix DC`, `S-arrows`), and tmux's pane scrollbars
+    (`MouseDown1Scrollbar*`).
   - Declined: the digit binds (`1`-`9` in vi, `M-1`-`M-9` in emacs) that open a
     "(repeat)" prompt: tmxr's copy mode takes counts directly (`5j`).
 - **`paste-buffer` without `-p` still brackets** a paste when the program asked

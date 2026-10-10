@@ -8,6 +8,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`main-horizontal-mirrored` and `main-vertical-mirrored` layouts** (main pane
+  below or to the right), in `next-layout`'s order and on `prefix M-6` / `M-7`,
+  as tmux 3.5 added them.
 - **vi `#` / `*` in copy mode** search back and on for the word at the cursor,
   as tmux's, through the new `send-keys -F` (arguments are formats) and the
   `copy_cursor_word`, `copy_cursor_x` and `copy_cursor_y` variables. A copy
