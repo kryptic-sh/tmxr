@@ -46,6 +46,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   event runs its pane's hooks, else its window's, its session's, the global
   ones; a respawned pane keeps its hooks.
 
+- `select-pane -T title` titles a pane (`#{pane_title}`), and resurrect saves
+  and restores pane titles.
+
 ### Changed
 
 - `wait-for` works anywhere a command list runs, as in tmux: in the middle of a

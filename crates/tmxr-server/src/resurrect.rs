@@ -75,6 +75,9 @@ pub struct SavedPane {
     /// Its arguments, when it is in `resurrect.restore-args`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub args: Vec<String>,
+    /// Its title (`#{pane_title}`), restored until its program sets one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
 }
 
 /// Layout shape; leaves are positions in [`SavedWindow::panes`].
@@ -302,6 +305,11 @@ pub fn capture(srv: &Server) -> Save {
                                         .unwrap_or_default(),
                                     command,
                                     args,
+                                    title: srv
+                                        .panes
+                                        .get(p)
+                                        .and_then(|pane| pane.emu.title())
+                                        .map(str::to_owned),
                                 }
                             })
                             .collect(),
@@ -509,6 +517,7 @@ fn restore_session(
         cwd: s.cwd.clone(),
         command: None,
         args: Vec::new(),
+        title: None,
     });
     let sid = srv.new_session(
         Some(s.name.clone()),
@@ -538,6 +547,7 @@ fn restore_session(
                 cwd: s.cwd.clone(),
                 command: None,
                 args: Vec::new(),
+                title: None,
             });
             srv.new_window(
                 sid,
@@ -566,6 +576,11 @@ fn restore_session(
                 false,
             )?;
             panes.push(id);
+        }
+        for (id, saved) in panes.iter().zip(&w.panes) {
+            if let (Some(p), Some(title)) = (srv.panes.get_mut(id), &saved.title) {
+                p.emu.set_title(title.clone());
+            }
         }
         if let Some(win) = srv.windows.get_mut(&wid) {
             if let Some(tree) = load_layout(&w.layout, &panes) {
@@ -642,11 +657,13 @@ mod tests {
                             cwd: "/home/u/src".into(),
                             command: Some("hjkl".into()),
                             args: vec!["notes.md".into()],
+                            title: None,
                         },
                         SavedPane {
                             cwd: "/tmp".into(),
                             command: None,
                             args: Vec::new(),
+                            title: None,
                         },
                     ],
                     link: None,

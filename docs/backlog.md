@@ -116,9 +116,11 @@ table. What has been verified, and how:
   on Linux CI bury a key press under 6–9 s of output (2026-10-09).
   `detach_stays_responsive_under_flood_output` checks every CI platform detaches
   within 5 s under a flood. Frame rate itself is still not capped or measured.
-- **Resurrect**: pane titles are not saved (restored programs set their own).
-  Arguments are restored only for programs in `resurrect.restore-args`.
-  Arguments that are not UTF-8 are not saved.
+- **Resurrect**: a pane's title is saved and restored, but a restored program
+  that titles itself wins, and on Windows ConPTY reports cmd's own title as it
+  starts, so there a saved title barely shows. Arguments are restored only for
+  programs in `resurrect.restore-args`. Arguments that are not UTF-8 are not
+  saved.
 - **`prefix y` (`copy-command-line`) without prompt marks relies on the shell's
   line keys**: a shell that sends OSC 133 prompt marks needs no keys, but one
   that does not, in vi mode or bound differently, does not move to the line's

@@ -64,6 +64,14 @@ pub(super) fn run(
         }
         "select-pane" => {
             let (_, wid, pid) = target::pane(srv, ctx, a.value('t'))?;
+            // -T titles the pane (the program may title it again).
+            if let Some(title) = a.value('T') {
+                let title = super::expand_for(srv, ctx, Some(pid), title);
+                let p = srv.panes.get_mut(&pid).ok_or("no such pane")?;
+                p.emu.set_title(title);
+                srv.mark_window_dirty(wid);
+                return Ok(true);
+            }
             let to = if a.has('l') {
                 srv.windows[&wid].last_pane.ok_or("no last pane")?
             } else if let Some(d) = dir_flag(a) {

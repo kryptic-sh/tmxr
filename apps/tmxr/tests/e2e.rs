@@ -3804,3 +3804,36 @@ fn display_popup_takes_tmux_position_letters() {
             .success()
     );
 }
+
+#[test]
+fn select_pane_titles_a_pane_and_resurrect_keeps_it() {
+    let t = Tmxr::new("titles");
+    t.run(&["new-session", "-d", "-s", "ti"]);
+    let title = |t: &Tmxr| {
+        t.run(&["display-message", "-p", "-t", "ti", "#{pane_title}"])
+            .trim()
+            .to_owned()
+    };
+    t.run(&["select-pane", "-t", "ti", "-T", "my-title-#{session_name}"]);
+    assert_eq!(title(&t), "my-title-ti");
+    t.run(&["resurrect-save"]);
+    assert!(
+        t.newest_save().contains("\"title\": \"my-title-ti\""),
+        "{}",
+        t.newest_save()
+    );
+    // Restored, until the program titles itself; on Windows ConPTY reports
+    // cmd's own title as it starts, so only Unix's sh keeps it.
+    if cfg!(unix) {
+        t.run(&["kill-server"]);
+        t.wait_run(&["ls"], "server gone", str::is_empty);
+        let config = std::fs::read_to_string(&t.config).unwrap();
+        std::fs::write(
+            &t.config,
+            config.replace("restore-on-start = false", "restore-on-start = true"),
+        )
+        .unwrap();
+        t.run(&["new-session", "-d", "-s", "other"]);
+        assert_eq!(title(&t), "my-title-ti");
+    }
+}

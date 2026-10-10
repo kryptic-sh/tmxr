@@ -255,6 +255,11 @@ impl Emulator {
         self.parser.callbacks().title.as_deref()
     }
 
+    /// Set the title as a program's OSC 0/2 would (`select-pane -T`).
+    pub fn set_title(&mut self, title: String) {
+        self.parser.callbacks_mut().title = Some(title);
+    }
+
     pub fn cwd(&self) -> Option<&std::path::Path> {
         self.parser.callbacks().cwd.as_deref()
     }
