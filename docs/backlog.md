@@ -43,10 +43,6 @@ table. What has been verified, and how:
   gets `(size + 1) / 2 - 1`). tmxr's splits are ratios in `hjkl-layout`
   (`split_geometry`), so matching tmux cell for cell means changing how that
   crate rounds, or splitting by cells; not started.
-- **`list-panes -F` and `pane_left` / `pane_top`**: tmxr's `list-panes` has no
-  `-F`, and `#{pane_left}` and `#{pane_top}` (and likely the other pane geometry
-  variables) expand to nothing; found while comparing with tmux (2026-10-10),
-  not looked at further.
 - **tmux's default menus are not bound**: tmux binds `prefix <` and `prefix >`
   and right-click on a pane or the status line to `display-menu`; tmxr's
   defaults have none of them, so "all of tmux's defaults are bound" below is

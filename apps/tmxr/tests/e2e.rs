@@ -4030,6 +4030,113 @@ fn popups_and_menus_are_placed_where_tmux_places_them() {
 }
 
 #[test]
+fn list_commands_take_formats_and_filters() {
+    let t = Tmxr::new("lists");
+    // What tmux 3.6 printed for the same commands on the same sessions.
+    t.run(&["new-session", "-d", "-s", "a", "-x", "100", "-y", "30"]);
+    t.run(&["new-window", "-d", "-t", "a:1", "-n", "second"]);
+    t.run(&["split-window", "-h", "-t", "a:0"]);
+    t.run(&["new-session", "-d", "-s", "b", "-x", "100", "-y", "30"]);
+    t.run(&["set-buffer", "-b", "one", "hello world"]);
+    // -x / -y are the window's size, status row not taken out.
+    assert_eq!(
+        t.run(&[
+            "display-message",
+            "-p",
+            "-t",
+            "b",
+            "#{window_width}x#{window_height}"
+        ])
+        .trim(),
+        "100x30"
+    );
+    let list = |args: &[&str]| t.run(args);
+    assert_eq!(
+        list(&["list-sessions", "-F", "#{session_name} #{session_windows}"]),
+        "a 2\nb 1\n"
+    );
+    assert_eq!(
+        list(&[
+            "list-sessions",
+            "-F",
+            "#{session_name}",
+            "-f",
+            "#{==:#{session_name},b}"
+        ]),
+        "b\n"
+    );
+    assert_eq!(
+        list(&[
+            "list-windows",
+            "-a",
+            "-F",
+            "#{session_name}:#{window_index}"
+        ]),
+        "a:0\na:1\nb:0\n"
+    );
+    assert_eq!(
+        list(&[
+            "list-panes",
+            "-s",
+            "-t",
+            "a",
+            "-F",
+            "#{window_index}.#{pane_index}"
+        ]),
+        "0.0\n0.1\n1.0\n"
+    );
+    assert_eq!(
+        list(&[
+            "list-panes",
+            "-a",
+            "-F",
+            "#{session_name}:#{window_index}.#{pane_index}",
+            "-f",
+            "#{pane_active}"
+        ]),
+        "a:0.1\na:1.0\nb:0.0\n"
+    );
+    // Pane edges, inclusive, and which window edges each pane touches.
+    let left_width: u16 = t
+        .run(&["display-message", "-p", "-t", "a:0.0", "#{pane_width}"])
+        .trim()
+        .parse()
+        .unwrap();
+    assert_eq!(
+        list(&[
+            "list-panes",
+            "-t",
+            "a:0",
+            "-F",
+            "#{pane_left} #{pane_top} #{pane_right} #{pane_bottom} #{pane_at_left}#{pane_at_right}#{pane_at_top}#{pane_at_bottom}"
+        ]),
+        format!(
+            "0 0 {} 29 1011\n{} 0 99 29 0111\n",
+            left_width - 1,
+            left_width + 1
+        )
+    );
+    assert_eq!(
+        list(&[
+            "list-buffers",
+            "-F",
+            "#{buffer_name} #{buffer_size} #{buffer_sample}"
+        ]),
+        "one 11 hello world\n"
+    );
+    let s = t.attach(&["attach", "-t", "b"]);
+    s.wait_for("status line", |text| text.contains('b'));
+    assert_eq!(
+        list(&[
+            "list-clients",
+            "-F",
+            "#{client_session} #{client_width}x#{client_height}"
+        ]),
+        format!("b {COLS}x{ROWS}\n")
+    );
+}
+
+#[test]
 fn select_pane_titles_a_pane_and_resurrect_keeps_it() {
     let t = Tmxr::new("titles");
     t.run(&["new-session", "-d", "-s", "ti"]);

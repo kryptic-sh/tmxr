@@ -8,6 +8,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`-F` and `-f` on the list commands**: `list-sessions`, `list-windows`,
+  `list-panes`, `list-clients` and `list-buffers` print each item with a format
+  and keep only those a filter is true for, as tmux's do; `list-panes -s` lists
+  a session's panes. New variables: `pane_left`, `pane_top`, `pane_right`,
+  `pane_bottom`, `pane_at_left` / `_right` / `_top` / `_bottom`, `client_name`,
+  `client_width`, `client_height`, `client_session`, `client_termname`, and in
+  `list-buffers` `buffer_name`, `buffer_size`, `buffer_sample`.
 - **Alert actions**: `bell-action`, `activity-action` and `silence-action`
   (`any`, `none`, `current`, `other`) choose which windows' alerts act, and
   `visual-bell`, `visual-activity` and `visual-silence` (`off`, `on`, `both`)
@@ -75,6 +82,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`new-session -d -x W -y H` makes a W x H window**, as tmux does; a row was
+  taken off for the status line.
 - **`kill-server` could fail on Linux and macOS** with "server closed the
   connection": the server exited before its reply went out, and a command run
   straight after could reach the server as it closed. The server now removes its

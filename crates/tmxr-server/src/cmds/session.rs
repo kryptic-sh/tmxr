@@ -5,10 +5,11 @@ use std::fmt::Write as _;
 use tmxr_command::Parsed;
 use tmxr_proto::ServerMsg;
 
-use super::{Ctx, Outcome, attached_client, client_size, cwd_arg, session_env};
+use super::{Ctx, Outcome, attached_client, client_size, cwd_arg, list_item, session_env};
 use crate::model::{ClientId, SessionId};
-use crate::server::{STATUS_ROWS, Server};
+use crate::server::Server;
 use crate::target;
+use crate::vars::Vars;
 
 pub(super) fn run(
     srv: &mut Server,
@@ -20,13 +21,12 @@ pub(super) fn run(
     let pos = a.positional();
     match p.name() {
         "new-session" => {
+            // -x / -y are the window's size, as tmux's: no status row comes
+            // out of them.
             let size = match (a.value('x'), a.value('y')) {
                 (Some(x), Some(y)) => (
                     x.parse().map_err(|_| "bad -x")?,
-                    y.parse::<u16>()
-                        .map_err(|_| "bad -y")?
-                        .saturating_sub(STATUS_ROWS)
-                        .max(1),
+                    y.parse::<u16>().map_err(|_| "bad -y")?.max(1),
                 ),
                 _ => client_size(srv, ctx),
             };
@@ -162,35 +162,59 @@ pub(super) fn run(
                 else {
                     continue;
                 };
-                let session = srv
+                let window = srv
                     .sessions
                     .get(&att.session)
-                    .map_or("", |s| s.name.as_str());
-                let term = c
-                    .hello
-                    .as_ref()
-                    .and_then(|h| h.terminal.as_ref())
-                    .map_or("", |t| t.term.as_str());
-                let _ = writeln!(
-                    out.stdout,
-                    "{}: {session} [{}x{} {term}]",
-                    c.id, att.cols, att.rows
-                );
+                    .and_then(|s| s.current_window());
+                let vars = Vars {
+                    srv,
+                    session: Some(att.session),
+                    window,
+                    pane: window.and_then(|w| srv.windows.get(&w)).map(|w| w.active),
+                    client: Some(c.id),
+                };
+                let line = list_item(a, &vars, || {
+                    let session = srv
+                        .sessions
+                        .get(&att.session)
+                        .map_or("", |s| s.name.as_str());
+                    let term = c
+                        .hello
+                        .as_ref()
+                        .and_then(|h| h.terminal.as_ref())
+                        .map_or("", |t| t.term.as_str());
+                    format!("{}: {session} [{}x{} {term}]", c.id, att.cols, att.rows)
+                });
+                if let Some(line) = line {
+                    let _ = writeln!(out.stdout, "{line}");
+                }
             }
         }
         "list-sessions" => {
             for s in srv.sessions.values() {
-                let attached = srv
-                    .clients
-                    .values()
-                    .any(|c| c.att.as_ref().is_some_and(|a| a.session == s.id));
-                let _ = writeln!(
-                    out.stdout,
-                    "{}: {} windows{}",
-                    s.name,
-                    s.windows.len(),
-                    if attached { " (attached)" } else { "" }
-                );
+                let window = s.current_window();
+                let vars = Vars {
+                    srv,
+                    session: Some(s.id),
+                    window,
+                    pane: window.and_then(|w| srv.windows.get(&w)).map(|w| w.active),
+                    client: None,
+                };
+                let line = list_item(a, &vars, || {
+                    let attached = srv
+                        .clients
+                        .values()
+                        .any(|c| c.att.as_ref().is_some_and(|a| a.session == s.id));
+                    format!(
+                        "{}: {} windows{}",
+                        s.name,
+                        s.windows.len(),
+                        if attached { " (attached)" } else { "" }
+                    )
+                });
+                if let Some(line) = line {
+                    let _ = writeln!(out.stdout, "{line}");
+                }
             }
         }
         "rename-session" => {

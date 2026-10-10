@@ -4,12 +4,13 @@ use std::fmt::Write as _;
 
 use tmxr_command::Parsed;
 
-use super::{Ctx, Outcome, client_size, cwd_arg, dir_flag};
+use super::{Ctx, Outcome, client_size, cwd_arg, dir_flag, list_item};
 use crate::layout::Dir;
 use crate::model::SessionId;
 use crate::server::STATUS_ROWS;
 use crate::server::Server;
 use crate::target;
+use crate::vars::Vars;
 
 /// Largest `resize-window` size, tmux's `WINDOW_MAXIMUM`.
 const WINDOW_MAXIMUM: u16 = 10_000;
@@ -245,24 +246,35 @@ pub(super) fn run(
                 let s = &srv.sessions[&sid];
                 for (idx, wid) in &s.windows {
                     let w = &srv.windows[wid];
-                    let prefix = if a.has('a') {
-                        format!("{}:", s.name)
-                    } else {
-                        String::new()
+                    let vars = Vars {
+                        srv,
+                        session: Some(sid),
+                        window: Some(*wid),
+                        pane: Some(w.active),
+                        client: None,
                     };
-                    let _ = writeln!(
-                        out.stdout,
-                        "{prefix}{idx}: {}{} ({} panes) [{}x{}]",
-                        w.name,
-                        w.flags(
-                            *idx == s.current,
-                            Some(*idx) == s.last,
-                            srv.window_is_marked(*wid)
-                        ),
-                        w.panes().len(),
-                        w.cols,
-                        w.rows
-                    );
+                    let line = list_item(a, &vars, || {
+                        let prefix = if a.has('a') {
+                            format!("{}:", s.name)
+                        } else {
+                            String::new()
+                        };
+                        format!(
+                            "{prefix}{idx}: {}{} ({} panes) [{}x{}]",
+                            w.name,
+                            w.flags(
+                                *idx == s.current,
+                                Some(*idx) == s.last,
+                                srv.window_is_marked(*wid)
+                            ),
+                            w.panes().len(),
+                            w.cols,
+                            w.rows
+                        )
+                    });
+                    if let Some(line) = line {
+                        let _ = writeln!(out.stdout, "{line}");
+                    }
                 }
             }
         }

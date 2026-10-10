@@ -6,9 +6,10 @@ use std::path::PathBuf;
 
 use tmxr_command::Parsed;
 
-use super::{Ctx, Outcome, expand_for};
+use super::{Ctx, Outcome, expand_for, list_item};
 use crate::server::{Buffer, Server};
 use crate::target;
+use crate::vars::Vars;
 
 pub(super) fn run(
     srv: &mut Server,
@@ -100,19 +101,28 @@ pub(super) fn run(
             srv.add_buffer(data, a.value('b').map(str::to_owned));
         }
         "list-buffers" => {
+            let vars = Vars::for_pane(srv, ctx.pane, ctx.client);
             for b in &srv.buffers {
-                let preview: String = b
-                    .data
-                    .chars()
-                    .take(50)
-                    .map(|c| if c == '\n' { ' ' } else { c })
-                    .collect();
-                let _ = writeln!(
-                    out.stdout,
-                    "{}: {} bytes: \"{preview}\"",
-                    b.name,
-                    b.data.len()
-                );
+                // tmux's buffer_sample: the start, with newlines shown as spaces.
+                let sample = || -> String {
+                    b.data
+                        .chars()
+                        .take(50)
+                        .map(|c| if c == '\n' { ' ' } else { c })
+                        .collect()
+                };
+                let item = |name: &str| match name {
+                    "buffer_name" => Some(b.name.clone()),
+                    "buffer_size" => Some(b.data.len().to_string()),
+                    "buffer_sample" => Some(sample()),
+                    _ => tmxr_command::format::Context::get(&vars, name),
+                };
+                let line = list_item(a, &item, || {
+                    format!("{}: {} bytes: \"{}\"", b.name, b.data.len(), sample())
+                });
+                if let Some(line) = line {
+                    let _ = writeln!(out.stdout, "{line}");
+                }
             }
         }
         "delete-buffer" => match a.value('b') {

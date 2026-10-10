@@ -5,11 +5,12 @@ use std::fmt::Write as _;
 use crossterm::event::KeyEvent;
 use tmxr_command::{Args, Key, Parsed};
 
-use super::{Ctx, Outcome, Res, attached_client, cwd_arg, dir_flag};
-use crate::model::PaneId;
+use super::{Ctx, Outcome, Res, attached_client, cwd_arg, dir_flag, list_item};
+use crate::model::{PaneId, SessionId, WindowId};
 use crate::overlay::Overlay;
 use crate::server::{Server, SplitSize};
 use crate::target;
+use crate::vars::Vars;
 
 pub(super) fn run(
     srv: &mut Server,
@@ -246,19 +247,55 @@ pub(super) fn run(
             srv.relayout(new);
         }
         "list-panes" => {
-            let (_, _, wid) = target::window(srv, ctx, a.value('t'))?;
-            let w = &srv.windows[&wid];
-            for (i, p) in w.panes().iter().enumerate() {
-                let pane = &srv.panes[p];
-                let _ = writeln!(
-                    out.stdout,
-                    "{}: [{}x{}] %{}{}",
-                    i as u32 + srv.cfg.pane_base_index,
-                    pane.rect.w,
-                    pane.rect.h,
-                    p,
-                    if *p == w.active { " (active)" } else { "" }
-                );
+            // -a every pane on the server, -s every pane in the session,
+            // else the target window's; each line says as much as it needs
+            // to name its pane, as tmux's.
+            let windows: Vec<(SessionId, u32, WindowId)> = if a.has('a') || a.has('s') {
+                let only = if a.has('a') {
+                    None
+                } else {
+                    Some(target::session(srv, ctx, a.value('t'))?)
+                };
+                srv.sessions
+                    .values()
+                    .filter(|s| only.is_none_or(|o| o == s.id))
+                    .flat_map(|s| s.windows.iter().map(|(i, w)| (s.id, *i, *w)))
+                    .collect()
+            } else {
+                vec![target::window(srv, ctx, a.value('t'))?]
+            };
+            for (sid, idx, wid) in windows {
+                let w = &srv.windows[&wid];
+                for (i, p) in w.panes().iter().enumerate() {
+                    let pane = &srv.panes[p];
+                    let vars = Vars {
+                        srv,
+                        session: Some(sid),
+                        window: Some(wid),
+                        pane: Some(*p),
+                        client: None,
+                    };
+                    let line = list_item(a, &vars, || {
+                        let prefix = if a.has('a') {
+                            format!("{}:{idx}.", srv.sessions[&sid].name)
+                        } else if a.has('s') {
+                            format!("{idx}.")
+                        } else {
+                            String::new()
+                        };
+                        format!(
+                            "{prefix}{}: [{}x{}] %{}{}",
+                            i as u32 + srv.cfg.pane_base_index,
+                            pane.rect.w,
+                            pane.rect.h,
+                            p,
+                            if *p == w.active { " (active)" } else { "" }
+                        )
+                    });
+                    if let Some(line) = line {
+                        let _ = writeln!(out.stdout, "{line}");
+                    }
+                }
             }
         }
         "display-panes" => {

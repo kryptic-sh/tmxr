@@ -234,14 +234,21 @@ pub const COMMANDS: &[CommandSpec] = &[
         0,
         "[-adk] [-s src-window] [-t dst-window]"
     ),
-    cmd!("list-buffers", Some("lsb"), "", 0, 0, ""),
+    cmd!(
+        "list-buffers",
+        Some("lsb"),
+        "F:f:",
+        0,
+        0,
+        "[-F format] [-f filter]"
+    ),
     cmd!(
         "list-clients",
         Some("lsc"),
-        "t:",
+        "F:f:t:",
         0,
         0,
-        "[-t target-session]"
+        "[-F format] [-f filter] [-t target-session]"
     ),
     cmd!("list-commands", Some("lscm"), "", 0, 0, ""),
     cmd!(
@@ -255,19 +262,26 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "list-panes",
         Some("lsp"),
-        "at:",
+        "asF:f:t:",
         0,
         0,
-        "[-a] [-t target-window]"
+        "[-as] [-F format] [-f filter] [-t target-window]"
     ),
-    cmd!("list-sessions", Some("ls"), "", 0, 0, ""),
+    cmd!(
+        "list-sessions",
+        Some("ls"),
+        "F:f:",
+        0,
+        0,
+        "[-F format] [-f filter]"
+    ),
     cmd!(
         "list-windows",
         Some("lsw"),
-        "at:",
+        "aF:f:t:",
         0,
         0,
-        "[-a] [-t target-session]"
+        "[-a] [-F format] [-f filter] [-t target-session]"
     ),
     cmd!(
         "load-buffer",

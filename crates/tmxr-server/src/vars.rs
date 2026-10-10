@@ -82,6 +82,19 @@ impl Context for Vars<'_> {
             "socket_path" => srv.endpoint.path().display().to_string(),
             "client_prefix" => flag(att.is_some_and(|a| a.table == "prefix")),
             "client_key_table" => att.map(|a| a.table.clone())?,
+            "client_name" => self.client?.to_string(),
+            "client_width" => att?.cols.to_string(),
+            "client_height" => att?.rows.to_string(),
+            "client_session" => srv.sessions.get(&att?.session)?.name.clone(),
+            "client_termname" => srv
+                .clients
+                .get(&self.client?)?
+                .hello
+                .as_ref()?
+                .terminal
+                .as_ref()?
+                .term
+                .clone(),
             "session_name" => session?.name.clone(),
             "session_id" => format!("${}", session?.id),
             "session_windows" => session?.windows.len().to_string(),
@@ -149,6 +162,15 @@ impl Context for Vars<'_> {
             }
             "pane_width" => pane?.rect.w.to_string(),
             "pane_height" => pane?.rect.h.to_string(),
+            // tmux's: the pane's cells in its window, edges inclusive.
+            "pane_left" => pane?.rect.x.to_string(),
+            "pane_top" => pane?.rect.y.to_string(),
+            "pane_right" => (pane?.rect.x + pane?.rect.w).saturating_sub(1).to_string(),
+            "pane_bottom" => (pane?.rect.y + pane?.rect.h).saturating_sub(1).to_string(),
+            "pane_at_left" => flag(pane?.rect.x == 0),
+            "pane_at_top" => flag(pane?.rect.y == 0),
+            "pane_at_right" => flag(pane?.rect.x + pane?.rect.w >= window?.cols),
+            "pane_at_bottom" => flag(pane?.rect.y + pane?.rect.h >= window?.rows),
             "cursor_x" => pane?.emu.screen().cursor_position().1.to_string(),
             "cursor_y" => pane?.emu.screen().cursor_position().0.to_string(),
             _ => return None,

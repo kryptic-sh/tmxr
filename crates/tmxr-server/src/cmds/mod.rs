@@ -208,6 +208,23 @@ fn expand_for(srv: &Server, ctx: &Ctx, pane: Option<PaneId>, s: &str) -> String 
     expand(s, &Vars::for_pane(srv, pane.or(ctx.pane), ctx.client))
 }
 
+/// One item of a list command: its `default` line, or `-F`'s format
+/// expanded with the item's variables; `None` when `-f`'s filter expands to
+/// nothing or `0` for it, as tmux's filters.
+fn list_item(
+    a: &Args,
+    vars: &dyn tmxr_command::format::Context,
+    default: impl FnOnce() -> String,
+) -> Option<String> {
+    if let Some(filter) = a.value('f') {
+        let keep = expand(filter, vars);
+        if keep.is_empty() || keep == "0" {
+            return None;
+        }
+    }
+    Some(a.value('F').map_or_else(default, |f| expand(f, vars)))
+}
+
 fn cwd_arg(srv: &Server, ctx: &Ctx, pane: Option<PaneId>, a: &Args) -> Option<PathBuf> {
     a.value('c')
         .map(|c| PathBuf::from(expand_for(srv, ctx, pane, c)))
