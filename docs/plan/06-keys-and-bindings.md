@@ -63,57 +63,57 @@ vim-tmux-navigator; **(sens)** = tmux-sensible; **(yank)** = tmux-yank;
 
 ### `prefix` (after `C-b`)
 
-| Key                     | Command                                              | Note                                               | From                  |
-| ----------------------- | ---------------------------------------------------- | -------------------------------------------------- | --------------------- |
-| `h` `j` `k` `l`         | `select-pane -L/-D/-U/-R`                            | Focus pane left/down/up/right                      | (cfg)                 |
-| `'` `"`                 | `split-window -v -c "#{pane_current_path}"`          | Split pane top/bottom in current dir               | (cfg)                 |
-| `;` `%`                 | `split-window -h -c "#{pane_current_path}"`          | Split pane left/right in current dir               | (cfg)                 |
-| `c`                     | `new-window -c "#{pane_current_path}"`               | New window in current dir                          | (cfg)                 |
-| `x`                     | `set-window-option synchronize-panes`                | Toggle synchronized input to all panes             | (cfg)                 |
-| `C-l`                   | `send-keys C-l`                                      | Clear screen (CTRL + l is taken by navigation)     | (nav)                 |
-| `b`                     | `last-window`                                        | Last window                                        | (sens)                |
-| `C-n` / `n`             | `next-window`                                        | Next window                                        | (sens)/(tmux)         |
-| `C-p` / `p`             | `previous-window`                                    | Previous window                                    | (sens)/(tmux)         |
-| `q`                     | `display-panes` (numbers over panes; a digit picks)  | Show pane numbers                                  | (tmux)                |
-| `#` / `-`               | `list-buffers` / `delete-buffer`                     | List / delete paste buffers                        | (tmux)                |
-| `.`                     | `move-window` prompt                                 | Move window                                        | (tmux)                |
-| `M-o`                   | `rotate-window -D`                                   | Rotate panes down                                  | (tmux)                |
-| `M-n` / `M-p`           | `next-window -a` / `previous-window -a`              | Next / previous window with an alert (a bell)      | (tmux)                |
-| `E`                     | `select-layout -E`                                   | Spread panes out evenly                            | (tmux)                |
-| `/`                     | `command-prompt -k` → `list-keys -1N` (describe)     | Describe a key                                     | (tmux)                |
-| `t`                     | `clock-mode` (big clock until a key is pressed)      | Show a clock                                       | (tmux)                |
-| `D`                     | `choose-client -Z` (picker; Enter detaches)          | Choose a client to detach                          | (tmux)                |
-| `C-z`                   | `suspend-client` (`fg` resumes; Unix only)           | Suspend the client                                 | (tmux)                |
-| `m` / `M`               | `select-pane -m` / `select-pane -M`                  | Mark the pane / clear the mark                     | (tmux)                |
-| `=`                     | `choose-buffer -Z` (picker; Enter pastes)            | Choose a paste buffer to paste                     | (tmux)                |
-| `f`                     | `find-window` prompt (window picker, pre-filtered)   | Find a window                                      | (tmux)                |
-| `R`                     | `source-file` (reload config)                        | Reload config                                      | (sens)                |
-| `C-b`                   | `send-prefix`                                        | Send the prefix key                                | (tmux)                |
-| `s`                     | session picker ([09](09-session-picker.md))          | Switch session                                     | (tmux, reimplemented) |
-| `w`                     | window picker (same widget, windows of all sessions) | Switch window                                      | (tmux, reimplemented) |
-| `d`                     | `detach-client`                                      | Detach                                             | (tmux)                |
-| `$` / `,`               | `rename-session` / `rename-window` prompt            | Rename session / window                            | (tmux)                |
-| `0`–`9`                 | `select-window -t :=N`                               | Select window N                                    | (tmux)                |
-| `:`                     | `command-prompt`                                     | Command prompt                                     | (tmux)                |
-| `?`                     | `list-keys -N`                                       | List key binds                                     | (tmux)                |
-| `[` / `PageUp`          | `copy-mode` / `copy-mode -u`                         | Copy mode                                          | (tmux)                |
-| `]`                     | `paste-buffer -p`                                    | Paste the most recent buffer                       | (tmux)                |
-| `z`                     | `resize-pane -Z`                                     | Zoom pane                                          | (tmux)                |
-| `!`                     | `break-pane`                                         | Break pane into a window                           | (tmux)                |
-| `{` / `}`               | `swap-pane -U` / `swap-pane -D`                      | Swap pane up/down                                  | (tmux)                |
-| `o` / `C-o`             | `select-pane -t :.+` / `rotate-window`               | Next pane / rotate panes                           | (tmux)                |
-| `Space`                 | `next-layout`                                        | Next layout                                        | (tmux)                |
-| `M-1`…`M-5`             | `select-layout` presets                              | Layout presets                                     | (tmux)                |
-| arrows                  | `select-pane -L/-D/-U/-R`                            | Focus pane                                         | (tmux)                |
-| `C-`arrows / `M-`arrows | `resize-pane` by 1 / 5 (repeatable)                  | Resize pane                                        | (tmux)                |
-| `(` / `)` / `L`         | `switch-client -p` / `-n` / `-l`                     | Previous / next / last session                     | (tmux)                |
-| `&`                     | `confirm-before kill-window`                         | Kill window                                        | (tmux)                |
-| `X`                     | `confirm-before kill-pane`                           | Kill pane (tmux's `x`; moved because `x` is sync)  | new                   |
-| `i` / `~`               | `display-message` / `show-messages`                  | Pane info / message log                            | (tmux)                |
-| `r`                     | `refresh-client`                                     | Redraw                                             | (tmux)                |
-| `y`                     | copy the pane's current command line to clipboard    | Copy the command line to the clipboard             | (yank) stretch        |
-| `Y`                     | copy `#{pane_current_path}` to clipboard             | Copy the pane's working directory to the clipboard | (yank)                |
-| `C-s` / `C-r`           | resurrect save / restore                             | Save sessions / Restore saved sessions             | (res) stretch         |
+| Key                     | Command                                              | Note                                                           | From                  |
+| ----------------------- | ---------------------------------------------------- | -------------------------------------------------------------- | --------------------- |
+| `h` `j` `k` `l`         | `select-pane -L/-D/-U/-R`                            | Focus pane left/down/up/right                                  | (cfg)                 |
+| `'` `"`                 | `split-window -v -c "#{pane_current_path}"`          | Split pane top/bottom in current dir                           | (cfg)                 |
+| `;` `%`                 | `split-window -h -c "#{pane_current_path}"`          | Split pane left/right in current dir                           | (cfg)                 |
+| `c`                     | `new-window -c "#{pane_current_path}"`               | New window in current dir                                      | (cfg)                 |
+| `x`                     | `set-window-option synchronize-panes`                | Toggle synchronized input to all panes                         | (cfg)                 |
+| `C-l`                   | `send-keys C-l`                                      | Clear screen (CTRL + l is taken by navigation)                 | (nav)                 |
+| `b`                     | `last-window`                                        | Last window                                                    | (sens)                |
+| `C-n` / `n`             | `next-window`                                        | Next window                                                    | (sens)/(tmux)         |
+| `C-p` / `p`             | `previous-window`                                    | Previous window                                                | (sens)/(tmux)         |
+| `q`                     | `display-panes` (numbers over panes; a digit picks)  | Show pane numbers                                              | (tmux)                |
+| `#` / `-`               | `list-buffers` / `delete-buffer`                     | List / delete paste buffers                                    | (tmux)                |
+| `.`                     | `move-window` prompt                                 | Move window                                                    | (tmux)                |
+| `M-o`                   | `rotate-window -D`                                   | Rotate panes down                                              | (tmux)                |
+| `M-n` / `M-p`           | `next-window -a` / `previous-window -a`              | Next / previous window with an alert (bell, activity, silence) | (tmux)                |
+| `E`                     | `select-layout -E`                                   | Spread panes out evenly                                        | (tmux)                |
+| `/`                     | `command-prompt -k` → `list-keys -1N` (describe)     | Describe a key                                                 | (tmux)                |
+| `t`                     | `clock-mode` (big clock until a key is pressed)      | Show a clock                                                   | (tmux)                |
+| `D`                     | `choose-client -Z` (picker; Enter detaches)          | Choose a client to detach                                      | (tmux)                |
+| `C-z`                   | `suspend-client` (`fg` resumes; Unix only)           | Suspend the client                                             | (tmux)                |
+| `m` / `M`               | `select-pane -m` / `select-pane -M`                  | Mark the pane / clear the mark                                 | (tmux)                |
+| `=`                     | `choose-buffer -Z` (picker; Enter pastes)            | Choose a paste buffer to paste                                 | (tmux)                |
+| `f`                     | `find-window` prompt (window picker, pre-filtered)   | Find a window                                                  | (tmux)                |
+| `R`                     | `source-file` (reload config)                        | Reload config                                                  | (sens)                |
+| `C-b`                   | `send-prefix`                                        | Send the prefix key                                            | (tmux)                |
+| `s`                     | session picker ([09](09-session-picker.md))          | Switch session                                                 | (tmux, reimplemented) |
+| `w`                     | window picker (same widget, windows of all sessions) | Switch window                                                  | (tmux, reimplemented) |
+| `d`                     | `detach-client`                                      | Detach                                                         | (tmux)                |
+| `$` / `,`               | `rename-session` / `rename-window` prompt            | Rename session / window                                        | (tmux)                |
+| `0`–`9`                 | `select-window -t :=N`                               | Select window N                                                | (tmux)                |
+| `:`                     | `command-prompt`                                     | Command prompt                                                 | (tmux)                |
+| `?`                     | `list-keys -N`                                       | List key binds                                                 | (tmux)                |
+| `[` / `PageUp`          | `copy-mode` / `copy-mode -u`                         | Copy mode                                                      | (tmux)                |
+| `]`                     | `paste-buffer -p`                                    | Paste the most recent buffer                                   | (tmux)                |
+| `z`                     | `resize-pane -Z`                                     | Zoom pane                                                      | (tmux)                |
+| `!`                     | `break-pane`                                         | Break pane into a window                                       | (tmux)                |
+| `{` / `}`               | `swap-pane -U` / `swap-pane -D`                      | Swap pane up/down                                              | (tmux)                |
+| `o` / `C-o`             | `select-pane -t :.+` / `rotate-window`               | Next pane / rotate panes                                       | (tmux)                |
+| `Space`                 | `next-layout`                                        | Next layout                                                    | (tmux)                |
+| `M-1`…`M-5`             | `select-layout` presets                              | Layout presets                                                 | (tmux)                |
+| arrows                  | `select-pane -L/-D/-U/-R`                            | Focus pane                                                     | (tmux)                |
+| `C-`arrows / `M-`arrows | `resize-pane` by 1 / 5 (repeatable)                  | Resize pane                                                    | (tmux)                |
+| `(` / `)` / `L`         | `switch-client -p` / `-n` / `-l`                     | Previous / next / last session                                 | (tmux)                |
+| `&`                     | `confirm-before kill-window`                         | Kill window                                                    | (tmux)                |
+| `X`                     | `confirm-before kill-pane`                           | Kill pane (tmux's `x`; moved because `x` is sync)              | new                   |
+| `i` / `~`               | `display-message` / `show-messages`                  | Pane info / message log                                        | (tmux)                |
+| `r`                     | `refresh-client`                                     | Redraw                                                         | (tmux)                |
+| `y`                     | copy the pane's current command line to clipboard    | Copy the command line to the clipboard                         | (yank) stretch        |
+| `Y`                     | copy `#{pane_current_path}` to clipboard             | Copy the pane's working directory to the clipboard             | (yank)                |
+| `C-s` / `C-r`           | resurrect save / restore                             | Save sessions / Restore saved sessions                         | (res) stretch         |
 
 Dropped from tmux's defaults because the config reuses the key: `'`
 (select-window prompt), `;` (last-pane — `C-\` covers it), `l` (last-window —

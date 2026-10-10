@@ -26,6 +26,9 @@ set-clipboard = "on"
 # tmux.conf: set -g allow-passthrough on
 allow-passthrough = true
 remain-on-exit = false
+# tmux's defaults: no activity or silence alerts.
+monitor-activity = false
+monitor-silence = 0
 copy-command = ""
 # tmux's default; `lock-client` runs it in the client's terminal.
 lock-command = "lock -np"

@@ -115,6 +115,11 @@ impl Server {
                 rows,
                 preset: 0,
                 manual_size: false,
+                monitor_activity: None,
+                monitor_silence: None,
+                activity: false,
+                silence: false,
+                last_output: Instant::now(),
             },
         );
         if let Err(e) = self.spawn_pane(pid, wid, session, &argv, cwd, cols, rows) {
@@ -146,6 +151,14 @@ impl Server {
             .map(|s| s.id)
     }
 
+    /// Whether `window` is the current window of a session holding it:
+    /// alerts are for windows out of sight.
+    pub fn window_is_current(&self, window: WindowId) -> bool {
+        self.sessions
+            .values()
+            .any(|s| s.current_window() == Some(window))
+    }
+
     /// Every session holding `window` (more than one when it is linked).
     pub fn sessions_of_window(&self, window: WindowId) -> Vec<SessionId> {
         self.sessions
@@ -169,6 +182,8 @@ impl Server {
             && let Some(win) = self.windows.get_mut(&w)
         {
             win.bell = false;
+            win.activity = false;
+            win.silence = false;
         }
         self.mark_session_dirty(session);
         Ok(())
@@ -336,6 +351,11 @@ impl Server {
                 rows,
                 preset: 0,
                 manual_size: false,
+                monitor_activity: None,
+                monitor_silence: None,
+                activity: false,
+                silence: false,
+                last_output: Instant::now(),
             },
         );
         if let Some(p) = self.panes.get_mut(&pane) {

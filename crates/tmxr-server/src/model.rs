@@ -97,6 +97,16 @@ pub struct Window {
     /// Set by `resize-window` (tmux's `window-size manual`): clients no
     /// longer size the window until `window-size latest`.
     pub manual_size: bool,
+    /// `monitor-activity` / `monitor-silence` set on this window, in place
+    /// of the global options.
+    pub monitor_activity: Option<bool>,
+    pub monitor_silence: Option<u64>,
+    /// It printed while not current (`monitor-activity`).
+    pub activity: bool,
+    /// It was quiet for `monitor-silence` seconds.
+    pub silence: bool,
+    /// When one of its panes last printed.
+    pub last_output: Instant,
 }
 
 impl Window {
@@ -117,6 +127,11 @@ impl Window {
         }
     }
 
+    /// A bell, activity or silence: what `next-window -a` looks for.
+    pub fn alerted(&self) -> bool {
+        self.bell || self.activity || self.silence
+    }
+
     pub fn flags(&self, current: bool, last: bool, marked: bool) -> String {
         let mut f = String::new();
         if current {
@@ -124,8 +139,15 @@ impl Window {
         } else if last {
             f.push('-');
         }
+        // tmux's order: activity, bell, silence.
+        if self.activity {
+            f.push('#');
+        }
         if self.bell {
             f.push('!');
+        }
+        if self.silence {
+            f.push('~');
         }
         if marked {
             f.push('M');

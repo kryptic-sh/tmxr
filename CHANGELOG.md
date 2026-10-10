@@ -53,6 +53,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `customize-mode`: a picker over every option and key bind, each shown as the
   command that sets it; Enter puts that command in the prompt to edit and run.
   `-f` opens it filtered.
+- **Activity and silence alerts**: `monitor-activity` flags a window that prints
+  while out of sight (`#`), and `monitor-silence N` one quiet for N seconds
+  (`~`), globally with `-g` or per window. `M-n` / `M-p` (`next-window -a` /
+  `previous-window -a`) now stop at these as well as bells;
+  `#{window_activity_flag}` and `#{window_silence_flag}` are new.
 
 ### Fixed
 

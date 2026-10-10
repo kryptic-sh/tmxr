@@ -2765,3 +2765,65 @@ fn customize_mode_edits_an_option_through_the_prompt() {
     });
     s.send(b"\x1b");
 }
+
+#[test]
+fn monitor_activity_and_silence_flag_windows_out_of_sight() {
+    let t = Tmxr::new("monitor");
+    t.run(&["new-session", "-d", "-s", "al"]);
+    t.run(&["new-window", "-d", "-t", "al:1"]);
+    t.run(&["new-window", "-d", "-t", "al:2"]);
+    let flags = |t: &Tmxr, w: &str| {
+        t.run(&[
+            "display-message",
+            "-p",
+            "-t",
+            &format!("al:{w}"),
+            "#{window_flags}",
+        ])
+        .trim()
+        .to_owned()
+    };
+    // Off by default: output alone flags nothing.
+    t.run(&["send-keys", "-t", "al:1", "echo quiet-one", "Enter"]);
+    std::thread::sleep(Duration::from_millis(500));
+    assert!(!flags(&t, "1").contains('#'), "{}", flags(&t, "1"));
+
+    t.run(&["set-window-option", "-g", "monitor-activity", "on"]);
+    assert_eq!(
+        t.run(&["show-options", "-v", "monitor-activity"]).trim(),
+        "on"
+    );
+    t.run(&["send-keys", "-t", "al:1", "echo busy-one", "Enter"]);
+    t.wait_run(
+        &[
+            "display-message",
+            "-p",
+            "-t",
+            "al:1",
+            "#{window_activity_flag}",
+        ],
+        "activity",
+        |o| o.trim() == "1",
+    );
+    assert!(flags(&t, "1").contains('#'));
+    // The current window is in sight: no flag.
+    t.run(&["send-keys", "-t", "al:0", "echo here", "Enter"]);
+    std::thread::sleep(Duration::from_millis(500));
+    assert!(!flags(&t, "0").contains('#'), "{}", flags(&t, "0"));
+    // next-window -a goes to it, and selecting it clears the flag.
+    t.run(&["next-window", "-a", "-t", "al"]);
+    assert_eq!(
+        t.run(&["display-message", "-p", "-t", "al", "#I"]).trim(),
+        "1"
+    );
+    assert!(!flags(&t, "1").contains('#'));
+
+    // monitor-silence on one window: flagged once quiet that long.
+    t.run(&["set-window-option", "-t", "al:2", "monitor-silence", "1"]);
+    t.wait_run(
+        &["display-message", "-p", "-t", "al:2", "#{window_flags}"],
+        "silence",
+        |o| o.contains('~'),
+    );
+    assert!(!flags(&t, "0").contains('~'), "only the window that asked");
+}

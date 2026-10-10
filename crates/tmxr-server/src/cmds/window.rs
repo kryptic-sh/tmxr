@@ -151,11 +151,16 @@ pub(super) fn run(
             };
             srv.select_window(sid, idx)?;
         }
-        // -a: the next / previous window with an alert (a bell), cycling.
+        // -a: the next / previous window with an alert (a bell, activity or
+        // silence), cycling.
         "next-window" | "previous-window" if a.has('a') => {
             let sid = target::session(srv, ctx, a.value('t'))?;
             let s = &srv.sessions[&sid];
-            let alerted = |i: &&u32| srv.windows.get(&s.windows[*i]).is_some_and(|w| w.bell);
+            let alerted = |i: &&u32| {
+                srv.windows
+                    .get(&s.windows[*i])
+                    .is_some_and(crate::model::Window::alerted)
+            };
             let after = s.windows.keys().filter(|i| **i > s.current);
             let before = s.windows.keys().filter(|i| **i < s.current);
             let found = if p.name() == "next-window" {

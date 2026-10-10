@@ -45,6 +45,12 @@ pub struct Config {
     /// Keep a pane whose program exited, shown as dead, until it is
     /// respawned or killed (tmux's `remain-on-exit`).
     pub remain_on_exit: bool,
+    /// Flag a window that prints while not current (tmux's
+    /// `monitor-activity`), for every window without its own setting.
+    pub monitor_activity: bool,
+    /// Flag a window quiet for this many seconds; 0 is off (tmux's
+    /// `monitor-silence`), for every window without its own setting.
+    pub monitor_silence: u64,
     /// Shell command `copy-pipe` sends the copied text to when it names none.
     pub copy_command: String,
     /// Shell command a locked client runs in its terminal; the client is

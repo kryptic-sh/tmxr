@@ -102,6 +102,8 @@ impl Context for Vars<'_> {
             "window_height" => window?.rows.to_string(),
             "window_zoomed_flag" => flag(window?.zoomed),
             "window_bell_flag" => flag(window?.bell),
+            "window_activity_flag" => flag(window?.activity),
+            "window_silence_flag" => flag(window?.silence),
             "window_active" => flag(session?.current_window() == Some(window?.id)),
             "window_flags" => {
                 let s = session?;

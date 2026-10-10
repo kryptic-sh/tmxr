@@ -672,6 +672,26 @@ impl Server {
                 self.log_message(format!("resurrect auto-save failed: {e}"));
             }
         }
+        // monitor-silence: a window out of sight and quiet for long enough.
+        let quiet: Vec<WindowId> = self
+            .windows
+            .values()
+            .filter(|w| {
+                let secs = w.monitor_silence.unwrap_or(self.cfg.monitor_silence);
+                secs > 0
+                    && !w.silence
+                    && now.duration_since(w.last_output) >= Duration::from_secs(secs)
+            })
+            .map(|w| w.id)
+            .collect();
+        for w in quiet {
+            if !self.window_is_current(w)
+                && let Some(win) = self.windows.get_mut(&w)
+            {
+                win.silence = true;
+                self.mark_window_dirty(w);
+            }
+        }
         let clock_windows: Vec<WindowId> = self
             .panes
             .values()

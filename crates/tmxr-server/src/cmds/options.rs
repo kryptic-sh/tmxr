@@ -57,6 +57,36 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
     let name = pos[0].as_str();
     let value = pos.get(1).map(String::as_str);
     let _ = out;
+    if name == "monitor-activity" || name == "monitor-silence" {
+        // -g sets the global value; without it, the target window's own.
+        let window = if a.has('g') {
+            None
+        } else {
+            Some(target::window(srv, ctx, a.value('t'))?.2)
+        };
+        let local = window.and_then(|w| srv.windows.get(&w));
+        if name == "monitor-activity" {
+            let current = local
+                .and_then(|w| w.monitor_activity)
+                .unwrap_or(srv.cfg.monitor_activity);
+            let on = on_off(value, current)?;
+            match window.and_then(|w| srv.windows.get_mut(&w)) {
+                Some(w) => w.monitor_activity = Some(on),
+                None => srv.cfg.monitor_activity = on,
+            }
+        } else {
+            let v = value.ok_or("monitor-silence: needs a value")?;
+            let secs = v
+                .parse::<u64>()
+                .map_err(|_| format!("monitor-silence: bad number {v}"))?;
+            match window.and_then(|w| srv.windows.get_mut(&w)) {
+                Some(w) => w.monitor_silence = Some(secs),
+                None => srv.cfg.monitor_silence = secs,
+            }
+        }
+        srv.mark_all_dirty();
+        return Ok(());
+    }
     if name == "window-size" {
         // Only per window, to undo `resize-window`: tmxr's sizing is always
         // tmux's `latest`.
@@ -193,6 +223,11 @@ pub fn option_lines(srv: &Server) -> Vec<String> {
         format!("default-terminal {}", c.default_terminal),
         format!("extended-keys {}", c.extended_keys),
         format!("set-clipboard {}", c.set_clipboard),
+        format!(
+            "monitor-activity {}",
+            if c.monitor_activity { "on" } else { "off" }
+        ),
+        format!("monitor-silence {}", c.monitor_silence),
         format!(
             "lock-command {}",
             join_args(std::slice::from_ref(&c.lock_command))

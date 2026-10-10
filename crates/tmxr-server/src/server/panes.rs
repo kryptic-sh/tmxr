@@ -325,6 +325,18 @@ impl Server {
                 if bell && let Some(w) = self.windows.get_mut(&wid) {
                     w.bell = true;
                 }
+                let watched = self
+                    .windows
+                    .get(&wid)
+                    .is_some_and(|w| w.monitor_activity.unwrap_or(self.cfg.monitor_activity));
+                let seen = self.window_is_current(wid);
+                if let Some(w) = self.windows.get_mut(&wid) {
+                    w.last_output = std::time::Instant::now();
+                    w.silence = false;
+                    if watched && !seen {
+                        w.activity = true;
+                    }
+                }
                 for (_, data) in clips {
                     self.forward_osc52(&data);
                 }

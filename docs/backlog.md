@@ -86,9 +86,11 @@ what was not.
   query, not a format filter.
 - **tmux default binds**: all of tmux's defaults are bound; `prefix C-z`
   (suspend-client) errors on Windows, which has no job control. Alerts for `M-n`
-  / `M-p` are bells only (no `monitor-activity` / `monitor-silence`).
-  `find-window` matches window names through the picker, not pane contents or
-  titles as tmux's does.
+  / `M-p` are bells, `monitor-activity` and `monitor-silence`; tmux's
+  `visual-activity` / `visual-bell` / `visual-silence` messages and
+  `activity-action` / `bell-action` / `silence-action` are not implemented
+  (alerts only set window flags). `find-window` matches window names through the
+  picker, not pane contents or titles as tmux's does.
 - **Mouse keys**: `SecondClick` is not recognised, and a double click sends
   `DoubleClick1…` in place of a second `MouseDown1…` (tmux sends both, the
   `DoubleClick` after a timer). The default double- and triple-click binds copy
