@@ -64,6 +64,11 @@ fn the_mouse_matches_tmux() {
     assert_passes("mouse.toml");
 }
 
+#[test]
+fn pasting_matches_tmux() {
+    assert_passes("paste.toml");
+}
+
 /// Differences kept on purpose or not fixed yet: reported, never failing.
 #[test]
 fn known_divergences_report() {

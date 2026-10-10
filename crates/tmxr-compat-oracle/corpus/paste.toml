@@ -1,0 +1,57 @@
+# What paste-buffer sends a program, as `cat -v` shows it on a raw terminal:
+# ^M for a carriage return, ^[[200~ / ^[[201~ for bracketed paste's marks.
+
+[[cases]]
+name = "paste_buffer_sends_returns_for_newlines"
+attach = true
+unix_only = true
+program = "stty raw -echo; exec cat -v"
+steps = [
+  { sleep = 0.5 },
+  { run = "set-buffer 'one\ntwo'" },
+  { run = "paste-buffer -t o" },
+]
+checks = [{ screen_contains = "one^Mtwo", expect = true }]
+
+[[cases]]
+name = "paste_buffer_takes_a_separator"
+attach = true
+unix_only = true
+program = "stty raw -echo; exec cat -v"
+steps = [
+  { sleep = 0.5 },
+  { run = "set-buffer 'one\ntwo'" },
+  { run = "paste-buffer -s , -t o" },
+]
+checks = [{ screen_contains = "one,two", expect = true }]
+
+[[cases]]
+name = "paste_buffer_r_keeps_newlines"
+attach = true
+unix_only = true
+program = "stty raw -echo; exec cat -v"
+steps = [
+  { sleep = 0.5 },
+  { run = "set-buffer 'one\ntwo'" },
+  { run = "paste-buffer -r -t o" },
+]
+checks = [
+  { screen_contains = "two", expect = true },
+  { screen_contains = "^M", expect = false },
+]
+
+[[cases]]
+name = "paste_buffer_brackets_only_with_p"
+attach = true
+unix_only = true
+program = "printf '\\033[?2004h'; stty raw -echo; exec cat -v"
+steps = [
+  { sleep = 0.5 },
+  { run = "set-buffer plain" },
+  { run = "paste-buffer -t o" },
+  { run = "set-buffer marked" },
+  { run = "paste-buffer -p -t o" },
+]
+checks = [
+  { screen_contains = "plain^[[200~marked^[[201~", expect = true },
+]

@@ -374,10 +374,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "paste-buffer",
         Some("pasteb"),
-        "b:dpt:",
+        "b:dprs:t:",
         0,
         0,
-        "[-dp] [-b buffer-name] [-t target-pane]"
+        "[-dpr] [-s separator] [-b buffer-name] [-t target-pane]"
     ),
     cmd!(
         "pipe-pane",

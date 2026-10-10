@@ -66,8 +66,20 @@ pub(super) fn run(
                 None if srv.buffers.is_empty() => return Ok(true),
                 None => 0,
             };
-            let data = srv.buffers[idx].data.clone();
-            srv.paste_to_pane(pid, &data);
+            // tmux 3.6's cmd_paste_buffer_exec: each newline sent as the
+            // separator (a carriage return, or a newline with -r), bracketed
+            // with -p if the program asked for it, to the pane alone.
+            let newline = if a.has('r') { "\n" } else { "\r" };
+            let sep = a.value('s').unwrap_or(newline);
+            let text = srv.buffers[idx].data.replace('\n', sep);
+            if let Some(p) = srv.panes.get_mut(&pid) {
+                let bytes = if a.has('p') {
+                    tmxr_term::encode_paste(&text, p.emu.input_modes())
+                } else {
+                    text.into_bytes()
+                };
+                let _ = p.pty.write(&bytes);
+            }
             if a.has('d') {
                 srv.buffers.remove(idx);
             }

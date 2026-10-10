@@ -61,9 +61,6 @@ table. What has been verified, and how:
   the slider reads the history size by cloning the pane's screen
   (`Emulator::history_size`), every frame while bars show, which costs with a
   long history. Not measured.
-- **`paste-buffer` without `-p` still brackets** a paste when the program asked
-  for bracketed paste; tmux brackets only with `-p`. Not changed: no bind or
-  report depends on it.
 - **Windows: an Enter sent before the shell's first read can stall**
   (2026-10-10). Probing with the real binary, `new-window -d` then at once
   `send-keys 'echo markN' Enter`, about 1 in 100 cmd panes showed the text but

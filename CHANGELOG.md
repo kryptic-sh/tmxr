@@ -8,6 +8,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`paste-buffer -r` and `-s separator`**, as tmux's.
 - **Menus take the mouse, as tmux 3.6's**: one the mouse opened (or
   `display-menu -M`) highlights the item under the pointer and runs the one the
   button is released on, closing on a release elsewhere; with `-O` a click runs
@@ -33,6 +34,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`paste-buffer` sends what tmux's sends**: each newline as a carriage return
+  (unless `-r` or `-s`), bracketed only with `-p` (it bracketed whenever the
+  program asked), and to the target pane alone, not every synchronized pane.
+  tmxr's binds all pass `-p`, as tmux's do.
 - **The mouse binds are tmux 3.6's**: the wheel over a pane enters copy mode
   without scrolling (the next tick scrolls), and the wheel, drags and double /
   triple clicks pass to a program on the alternate screen or in copy mode, as
