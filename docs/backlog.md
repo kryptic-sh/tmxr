@@ -72,10 +72,11 @@ table. What has been verified, and how:
   (tmux's `simple` and `padded` are errors); `-k` and `-N` are accepted and
   ignored. A menu's `-O` and `-x` / `-y` are accepted and not followed: it is
   centred. Closing a running popup kills its command (`Popup`'s `Drop`, as
-  `kill-pane` does); removing that kill does not turn the e2e test red on
-  Windows, because closing the ConPTY ends the program anyway. Whether the
-  explicit kill is what ends it on Unix (where the PTY reader thread holds its
-  own copy of the master) is not verified.
+  `kill-pane` does). On Windows closing the ConPTY ends the program anyway, so
+  removing the kill leaves the e2e test green there; on Linux and macOS it is
+  what ends it: without it `display_popup_runs_a_command_over_the_panes` failed
+  on both ("the popup's command outlived it"; CI run 38060138527, a throwaway
+  branch, 2026-10-10).
 - **tmux command shorthand** (requested 2026-10-09: `tmux a` for
   `attach-session` and the like). The lookup works as tmux's does
   (`tmxr_command::table::lookup`): exact name or alias first, then an
@@ -207,6 +208,11 @@ table. What has been verified, and how:
 
 ## Not yet verified
 
+- **`prefix_y_copies_the_shells_command_line` flaked once on macOS** (CI run
+  38060138527, 2026-10-10): it timed out waiting for the copy, which held
+  `me-nowbash-5.3$`, part of the prompt, and passed on the retry. That is bash
+  without prompt marks, so likely the read-too-early case under the `prefix y`
+  entry (`copyline::STEP_LIMIT`); not diagnosed.
 - **`socket-acl` flaked once on ubuntu** (run 38057623410, commit 0491b6e,
   2026-10-10). The step stalled about 34 s after the expected "Permission
   denied" and "server closed the connection", then exited 1 without saying which
