@@ -62,9 +62,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Passthrough lands where it was printed**: a pane's `tmux;` passthrough (an
   inline sixel, say) is now sent to the terminal from the cell the program's
-  cursor was on, inside the pane, as tmux does. It used to go wherever the last
-  frame left the terminal's cursor, usually the status line, so an image drew at
-  the bottom of the window and scrolled the whole client.
+  cursor was on, inside the pane, as tmux does. It used to go from wherever the
+  previous frame left the terminal's cursor, which is stale when the program
+  printed text just before the image.
 - Resurrect keeps a window's `resize-window` size; it was restored following its
   clients again.
 
