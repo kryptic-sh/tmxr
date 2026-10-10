@@ -200,7 +200,12 @@ table. What has been verified, and how:
   built from `main` in the left pane of a two-pane tmxr window: `C-l` at its
   edge moved tmxr's focus to the right pane; the same with `$TMXR` cleared left
   it where it was, with hjkl running (its status line on the screen). Not
-  repeated on Linux or macOS.
+  repeated on Linux or macOS. WSL Ubuntu on the dev machine could run the Linux
+  check (tmux 3.6 runs there, and tmxr's Linux release binary would), but it has
+  no Rust toolchain, hjkl's `main` needs a C toolchain to build (tree-sitter,
+  libgit2, aws-lc), and its CI keeps no artifacts. Either install rustup and
+  `build-essential` in WSL (needs sudo) or wait for an hjkl release that has
+  `074ef614`, then repeat the Windows check there.
 - **nvim navigation** is the separate
   [tmxr-navigator.nvim](https://github.com/kryptic-sh/tmxr-navigator.nvim)
   plugin (CI green on Linux, macOS and Windows, nvim stable and nightly).
