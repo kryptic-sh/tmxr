@@ -108,8 +108,19 @@ impl Tmxr {
         self.spawn(env!("CARGO_BIN_EXE_tmxr"), &self.args(rest))
     }
 
+    /// [`Tmxr::attach`] with variables set (`Some`) or removed (`None`) in
+    /// the client's environment, over what the test runner has.
+    fn attach_env(&self, rest: &[&str], vars: &[(&str, Option<&str>)]) -> Screen {
+        self.spawn_env(env!("CARGO_BIN_EXE_tmxr"), &self.args(rest), vars)
+    }
+
     /// Start `program` in a pseudo-terminal with the test's environment.
     fn spawn(&self, program: &str, args: &[String]) -> Screen {
+        self.spawn_env(program, args, &[])
+    }
+
+    /// [`Tmxr::spawn`] with variables set or removed, as [`Tmxr::attach_env`].
+    fn spawn_env(&self, program: &str, args: &[String], vars: &[(&str, Option<&str>)]) -> Screen {
         let pair = native_pty_system()
             .openpty(PtySize {
                 rows: ROWS,
@@ -122,6 +133,12 @@ impl Tmxr {
         cmd.args(args);
         for (k, v) in self.env() {
             cmd.env(k, v);
+        }
+        for (k, v) in vars {
+            match v {
+                Some(v) => cmd.env(k, v),
+                None => cmd.env_remove(k),
+            }
         }
         cmd.cwd(self.dir.path());
         let child = pair.slave.spawn_command(cmd).unwrap();
@@ -2885,4 +2902,69 @@ fn find_window_matches_names_and_pane_contents() {
     found(&t, &s, &["-i", "ALPHA"], "windows 1/1");
     found(&t, &s, &["-r", "need.e-in-p"], "windows 1/1");
     assert!(!t.output(&["find-window", "-r", "("]).status.success());
+}
+
+#[test]
+fn rgb_colour_off_sends_the_256_colours() {
+    let t = Tmxr::new("rgb");
+    let s = t.attach(&["new", "-s", "rg"]);
+    s.wait_for("status line", |text| text.contains("rg"));
+    let rgb_cells = |s: &Screen| {
+        s.status_cells()
+            .iter()
+            .filter(|(_, fg, bg)| fg.starts_with("Rgb") || bg.starts_with("Rgb"))
+            .count()
+    };
+    assert!(
+        rgb_cells(&s) > 0,
+        "the theme's status line is 24-bit by default"
+    );
+    t.run(&["set-option", "-g", "rgb-colour", "off"]);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while rgb_cells(&s) > 0 {
+        assert!(
+            Instant::now() < deadline,
+            "still RGB: {:?}",
+            s.status_cells()
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert!(
+        s.status_cells()
+            .iter()
+            .any(|(_, _, bg)| bg.starts_with("Idx")),
+        "{:?}",
+        s.status_cells()
+    );
+    assert!(
+        !t.output(&["set-option", "-g", "rgb-colour", "maybe"])
+            .status
+            .success()
+    );
+}
+
+#[test]
+fn rgb_colour_auto_follows_the_client_environment() {
+    let t = Tmxr::new("rgbauto");
+    t.run(&["new-session", "-d", "-s", "ra"]);
+    t.run(&["set-option", "-g", "rgb-colour", "auto"]);
+    let rgb_cells = |s: &Screen| {
+        s.status_cells()
+            .iter()
+            .filter(|(_, fg, bg)| fg.starts_with("Rgb") || bg.starts_with("Rgb"))
+            .count()
+    };
+    let plain = [
+        ("COLORTERM", None),
+        ("WT_SESSION", None),
+        ("TERM", Some("xterm-256color")),
+    ];
+    let s = t.attach_env(&["attach", "-t", "ra"], &plain);
+    s.wait_for("status line", |text| text.contains("ra"));
+    assert_eq!(rgb_cells(&s), 0, "{:?}", s.status_cells());
+    drop(s);
+    let true_colour = [("COLORTERM", Some("truecolor")), ("WT_SESSION", None)];
+    let s = t.attach_env(&["attach", "-t", "ra"], &true_colour);
+    s.wait_for("status line", |text| text.contains("ra"));
+    assert!(rgb_cells(&s) > 0, "{:?}", s.status_cells());
 }

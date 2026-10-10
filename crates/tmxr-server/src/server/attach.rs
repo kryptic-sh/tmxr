@@ -18,8 +18,10 @@ impl Server {
         };
         let (cols, rows) = (term.cols.max(1), term.rows.max(1));
         let area = Rect::new(0, 0, cols, rows);
+        let mut backend = AnsiBackend::new(cols, rows);
+        backend.set_rgb(self.client_rgb(id));
         let terminal = Terminal::with_options(
-            AnsiBackend::new(cols, rows),
+            backend,
             TerminalOptions {
                 viewport: Viewport::Fixed(area),
             },
@@ -101,6 +103,42 @@ impl Server {
         att.full_redraw = true;
         self.touch_session(session);
         self.size_session(session);
+    }
+
+    /// Whether client `id` gets 24-bit colour (`rgb-colour`): `auto` trusts
+    /// what its environment advertises.
+    pub fn client_rgb(&self, id: ClientId) -> bool {
+        match self.cfg.rgb_colour.as_str() {
+            "off" => false,
+            "auto" => {
+                let env = self
+                    .clients
+                    .get(&id)
+                    .and_then(|c| c.hello.as_ref())
+                    .map(|h| h.env.as_slice())
+                    .unwrap_or_default();
+                let var = |k: &str| env.iter().find(|(n, _)| n == k).map(|(_, v)| v.as_str());
+                var("COLORTERM").is_some_and(|v| v == "truecolor" || v == "24bit")
+                    || var("TERM").is_some_and(|t| t.ends_with("-direct"))
+                    || var("WT_SESSION").is_some()
+            }
+            _ => true,
+        }
+    }
+
+    /// Re-read `rgb-colour` for every attached client.
+    pub fn apply_rgb_colour(&mut self) {
+        let ids: Vec<ClientId> = self.clients.keys().copied().collect();
+        for id in ids {
+            let rgb = self.client_rgb(id);
+            if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
+                if let Some(t) = a.term.as_mut() {
+                    t.backend_mut().set_rgb(rgb);
+                }
+                a.full_redraw = true;
+                a.dirty = true;
+            }
+        }
     }
 
     pub fn touch_session(&mut self, session: SessionId) {

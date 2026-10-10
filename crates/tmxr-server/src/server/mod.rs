@@ -769,6 +769,7 @@ impl Server {
         };
         self.keys = keys;
         self.cfg = cfg;
+        self.apply_rgb_colour();
         self.mark_all_dirty();
         if errors.is_empty() {
             Ok(())

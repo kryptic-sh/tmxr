@@ -23,6 +23,9 @@ repeat-time = 500
 default-terminal = "tmux-256color"
 extended-keys = "always"
 set-clipboard = "on"
+# 24-bit colour on every terminal, as the tmux config's `terminal-overrides
+# ",*:RGB"`; "auto" asks the client's environment, "off" sends the 256.
+rgb-colour = "on"
 # tmux.conf: set -g allow-passthrough on
 allow-passthrough = true
 remain-on-exit = false

@@ -39,6 +39,9 @@ pub struct Config {
     pub default_shell: Option<String>,
     pub extended_keys: String,
     pub set_clipboard: String,
+    /// `on`, `off` or `auto`: whether clients get 24-bit colour, or RGB
+    /// mapped to the 256 colours.
+    pub rgb_colour: String,
     /// Forward programs' `ESC P tmux; … ESC \` passthrough to the outer
     /// terminal (inline images and the like), as tmux's `allow-passthrough`.
     pub allow_passthrough: bool,

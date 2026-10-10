@@ -168,6 +168,10 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
         "default-shell" => c.default_shell = Some(need()?.to_owned()),
         "extended-keys" => need()?.clone_into(&mut c.extended_keys),
         "set-clipboard" => need()?.clone_into(&mut c.set_clipboard),
+        "rgb-colour" => match need()? {
+            v @ ("on" | "off" | "auto") => v.clone_into(&mut c.rgb_colour),
+            v => return Err(format!("rgb-colour: unknown value: {v} (on, off or auto)")),
+        },
         "copy-command" => need()?.clone_into(&mut c.copy_command),
         "lock-command" => need()?.clone_into(&mut c.lock_command),
         "remain-on-exit" => c.remain_on_exit = on_off(value, c.remain_on_exit)?,
@@ -196,6 +200,9 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
         }
         _ => return Err(format!("invalid option: {name}")),
     }
+    if name == "rgb-colour" {
+        srv.apply_rgb_colour();
+    }
     srv.mark_all_dirty();
     Ok(())
 }
@@ -223,6 +230,7 @@ pub fn option_lines(srv: &Server) -> Vec<String> {
         format!("default-terminal {}", c.default_terminal),
         format!("extended-keys {}", c.extended_keys),
         format!("set-clipboard {}", c.set_clipboard),
+        format!("rgb-colour {}", c.rgb_colour),
         format!(
             "monitor-activity {}",
             if c.monitor_activity { "on" } else { "off" }

@@ -62,6 +62,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `…StatusRight` for `status-left` and `status-right`, `…StatusDefault` for the
   rest outside the window list (`MouseDown3StatusLeft`, `WheelUpStatusDefault`,
   …). `…Status` is now only a click on a window in the list.
+- `rgb-colour` option: `on` (the default) sends 24-bit colour as before, `off`
+  maps it to the nearest of the 256 colours (tmux's own mapping) for terminals
+  without true colour, such as macOS Terminal.app, and `auto` decides per client
+  from `COLORTERM`, a `-direct` `TERM` or Windows Terminal.
 
 ### Changed
 

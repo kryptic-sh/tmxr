@@ -95,12 +95,12 @@ what was not.
   `DoubleClick` after a timer). The default double- and triple-click binds copy
   at once; tmux's show the selection for 0.3 s first (`run -d0.3`, which tmxr's
   `run-shell` lacks).
-- **No 256-colour fallback, by design for now**: colours are always 24-bit RGB,
-  which is what the tmux config asks for (`terminal-overrides ",*:RGB"` forces
-  RGB on every terminal). Only for a user whose terminal lacks true colour (e.g.
-  macOS Terminal.app) would a fallback matter: map RGB to the nearest xterm-256
-  index in `AnsiBackend` when the client's environment does not advertise true
-  colour (`COLORTERM`, `WT_SESSION`, …), behind an option.
+- **`rgb-colour auto`** decides from the client's environment only:
+  `COLORTERM=truecolor` / `24bit`, a `TERM` ending in `-direct`, or
+  `WT_SESSION`. Terminals that take 24-bit colour without saying so (some
+  `TERM_PROGRAM`s) get the 256 under `auto`; the default `on` sends 24-bit to
+  every terminal, as the tmux config's `terminal-overrides ",*:RGB"` does. There
+  is no 16-colour fallback.
 - **No frame-rate cap**: the server renders after each pass of its loop, and a
   pass stops handling events after `DRAIN_BUDGET` so a flood still repaints.
   Each pane's output waits in a bounded queue (`output::QUEUE_LIMIT`) that

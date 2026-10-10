@@ -20,6 +20,9 @@ pub struct AnsiBackend {
     out: String,
     size: Size,
     cursor: Position,
+    /// The terminal takes 24-bit colour; without it, RGB colours are sent
+    /// as their nearest of the 256.
+    rgb: bool,
 }
 
 impl AnsiBackend {
@@ -28,7 +31,13 @@ impl AnsiBackend {
             out: String::new(),
             size: Size::new(cols, rows),
             cursor: Position::new(0, 0),
+            rgb: true,
         }
+    }
+
+    /// Send 24-bit colour, or map it to the 256 (`rgb-colour`).
+    pub fn set_rgb(&mut self, rgb: bool) {
+        self.rgb = rgb;
     }
 
     pub fn set_size(&mut self, cols: u16, rows: u16) {
@@ -46,8 +55,43 @@ impl AnsiBackend {
     }
 }
 
-fn sgr_colour(out: &mut String, c: Color, fg: bool) {
+/// The xterm-256 colour nearest `(r, g, b)`: tmux's `colour_find_rgb`
+/// (colour.c), which picks the closer of the nearest 6x6x6 cube colour and
+/// the nearest of the 24 greys.
+pub fn nearest_256(r: u8, g: u8, b: u8) -> u8 {
+    const Q2C: [i32; 6] = [0x00, 0x5f, 0x87, 0xaf, 0xd7, 0xff];
+    let to_6cube = |v: i32| match v {
+        ..48 => 0,
+        48..114 => 1,
+        _ => (v - 35) / 40,
+    };
+    let dist = |(r1, g1, b1): (i32, i32, i32), (r2, g2, b2): (i32, i32, i32)| {
+        (r1 - r2).pow(2) + (g1 - g2).pow(2) + (b1 - b2).pow(2)
+    };
+    let (r, g, b) = (i32::from(r), i32::from(g), i32::from(b));
+    let (qr, qg, qb) = (to_6cube(r), to_6cube(g), to_6cube(b));
+    let cube = (Q2C[qr as usize], Q2C[qg as usize], Q2C[qb as usize]);
+    let cube_idx = 16 + 36 * qr + 6 * qg + qb;
+    if cube == (r, g, b) {
+        return cube_idx as u8;
+    }
+    let avg = (r + g + b) / 3;
+    let grey_idx = if avg > 238 { 23 } else { (avg - 3) / 10 };
+    let grey = 8 + 10 * grey_idx;
+    let idx = if dist((grey, grey, grey), (r, g, b)) < dist(cube, (r, g, b)) {
+        232 + grey_idx
+    } else {
+        cube_idx
+    };
+    idx as u8
+}
+
+fn sgr_colour(out: &mut String, c: Color, fg: bool, rgb: bool) {
     let base = if fg { 30 } else { 40 };
+    let c = match c {
+        Color::Rgb(r, g, b) if !rgb => Color::Indexed(nearest_256(r, g, b)),
+        c => c,
+    };
     let _ = match c {
         Color::Reset => Ok(()),
         Color::Black => write!(out, ";{}", base),
@@ -72,7 +116,7 @@ fn sgr_colour(out: &mut String, c: Color, fg: bool) {
 }
 
 /// A full SGR sequence (starting from a reset) for one cell's style.
-fn sgr(cell: &Cell) -> String {
+fn sgr(cell: &Cell, rgb: bool) -> String {
     let mut s = String::from("\x1b[0");
     let m = cell.modifier;
     for (flag, code) in [
@@ -90,8 +134,8 @@ fn sgr(cell: &Cell) -> String {
             let _ = write!(s, ";{code}");
         }
     }
-    sgr_colour(&mut s, cell.fg, true);
-    sgr_colour(&mut s, cell.bg, false);
+    sgr_colour(&mut s, cell.fg, true, rgb);
+    sgr_colour(&mut s, cell.bg, false, rgb);
     s.push('m');
     s
 }
@@ -110,7 +154,7 @@ impl Backend for AnsiBackend {
                 let _ = write!(self.out, "\x1b[{};{}H", y + 1, x + 1);
             }
             last = Some(Position::new(x, y));
-            let want = sgr(cell);
+            let want = sgr(cell, self.rgb);
             if style.as_deref() != Some(want.as_str()) {
                 self.out.push_str(&want);
                 style = Some(want);
@@ -220,5 +264,42 @@ mod tests {
         .unwrap();
         let again = String::from_utf8(term.backend_mut().take()).unwrap();
         assert!(!again.contains("hello"), "{again:?}");
+    }
+
+    #[test]
+    fn nearest_256_matches_tmux() {
+        // Cube corners and exact cube colours map to themselves.
+        assert_eq!(nearest_256(0, 0, 0), 16);
+        assert_eq!(nearest_256(255, 255, 255), 231);
+        assert_eq!(nearest_256(255, 0, 0), 196);
+        assert_eq!(nearest_256(0x5f, 0x87, 0xaf), 67);
+        // Mid grey is nearer a grey ramp entry than any cube colour.
+        assert_eq!(nearest_256(128, 128, 128), 244);
+        assert_eq!(nearest_256(8, 8, 8), 232);
+        // Near black stays on the cube.
+        assert_eq!(nearest_256(1, 2, 3), 16);
+        // Tokyo Night's blue, #7aa2f7.
+        assert_eq!(nearest_256(0x7a, 0xa2, 0xf7), 111);
+    }
+
+    #[test]
+    fn rgb_off_sends_the_nearest_of_the_256() {
+        let area = Rect::new(0, 0, 4, 1);
+        let mut term = Terminal::with_options(
+            AnsiBackend::new(4, 1),
+            TerminalOptions {
+                viewport: Viewport::Fixed(area),
+            },
+        )
+        .unwrap();
+        term.backend_mut().set_rgb(false);
+        term.draw(|f| {
+            let style = Style::default().fg(Color::Rgb(255, 0, 0));
+            f.buffer_mut().set_string(0, 0, "x", style);
+        })
+        .unwrap();
+        let out = String::from_utf8(term.backend_mut().take()).unwrap();
+        assert!(out.contains(";38;5;196"), "{out:?}");
+        assert!(!out.contains(";38;2;"), "{out:?}");
     }
 }
