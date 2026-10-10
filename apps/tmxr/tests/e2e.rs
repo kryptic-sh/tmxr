@@ -3966,7 +3966,9 @@ fn popups_and_menus_are_placed_where_tmux_places_them() {
             "5",
             hold,
         ]);
-        s.wait_for("the popup", |text| text.contains("PLACED"));
+        s.wait_for("the popup, drawn", |text| {
+            text.contains("PLACED") && corner(&s).is_some()
+        });
         assert_eq!(corner(&s), Some(want), "popup -x {x} -y {y}");
         t.run(&["display-popup", "-C"]);
         s.wait_for("closed", |text| !text.contains("PLACED"));
@@ -3992,7 +3994,9 @@ fn popups_and_menus_are_placed_where_tmux_places_them() {
         "5",
         hold,
     ]);
-    s.wait_for("the popup", |text| text.contains("PLACED"));
+    s.wait_for("the popup, drawn", |text| {
+        text.contains("PLACED") && corner(&s).is_some()
+    });
     assert_eq!(corner(&s), Some((left, 24)), "popup -x P -y P");
     t.run(&["display-popup", "-C"]);
     s.wait_for("closed", |text| !text.contains("PLACED"));
@@ -4017,7 +4021,9 @@ fn popups_and_menus_are_placed_where_tmux_places_them() {
             "b",
             "",
         ]);
-        s.wait_for("the menu", |text| text.contains("aaa"));
+        s.wait_for("the menu, drawn", |text| {
+            text.contains("aaa") && corner(&s).is_some()
+        });
         assert_eq!(corner(&s), Some(want), "menu -x {x} -y {y}");
         s.send(b"\x1b");
         s.wait_for("closed", |text| !text.contains("aaa"));
