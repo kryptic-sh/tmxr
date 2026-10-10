@@ -154,6 +154,67 @@ fn saved_args(srv: &Server, pane: PaneId, command: &str) -> Vec<String> {
     }
 }
 
+/// What to start again in `pane`, by `resurrect.processes`: a program and
+/// its arguments. Each entry is one of tmux-resurrect's forms, and the first
+/// that matches the pane's foreground program wins:
+/// - `name`: that program, with its arguments when it is in `restore-args`;
+/// - `~text`: a command line holding `text`, restored whole;
+/// - `match->command`: a command line starting with `match` (holding it, with
+///   a leading `~`), restored as `command`, split as tmux splits a command.
+fn saved_program(srv: &Server, pane: PaneId) -> Option<(String, Vec<String>)> {
+    let name = foreground(srv, pane)?;
+    // The foreground program's argv, read once and only when an entry needs
+    // the command line.
+    let argv = std::cell::OnceCell::new();
+    let argv = || {
+        argv.get_or_init(|| {
+            srv.panes
+                .get(&pane)
+                .and_then(|p| tmxr_term::process::foreground_args(&p.pty))
+                .filter(|a| {
+                    a.first()
+                        .is_some_and(|p| program_name(p).eq_ignore_ascii_case(&name))
+                })
+        })
+    };
+    let line = || argv().as_ref().map(|a| a.join(" "));
+    for entry in &srv.cfg.resurrect.processes {
+        let (pattern, restore) = match entry.split_once("->") {
+            Some((p, r)) => (p, Some(r)),
+            None => (entry.as_str(), None),
+        };
+        let anywhere = pattern.strip_prefix('~');
+        let matched = match (anywhere, restore) {
+            (Some(text), _) => line().is_some_and(|l| l.contains(text)),
+            (None, Some(_)) => line().is_some_and(|l| l.starts_with(pattern)),
+            (None, None) => pattern == name,
+        };
+        if !matched {
+            continue;
+        }
+        match (restore, anywhere) {
+            (Some(cmd), _) => {
+                let words = tmxr_command::tokenize(cmd, &|_| None)
+                    .ok()
+                    .and_then(|cmds| cmds.into_iter().next())
+                    .unwrap_or_default();
+                if let Some((program, args)) = words.split_first() {
+                    return Some((program.clone(), args.to_vec()));
+                }
+            }
+            (None, Some(_)) => {
+                let (program, args) = argv().as_ref()?.split_first()?;
+                return Some((program_name(program).to_owned(), args.to_vec()));
+            }
+            (None, None) => {
+                let args = saved_args(srv, pane, &name);
+                return Some((name, args));
+            }
+        }
+    }
+    None
+}
+
 /// A program as `argv[0]` may give it (`/usr/bin/less`, `C:\…\hjkl.exe`) by
 /// the name `pane_current_command` reports.
 fn program_name(program: &str) -> &str {
@@ -167,7 +228,6 @@ fn program_name(program: &str) -> &str {
 
 /// Capture the server's sessions.
 pub fn capture(srv: &Server) -> Save {
-    let keep = &srv.cfg.resurrect.processes;
     let sessions = srv
         .sessions
         .values()
@@ -194,15 +254,13 @@ pub fn capture(srv: &Server) -> Save {
                         panes: panes
                             .iter()
                             .map(|p| {
-                                let command = foreground(srv, *p).filter(|c| keep.contains(c));
+                                let (command, args) = saved_program(srv, *p)
+                                    .map_or((None, Vec::new()), |(c, a)| (Some(c), a));
                                 SavedPane {
                                     cwd: crate::vars::pane_current_path(srv, *p)
                                         .unwrap_or_default(),
-                                    args: command
-                                        .as_deref()
-                                        .map(|c| saved_args(srv, *p, c))
-                                        .unwrap_or_default(),
                                     command,
+                                    args,
                                 }
                             })
                             .collect(),

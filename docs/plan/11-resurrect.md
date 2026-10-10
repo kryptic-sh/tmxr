@@ -19,6 +19,12 @@ Stretch goal for the MVP; designed now so the model keeps what it needs.
   Linux, `KERN_PROCARGS2` on macOS, the process's command line split by
   `CommandLineToArgvW` on Windows. Anything else restores as a shell in the same
   directory.
+- `resurrect.processes` also takes tmux-resurrect's two other forms, matched
+  against the program's command line (its arguments joined by spaces): `~text`
+  restores a program whose command line holds `text`, arguments and all, and
+  `match->command` restores one whose command line starts with `match` (holds
+  it, with a leading `~`) as `command`, split as a tmux command is. The first
+  entry that matches wins.
 
 Each window's last pane is saved too. Not saved: pane titles, arguments of
 programs outside `restore-args`, pane contents (tmux-resurrect's

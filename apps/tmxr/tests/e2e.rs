@@ -103,6 +103,20 @@ impl Tmxr {
         }
     }
 
+    /// The newest resurrect save's text.
+    fn newest_save(&self) -> String {
+        let dir = self.dir.path().join("data").join("tmxr").join("resurrect");
+        let newest = std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .flat_map(|server| std::fs::read_dir(server.path()).unwrap().flatten())
+            .map(|f| f.path())
+            .filter(|p| p.extension().is_some_and(|e| e == "json"))
+            .max()
+            .expect("a save");
+        std::fs::read_to_string(newest).unwrap()
+    }
+
     /// Start an attaching client in a pseudo-terminal.
     fn attach(&self, rest: &[&str]) -> Screen {
         self.spawn(env!("CARGO_BIN_EXE_tmxr"), &self.args(rest))
@@ -175,6 +189,19 @@ impl Tmxr {
             child,
         }
     }
+}
+
+/// The first `args` list in a resurrect save (the test's one pane with any).
+fn saved_args(save: &str) -> Vec<String> {
+    let Some((_, rest)) = save.split_once("\"args\": [") else {
+        return Vec::new();
+    };
+    let list = rest.split(']').next().unwrap();
+    list.split('"')
+        .skip(1)
+        .step_by(2)
+        .map(str::to_owned)
+        .collect()
 }
 
 impl Drop for Tmxr {
@@ -1794,28 +1821,7 @@ fn resurrect_restores_allowlisted_programs_with_their_arguments() {
             |o| o.trim().eq_ignore_ascii_case(program),
         );
     };
-    // The first `args` list in the newest save (only one pane has any).
-    let saved_args = |t: &Tmxr| -> Vec<String> {
-        let dir = t.dir.path().join("data").join("tmxr").join("resurrect");
-        let newest = std::fs::read_dir(&dir)
-            .unwrap()
-            .flatten()
-            .flat_map(|server| std::fs::read_dir(server.path()).unwrap().flatten())
-            .map(|f| f.path())
-            .filter(|p| p.extension().is_some_and(|e| e == "json"))
-            .max()
-            .expect("a save");
-        let save = std::fs::read_to_string(newest).unwrap();
-        let Some((_, rest)) = save.split_once("\"args\": [") else {
-            return Vec::new();
-        };
-        let list = rest.split(']').next().unwrap();
-        list.split('"')
-            .skip(1)
-            .step_by(2)
-            .map(str::to_owned)
-            .collect()
-    };
+    let saved_args = |t: &Tmxr| saved_args(&t.newest_save());
     running(&t);
     t.run(&["resurrect-save"]);
     assert_eq!(saved_args(&t), args);
@@ -2967,4 +2973,60 @@ fn rgb_colour_auto_follows_the_client_environment() {
     let s = t.attach_env(&["attach", "-t", "ra"], &true_colour);
     s.wait_for("status line", |text| text.contains("ra"));
     assert!(rgb_cells(&s) > 0, "{:?}", s.status_cells());
+}
+
+#[test]
+fn resurrect_matches_command_lines_as_tmux_resurrect() {
+    // A program with arguments; on Windows the pane's cmd runs it as a child.
+    #[cfg(unix)]
+    let (program, start) = ("sleep", vec!["sleep", "300"]);
+    #[cfg(windows)]
+    let (program, start) = (
+        "PING",
+        vec!["cmd.exe", "/d", "/c", "ping -n 300 127.0.0.1 >NUL"],
+    );
+    let t = Tmxr::new("resmatch");
+    let base = std::fs::read_to_string(&t.config).unwrap();
+    let mut new = vec!["new-session", "-d", "-s", "main"];
+    new.extend(&start);
+    t.run(&new);
+    t.wait_run(
+        &[
+            "display-message",
+            "-p",
+            "-t",
+            "main",
+            "#{pane_current_command}",
+        ],
+        "the program running",
+        |o| o.trim().eq_ignore_ascii_case(program),
+    );
+    let save_with = |t: &Tmxr, processes: &str| {
+        std::fs::write(
+            &t.config,
+            format!(
+                "{base}processes = [{processes}]
+"
+            ),
+        )
+        .unwrap();
+        t.run(&["source-file"]);
+        t.run(&["resurrect-save"]);
+        t.newest_save()
+    };
+    // ~: a command line holding the text, restored whole.
+    #[cfg(unix)]
+    let (anywhere, whole) = ("\"~eep 30\"", vec!["300"]);
+    #[cfg(windows)]
+    let (anywhere, whole) = ("\"~300 127.0\"", vec!["-n", "300", "127.0.0.1"]);
+    assert_eq!(saved_args(&save_with(&t, anywhere)), whole);
+    // ->: a command line starting with the match, restored as the command.
+    #[cfg(unix)]
+    let (swap, restored) = ("\"sleep 300->sleep 'a b'\"", vec!["a b"]);
+    #[cfg(windows)]
+    let (swap, restored) = ("\"ping -n 300->ping -n 'a b'\"", vec!["-n", "a b"]);
+    assert_eq!(saved_args(&save_with(&t, swap)), restored);
+    // Neither matches: nothing restored.
+    let none = save_with(&t, "\"~not-in-it\", \"zzz->x\"");
+    assert!(!none.contains("\"command\": \""), "{none}");
 }

@@ -82,6 +82,8 @@ display-panes-active-colour = "#{@thm_red}"
 auto-save-minutes = 15
 restore-on-start = true
 keep = 20
+# Programs restored by name; tmux-resurrect's `~text` (a command line holding
+# text, restored whole) and `match->command` (restored as command) work too.
 processes = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "top", "htop", "irssi", "weechat", "mutt", "hjkl", "sqeel"]
 # Of those, the ones restored with their arguments (`less app.log`, not
 # `less`): tmux-resurrect's default list and hjkl. Arguments are saved in the

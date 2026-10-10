@@ -109,10 +109,8 @@ what was not.
   `detach_stays_responsive_under_flood_output` checks every CI platform detaches
   within 5 s under a flood. Frame rate itself is still not capped or measured.
 - **Resurrect**: pane titles are not saved (restored programs set their own).
-  Arguments are restored only for programs in `resurrect.restore-args`;
-  tmux-resurrect's `~` (match anywhere in the command line) and `->` (restore a
-  different command) strategies are not implemented. Arguments that are not
-  UTF-8 are not saved.
+  Arguments are restored only for programs in `resurrect.restore-args`.
+  Arguments that are not UTF-8 are not saved.
 - **tmux-yank `prefix y`** (copy the shell's command line) is not bound, on
   purpose for now. tmux-yank's `copy_line.sh` sends `C-a` to the shell, enters
   copy mode at the shell's cursor, selects to the end of the command and sends
