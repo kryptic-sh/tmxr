@@ -169,20 +169,25 @@ pub(super) fn run(
         }
         "pipe-pane" => {
             let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
-            if a.has('I') {
-                return Err("pipe-pane -I is not supported: only output (-O) is piped".into());
-            }
             let line = pos
                 .first()
                 .filter(|l| !l.is_empty())
                 .map(|l| super::expand_for(srv, ctx, Some(pid), l));
+            // Neither -I nor -O: the pane's output, as tmux's default.
+            let dir = crate::pipe::Direction {
+                output: a.has('O') || !a.has('I'),
+                input: a.has('I'),
+            };
             let shell = srv.cfg.default_shell.clone();
+            let (events, id) = (srv.events.clone(), srv.next_pipe);
+            srv.next_pipe += 1;
             let p = srv.panes.get_mut(&pid).ok_or("no such pane")?;
             // An open pipe always closes first; -o makes the command a toggle.
             let had = p.pipe.take().is_some();
             if let Some(line) = line.filter(|_| !(a.has('o') && had)) {
-                let pipe = crate::pipe::PanePipe::open(&line, shell.as_deref())
-                    .map_err(|e| format!("pipe-pane: {line}: {e}"))?;
+                let pipe =
+                    crate::pipe::PanePipe::open(id, &line, shell.as_deref(), dir, pid, events)
+                        .map_err(|e| format!("pipe-pane: {line}: {e}"))?;
                 p.pipe = Some(pipe);
             }
         }

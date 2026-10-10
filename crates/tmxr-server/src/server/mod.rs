@@ -49,6 +49,12 @@ pub enum Event {
     JobDone(Box<crate::jobs::Done>),
     /// A line for the message log from work done off the state thread.
     Log(String),
+    /// `pipe-pane -I`: the command printed this, to be typed into the pane.
+    PipeInput {
+        pane: PaneId,
+        pipe: u64,
+        bytes: Vec<u8>,
+    },
 }
 
 pub struct Client {
@@ -127,6 +133,8 @@ pub struct Server {
     pub next_pane: PaneId,
     next_spawn: u64,
     next_buffer: u32,
+    /// The id the next `pipe-pane` pipe takes.
+    pub next_pipe: u64,
     had_session: bool,
     pub exiting: bool,
     last_status: Instant,
@@ -233,6 +241,7 @@ impl Server {
             next_pane: 0,
             next_spawn: 0,
             next_buffer: 0,
+            next_pipe: 0,
             had_session: false,
             exiting: false,
             last_status: Instant::now(),
@@ -366,6 +375,17 @@ impl Server {
             }
             Event::JobDone(done) => self.job_done(*done),
             Event::Log(line) => self.log_message(line),
+            Event::PipeInput { pane, pipe, bytes } => {
+                // Only from the pane's open pipe: one since closed is done.
+                if let Some(p) = self
+                    .panes
+                    .get_mut(&pane)
+                    .filter(|p| p.pipe.as_ref().is_some_and(|x| x.id == pipe))
+                    && let Err(e) = p.pty.write(&bytes)
+                {
+                    tracing::debug!(pane, error = %e, "pipe-pane input not written");
+                }
+            }
         }
     }
 

@@ -2399,8 +2399,6 @@ fn pipe_pane_copies_output_to_a_command() {
     assert_eq!(piped(&t).trim(), "1");
     t.run(&["pipep", "-o", "-t", "pp", &command]);
     assert_eq!(piped(&t).trim(), "0");
-    let input = t.output(&["pipep", "-I", "-t", "pp", &command]);
-    assert!(!input.status.success(), "-I is not supported: {input:?}");
 }
 
 #[test]
@@ -3570,5 +3568,23 @@ fn dash_e_sets_variables_for_new_panes_and_sessions() {
         !t.output(&["new-window", "-d", "-e", "NOEQUALS"])
             .status
             .success()
+    );
+}
+
+#[test]
+fn pipe_pane_input_types_the_commands_output() {
+    let t = Tmxr::new("pipein");
+    t.run(&["new-session", "-d", "-s", "pi"]);
+    // The pipe's command prints a command line; the pane's shell runs it.
+    t.run(&["pipe-pane", "-I", "-t", "pi", "echo echo from-the-pipe"]);
+    t.wait_run(
+        &["capture-pane", "-p", "-t", "pi"],
+        "the typed command's output",
+        |o| o.lines().any(|l| l.trim_end() == "from-the-pipe"),
+    );
+    assert_eq!(
+        t.run(&["display-message", "-p", "-t", "pi", "#{pane_pipe}"])
+            .trim(),
+        "1"
     );
 }

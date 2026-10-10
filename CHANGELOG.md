@@ -30,6 +30,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `respawn-pane` and `respawn-window` (the new pane's environment) and
   `new-session` (the session's); `display-popup -e` may now be repeated too.
 
+- `pipe-pane -I`: the command's output is typed into the pane (`-IO` for both
+  directions); closing such a pipe stops its command.
+
 ### Changed
 
 - A `-S` socket's directory is no longer required to be private to its owner, as

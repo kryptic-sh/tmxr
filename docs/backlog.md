@@ -71,14 +71,13 @@ table. What has been verified, and how:
   real `tmux list-commands`. Every tmux 3.x command is in the table. Checked
   against a running server on 2026-10-10: `pipe`, `custom`, `linkw`, `popup`,
   `resizew` and `lockc` resolve, and `displ` is ambiguous as in tmux.
-- **Partial tmux commands**: `pipe-pane -I` is an error; `wait-for` must end its
-  command list and come from a command client; hooks are global or per session
-  (no pane or window hooks); `display-menu` and `display-popup` ignore tmux's
-  style flags (popup gaps above); a window cannot be linked twice into the same
-  session (tmux allows it); `customize-mode` is a picker over the options and
-  binds whose Enter puts the setting command in the prompt, without tmux's tree,
-  per-scope options or `d` / `u` keys, and its `-f` is a text query, not a
-  format filter.
+- **Partial tmux commands**: `wait-for` must end its command list and come from
+  a command client; hooks are global or per session (no pane or window hooks);
+  `display-menu` and `display-popup` ignore tmux's style flags (popup gaps
+  above); a window cannot be linked twice into the same session (tmux allows
+  it); `customize-mode` is a picker over the options and binds whose Enter puts
+  the setting command in the prompt, without tmux's tree, per-scope options or
+  `d` / `u` keys, and its `-f` is a text query, not a format filter.
 - **tmux default binds**: all of tmux's defaults are bound; `prefix C-z`
   (suspend-client) errors on Windows, which has no job control. Alerts for `M-n`
   / `M-p` are bells, `monitor-activity` and `monitor-silence`; tmux's
