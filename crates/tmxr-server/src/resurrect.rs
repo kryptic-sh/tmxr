@@ -545,6 +545,7 @@ fn restore_session(
                 (!w.auto_name).then(|| w.name.clone()),
                 Some(existing_dir(&p0.cwd, missing)),
                 argv(&p0),
+                &[],
                 size,
                 false,
             )?
@@ -561,6 +562,7 @@ fn restore_session(
                 None,
                 existing_dir(&p.cwd, missing),
                 argv(p),
+                &[],
                 false,
             )?;
             panes.push(id);

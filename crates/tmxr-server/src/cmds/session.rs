@@ -33,10 +33,13 @@ pub(super) fn run(
             let cwd = cwd_arg(srv, ctx, None, a)
                 .or_else(|| ctx.cwd.clone())
                 .unwrap_or_else(crate::util::home_dir);
+            // -e sets the new session's environment, after the client's.
+            let mut env = session_env(srv, ctx);
+            env.extend(super::env_flags(a)?);
             let sid = srv.new_session(
                 a.value('s').map(str::to_owned),
                 cwd,
-                session_env(srv, ctx),
+                env,
                 a.value('n').map(str::to_owned),
                 pos.to_vec(),
                 size,

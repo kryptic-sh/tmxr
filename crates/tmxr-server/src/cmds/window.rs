@@ -48,6 +48,7 @@ pub(super) fn run(
                 a.value('n').map(str::to_owned),
                 cwd,
                 pos.to_vec(),
+                &super::env_flags(a)?,
                 size,
                 !a.has('d'),
             )?;

@@ -31,10 +31,11 @@ impl Server {
         session: SessionId,
         argv: &[String],
         cwd: PathBuf,
+        env: &[(String, String)],
         cols: u16,
         rows: u16,
     ) -> Result<(), String> {
-        let started = self.start_pty(pid, session, argv, cwd, &[], cols, rows)?;
+        let started = self.start_pty(pid, session, argv, cwd, env, cols, rows)?;
         self.panes.insert(
             pid,
             Pane {
@@ -144,12 +145,14 @@ impl Server {
     }
 
     /// `respawn-pane -k`: end the pane's program and start `argv` (else the
-    /// command it was started with) in its place, keeping its id and cell.
+    /// command it was started with) in its place, keeping its id and cell;
+    /// `env` is added to its environment (`-e`).
     pub fn respawn_pane(
         &mut self,
         pid: PaneId,
         argv: Vec<String>,
         cwd: Option<PathBuf>,
+        env: &[(String, String)],
     ) -> Result<(), String> {
         let p = self.panes.get(&pid).ok_or("no such pane")?;
         let (wid, rect) = (p.window, p.rect);
@@ -164,7 +167,7 @@ impl Server {
             let _ = old.pty.kill();
         }
         self.commands.remove(&pid);
-        if let Err(e) = self.spawn_pane(pid, wid, session, &argv, cwd, rect.w, rect.h) {
+        if let Err(e) = self.spawn_pane(pid, wid, session, &argv, cwd, env, rect.w, rect.h) {
             // The old program is gone: take its cell out of the layout too.
             self.remove_pane_from_window(wid, pid);
             return Err(e);
@@ -174,7 +177,8 @@ impl Server {
     }
 
     /// Split `target` and start a new pane. `horizontal` is tmux's `-h`
-    /// (side by side); `before` is `-b`; `size` is the new pane's cells.
+    /// (side by side); `before` is `-b`; `size` is the new pane's cells;
+    /// `env` is added to its environment (`-e`).
     #[allow(clippy::too_many_arguments)]
     pub fn split(
         &mut self,
@@ -184,6 +188,7 @@ impl Server {
         size: Option<SplitSize>,
         cwd: PathBuf,
         argv: Vec<String>,
+        env: &[(String, String)],
         focus: bool,
     ) -> Result<PaneId, String> {
         let wid = self.panes.get(&target).ok_or("no such pane")?.window;
@@ -197,7 +202,7 @@ impl Server {
             .find(|(p, _)| *p == new)
             .map(|(_, r)| *r)
             .unwrap_or_default();
-        if let Err(e) = self.spawn_pane(new, wid, session, &argv, cwd, r.w, r.h) {
+        if let Err(e) = self.spawn_pane(new, wid, session, &argv, cwd, env, r.w, r.h) {
             if let Some(win) = self.windows.get_mut(&wid) {
                 let _ = win.layout.remove_leaf(new as usize);
             }

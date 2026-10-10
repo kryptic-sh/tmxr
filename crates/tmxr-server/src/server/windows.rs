@@ -60,7 +60,7 @@ impl Server {
                 last_used: Instant::now(),
             },
         );
-        if let Err(e) = self.new_window(id, None, window_name, Some(cwd), argv, size, true) {
+        if let Err(e) = self.new_window(id, None, window_name, Some(cwd), argv, &[], size, true) {
             self.sessions.remove(&id);
             return Err(e);
         }
@@ -73,7 +73,8 @@ impl Server {
         Ok(id)
     }
 
-    /// Create a window in `session` at `index` (or the first free index).
+    /// Create a window in `session` at `index` (or the first free index);
+    /// `env` is added to its pane's environment (`-e`).
     #[allow(clippy::too_many_arguments)]
     pub fn new_window(
         &mut self,
@@ -82,6 +83,7 @@ impl Server {
         name: Option<String>,
         cwd: Option<PathBuf>,
         argv: Vec<String>,
+        env: &[(String, String)],
         size: (u16, u16),
         select: bool,
     ) -> Result<WindowId, String> {
@@ -122,7 +124,7 @@ impl Server {
                 last_output: Instant::now(),
             },
         );
-        if let Err(e) = self.spawn_pane(pid, wid, session, &argv, cwd, cols, rows) {
+        if let Err(e) = self.spawn_pane(pid, wid, session, &argv, cwd, env, cols, rows) {
             self.windows.remove(&wid);
             return Err(e);
         }

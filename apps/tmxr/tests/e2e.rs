@@ -3523,3 +3523,52 @@ fn lock_after_time_locks_an_idle_client() {
     assert!(!s.text().contains("IDLE-LOCKED"), "locked again at once");
     t.run(&["set-option", "-g", "lock-after-time", "0"]);
 }
+
+#[test]
+fn dash_e_sets_variables_for_new_panes_and_sessions() {
+    let t = Tmxr::new("envflag");
+    // Prints both variables, then stays open.
+    let show = if cfg!(windows) {
+        "cmd /k echo A=%TMXR_A% B=%TMXR_B%"
+    } else {
+        "sh -c 'echo A=$TMXR_A B=$TMXR_B; sleep 30'"
+    };
+    // Each command its own values: the session's (from new-session -e)
+    // reach every later pane too, and must not pass for the command's.
+    let printed = |t: &Tmxr, target: &str, want: &'static str| {
+        t.wait_run(&["capture-pane", "-p", "-t", target], want, |o| {
+            o.contains(want)
+        });
+    };
+    let with = |a: &'static str, b: &'static str, cmd: &[&'static str]| {
+        let mut args = cmd.to_vec();
+        args.extend(["-e", a, "-e", b, show]);
+        t.run(&args);
+    };
+    with("TMXR_A=1", "TMXR_B=2", &["new-session", "-d", "-s", "ev"]);
+    printed(&t, "ev", "A=1 B=2");
+    let shown = t.run(&["show-environment", "-t", "ev"]);
+    assert!(
+        shown.contains("TMXR_A=1") && shown.contains("TMXR_B=2"),
+        "{shown}"
+    );
+    with("TMXR_A=3", "TMXR_B=4", &["new-window", "-d", "-t", "ev:5"]);
+    printed(&t, "ev:5", "A=3 B=4");
+    with(
+        "TMXR_A=5",
+        "TMXR_B=6",
+        &["split-window", "-d", "-t", "ev:5"],
+    );
+    printed(&t, "ev:5.1", "A=5 B=6");
+    with(
+        "TMXR_A=7",
+        "TMXR_B=8",
+        &["respawn-pane", "-k", "-t", "ev:5.1"],
+    );
+    printed(&t, "ev:5.1", "A=7 B=8");
+    assert!(
+        !t.output(&["new-window", "-d", "-e", "NOEQUALS"])
+            .status
+            .success()
+    );
+}

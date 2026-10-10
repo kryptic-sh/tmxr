@@ -33,6 +33,7 @@ pub(super) fn run(
                 size,
                 cwd,
                 pos.to_vec(),
+                &super::env_flags(a)?,
                 !a.has('d'),
             )?;
         }
@@ -146,7 +147,7 @@ pub(super) fn run(
                 return Err(format!("respawn pane failed: pane %{pid} still active"));
             }
             let cwd = cwd_arg(srv, ctx, Some(pid), a);
-            srv.respawn_pane(pid, pos.to_vec(), cwd)?;
+            srv.respawn_pane(pid, pos.to_vec(), cwd, &super::env_flags(a)?)?;
         }
         "respawn-window" => {
             // tmux: the window goes back to one pane, its first, respawned.
@@ -160,7 +161,7 @@ pub(super) fn run(
                 srv.kill_pane(*p);
             }
             let cwd = cwd_arg(srv, ctx, Some(first), a);
-            srv.respawn_pane(first, pos.to_vec(), cwd)?;
+            srv.respawn_pane(first, pos.to_vec(), cwd, &super::env_flags(a)?)?;
         }
         "copy-command-line" => {
             let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;

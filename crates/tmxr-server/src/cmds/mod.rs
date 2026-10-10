@@ -207,6 +207,17 @@ fn cwd_arg(srv: &Server, ctx: &Ctx, pane: Option<PaneId>, a: &Args) -> Option<Pa
         .map(|c| PathBuf::from(expand_for(srv, ctx, pane, c)))
 }
 
+/// The `-e NAME=VALUE` flags, in order.
+fn env_flags(a: &Args) -> Result<Vec<(String, String)>, String> {
+    a.values('e')
+        .map(|e| {
+            e.split_once('=')
+                .map(|(k, v)| (k.to_owned(), v.to_owned()))
+                .ok_or_else(|| format!("-e {e}: not NAME=VALUE"))
+        })
+        .collect()
+}
+
 fn session_env(srv: &Server, ctx: &Ctx) -> Vec<(String, String)> {
     let wanted = &srv.cfg.update_environment;
     let from = |k: &str| -> Option<String> {

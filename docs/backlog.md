@@ -57,12 +57,12 @@ table. What has been verified, and how:
   tmxr's private directory, unreachable by other users whatever `socket-access`
   says; `server-access -a` then says to use `-S`, as tmux documents.
 - **`display-popup` gaps.** `-x` / `-y` take a number or `C` (tmux's other
-  position forms and formats are errors); `-e` may be given once; `-b`, `-s`,
-  `-S`, `-k` and `-N` are accepted and ignored. Closing a running popup kills
-  its command (`Popup`'s `Drop`, as `kill-pane` does); removing that kill does
-  not turn the e2e test red on Windows, because closing the ConPTY ends the
-  program anyway. Whether the explicit kill is what ends it on Unix (where the
-  PTY reader thread holds its own copy of the master) is not verified.
+  position forms and formats are errors); `-b`, `-s`, `-S`, `-k` and `-N` are
+  accepted and ignored. Closing a running popup kills its command (`Popup`'s
+  `Drop`, as `kill-pane` does); removing that kill does not turn the e2e test
+  red on Windows, because closing the ConPTY ends the program anyway. Whether
+  the explicit kill is what ends it on Unix (where the PTY reader thread holds
+  its own copy of the master) is not verified.
 - **tmux command shorthand** (requested 2026-10-09: `tmux a` for
   `attach-session` and the like). The lookup works as tmux's does
   (`tmxr_command::table::lookup`): exact name or alias first, then an

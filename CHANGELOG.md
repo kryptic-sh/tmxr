@@ -26,6 +26,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `lock-after-time`: lock a client after that many idle seconds (0, the default,
   never does).
 
+- `-e NAME=VALUE`, as often as needed, on `new-window`, `split-window`,
+  `respawn-pane` and `respawn-window` (the new pane's environment) and
+  `new-session` (the session's); `display-popup -e` may now be repeated too.
+
 ### Changed
 
 - A `-S` socket's directory is no longer required to be private to its owner, as

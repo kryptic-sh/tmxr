@@ -321,7 +321,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "new-session",
         Some("new"),
-        "dc:n:s:x:y:",
+        "dc:e:n:s:x:y:",
         0,
         ANY,
         "[-d] [-c start-directory] [-n window-name] [-s session-name] [-x width] [-y height] [command]"
@@ -329,7 +329,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "new-window",
         Some("neww"),
-        "adc:n:t:",
+        "adc:e:n:t:",
         0,
         ANY,
         "[-ad] [-c start-directory] [-n window-name] [-t target-window] [command]"
@@ -418,7 +418,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "respawn-pane",
         Some("respawnp"),
-        "c:kt:",
+        "c:e:kt:",
         0,
         ANY,
         "[-k] [-c start-directory] [-t target-pane] [command]"
@@ -426,7 +426,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "respawn-window",
         Some("respawnw"),
-        "c:kt:",
+        "c:e:kt:",
         0,
         ANY,
         "[-k] [-c start-directory] [-t target-window] [command]"
@@ -577,7 +577,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "split-window",
         Some("splitw"),
-        "bc:dfhl:t:v",
+        "bc:de:fhl:t:v",
         0,
         ANY,
         "[-bdfhv] [-c start-directory] [-l size] [-t target-pane] [command]"

@@ -22,6 +22,8 @@ pub struct Args {
     flags: BTreeMap<char, Option<String>>,
     /// How many times each flag was given (`-EE`).
     counts: BTreeMap<char, usize>,
+    /// Every value a flag was given, in order (`-e A=1 -e B=2`).
+    values: BTreeMap<char, Vec<String>>,
     positional: Vec<String>,
 }
 
@@ -58,6 +60,7 @@ impl Args {
                 } else {
                     attached.to_owned()
                 };
+                out.values.entry(c).or_default().push(value.clone());
                 out.flags.insert(c, Some(value));
                 break;
             }
@@ -76,6 +79,15 @@ impl Args {
         self.counts.get(&flag).copied().unwrap_or(0)
     }
 
+    /// Every value `flag` was given, in order; `value` is the last.
+    pub fn values(&self, flag: char) -> impl Iterator<Item = &str> {
+        self.values
+            .get(&flag)
+            .into_iter()
+            .flatten()
+            .map(String::as_str)
+    }
+
     pub fn value(&self, flag: char) -> Option<&str> {
         self.flags.get(&flag).and_then(|v| v.as_deref())
     }
@@ -91,6 +103,14 @@ mod tests {
 
     fn v(args: &[&str]) -> Vec<String> {
         args.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    #[test]
+    fn repeated_values_are_all_kept() {
+        let a = Args::parse("e:t:", &v(&["-e", "A=1", "-eB=2", "-t", "x"])).unwrap();
+        assert_eq!(a.values('e').collect::<Vec<_>>(), ["A=1", "B=2"]);
+        assert_eq!(a.value('e'), Some("B=2"));
+        assert_eq!(a.values('d').count(), 0);
     }
 
     #[test]

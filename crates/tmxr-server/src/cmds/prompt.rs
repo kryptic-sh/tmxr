@@ -90,19 +90,7 @@ pub(super) fn run(
                     .or_else(|| srv.sessions.get(&sid).map(|s| s.cwd.clone()))
                     .unwrap_or_else(crate::util::home_dir),
             };
-            if a.count('e') > 1 {
-                return Err("display-popup: -e may be given once".into());
-            }
-            let env: Vec<(String, String)> = a
-                .value('e')
-                .map(|e| {
-                    e.split_once('=')
-                        .map(|(k, v)| (k.to_owned(), v.to_owned()))
-                        .ok_or_else(|| format!("display-popup: -e {e}: not NAME=VALUE"))
-                })
-                .transpose()?
-                .into_iter()
-                .collect();
+            let env = super::env_flags(a)?;
             let title = a
                 .value('T')
                 .map(|t| expand_for(srv, ctx, pane, t))
