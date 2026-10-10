@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Panning, as tmux's**: a window larger than the client (from `resize-window`)
+  follows the active pane's cursor, and `refresh-client -L` / `-R` / `-U` /
+  `-D [n]` move the view, `-c` goes back to following the cursor; bound to
+  `prefix S-arrows` and `prefix DC`. Before, only the window's top-left corner
+  showed. `refresh-client` from a command client acts on the current client.
+- **`prefix C`** opens `customize-mode`, as tmux's.
 - **tmux's menus** on `prefix <`, `prefix >` and the right button over a pane, a
   window's name or the status line's left part, bound as tmux 3.6 binds them. A
   menu item runs against the menu's target and the mouse event that opened it,

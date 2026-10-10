@@ -3156,6 +3156,11 @@ fn customize_mode_edits_an_option_through_the_prompt() {
             .any(|l| l.starts_with(":bind-key") && l.contains("#{pane_current_path}"))
     });
     s.send(b"\x1b");
+    s.wait_for("the prompt closed", |text| !text.contains(":bind-key"));
+    // prefix C opens it, as tmux's.
+    s.send(PREFIX);
+    s.send(b"C");
+    s.wait_for("customize mode", |text| text.contains("option mode-keys"));
 }
 
 #[test]
@@ -4478,6 +4483,48 @@ fn tmuxs_status_line_menus_act_on_what_was_clicked() {
         "a new window",
         |o| o.trim() == "3",
     );
+}
+
+#[test]
+fn refresh_client_pans_a_window_larger_than_the_client() {
+    let t = Tmxr::new("pan");
+    let s = t.attach(&["new", "-s", "pa"]);
+    s.wait_for("status line", |text| text.contains("pa"));
+    s.wait_mouse(true);
+    t.run(&["resize-window", "-t", "pa", "-x", "150", "-y", "40"]);
+    t.run(&["split-window", "-h", "-t", "pa"]);
+    t.run(&["select-pane", "-t", "pa:0.0"]);
+    t.wait_prompt("pa:0.0");
+    let left: u16 = t
+        .run(&["display-message", "-p", "-t", "pa:0.0", "#{pane_width}"])
+        .trim()
+        .parse()
+        .unwrap();
+    // Where the border between the panes shows on the client's top row.
+    let border = |s: &Screen| s.row_cells(0).iter().position(|c| c.0 == "│");
+    let border_at = |s: &Screen, want: u16, what: &str| {
+        s.wait_for(what, |_| border(s) == Some(usize::from(want)));
+    };
+    // The left pane's cursor is in the first screenful: no offset.
+    border_at(&s, left, "the window's left edge in view");
+    t.run(&["refresh-client", "-R", "10"]);
+    border_at(&s, left - 10, "panned right by 10");
+    // No further than the window's edge: 150 - 100.
+    t.run(&["refresh-client", "-R", "1000"]);
+    border_at(&s, left - 50, "panned to the right edge");
+    t.run(&["refresh-client", "-L", "20"]);
+    border_at(&s, left - 30, "panned back by 20");
+    // A click lands on the window cell under it: the right pane.
+    s.click(0, left - 30 + 5, 3);
+    t.wait_run(
+        &["display-message", "-p", "-t", "pa", "#{pane_index}"],
+        "the right pane",
+        |o| o.trim() == "1",
+    );
+    // -c follows the cursor again: back to the left pane's, at offset 0.
+    t.run(&["select-pane", "-t", "pa:0.0"]);
+    t.run(&["refresh-client", "-c"]);
+    border_at(&s, left, "following the cursor again");
 }
 
 #[test]

@@ -285,6 +285,10 @@ fn locate(
     }
     let wid = sess.current_window()?;
     t.window = Some((sess.current, wid));
+    // In window cells: the view may be panned across a larger window.
+    let (ox, oy) = crate::render::window_offset(srv, att);
+    let (col, row) = (col + ox, row + oy);
+    (t.col, t.row) = (col, row);
     let rects = srv.windows.get(&wid)?.visible_rects();
     if let Some((pane, _)) = rects
         .iter()

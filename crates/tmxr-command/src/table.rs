@@ -403,7 +403,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         0,
         "[-a] [-t target-session]"
     ),
-    cmd!("refresh-client", Some("refresh"), "", 0, 0, ""),
+    cmd!(
+        "refresh-client",
+        Some("refresh"),
+        "cDLRU",
+        0,
+        1,
+        "[-cDLRU] [adjustment]"
+    ),
     cmd!(
         "rename-session",
         Some("rename"),

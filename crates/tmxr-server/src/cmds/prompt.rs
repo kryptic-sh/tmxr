@@ -196,9 +196,65 @@ pub(super) fn run(
             }
         }
         "refresh-client" => {
-            if let Some(c) = attached_client(srv, ctx)
-                && let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut())
-            {
+            // From a command client, the current client, as tmux's.
+            let Some(c) = super::display_client(srv, ctx) else {
+                return Ok(true);
+            };
+            // -L / -R / -U / -D pan a window larger than the client by the
+            // adjustment (1 by default), from where the view is now; -c
+            // goes back to following the cursor. As tmux 3.6's.
+            if "cLRUD".chars().any(|f| a.has(f)) {
+                let adjust = match pos.first() {
+                    Some(n) => n
+                        .parse::<u16>()
+                        .ok()
+                        .filter(|n| *n >= 1)
+                        .ok_or_else(|| format!("adjustment {n} is invalid"))?,
+                    None => 1,
+                };
+                let att = srv
+                    .clients
+                    .get(&c)
+                    .and_then(|c| c.att.as_ref())
+                    .ok_or("no client")?;
+                let window = srv
+                    .sessions
+                    .get(&att.session)
+                    .and_then(crate::model::Session::current_window)
+                    .and_then(|w| srv.windows.get(&w))
+                    .map(|w| (w.id, w.cols, w.rows));
+                let (ox, oy) = crate::render::window_offset(srv, att);
+                let view = (
+                    att.cols,
+                    att.rows.saturating_sub(crate::server::STATUS_ROWS),
+                );
+                let pan = match window {
+                    _ if a.has('c') => None,
+                    None => att.pan,
+                    Some((wid, wcols, wrows)) => {
+                        let (mut x, mut y) = match att.pan {
+                            Some((w, x, y)) if w == wid => (x, y),
+                            _ => (ox, oy),
+                        };
+                        if a.has('L') {
+                            x = x.saturating_sub(adjust);
+                        } else if a.has('R') {
+                            x = x.saturating_add(adjust).min(wcols.saturating_sub(view.0));
+                        } else if a.has('U') {
+                            y = y.saturating_sub(adjust);
+                        } else if a.has('D') {
+                            y = y.saturating_add(adjust).min(wrows.saturating_sub(view.1));
+                        }
+                        Some((wid, x, y))
+                    }
+                };
+                if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
+                    att.pan = pan;
+                    att.dirty = true;
+                }
+                return Ok(true);
+            }
+            if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
                 att.full_redraw = true;
                 att.dirty = true;
             }
@@ -284,6 +340,9 @@ pub(super) fn run(
         }
         // tmux's -f is a format filter; tmxr opens the picker with it as the
         // query. -a, -F, -N, -t and -Z are accepted and not followed.
+        // tmux's -Z zooms the pane the mode is in so it fills the window;
+        // tmxr's picker covers the whole client already, so -Z changes
+        // nothing.
         "customize-mode" => {
             let c = super::display_client(srv, ctx).ok_or("no current client")?;
             let ov = Overlay::customize_picker(srv, a.value('f').unwrap_or(""));

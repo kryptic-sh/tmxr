@@ -102,6 +102,9 @@ pub struct Attached {
     pub status_ranges: crate::render::StatusRanges,
     /// Whether this client was last told to capture the mouse.
     pub mouse: bool,
+    /// `refresh-client -L` / `-R` / `-U` / `-D`: the view of a window larger
+    /// than the client held at this offset, until `-c` or another window.
+    pub pan: Option<(WindowId, u16, u16)>,
 }
 
 /// Paste buffer.

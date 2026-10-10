@@ -126,6 +126,52 @@ pub(crate) fn runs_width(text: &str) -> u16 {
         .sum()
 }
 
+/// Where a client's view of its window starts, for a window larger than
+/// the client (tmux 3.6's `tty_window_offset1`): a pan holds the view,
+/// clamped to the window; otherwise it follows the active pane's cursor,
+/// centring it once it would leave the first screenful.
+pub fn window_offset(srv: &Server, att: &crate::server::Attached) -> (u16, u16) {
+    let Some(win) = srv
+        .sessions
+        .get(&att.session)
+        .and_then(crate::model::Session::current_window)
+        .and_then(|w| srv.windows.get(&w))
+    else {
+        return (0, 0);
+    };
+    let (sx, sy) = (att.cols, att.rows.saturating_sub(STATUS_ROWS));
+    if sx >= win.cols && sy >= win.rows {
+        return (0, 0);
+    }
+    let clamp = |o: u16, view: u16, size: u16| if view >= size { 0 } else { o.min(size - view) };
+    if let Some((w, ox, oy)) = att.pan
+        && w == win.id
+    {
+        return (clamp(ox, sx, win.cols), clamp(oy, sy, win.rows));
+    }
+    let Some(p) = srv.panes.get(&win.active) else {
+        return (0, 0);
+    };
+    let screen = p.emu.screen();
+    if screen.hide_cursor() {
+        return (0, 0);
+    }
+    let (row, col) = screen.cursor_position();
+    let follow = |c: u16, view: u16, size: u16| {
+        if c < view {
+            0
+        } else if c > size.saturating_sub(view) {
+            size.saturating_sub(view)
+        } else {
+            c - view / 2
+        }
+    };
+    (
+        follow(p.rect.x + col, sx, win.cols),
+        follow(p.rect.y + row, sy, win.rows),
+    )
+}
+
 /// Draw the client's frame. Returns the status-line window ranges.
 pub fn draw(srv: &Server, id: ClientId, term: &mut Terminal<AnsiBackend>) -> StatusRanges {
     let mut ranges = StatusRanges::default();
@@ -140,7 +186,29 @@ pub fn draw(srv: &Server, id: ClientId, term: &mut Terminal<AnsiBackend>) -> Sta
         let pane_rows = rows.saturating_sub(STATUS_ROWS);
         let mut cursor = None;
         if let Some(wid) = window {
-            cursor = draw_window(srv, id, wid, buf, cols, pane_rows);
+            cursor = match srv.windows.get(&wid) {
+                // Larger than the client: drawn whole, then the part in
+                // view copied out.
+                Some(win) if win.cols > cols || win.rows > pane_rows => {
+                    let (ox, oy) = window_offset(srv, att);
+                    let mut whole = Buffer::empty(Rect::new(0, 0, win.cols, win.rows));
+                    let at = draw_window(srv, id, wid, &mut whole, win.cols, win.rows);
+                    for y in 0..pane_rows.min(win.rows.saturating_sub(oy)) {
+                        for x in 0..cols.min(win.cols.saturating_sub(ox)) {
+                            if let (Some(cell), Some(out)) =
+                                (whole.cell((x + ox, y + oy)), buf.cell_mut((x, y)))
+                            {
+                                *out = cell.clone();
+                            }
+                        }
+                    }
+                    at.and_then(|c| {
+                        let (x, y) = (c.x.checked_sub(ox)?, c.y.checked_sub(oy)?);
+                        (x < cols && y < pane_rows).then_some(Position::new(x, y))
+                    })
+                }
+                _ => draw_window(srv, id, wid, buf, cols, pane_rows),
+            };
         }
         ranges = draw_status(srv, id, buf, cols, rows);
         if let Some(c) = draw_overlay(srv, id, buf, cols, rows) {

@@ -49,6 +49,7 @@ impl Server {
             click: None,
             status_ranges: crate::render::StatusRanges::default(),
             mouse: false,
+            pan: None,
         });
         self.restored_pending = false;
         self.send(id, ServerMsg::Attached);
