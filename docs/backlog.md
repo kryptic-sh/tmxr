@@ -3,50 +3,34 @@
 Work raised and not finished, decisions still open, and gaps in what has been
 verified. Delete an entry when it ships; `git log` keeps the history.
 
-## Where the implementation stands (session of 2026-10-09)
+## Where the implementation stands (2026-10-10)
 
-The first implementation pass covers most of milestones M1–M7 in code; only part
-of it has been exercised end to end. Each item below says what was verified and
-what was not.
+Milestones M1–M7 are in code, and every tmux 3.x command except `server-access`
+(a decision, below) is in the command table. What has been verified, and how:
 
-- **Built and unit-tested** (Windows locally; CI covers Linux/macOS):
+- **Unit tests** in every crate (Windows locally; CI on Linux and macOS too):
   `tmxr-proto` (codec, golden wire bytes, endpoints, owner-only pipe DACL),
   `tmxr-command` (tokenizer, getopt flags, command table, key names, formats),
-  `tmxr-config` (defaults = tmux.conf port, layering, parity test against the
-  tmux binds), `tmxr-term` (PTY spawn incl. ConPTY, vt100 hooks, DA/DSR replies,
-  key/paste/mouse encoding, foreground-process inspection), `tmxr-server`
-  (layout geometry and navigation, ANSI backend, overlays incl. the hjkl-picker
-  session picker, copy-mode motions/selection/search, resurrect save/load),
-  `tmxr-client`.
-- **Verified by hand on Windows** with the real binary: auto-spawned detached
-  server, `new -d`, `ls`, `split-window -t`, `list-panes`, `display -p` with
-  formats, `send-keys`, `capture-pane -p`, `kill-server`, resurrect
-  save-on-exit + restore-on-start.
-- **Verified end to end** by `apps/tmxr/tests/e2e.rs` (real binary in a ConPTY
-  locally on Windows and in a pty on every CI platform; each test shown to fail
-  when the code it covers is broken): attach, typing into the pane, `prefix %`
-  split, `prefix h`, `prefix d` detach, `ls`, reattach with output preserved,
-  command clients starting and stopping a server; the `C-l` navigator moving
-  focus past a plain program and passing the key through to a program named
-  `hjkl`; the `prefix s` picker by `Enter`, by typing a filter and by `j` in
-  normal mode; copy mode by keyboard (`prefix [`, `?` search, `v` `E` `y`) into
-  a buffer and `prefix ]` pasting it; `save-buffer` / `load-buffer`; `if-shell`
-  with and without `-F`; `move-window` / `swap-window` within and across
-  sessions; `join-pane` and `swap-pane -s` across windows; `respawn-pane -k`
-  surviving the old program's exit; resurrect restoring a three-pane layout into
-  a new server; the status line's catppuccin layout and Tokyo Night colours,
-  cell by cell, including the session block turning red while the prefix is
-  pending.
+  `tmxr-config` (defaults = tmux.conf port, layering, parity with the tmux
+  binds), `tmxr-term` (PTY spawn incl. ConPTY, vt100 hooks, key/paste/mouse
+  encoding, foreground-process inspection), `tmxr-server` (layout, ANSI backend
+  and colour mapping, overlays, menus, copy mode, resurrect), and `tmxr-client`.
+- **End to end** by `apps/tmxr/tests/e2e.rs`: the real binary in a ConPTY
+  locally and in a pty on every CI platform, each test shown to fail when the
+  code it covers is broken. It drives attaching, typing, splits, navigation, the
+  pickers, copy mode (vi and emacs), buffers, mouse clicks, drags and the wheel,
+  every command family including hooks, menus, popups, locking, `run-shell` /
+  `if-shell` ordering and linked windows, resurrect, and the status line's cells
+  and colours. The test names say what each covers.
 - **Not yet verified anywhere**: how the status line and borders look in a real
-  terminal emulator (the e2e test checks the status line's cells and colours in
-  the vt100 emulator, not a terminal's rendering of the glyphs), mouse, and the
-  navigator with a real hjkl or vim in front (the test uses a renamed system
-  program, so only the name match and the key routing are covered).
+  terminal emulator (the tests check cells and colours in a vt100 emulator, not
+  a terminal's rendering of the glyphs), and the navigator with a real hjkl or
+  vim in front (the test uses a renamed system program, so only the name match
+  and the key routing are covered).
 - **Not run on Linux/macOS locally**: the `cfg(unix)` arms (socket dir checks,
-  peer uid, `setsid` spawn, `/proc` and `proc_pidinfo` inspection) are only
-  compiled and tested by CI.
-- CI (commit 7d26b7a) runs the unit and e2e tests green on Linux, macOS and
-  Windows; the Unix arms are exercised there, not locally.
+  peer uid, `setsid` spawn, `/proc` and `proc_pidinfo` inspection, the client's
+  `/bin/sh` lock command) are compiled and tested by CI only, which runs on
+  every push to `main`.
 - **The server's pipe refuses other Windows users**: CI's `pipe-acl` job makes a
   second local account, whose `tmxr ls` on the owner's pipe fails with
   `Access is denied. (os error 5)` while the owner's succeeds. Shown to go red
