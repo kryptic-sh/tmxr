@@ -38,11 +38,6 @@ table. What has been verified, and how:
 
 ## Known gaps and follow-ups
 
-- **Panning a window larger than the client** follows tmux's
-  `tty_window_offset1` for drawing and pane clicks. Not done: a popup or menu
-  placed at the mouse (`-x M`) or by the pane (`P`) uses client cells, so with
-  the view panned it lands off by the offset, and a border drag (`follow_drag`)
-  reads client cells too.
 - **tmux default binds tmxr lacks** (compared with tmux 3.6's `list-keys` on
   2026-10-10; 21 of its 267). Each needs something tmxr does not have yet:
   - Menus: all of tmux's are bound (`prefix <` / `>`, the right button over a

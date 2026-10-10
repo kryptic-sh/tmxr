@@ -318,9 +318,17 @@ fn follow_drag(srv: &mut Server, id: ClientId, m: MouseEvent) -> bool {
     else {
         return false;
     };
+    // In window cells, as the drag's start was found: the view may be
+    // panned across a larger window.
+    let (ox, oy) = srv
+        .clients
+        .get(&id)
+        .and_then(|c| c.att.as_ref())
+        .map_or((0, 0), |a| crate::render::window_offset(srv, a));
+    let (col, row) = (m.column + ox, m.row + oy);
     match (drag, m.kind) {
         (Drag::Border { pane, vertical, at }, MouseEventKind::Drag(MouseButton::Left)) => {
-            let now = if vertical { m.column } else { m.row };
+            let now = if vertical { col } else { row };
             if now != at {
                 let (dir, cells) = match (vertical, now > at) {
                     (true, true) => (Dir::Right, now - at),
@@ -347,7 +355,7 @@ fn follow_drag(srv: &mut Server, id: ClientId, m: MouseEvent) -> bool {
             }
         }
         (Drag::Select { pane }, MouseEventKind::Drag(MouseButton::Left)) => {
-            move_copy_cursor(srv, pane, m.column, m.row);
+            move_copy_cursor(srv, pane, col, row);
         }
         (Drag::Select { pane }, MouseEventKind::Up(MouseButton::Left)) => {
             set_drag(srv, id, None);
@@ -365,8 +373,8 @@ fn follow_drag(srv: &mut Server, id: ClientId, m: MouseEvent) -> bool {
                 let target = MouseTarget {
                     event: m,
                     location: MouseLocation::Pane,
-                    col: m.column,
-                    row: m.row,
+                    col,
+                    row,
                     session,
                     window: index.map(|i| (i, window)),
                     pane: Some(pane),

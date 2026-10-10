@@ -4497,10 +4497,40 @@ fn refresh_client_pans_a_window_larger_than_the_client() {
         "the right pane",
         |o| o.trim() == "1",
     );
+    // A box placed at the mouse lands by the click on screen, not at its
+    // window cell: centred on column 40, its bottom row just below 10.
+    let hold = if cfg!(windows) {
+        "'echo PANPOP& ping -n 30 127.0.0.1 >NUL'"
+    } else {
+        "'echo PANPOP; sleep 30'"
+    };
+    let popup = format!("display-popup -x M -y M -w 10 -h 4 {hold}");
+    t.run(&["bind-key", "-n", "MouseDown3Pane", &popup]);
+    s.click(2, 40, 10);
+    s.wait_for("the popup", |text| text.contains("PANPOP"));
+    let corner = (0..ROWS).find_map(|r| {
+        let col = s.row_cells(r).iter().position(|(c, _, _)| c == "┌")?;
+        Some((col, r))
+    });
+    assert_eq!(corner, Some((35, 10)), "popup at the mouse while panned");
+    t.run(&["display-popup", "-C"]);
+    s.wait_for("closed", |text| !text.contains("PANPOP"));
+    // Dragging the border three cells right widens the left pane by three.
+    let at = left - 30;
+    s.mouse(0, at, 5, false);
+    s.mouse(32, at + 1, 5, false);
+    s.mouse(32, at + 3, 5, false);
+    s.mouse(0, at + 3, 5, true);
+    t.wait_run(
+        &["display-message", "-p", "-t", "pa:0.0", "#{pane_width}"],
+        "the border dragged",
+        |o| o.trim() == (left + 3).to_string(),
+    );
     // -c follows the cursor again: back to the left pane's, at offset 0.
     t.run(&["select-pane", "-t", "pa:0.0"]);
     t.run(&["refresh-client", "-c"]);
-    border_at(&s, left, "following the cursor again");
+    // The left pane, three wider since the drag.
+    border_at(&s, left + 3, "following the cursor again");
 }
 
 #[test]

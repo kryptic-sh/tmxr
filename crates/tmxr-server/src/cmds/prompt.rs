@@ -436,11 +436,28 @@ fn client_size(srv: &Server, c: ClientId) -> Result<(u16, u16), String> {
 
 /// What a menu or popup on client `c` for `pane` may be placed by.
 fn places(srv: &Server, ctx: &Ctx, c: ClientId, pane: Option<PaneId>) -> Places {
+    // Panes and pane clicks are in window cells; a box is placed in the
+    // client's, which differ while the view is panned.
+    let (ox, oy) = srv
+        .clients
+        .get(&c)
+        .and_then(|c| c.att.as_ref())
+        .map_or((0, 0), |a| crate::render::window_offset(srv, a));
     Places {
-        pane: pane
-            .and_then(|p| srv.panes.get(&p))
-            .map(|p| ratatui::layout::Rect::new(p.rect.x, p.rect.y, p.rect.w, p.rect.h)),
-        mouse: ctx.mouse.map(|m| (m.col, m.row)),
+        pane: pane.and_then(|p| srv.panes.get(&p)).map(|p| {
+            ratatui::layout::Rect::new(
+                p.rect.x.saturating_sub(ox),
+                p.rect.y.saturating_sub(oy),
+                p.rect.w,
+                p.rect.h,
+            )
+        }),
+        mouse: ctx.mouse.map(|m| match m.location {
+            tmxr_command::MouseLocation::Pane | tmxr_command::MouseLocation::Border => {
+                (m.col.saturating_sub(ox), m.row.saturating_sub(oy))
+            }
+            _ => (m.col, m.row),
+        }),
         window: srv
             .clients
             .get(&c)
