@@ -208,11 +208,6 @@ table. What has been verified, and how:
 
 ## Not yet verified
 
-- **`prefix_y_copies_the_shells_command_line` flaked once on macOS** (CI run
-  38060138527, 2026-10-10): it timed out waiting for the copy, which held
-  `me-nowbash-5.3$`, part of the prompt, and passed on the retry. That is bash
-  without prompt marks, so likely the read-too-early case under the `prefix y`
-  entry (`copyline::STEP_LIMIT`); not diagnosed.
 - **`socket-acl` flaked once on ubuntu** (run 38057623410, commit 0491b6e,
   2026-10-10). The step stalled about 34 s after the expected "Permission
   denied" and "server closed the connection", then exited 1 without saying which

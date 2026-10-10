@@ -3567,6 +3567,9 @@ fn prefix_y_copies_the_shells_command_line() {
         "the shell",
         |o| o.trim().eq_ignore_ascii_case(shell),
     );
+    // Its prompt too: keys typed before the line editor reads them are
+    // echoed by the terminal, then drawn again after the prompt.
+    t.wait_prompt("yk");
     // Typed, not run, with the cursor left in the middle of it.
     s.send(b"echo yank-me-now");
     s.wait_for("the typing", |text| text.contains("echo yank-me-now"));
@@ -3605,6 +3608,7 @@ fn prefix_y_uses_the_shells_prompt_mark() {
         "the shell",
         |o| o.trim().eq_ignore_ascii_case(shell),
     );
+    t.wait_prompt("ym");
     // The prompt now ends with an OSC 133;B mark.
     s.send(mark.as_bytes());
     s.send(b"\r");
