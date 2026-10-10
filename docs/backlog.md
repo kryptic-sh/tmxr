@@ -103,12 +103,12 @@ table. What has been verified, and how:
   (`popups_and_menus_are_placed_where_tmux_places_them`); tmux's `menu_*`
   variables are not defined. `-b` draws single, rounded, double, heavy or no
   lines (tmux's `simple` and `padded` are errors); `-k` and `-N` are accepted
-  and ignored, as is a menu's `-O`. Closing a running popup kills its command
-  (`Popup`'s `Drop`, as `kill-pane` does). On Windows closing the ConPTY ends
-  the program anyway, so removing the kill leaves the e2e test green there; on
-  Linux and macOS it is what ends it: without it
-  `display_popup_runs_a_command_over_the_panes` failed on both ("the popup's
-  command outlived it"; CI run 38060138527, a throwaway branch, 2026-10-10).
+  and ignored. Closing a running popup kills its command (`Popup`'s `Drop`, as
+  `kill-pane` does). On Windows closing the ConPTY ends the program anyway, so
+  removing the kill leaves the e2e test green there; on Linux and macOS it is
+  what ends it: without it `display_popup_runs_a_command_over_the_panes` failed
+  on both ("the popup's command outlived it"; CI run 38060138527, a throwaway
+  branch, 2026-10-10).
 - **tmux command shorthand** (requested 2026-10-09: `tmux a` for
   `attach-session` and the like). The lookup works as tmux's does
   (`tmxr_command::table::lookup`): exact name or alias first, then an
