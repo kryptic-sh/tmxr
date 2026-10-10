@@ -115,13 +115,7 @@ pub(super) fn run(
                     let k = format!("{prefix}{key}");
                     let _ = writeln!(out.stdout, "{k:<w$}  {note}", w = width + 6);
                 } else {
-                    let r = if b.repeat { "-r " } else { "" };
-                    let _ = writeln!(
-                        out.stdout,
-                        "bind-key {r}-T {table} {} {}",
-                        join_args(&[key.to_string()]),
-                        b.cmd
-                    );
+                    let _ = writeln!(out.stdout, "{}", bind_line(&table, &key, &b));
                 }
             }
         }
@@ -129,4 +123,14 @@ pub(super) fn run(
         _ => return Ok(false),
     }
     Ok(true)
+}
+
+/// A bind as `list-keys` prints it: the `bind-key` command that makes it.
+pub fn bind_line(table: &str, key: &BindKey, b: &BindSpec) -> String {
+    let r = if b.repeat { "-r " } else { "" };
+    format!(
+        "bind-key {r}-T {table} {} {}",
+        join_args(&[key.to_string()]),
+        b.cmd
+    )
 }

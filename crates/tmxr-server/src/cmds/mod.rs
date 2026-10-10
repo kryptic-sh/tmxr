@@ -12,6 +12,9 @@ mod session;
 mod wait;
 mod window;
 
+pub use binds::bind_line;
+pub use options::option_lines;
+
 use std::path::PathBuf;
 
 use crossterm::event::KeyEvent;

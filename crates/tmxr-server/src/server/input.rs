@@ -121,6 +121,11 @@ impl Server {
                         a.overlay = Some(ov);
                     }
                 }
+                OverlayAction::Edit(line) => {
+                    if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
+                        a.overlay = Some(Overlay::prompt(":".into(), line, None));
+                    }
+                }
                 OverlayAction::Switch(sid) => self.switch_client(id, sid),
                 OverlayAction::SwitchWindow(sid, idx) => {
                     self.switch_client(id, sid);

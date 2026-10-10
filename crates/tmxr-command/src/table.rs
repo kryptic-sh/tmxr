@@ -111,6 +111,14 @@ pub const COMMANDS: &[CommandSpec] = &[
     ),
     cmd!("copy-mode", None, "eMut:", 0, 0, "[-eMu] [-t target-pane]"),
     cmd!(
+        "customize-mode",
+        None,
+        "aF:f:Nt:Z",
+        0,
+        0,
+        "[-aNZ] [-F format] [-f filter] [-t target-pane]"
+    ),
+    cmd!(
         "delete-buffer",
         Some("deleteb"),
         "b:",

@@ -227,6 +227,16 @@ pub(super) fn run(
                 crate::server::if_shell(srv, ctx, cond, then, otherwise);
             }
         }
+        // tmux's -f is a format filter; tmxr opens the picker with it as the
+        // query. -a, -F, -N, -t and -Z are accepted and not followed.
+        "customize-mode" => {
+            let c = super::display_client(srv, ctx).ok_or("no current client")?;
+            let ov = Overlay::customize_picker(srv, a.value('f').unwrap_or(""));
+            if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
+                att.overlay = Some(ov);
+            }
+            srv.mark_client_dirty(c);
+        }
         "choose-tree" | "choose-buffer" | "choose-client" | "find-window" => {
             let c = attached_client(srv, ctx).ok_or("no current client")?;
             let ov = match p.name() {

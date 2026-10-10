@@ -20,43 +20,7 @@ pub(super) fn run(
         "set-option" | "set-window-option" => set_option(srv, ctx, p, out)?,
         // Window options live with the rest in one table.
         "show-options" | "show-window-options" => {
-            let c = &srv.cfg;
-            let lines = [
-                format!("prefix {}", c.prefix),
-                format!("mouse {}", if c.mouse { "on" } else { "off" }),
-                format!("base-index {}", c.base_index),
-                format!("pane-base-index {}", c.pane_base_index),
-                format!(
-                    "renumber-windows {}",
-                    if c.renumber_windows { "on" } else { "off" }
-                ),
-                format!("mode-keys {}", c.mode_keys),
-                format!("history-limit {}", c.history_limit),
-                format!("prompt-history-limit {}", c.prompt_history_limit),
-                format!("display-time {}", c.display_time),
-                format!("status-interval {}", c.status_interval),
-                format!("status-left-length {}", c.status.left_length),
-                format!("status-right-length {}", c.status.right_length),
-                format!("repeat-time {}", c.repeat_time),
-                format!("default-terminal {}", c.default_terminal),
-                format!("extended-keys {}", c.extended_keys),
-                format!("set-clipboard {}", c.set_clipboard),
-                format!(
-                    "lock-command {}",
-                    join_args(std::slice::from_ref(&c.lock_command))
-                ),
-                format!(
-                    "allow-passthrough {}",
-                    if c.allow_passthrough { "on" } else { "off" }
-                ),
-            ];
-            let mut all: Vec<String> = lines.to_vec();
-            all.extend(
-                c.options
-                    .iter()
-                    .map(|(k, v)| format!("{k} {}", join_args(std::slice::from_ref(v)))),
-            );
-            for l in all {
+            for l in option_lines(srv) {
                 if pos
                     .first()
                     .is_none_or(|n| l.split(' ').next() == Some(n.as_str()))
@@ -204,4 +168,45 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
     }
     srv.mark_all_dirty();
     Ok(())
+}
+
+/// Each option as `show-options` prints it: `name value`.
+pub fn option_lines(srv: &Server) -> Vec<String> {
+    let c = &srv.cfg;
+    let lines = [
+        format!("prefix {}", c.prefix),
+        format!("mouse {}", if c.mouse { "on" } else { "off" }),
+        format!("base-index {}", c.base_index),
+        format!("pane-base-index {}", c.pane_base_index),
+        format!(
+            "renumber-windows {}",
+            if c.renumber_windows { "on" } else { "off" }
+        ),
+        format!("mode-keys {}", c.mode_keys),
+        format!("history-limit {}", c.history_limit),
+        format!("prompt-history-limit {}", c.prompt_history_limit),
+        format!("display-time {}", c.display_time),
+        format!("status-interval {}", c.status_interval),
+        format!("status-left-length {}", c.status.left_length),
+        format!("status-right-length {}", c.status.right_length),
+        format!("repeat-time {}", c.repeat_time),
+        format!("default-terminal {}", c.default_terminal),
+        format!("extended-keys {}", c.extended_keys),
+        format!("set-clipboard {}", c.set_clipboard),
+        format!(
+            "lock-command {}",
+            join_args(std::slice::from_ref(&c.lock_command))
+        ),
+        format!(
+            "allow-passthrough {}",
+            if c.allow_passthrough { "on" } else { "off" }
+        ),
+    ];
+    let mut all: Vec<String> = lines.to_vec();
+    all.extend(
+        c.options
+            .iter()
+            .map(|(k, v)| format!("{k} {}", join_args(std::slice::from_ref(v)))),
+    );
+    all
 }

@@ -28,6 +28,9 @@ pub enum OverlayAction {
     /// Run this command list and keep the overlay open
     /// (`command-prompt -i`, after each edit).
     Preview(String),
+    /// Close and open the command prompt holding this command line, to be
+    /// edited and run (`customize-mode`).
+    Edit(String),
 }
 
 pub enum Overlay {
@@ -232,6 +235,31 @@ impl Overlay {
         Self::Picker(Box::new(PickerOverlay::new("buffers", items)))
     }
 
+    /// `customize-mode`: every option and key bind, as the command that sets
+    /// it; Enter puts that command in the prompt to change. Opens filtered
+    /// by `query`.
+    pub fn customize_picker(srv: &Server, query: &str) -> Self {
+        let options = crate::cmds::option_lines(srv).into_iter().map(|l| Item {
+            label: format!("option {l}"),
+            matches: l.clone(),
+            target: Target::Edit(format!("set-option -g {l}")),
+        });
+        let binds = srv.keys.list(None).into_iter().map(|(table, key, b)| {
+            let line = crate::cmds::bind_line(&table, &key, &b);
+            Item {
+                label: line.clone(),
+                matches: line.clone(),
+                target: Target::Edit(line),
+            }
+        });
+        let items = options.chain(binds).collect();
+        Self::Picker(Box::new(PickerOverlay::with_query(
+            "customize",
+            items,
+            query,
+        )))
+    }
+
     /// Feed a key. Returns what the server should do.
     pub fn key(&mut self, ev: &KeyEvent) -> OverlayAction {
         let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
@@ -431,6 +459,8 @@ enum Target {
     Buffer(String),
     /// An attached client.
     Client(ClientId),
+    /// An option or bind, by the command line that sets it.
+    Edit(String),
 }
 
 struct Item {
@@ -548,7 +578,7 @@ impl PickerOverlay {
         match self.rows.iter().find(|(l, _)| *l == label)?.1 {
             Target::Session(id, _) => Some(Previewed::Session(id)),
             Target::Window(s, i) => Some(Previewed::Window(s, i)),
-            Target::Buffer(_) | Target::Client(_) => None,
+            Target::Buffer(_) | Target::Client(_) | Target::Edit(_) => None,
         }
     }
 
@@ -571,6 +601,7 @@ impl PickerOverlay {
                     Target::Buffer(name) => {
                         OverlayAction::Run(format!("paste-buffer -p -b {}", join_args(&[name])))
                     }
+                    Target::Edit(line) => OverlayAction::Edit(line),
                 },
                 Err(_) => OverlayAction::Close,
             },

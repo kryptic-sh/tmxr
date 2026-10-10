@@ -67,29 +67,23 @@ what was not.
   two separate windows. Saving it once and re-linking it on restore needs a
   window identity in the save format. Not started.
 - **tmux command shorthand** (requested 2026-10-09: `tmux a` for
-  `attach-session` and the like). The lookup already works as tmux's does
+  `attach-session` and the like). The lookup works as tmux's does
   (`tmxr_command::table::lookup`): exact name or alias first, then an
-  unambiguous prefix of a full name, so `tmxr a`, `ls`, `new`, `kill-ser` and
-  `splitw` resolve; unit-tested there. Every tmux alias on a list of tmux 3.x's
-  aliases written from memory is present; check it against a real
-  `tmux list-commands`. The gap is the tmux commands tmxr does not have, whose
-  names and shorthands are therefore unknown: `customize-mode` and
-  `server-access` (the latter awaiting a decision, below) (`move-pane`,
-  `previous-layout`, `show-window-options`, `start-server`, `set-environment`,
-  `show-environment`, `clear-history`, `respawn-window` `pipe-pane` (output
-  only; `-I` is an error), `show-prompt-history`, `clear-prompt-history` and
-  `wait-for` (ending its command list, from a command client), `set-hook` and
-  `show-hooks` (global and session hooks; `after-<command>` plus
-  `client-attached`, `client-detached`, `pane-exited`, `session-closed`,
-  `session-created`; no pane or window hooks) and `display-menu` (centred;
-  tmux's placement and style flags are accepted and not followed),
-  `lock-client`, `lock-session` and `lock-server` (`lock-command`, default
-  `lock -np`; no `lock-after-time`) and `resize-window` (a manual size, undone
-  with `set-window-option window-size latest`; resurrect does not save it),
-  `link-window`, `unlink-window` and `display-popup` were added on 2026-10-09).
-  Checked against a running server on 2026-10-09: `ls`, `list-s`, `show`
-  (`show-options`) and `kill-ser` resolve, `displ` is ambiguous as in tmux, and
-  `pipe` is an unknown command where `tmux pipe` runs `pipe-pane`.
+  unambiguous prefix of a full name; unit-tested there. Every tmux alias on a
+  list of tmux 3.x's aliases written from memory is present; check it against a
+  real `tmux list-commands`. Every tmux 3.x command is in the table except
+  `server-access` (awaiting a decision, below). Checked against a running server
+  on 2026-10-10: `pipe`, `custom`, `linkw`, `popup`, `resizew` and `lockc`
+  resolve, and `displ` is ambiguous as in tmux.
+- **Partial tmux commands**: `pipe-pane -I` is an error; `wait-for` must end its
+  command list and come from a command client; hooks are global or per session
+  (no pane or window hooks); `display-menu` and `display-popup` ignore tmux's
+  style flags (popup gaps above); there is no `lock-after-time`; resurrect does
+  not save `resize-window`'s manual size; a window cannot be linked twice into
+  the same session (tmux allows it); `customize-mode` is a picker over the
+  options and binds whose Enter puts the setting command in the prompt, without
+  tmux's tree, per-scope options or `d` / `u` keys, and its `-f` is a text
+  query, not a format filter.
 - **tmux default binds**: all of tmux's defaults are bound; `prefix C-z`
   (suspend-client) errors on Windows, which has no job control. Alerts for `M-n`
   / `M-p` are bells only (no `monitor-activity` / `monitor-silence`).

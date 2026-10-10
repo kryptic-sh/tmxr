@@ -2735,3 +2735,33 @@ fn display_popup_runs_a_command_over_the_panes() {
     std::thread::sleep(Duration::from_secs(4));
     assert!(!marker.exists(), "the popup's command outlived it");
 }
+
+#[test]
+fn customize_mode_edits_an_option_through_the_prompt() {
+    let t = Tmxr::new("customize");
+    let s = t.attach(&["new", "-s", "cu"]);
+    s.wait_for("status line", |text| text.contains("cu"));
+    t.run(&["customize-mode", "-f", "mode-keys"]);
+    s.wait_for("the option", |text| text.contains("option mode-keys vi"));
+    s.send(b"\r");
+    s.wait_for("the prompt", |text| {
+        text.contains(":set-option -g mode-keys vi")
+    });
+    // Replace "vi" with "emacs" and run it.
+    s.send(b"\x7f\x7femacs\r");
+    t.wait_run(
+        &["show-options", "-v", "mode-keys"],
+        "the edited option",
+        |o| o.trim() == "emacs",
+    );
+
+    // A bind comes back as its bind-key line, formats unexpanded.
+    t.run(&["customize-mode", "-f", "pane_current_path"]);
+    s.wait_for("a bind", |text| text.contains("bind-key"));
+    s.send(b"\r");
+    s.wait_for("the bind in the prompt", |text| {
+        text.lines()
+            .any(|l| l.starts_with(":bind-key") && l.contains("#{pane_current_path}"))
+    });
+    s.send(b"\x1b");
+}

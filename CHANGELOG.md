@@ -50,6 +50,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   success); otherwise it stays until a key. `-w` / `-h` in cells or percent,
   `-x` / `-y`, `-T` title, `-B` no border, `-d` directory (default: the pane's
   current one), `-e` one variable, `-C` to close.
+- `customize-mode`: a picker over every option and key bind, each shown as the
+  command that sets it; Enter puts that command in the prompt to edit and run.
+  `-f` opens it filtered.
 
 ### Fixed
 
