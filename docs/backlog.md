@@ -199,6 +199,7 @@ the same day.
 
 ## Not yet verified
 
-- The `.deb` and `.rpm` packages are built and their contents listed in CI, but
-  were never installed on a Debian or Fedora system; the macOS and Linux release
-  binaries were not run outside CI's smoke step.
+- The `.deb` and `.rpm` are installed and run in clean Debian and Fedora
+  containers by CI's `install-packages` job on every push to `main` (x86_64
+  only; the aarch64 packages are built, not installed). The macOS release
+  binaries and the `.apk` were not run outside CI's smoke step.
