@@ -224,11 +224,6 @@ table. What has been verified, and how:
 
 ## Not yet verified
 
-- **An Escape and a mouse event in one read** (seen in CI on ubuntu,
-  2026-10-11): a test sent Escape and, at once, a right-click; the client read
-  `ESC ESC [<2;1;30M` as Alt+Escape and the rest as typed text, so the click
-  reached the shell as `^[[<2;1;30M`. A person cannot press Escape and click
-  that close together; tmux's handling of the same bytes was not compared.
 - **`socket-acl` flakes**: a traced repeat on macOS (run 38062106864) was a
   `kill-server` that printed "server closed the connection": the server exited
   before its reply was written, and right after a `kill-server` a new client
