@@ -46,9 +46,9 @@ table. What has been verified, and how:
   clicks and the wheel on the status line, the right-click menu and middle-click
   paste all match. Its first runs found the wheel scrolling as it entered copy
   mode and the binds missing tmux's alternate-screen and copy-mode conditions,
-  fixed. Still missing: tmxr's menus take no mouse at all (tmux runs the item a
-  click or a release lands on, and closes a menu clicked outside); and nothing
-  has been tried by hand in a real terminal.
+  fixed. Menus take the mouse as tmux's (`Menu::mouse`, from `menu_key_cb`),
+  checked by the oracle's menu cases. Still missing: nothing has been tried by
+  hand in a real terminal.
 - **Pane numbers follow the layout**: tmxr numbers a window's panes by their
   place in its layout tree, tmux by their own order, which a layout does not
   change. With a mirrored layout the main pane becomes tmxr's last

@@ -4369,12 +4369,26 @@ fn tmuxs_pane_menu_works_from_the_prefix_and_the_right_button() {
         .find(|(_, l)| l.trim_end() == "rightword")
         .unwrap();
     let col = line.find("rightword").unwrap() + 3;
-    s.click(2, u16::try_from(col).unwrap(), u16::try_from(row).unwrap());
+    // Pressed, not let go: as in tmux, a release on the menu's border
+    // (where the mouse is) would close it.
+    s.mouse(
+        2,
+        u16::try_from(col).unwrap(),
+        u16::try_from(row).unwrap(),
+        false,
+    );
     s.wait_for("the menu with the word", |text| {
         text.contains("Copy rightword")
     });
     s.send(b"c");
     t.wait_run(&["show-buffer"], "the word copied", |o| o == "rightword");
+    // The button let go, the menu gone.
+    s.mouse(
+        2,
+        u16::try_from(col).unwrap(),
+        u16::try_from(row).unwrap(),
+        true,
+    );
     // Horizontal Split from the menu splits the pane.
     s.send(PREFIX);
     s.send(b">");
@@ -4399,9 +4413,10 @@ fn tmuxs_pane_menu_works_from_the_prefix_and_the_right_button() {
         .expect("the word in the left pane");
     // Another cell of the word: a second press in the same cell this soon
     // is a double click, which tmux binds to nothing either.
-    s.click(2, 6, u16::try_from(row).unwrap());
+    s.mouse(2, 6, u16::try_from(row).unwrap(), false);
     s.wait_for("the menu again", |text| text.contains("Copy rightword"));
     s.send(b"m");
+    s.mouse(2, 6, u16::try_from(row).unwrap(), true);
     t.wait_run(
         &["display-message", "-p", "-t", "pn:0.0", "#{pane_marked}"],
         "the clicked pane marked",
@@ -4438,7 +4453,8 @@ fn tmuxs_status_line_menus_act_on_what_was_clicked() {
     };
     // On a window's name: that window's menu, though another is current;
     // Rename starts from the name of the window clicked.
-    s.click(2, find("clickme"), ROWS - 1);
+    // Pressed, not let go: a release outside the menu's items closes it.
+    s.mouse(2, find("clickme"), ROWS - 1, false);
     s.wait_for("the window menu", |text| text.contains("0:clickme"));
     s.send(b"n");
     s.wait_for("the prompt", |text| {
@@ -4450,8 +4466,9 @@ fn tmuxs_status_line_menus_act_on_what_was_clicked() {
     s.wait_for("the prompt closed", |text| {
         text.lines().last().is_some_and(|l| l.contains("LEFTPART"))
     });
+    s.mouse(2, find("clickme"), ROWS - 1, true);
     // On the left part: the session's menu; New Window adds one.
-    s.click(2, find("LEFTPART"), ROWS - 1);
+    s.mouse(2, find("LEFTPART"), ROWS - 1, false);
     s.wait_for("the session menu", |text| text.contains("New Window"));
     s.send(b"w");
     t.wait_run(

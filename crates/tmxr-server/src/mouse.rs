@@ -94,6 +94,11 @@ pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
     let Some(att) = srv.clients.get(&id).and_then(|c| c.att.as_ref()) else {
         return;
     };
+    // An open menu takes every mouse event, as tmux's.
+    if matches!(att.overlay, Some(crate::overlay::Overlay::Menu(_))) {
+        srv.menu_mouse(id, m);
+        return;
+    }
     let press = att.press;
     if follow_drag(srv, id, m) {
         return;

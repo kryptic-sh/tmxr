@@ -56,6 +56,13 @@ pub(super) fn run(
                 crate::menu::Menu::parse(title, pos, start, &|w| expand_for(srv, ctx, pane, w))?;
             menu.look = crate::overlay::BoxLook::from_args(a)?;
             (menu.pane, menu.mouse) = (pane, ctx.mouse);
+            // tmux's: a menu the mouse opened (or -M) takes the mouse and
+            // starts with nothing highlighted; -O keeps it open.
+            menu.mouse_mode = ctx.mouse.is_some() || a.has('M');
+            menu.stay_open = a.has('O');
+            if menu.mouse_mode {
+                menu.selected = None;
+            }
             let (cols, rows) = client_size(srv, c)?;
             let places = places(srv, ctx, c, pane);
             menu.at = Some(place(a, (cols, rows), menu.size(), places, |v| {

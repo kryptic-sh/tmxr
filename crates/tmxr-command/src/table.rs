@@ -145,10 +145,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "display-menu",
         Some("menu"),
-        "b:c:C:H:Os:S:t:T:x:y:",
+        "b:c:C:H:MOs:S:t:T:x:y:",
         1,
         ANY,
-        "[-O] [-c target-client] [-C starting-choice] [-t target-pane] [-T title] name key command ..."
+        "[-MO] [-c target-client] [-C starting-choice] [-t target-pane] [-T title] name key command ..."
     ),
     cmd!(
         "display-message",

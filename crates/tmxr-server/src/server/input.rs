@@ -90,6 +90,35 @@ impl Server {
         self.windows.get(&w).map(|w| w.active)
     }
 
+    /// A mouse event on client `id`'s open menu: tmux's rules in
+    /// [`crate::menu::Menu::mouse`], an item it chooses run against the
+    /// menu's target.
+    pub fn menu_mouse(&mut self, id: ClientId, m: crossterm::event::MouseEvent) {
+        let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
+            return;
+        };
+        let (cols, rows) = (
+            att.cols,
+            att.rows.saturating_sub(crate::server::STATUS_ROWS),
+        );
+        let Some(Overlay::Menu(mut menu)) = att.overlay.take() else {
+            return;
+        };
+        let action = menu.mouse(&m, cols, rows);
+        att.dirty = true;
+        let ctx = Ctx {
+            client: Some(id),
+            pane: menu.pane,
+            mouse: menu.mouse,
+            ..Ctx::default()
+        };
+        match action {
+            OverlayAction::Run(cmd) => self.run_bind_ctx(id, &ctx, &cmd),
+            OverlayAction::Close => {}
+            _ => att.overlay = Some(Overlay::Menu(menu)),
+        }
+    }
+
     fn key(&mut self, id: ClientId, ev: KeyEvent) {
         let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
             return;

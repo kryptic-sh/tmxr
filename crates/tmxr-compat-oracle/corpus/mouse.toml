@@ -105,6 +105,47 @@ steps = [{ mouse = { action = "down", button = 3, at = [5, 5] } }]
 checks = [{ screen_contains = "Horizontal Split", expect = true }]
 
 [[cases]]
+name = "a_release_over_a_menu_item_runs_it"
+attach = true
+unix_only = true
+steps = [
+  { mouse = { action = "down", button = 3, at = [5, 5] } },
+  { wait_text = "Horizontal Split" },
+  { mouse = { action = "drag", button = 3, at = { text = "Horizontal Split" }, to = { text = "Horizontal Split" } } },
+  { sleep = 0.5 },
+]
+checks = [
+  { format = "#{window_panes}", expect = "2" },
+  { command = "list-panes -t o -F '#{pane_left}+#{pane_width}'" },
+]
+
+[[cases]]
+name = "a_right_click_in_place_closes_the_menu"
+# The release lands on the menu's border, outside its items.
+attach = true
+unix_only = true
+steps = [{ mouse = { action = "click", button = 3, at = [5, 5] } }, { sleep = 0.5 }]
+checks = [
+  { screen_contains = "Horizontal Split", expect = false },
+  { format = "#{window_panes}", expect = "1" },
+]
+
+[[cases]]
+name = "a_release_outside_a_menu_closes_it"
+attach = true
+unix_only = true
+steps = [
+  { mouse = { action = "down", button = 3, at = [5, 5] } },
+  { wait_text = "Horizontal Split" },
+  { mouse = { action = "up", button = 3, at = [90, 25] } },
+  { sleep = 0.5 },
+]
+checks = [
+  { screen_contains = "Horizontal Split", expect = false },
+  { format = "#{window_panes}", expect = "1" },
+]
+
+[[cases]]
 name = "the_middle_button_pastes"
 attach = true
 program = "exec cat"

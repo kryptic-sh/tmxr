@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Menus take the mouse, as tmux 3.6's**: one the mouse opened (or
+  `display-menu -M`) highlights the item under the pointer and runs the one the
+  button is released on, closing on a release elsewhere; with `-O` a click runs
+  an item and the menu stays open. A menu the keyboard opened ignores the left
+  button and closes on the others. A right-click let go in place closes the
+  menu, as in tmux: hold the button and release over an item.
 - **`main-pane-height`, `main-pane-width`, `other-pane-height` and
   `other-pane-width`**, in cells or `N%`, as tmux's.
 - **`alternate_on`, `scroll_position` and `selection_present`** format

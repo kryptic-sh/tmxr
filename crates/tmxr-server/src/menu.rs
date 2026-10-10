@@ -2,7 +2,7 @@
 //! or by its own key, as tmux draws them, placed by `-x` / `-y` as a popup
 //! is.
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
@@ -28,7 +28,9 @@ pub enum MenuItem {
 pub struct Menu {
     pub title: String,
     pub items: Vec<MenuItem>,
-    pub selected: usize,
+    /// The highlighted item; none in a menu the mouse opened, until it
+    /// moves over one.
+    pub selected: Option<usize>,
     pub look: crate::overlay::BoxLook,
     /// The box's top-left cell; centred when `None`.
     pub at: Option<(u16, u16)>,
@@ -36,6 +38,10 @@ pub struct Menu {
     /// and the mouse event that opened it (for `-t =` in its commands).
     pub pane: Option<crate::model::PaneId>,
     pub mouse: Option<crate::mouse::MouseTarget>,
+    /// Opened by the mouse (or `-M`): it takes the mouse, as tmux's.
+    pub mouse_mode: bool,
+    /// `-O`: a click chooses and the menu stays open on the rest.
+    pub stay_open: bool,
 }
 
 impl Menu {
@@ -90,17 +96,20 @@ impl Menu {
         let mut menu = Self {
             title,
             items,
-            selected: 0,
+            selected: None,
             look: crate::overlay::BoxLook::default(),
             at: None,
             pane: None,
             mouse: None,
+            mouse_mode: false,
+            stay_open: false,
         };
         if !(0..menu.items.len()).any(|i| menu.selectable(i)) {
             return Err("display-menu: no items to choose".into());
         }
-        menu.selected = start.min(menu.items.len() - 1);
-        if !menu.selectable(menu.selected) {
+        let start = start.min(menu.items.len() - 1);
+        menu.selected = Some(start);
+        if !menu.selectable(start) {
             menu.step(true);
         }
         Ok(menu)
@@ -116,14 +125,15 @@ impl Menu {
         )
     }
 
-    /// Move to the next (`down`) or previous selectable item, wrapping.
+    /// Move to the next (`down`) or previous selectable item, wrapping; from
+    /// none, to the first or the last, as tmux's.
     fn step(&mut self, down: bool) {
         let n = self.items.len();
-        let mut i = self.selected;
+        let mut i = self.selected.unwrap_or(if down { n - 1 } else { 0 });
         for _ in 0..n {
             i = if down { (i + 1) % n } else { (i + n - 1) % n };
             if self.selectable(i) {
-                self.selected = i;
+                self.selected = Some(i);
                 return;
             }
         }
@@ -149,7 +159,9 @@ impl Menu {
         match ev.code {
             KeyCode::Esc | KeyCode::Char('q') => return OverlayAction::Close,
             KeyCode::Char('c') if ctrl => return OverlayAction::Close,
-            KeyCode::Enter => return self.run(self.selected),
+            KeyCode::Enter => {
+                return self.selected.map_or(OverlayAction::Close, |i| self.run(i));
+            }
             KeyCode::Up | KeyCode::Char('k') => self.step(false),
             KeyCode::Char('p') if ctrl => self.step(false),
             KeyCode::Down | KeyCode::Char('j') => self.step(true),
@@ -189,9 +201,76 @@ impl Menu {
         )
     }
 
-    /// Draw the menu at [`Menu::at`] (or centred) in the `cols` × `rows`
-    /// area: items in `base`, the selected one in `selected`, the border in
-    /// `border`.
+    /// Where the box goes in a `cols` × `rows` area: at [`Menu::at`] or
+    /// centred, kept inside should the client have shrunk since.
+    pub fn rect(&self, cols: u16, rows: u16) -> Rect {
+        let (w, h) = self.size();
+        let (w, h) = (w.min(cols), h.min(rows));
+        let (x, y) = self
+            .at
+            .unwrap_or_else(|| (cols.saturating_sub(w) / 2, rows.saturating_sub(h) / 2));
+        Rect::new(
+            x.min(cols.saturating_sub(w)),
+            y.min(rows.saturating_sub(h)),
+            w,
+            h,
+        )
+    }
+
+    /// A mouse event on a menu shown in a `cols` × `rows` area: tmux 3.6's
+    /// `menu_key_cb`. A menu the keyboard opened ignores the left button
+    /// and closes on any other. One the mouse opened (or `-M`) highlights
+    /// the item under a press, drag or wheel and runs it on release; a
+    /// release outside closes it. With `-O` (`stay_open`) a click runs the
+    /// item and a press outside closes it.
+    pub fn mouse(&mut self, ev: &MouseEvent, cols: u16, rows: u16) -> OverlayAction {
+        let release = matches!(ev.kind, MouseEventKind::Up(_));
+        let press = matches!(ev.kind, MouseEventKind::Down(_));
+        if !self.mouse_mode {
+            let left = matches!(
+                ev.kind,
+                MouseEventKind::Down(MouseButton::Left)
+                    | MouseEventKind::Up(MouseButton::Left)
+                    | MouseEventKind::Drag(MouseButton::Left)
+                    | MouseEventKind::Moved
+            );
+            return if left {
+                OverlayAction::Keep
+            } else {
+                OverlayAction::Close
+            };
+        }
+        let area = self.rect(cols, rows);
+        let n = u16::try_from(self.items.len()).unwrap_or(u16::MAX);
+        let (x, y) = (ev.column, ev.row);
+        // As tmux's: the columns up to one past the box, the item rows.
+        let inside = x >= area.x && x <= area.x + area.width && y > area.y && y <= area.y + n;
+        if !inside {
+            let closes = if self.stay_open { press } else { release };
+            if closes {
+                return OverlayAction::Close;
+            }
+            self.selected = None;
+            return OverlayAction::Keep;
+        }
+        let chooses = if self.stay_open {
+            press || release
+        } else {
+            release
+        };
+        if chooses {
+            return match self.selected {
+                Some(i) if self.selectable(i) => self.run(i),
+                _ if self.stay_open => OverlayAction::Keep,
+                _ => OverlayAction::Close,
+            };
+        }
+        self.selected = Some(usize::from(y - area.y - 1));
+        OverlayAction::Keep
+    }
+
+    /// Draw the menu (see [`Menu::rect`]): items in `base`, the selected one
+    /// in `selected`, the border in `border`.
     pub fn draw(
         &self,
         buf: &mut Buffer,
@@ -199,18 +278,7 @@ impl Menu {
         rows: u16,
         (base, border, selected): (Style, Style, Style),
     ) {
-        let (w, h) = self.size();
-        let (w, h) = (w.min(cols), h.min(rows));
-        let (x, y) = self
-            .at
-            .unwrap_or_else(|| (cols.saturating_sub(w) / 2, rows.saturating_sub(h) / 2));
-        // Kept inside the area should the client have shrunk since.
-        let area = Rect::new(
-            x.min(cols.saturating_sub(w)),
-            y.min(rows.saturating_sub(h)),
-            w,
-            h,
-        );
+        let area = self.rect(cols, rows);
         Clear.render(area, buf);
         buf.set_style(area, base);
         let block = match self.look.lines {
@@ -249,7 +317,7 @@ impl Menu {
                 continue;
             }
             let (name, key) = Self::label(item);
-            let style = if row == self.selected {
+            let style = if Some(row) == self.selected {
                 selected
             } else if !self.selectable(row) {
                 base.add_modifier(Modifier::DIM)
@@ -368,7 +436,11 @@ mod tests {
         )
         .unwrap();
         assert_eq!(m.key(&k(KeyCode::Down)), OverlayAction::Keep);
-        assert_eq!(m.selected, 3, "past the separator and the disabled item");
+        assert_eq!(
+            m.selected,
+            Some(3),
+            "past the separator and the disabled item"
+        );
         assert_eq!(
             m.key(&k(KeyCode::Enter)),
             OverlayAction::Run("cmd-two".into())
@@ -383,5 +455,86 @@ mod tests {
             OverlayAction::Run("cmd-one".into())
         );
         assert_eq!(m.key(&k(KeyCode::Esc)), OverlayAction::Close);
+    }
+
+    fn mouse(kind: MouseEventKind, column: u16, row: u16) -> MouseEvent {
+        MouseEvent {
+            kind,
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }
+    }
+
+    /// A menu the mouse opened at (10, 5): items on rows 6 to 8, the
+    /// separator on 7.
+    fn mouse_menu(stay_open: bool) -> Menu {
+        let mut m = Menu::parse(
+            "t".into(),
+            &args(&["One", "1", "one", "", "Two", "2", "two"]),
+            0,
+            &|w| w.to_owned(),
+        )
+        .unwrap();
+        m.at = Some((10, 5));
+        m.mouse_mode = true;
+        m.stay_open = stay_open;
+        m.selected = None;
+        m
+    }
+
+    #[test]
+    fn a_release_over_an_item_runs_it() {
+        let mut m = mouse_menu(false);
+        let down = MouseEventKind::Down(MouseButton::Right);
+        assert_eq!(m.mouse(&mouse(down, 12, 6), 100, 30), OverlayAction::Keep);
+        assert_eq!(m.selected, Some(0), "the item under the press");
+        let drag = MouseEventKind::Drag(MouseButton::Right);
+        assert_eq!(m.mouse(&mouse(drag, 12, 8), 100, 30), OverlayAction::Keep);
+        assert_eq!(m.selected, Some(2), "follows the drag");
+        let up = MouseEventKind::Up(MouseButton::Right);
+        assert_eq!(
+            m.mouse(&mouse(up, 12, 8), 100, 30),
+            OverlayAction::Run("two".into())
+        );
+    }
+
+    #[test]
+    fn a_release_on_a_separator_or_outside_closes() {
+        let up = MouseEventKind::Up(MouseButton::Left);
+        let drag = MouseEventKind::Drag(MouseButton::Left);
+        let mut m = mouse_menu(false);
+        m.mouse(&mouse(drag, 12, 7), 100, 30);
+        assert_eq!(m.mouse(&mouse(up, 12, 7), 100, 30), OverlayAction::Close);
+        let mut m = mouse_menu(false);
+        m.mouse(&mouse(drag, 12, 6), 100, 30);
+        assert_eq!(m.mouse(&mouse(drag, 50, 20), 100, 30), OverlayAction::Keep);
+        assert_eq!(m.selected, None, "leaving the menu clears the choice");
+        assert_eq!(m.mouse(&mouse(up, 50, 20), 100, 30), OverlayAction::Close);
+    }
+
+    #[test]
+    fn stay_open_menus_run_on_a_click_and_close_on_a_press_outside() {
+        let mut m = mouse_menu(true);
+        let moved = MouseEventKind::Moved;
+        m.mouse(&mouse(moved, 12, 6), 100, 30);
+        let down = MouseEventKind::Down(MouseButton::Left);
+        assert_eq!(
+            m.mouse(&mouse(down, 12, 6), 100, 30),
+            OverlayAction::Run("one".into())
+        );
+        let up = MouseEventKind::Up(MouseButton::Left);
+        assert_eq!(m.mouse(&mouse(up, 50, 20), 100, 30), OverlayAction::Keep);
+        assert_eq!(m.mouse(&mouse(down, 50, 20), 100, 30), OverlayAction::Close);
+    }
+
+    #[test]
+    fn a_keyboard_menu_ignores_the_left_button() {
+        let mut m = mouse_menu(false);
+        m.mouse_mode = false;
+        let left = MouseEventKind::Down(MouseButton::Left);
+        assert_eq!(m.mouse(&mouse(left, 12, 6), 100, 30), OverlayAction::Keep);
+        let right = MouseEventKind::Down(MouseButton::Right);
+        assert_eq!(m.mouse(&mouse(right, 12, 6), 100, 30), OverlayAction::Close);
     }
 }
