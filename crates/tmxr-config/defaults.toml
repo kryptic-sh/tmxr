@@ -149,6 +149,9 @@ restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "to
 "WheelUpPane" = { cmd = "if-shell -F '#{mouse_any_flag}' 'send-keys -M' 'copy-mode -e ; send-keys -X -N 5 scroll-up'", note = "Scroll up into copy mode" }
 "MouseDrag1Border" = { cmd = "resize-pane -M", note = "Resize panes by dragging a border" }
 "MouseDown1Status" = { cmd = "select-window -t =", note = "Select the window clicked" }
+"WheelUpStatus" = { cmd = "previous-window", note = "Previous window" }
+"WheelDownStatus" = { cmd = "next-window", note = "Next window" }
+"MouseDown2Pane" = { cmd = "select-pane -t = ; if-shell -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' { send-keys -M } { paste-buffer -p }", note = "Paste the latest buffer" }
 "DoubleClick1Pane" = { cmd = "select-pane -t = ; if-shell -F '#{mouse_any_flag}' 'send-keys -M' 'copy-mode ; send-keys -X select-word ; run-shell -d 0.3 ; send-keys -X copy-selection-and-cancel'", note = "Copy the word double-clicked" }
 "TripleClick1Pane" = { cmd = "select-pane -t = ; if-shell -F '#{mouse_any_flag}' 'send-keys -M' 'copy-mode ; send-keys -X select-line ; run-shell -d 0.3 ; send-keys -X copy-selection-and-cancel'", note = "Copy the line triple-clicked" }
 
@@ -270,6 +273,14 @@ restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "to
 # tmux's own copy-mode-vi table.
 "Escape" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
 "q" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
+"C-c" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
+"BSpace" = { cmd = "send-keys -X cursor-left", note = "Cursor left" }
+"Home" = { cmd = "send-keys -X start-of-line", note = "Start of line" }
+"End" = { cmd = "send-keys -X end-of-line", note = "End of line" }
+"J" = { cmd = "send-keys -X scroll-down", note = "Scroll down a line" }
+"K" = { cmd = "send-keys -X scroll-up", note = "Scroll up a line" }
+"C-Down" = { cmd = "send-keys -X scroll-down", note = "Scroll down a line" }
+"C-Up" = { cmd = "send-keys -X scroll-up", note = "Scroll up a line" }
 "Enter" = { cmd = "send-keys -X copy-selection-and-cancel", note = "Copy selection" }
 "Space" = { cmd = "send-keys -X begin-selection", note = "Start selection" }
 "V" = { cmd = "send-keys -X select-line", note = "Select line" }

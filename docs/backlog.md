@@ -43,10 +43,24 @@ table. What has been verified, and how:
   gets `(size + 1) / 2 - 1`). tmxr's splits are ratios in `hjkl-layout`
   (`split_geometry`), so matching tmux cell for cell means changing how that
   crate rounds, or splitting by cells; not started.
-- **tmux's default menus are not bound**: tmux binds `prefix <` and `prefix >`
-  and right-click on a pane or the status line to `display-menu`; tmxr's
-  defaults have none of them, so "all of tmux's defaults are bound" below is
-  wrong for those. Compare with tmux's `list-keys` before fixing.
+- **tmux default binds tmxr lacks** (compared with tmux 3.6's `list-keys` on
+  2026-10-10; 46 of its 267). Each needs something tmxr does not have yet:
+  - Menus: `prefix <` / `>`, `MouseDown3Pane`, `MouseDown3Status`,
+    `MouseDown3StatusLeft` and their `M-` forms. Their items use `-t =`, `#{?…}`
+    conditionals and `{ … }` blocks (now parsed); not tried.
+  - Copy-mode actions: `cursor-centre-vertical` / `-horizontal` (emacs `C-l`,
+    `M-l`), `toggle-position` (`P`), `append-selection-and-cancel` (vi `A`),
+    `other-end` (vi `o`), `scroll-middle` (vi `z`), and vi `#` / `*`, which need
+    `send-keys -F` and `#{copy_cursor_word}`.
+  - `select-layout main-horizontal-mirrored` / `main-vertical-mirrored`
+    (`prefix M-6` / `M-7`), `customize-mode -Z` (`prefix C`),
+    `refresh-client -c` and `-D` / `-L` / `-R` / `-U` panning (`prefix DC`,
+    `S-arrows`), and tmux's pane scrollbars (`MouseDown1Scrollbar*`).
+  - Declined: the digit binds (`1`-`9` in vi, `M-1`-`M-9` in emacs) that open a
+    "(repeat)" prompt: tmxr's copy mode takes counts directly (`5j`).
+- **`paste-buffer` without `-p` still brackets** a paste when the program asked
+  for bracketed paste; tmux brackets only with `-p`. Not changed: no bind or
+  report depends on it.
 - **Windows: an Enter sent before the shell's first read can stall**
   (2026-10-10). Probing with the real binary, `new-window -d` then at once
   `send-keys 'echo markN' Enter`, about 1 in 100 cmd panes showed the text but
@@ -106,14 +120,14 @@ table. What has been verified, and how:
     setting command in the prompt, not tmux's tree with `d` / `u` keys: the
     owner chose hjkl-style pickers, where typing always filters, so letter keys
     cannot be commands. Its `-f` is a text query, not a format filter.
-- **tmux default binds**: all of tmux's defaults are bound; `prefix C-z`
-  (suspend-client) errors on Windows, which has no job control. Alerts follow
-  tmux 3.6's, as recorded from a running tmux on 2026-10-10 (WSL Ubuntu, a
-  client on a pty): flags unless a client is looking at the window, `*-action`
-  and `visual-*` as tmux's, the `alert-*` hooks. Not compared: windows linked
-  into two sessions (tmux flags each session's link; tmxr has one flag per
-  window), and an activity alert in the window in sight rings on every burst of
-  output, as tmux's did there, which was not looked at more closely.
+- **tmux default binds**: most of tmux's defaults are bound (see above);
+  `prefix C-z` (suspend-client) errors on Windows, which has no job control.
+  Alerts follow tmux 3.6's, as recorded from a running tmux on 2026-10-10 (WSL
+  Ubuntu, a client on a pty): flags unless a client is looking at the window,
+  `*-action` and `visual-*` as tmux's, the `alert-*` hooks. Not compared:
+  windows linked into two sessions (tmux flags each session's link; tmxr has one
+  flag per window), and an activity alert in the window in sight rings on every
+  burst of output, as tmux's did there, which was not looked at more closely.
 - **`rgb-colour auto`** decides from the client's environment only:
   `COLORTERM=truecolor` / `24bit`, a `TERM` ending in `-direct`, or
   `WT_SESSION`. Terminals that take 24-bit colour without saying so (some

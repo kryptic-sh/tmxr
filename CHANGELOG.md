@@ -8,6 +8,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **More of tmux's default binds**: the wheel over a window's name on the status
+  line switches windows, the middle button pastes the latest buffer, and vi copy
+  mode has `BSpace`, `Home`, `End`, `J`, `K`, `C-Up`, `C-Down` and `C-c`, as
+  tmux 3.6 binds them.
 - **`{ … }` command blocks**, as tmux's: a block is one argument holding the
   commands inside (one per line or `;`), so tmux binds such as
   `if-shell -F 1 { cmd ; cmd }` work in tmxr's commands and binds. Unlike tmux,

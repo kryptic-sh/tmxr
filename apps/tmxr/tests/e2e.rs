@@ -4155,6 +4155,54 @@ fn a_brace_block_runs_as_commands() {
 }
 
 #[test]
+fn the_wheel_on_the_status_line_and_a_middle_click_do_what_tmuxs_do() {
+    let t = Tmxr::new("tmuxmouse");
+    let s = t.attach(&["new", "-s", "tm"]);
+    s.wait_for("status line", |text| text.contains("tm"));
+    s.wait_mouse(true);
+    t.run(&["rename-window", "-t", "tm:0", "wheelfirst"]);
+    t.run(&["new-window", "-d", "-t", "tm:1", "-n", "wheelsecond"]);
+    s.wait_for("both windows listed", |text| text.contains("wheelsecond"));
+    let current = |t: &Tmxr| {
+        t.run(&["display-message", "-p", "-t", "tm", "#I"])
+            .trim()
+            .to_owned()
+    };
+    // Over a window's name, where tmux's Status keys are.
+    let cells = s.status_cells();
+    let col = (0..cells.len())
+        .find(|&i| {
+            cells[i..]
+                .iter()
+                .take(10)
+                .map(|c| c.0.as_str())
+                .collect::<String>()
+                == "wheelfirst"
+        })
+        .expect("the first window in the status line");
+    let col = u16::try_from(col).unwrap();
+    // Wheel down then up: the next window, then back.
+    s.mouse(65, col, ROWS - 1, false);
+    t.wait_run(
+        &["display-message", "-p", "-t", "tm", "#I"],
+        "next window",
+        |o| o.trim() == "1",
+    );
+    s.mouse(64, col, ROWS - 1, false);
+    t.wait_run(
+        &["display-message", "-p", "-t", "tm", "#I"],
+        "previous window",
+        |o| o.trim() == "0",
+    );
+    assert_eq!(current(&t), "0");
+    // The middle button pastes the latest buffer into the pane clicked.
+    t.wait_prompt("tm:0");
+    t.run(&["set-buffer", "middle-pasted"]);
+    s.click(1, 5, 2);
+    s.wait_for("the paste", |text| text.contains("middle-pasted"));
+}
+
+#[test]
 fn select_pane_titles_a_pane_and_resurrect_keeps_it() {
     let t = Tmxr::new("titles");
     t.run(&["new-session", "-d", "-s", "ti"]);
