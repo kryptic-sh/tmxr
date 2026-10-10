@@ -70,6 +70,11 @@ pub struct Config {
     pub pane_scrollbars: Scrollbars,
     pub pane_scrollbars_position: ScrollbarPosition,
     pub pane_scrollbars_style: String,
+    /// tmux's main-horizontal / main-vertical sizes: cells or `N%`.
+    pub main_pane_height: String,
+    pub main_pane_width: String,
+    pub other_pane_height: String,
+    pub other_pane_width: String,
     /// Shell command `copy-pipe` sends the copied text to when it names none.
     pub copy_command: String,
     /// Shell command a locked client runs in its terminal; the client is

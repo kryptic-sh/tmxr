@@ -44,6 +44,12 @@ visual-silence = "off"
 pane-scrollbars = "off"
 pane-scrollbars-position = "right"
 pane-scrollbars-style = "bg=black,fg=white,width=1,pad=0"
+# tmux's defaults: the main pane of main-horizontal / main-vertical, and the
+# others (0: what is left), in cells or "N%".
+main-pane-height = "24"
+main-pane-width = "80"
+other-pane-height = "0"
+other-pane-width = "0"
 copy-command = ""
 # tmux's default; `lock-client` runs it in the client's terminal.
 lock-command = "lock -np"

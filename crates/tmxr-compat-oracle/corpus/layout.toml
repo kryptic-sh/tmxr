@@ -69,3 +69,42 @@ steps = [
   { run = "copy-mode -t o:0.0" },
 ]
 checks = [{ command = "list-panes -t o -F '#{pane_left}+#{pane_width}'", expect = "3+47\n51+49" }]
+
+[[cases]]
+name = "main_horizontal_sizes_the_main_pane"
+steps = [
+  { run = "split-window -t o" },
+  { run = "split-window -t o" },
+  { run = "select-layout -t o main-horizontal" },
+]
+checks = [{ command = "list-panes -t o -F '#{pane_top}+#{pane_height}'", expect = "0+24\n25+5\n25+5" }]
+
+[[cases]]
+name = "main_vertical_sizes_the_main_pane"
+steps = [
+  { run = "split-window -t o" },
+  { run = "split-window -t o" },
+  { run = "select-layout -t o main-vertical" },
+]
+checks = [{ command = "list-panes -t o -F '#{pane_left}+#{pane_width}'", expect = "0+80\n81+19\n81+19" }]
+
+[[cases]]
+name = "main_pane_height_as_a_percentage"
+steps = [
+  { run = "set -g main-pane-height 50%" },
+  { run = "split-window -t o" },
+  { run = "split-window -t o" },
+  { run = "select-layout -t o main-horizontal" },
+]
+checks = [{ command = "list-panes -t o -F '#{pane_height}'", expect = "14\n15\n15" }]
+
+[[cases]]
+name = "other_pane_height_sizes_the_others"
+steps = [
+  { run = "set -g main-pane-height 3" },
+  { run = "set -g other-pane-height 10" },
+  { run = "split-window -t o" },
+  { run = "split-window -t o" },
+  { run = "select-layout -t o main-horizontal" },
+]
+checks = [{ command = "list-panes -t o -F '#{pane_height}'" }]

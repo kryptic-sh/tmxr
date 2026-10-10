@@ -221,6 +221,10 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
             })?;
         }
         "pane-scrollbars-style" => need()?.clone_into(&mut c.pane_scrollbars_style),
+        "main-pane-height" => need()?.clone_into(&mut c.main_pane_height),
+        "main-pane-width" => need()?.clone_into(&mut c.main_pane_width),
+        "other-pane-height" => need()?.clone_into(&mut c.other_pane_height),
+        "other-pane-width" => need()?.clone_into(&mut c.other_pane_width),
         "remain-on-exit" => c.remain_on_exit = on_off(value, c.remain_on_exit)?,
         "allow-passthrough" => {
             let on = on_off(value, c.allow_passthrough)?;
@@ -301,6 +305,10 @@ pub fn option_lines(srv: &Server) -> Vec<String> {
             c.pane_scrollbars_position.as_str()
         ),
         format!("pane-scrollbars-style {}", c.pane_scrollbars_style),
+        format!("main-pane-height {}", c.main_pane_height),
+        format!("main-pane-width {}", c.main_pane_width),
+        format!("other-pane-height {}", c.other_pane_height),
+        format!("other-pane-width {}", c.other_pane_width),
         format!("lock-after-time {}", c.lock_after_time),
         format!(
             "lock-command {}",

@@ -38,20 +38,22 @@ table. What has been verified, and how:
 
 ## Known gaps and follow-ups
 
-- **Mouse use as in the owner's tmux config** (asked for 2026-10-11: "proper
-  mouse support in tmxr so that I can use it just like my tmux config"). That
-  config is `set -g mouse on`, tmux's default mouse binds and tmux-yank's
-  drag-to-copy. tmxr binds all of tmux 3.6's default mouse keys and tmux-yank's,
-  and the e2e tests drive clicks, drags, double and triple clicks, the wheel,
-  border drags, the status line, the menus and scrollbars through SGR mouse
-  sequences. What is missing is a side-by-side check in a real terminal, and
-  which behaviour falls short is not known yet: ask, then compare with tmux in
-  the same terminal. To check: click to focus; drag to select and copy (to the
-  system clipboard, as tmux-yank's `copy-pipe`); double / triple click; the
-  wheel into copy mode, through it and back out; a border drag; clicks and the
-  wheel on the status line; the right-click menus; mouse handed to programs that
-  ask for it (nvim / hjkl with the mouse on); and the mouse with the view
-  panned, zoomed and in copy mode.
+- **Mouse use as in the owner's tmux config** (asked for 2026-10-11). The tmux
+  compatibility oracle (`crates/tmxr-compat-oracle`, `corpus/mouse.toml`) drives
+  a tmux 3.6 client and a tmxr client with the same SGR mouse events in CI and
+  compares the results: click focus, drag to copy, double and triple click (and
+  the keys two clicks send), the wheel into and out of copy mode, border drags,
+  clicks and the wheel on the status line, the right-click menu and middle-click
+  paste all match. Its first runs found the wheel scrolling as it entered copy
+  mode and the binds missing tmux's alternate-screen and copy-mode conditions,
+  fixed. Still missing: tmxr's menus take no mouse at all (tmux runs the item a
+  click or a release lands on, and closes a menu clicked outside); and nothing
+  has been tried by hand in a real terminal.
+- **Pane numbers follow the layout**: tmxr numbers a window's panes by their
+  place in its layout tree, tmux by their own order, which a layout does not
+  change. With a mirrored layout the main pane becomes tmxr's last
+  (`known_divergences.toml`, `mirrored_layouts_keep_pane_numbers`). Changing it
+  means keeping a pane order apart from the tree; not started.
 - **tmux default binds**: all of tmux 3.6's 267 are bound (compared with its
   `list-keys`, 2026-10-11) except the 18 digit binds (`1`-`9` in vi, `M-1`-`M-9`
   in emacs) that open a "(repeat)" prompt, declined: tmxr's copy mode takes

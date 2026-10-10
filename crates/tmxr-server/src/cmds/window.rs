@@ -291,6 +291,12 @@ pub(super) fn run(
             srv.relayout(wid);
         }
         "next-layout" | "previous-layout" | "select-layout" => {
+            let sizes = crate::layout::MainPane {
+                height: srv.cfg.main_pane_height.clone(),
+                width: srv.cfg.main_pane_width.clone(),
+                other_height: srv.cfg.other_pane_height.clone(),
+                other_width: srv.cfg.other_pane_width.clone(),
+            };
             let (_, _, wid) = target::window(srv, ctx, a.value('t'))?;
             let win = srv.windows.get_mut(&wid).ok_or("no window")?;
             let name = if p.name() == "next-layout" || a.has('n') {
@@ -305,7 +311,7 @@ pub(super) fn run(
                     .cloned()
                     .unwrap_or_else(|| crate::layout::PRESETS[win.preset].to_owned())
             };
-            let tree = crate::layout::preset(&name, &win.panes())
+            let tree = crate::layout::preset(&name, &win.panes(), (win.cols, win.rows), &sizes)
                 .ok_or_else(|| format!("unknown layout: {name}"))?;
             if let Some(i) = crate::layout::PRESETS.iter().position(|p| *p == name) {
                 win.preset = i;

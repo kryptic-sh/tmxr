@@ -8,6 +8,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`main-pane-height`, `main-pane-width`, `other-pane-height` and
+  `other-pane-width`**, in cells or `N%`, as tmux's.
 - **`alternate_on`, `scroll_position` and `selection_present`** format
   variables, as tmux's.
 - **A tmux compatibility oracle** (`crates/tmxr-compat-oracle`): the same steps
@@ -33,6 +35,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`main-horizontal` and `main-vertical` size the main pane as tmux does**: 24
+  rows or 80 columns by default (tmxr gave it 60%). Found by the oracle.
 - **Sessions list in tmux's order**, by name: `list-sessions`,
   `list-windows -a`, `list-panes -a` and `switch-client -n` / `-p` went by
   creation order. Found by the oracle.

@@ -304,21 +304,97 @@ fn even(dir: SplitDir, ids: &[usize]) -> LayoutTree {
     }
 }
 
-/// Arrange `panes` (in order) in the named preset. `None` for an unknown name.
-pub fn preset(name: &str, panes: &[PaneId]) -> Option<LayoutTree> {
+/// tmux's `main-pane-height` / `-width` and `other-pane-height` / `-width`:
+/// cells, or a percentage, as tmux takes them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MainPane {
+    pub height: String,
+    pub width: String,
+    pub other_height: String,
+    pub other_width: String,
+}
+
+impl Default for MainPane {
+    /// tmux's defaults.
+    fn default() -> Self {
+        Self {
+            height: "24".into(),
+            width: "80".into(),
+            other_height: "0".into(),
+            other_width: "0".into(),
+        }
+    }
+}
+
+/// tmux's `args_string_percentage`: `N` from 0 to `max`, or `N%` (0 to 100)
+/// of `of` if that is at most `max`. `None` for anything else.
+fn size_spec(spec: &str, max: u16, of: u16) -> Option<u16> {
+    let n = match spec.strip_suffix('%') {
+        Some(pct) => {
+            let pct: u32 = pct.parse().ok().filter(|p| *p <= 100)?;
+            u16::try_from(u32::from(of) * pct / 100).ok()?
+        }
+        None => spec.parse().ok()?,
+    };
+    (n <= max).then_some(n)
+}
+
+/// The main pane's cells and the other panes' across `len` cells, a border
+/// between them: tmux 3.6's `layout_set_main_h` / `_v`, `default` when
+/// `main` does not fit (24 rows, 80 columns).
+fn main_split(len: u16, main: &str, other: &str, default: u16) -> (u16, u16) {
+    let avail = len.saturating_sub(1);
+    let mut main_cells = size_spec(main, avail, avail).unwrap_or(default);
+    let other_cells;
+    if main_cells + 1 >= avail {
+        main_cells = if avail <= 2 { 1 } else { avail - 1 };
+        other_cells = 1;
+    } else {
+        match size_spec(other, avail, avail).filter(|o| *o > 0) {
+            Some(o) if avail - o >= main_cells => {
+                other_cells = o;
+                main_cells = avail - o;
+            }
+            _ => other_cells = avail - main_cells,
+        }
+    }
+    (main_cells, other_cells)
+}
+
+/// Arrange `panes` (in order) in the named preset for a `cols` x `rows`
+/// window. `None` for an unknown name.
+pub fn preset(
+    name: &str,
+    panes: &[PaneId],
+    (cols, rows): (u16, u16),
+    sizes: &MainPane,
+) -> Option<LayoutTree> {
     let ids: Vec<usize> = panes.iter().map(|p| *p as usize).collect();
     if ids.is_empty() {
         return None;
     }
-    // The first pane is the main one; mirrored, it goes below or to the
-    // right of the rest instead of above or to the left.
+    // The first pane is the main one, sized as tmux sizes it; mirrored, it
+    // goes below or to the right of the rest instead of above or to the
+    // left. hjkl-layout gives the first child round(len × ratio) cells,
+    // its border among them.
     let main = |dir: SplitDir, rest_dir: SplitDir, mirrored: bool| match ids.as_slice() {
         [one] => LayoutTree::Leaf(*one),
-        [first, rest @ ..] if mirrored => {
-            LayoutTree::split(dir, 0.4, even(rest_dir, rest), LayoutTree::Leaf(*first))
-        }
         [first, rest @ ..] => {
-            LayoutTree::split(dir, 0.6, LayoutTree::Leaf(*first), even(rest_dir, rest))
+            let (len, main_cells, other_cells) = if dir == SplitDir::Horizontal {
+                let (m, o) = main_split(rows, &sizes.height, &sizes.other_height, 24);
+                (rows, m, o)
+            } else {
+                let (m, o) = main_split(cols, &sizes.width, &sizes.other_width, 80);
+                (cols, m, o)
+            };
+            let len = f32::from(len.max(1));
+            if mirrored {
+                let ratio = f32::from(other_cells + 1) / len;
+                LayoutTree::split(dir, ratio, even(rest_dir, rest), LayoutTree::Leaf(*first))
+            } else {
+                let ratio = f32::from(main_cells + 1) / len;
+                LayoutTree::split(dir, ratio, LayoutTree::Leaf(*first), even(rest_dir, rest))
+            }
         }
         [] => LayoutTree::Leaf(0),
     };
@@ -464,7 +540,13 @@ mod tests {
 
     #[test]
     fn mirrored_presets_put_the_main_pane_below_or_right() {
-        let rects = |name: &str| pane_rects(&preset(name, &[1, 2, 3]).unwrap(), 100, 40);
+        let rects = |name: &str| {
+            pane_rects(
+                &preset(name, &[1, 2, 3], (100, 40), &MainPane::default()).unwrap(),
+                100,
+                40,
+            )
+        };
         let main = |name: &str| rects(name).into_iter().find(|(p, _)| *p == 1).unwrap().1;
         // main-horizontal: the main pane across the top; mirrored, the bottom.
         let (top, bottom) = (main("main-horizontal"), main("main-horizontal-mirrored"));
@@ -484,10 +566,23 @@ mod tests {
     }
 
     #[test]
+    fn main_pane_sizes_are_tmuxs() {
+        // tmux 3.6, a 30-row window: the main pane's rows and the others'.
+        assert_eq!(main_split(30, "24", "0", 24), (24, 5));
+        assert_eq!(main_split(30, "50%", "0", 24), (14, 15));
+        assert_eq!(main_split(30, "3", "0", 24), (3, 26));
+        // Too tall for the window: tmux's default instead.
+        assert_eq!(main_split(30, "40", "0", 24), (24, 5));
+        // Others that would shrink the main pane are not taken.
+        assert_eq!(main_split(30, "24", "10", 24), (24, 5));
+        assert_eq!(main_split(30, "3", "10", 24), (19, 10));
+    }
+
+    #[test]
     fn presets_place_every_pane() {
         let panes = [3, 4, 5, 6, 7];
         for name in PRESETS {
-            let t = preset(name, &panes).unwrap();
+            let t = preset(name, &panes, (100, 40), &MainPane::default()).unwrap();
             let mut leaves = t.leaves();
             leaves.sort_unstable();
             assert_eq!(leaves, vec![3, 4, 5, 6, 7], "{name}");
@@ -498,12 +593,22 @@ mod tests {
             );
         }
         // even-horizontal really is even.
-        let rects = pane_rects(&preset("even-horizontal", &[1, 2, 3, 4]).unwrap(), 83, 10);
+        let rects = pane_rects(
+            &preset(
+                "even-horizontal",
+                &[1, 2, 3, 4],
+                (83, 10),
+                &MainPane::default(),
+            )
+            .unwrap(),
+            83,
+            10,
+        );
         let widths: Vec<u16> = rects.iter().map(|(_, r)| r.w).collect();
         assert!(
             widths.iter().max().unwrap() - widths.iter().min().unwrap() <= 1,
             "{widths:?}"
         );
-        assert!(preset("nope", &panes).is_none());
+        assert!(preset("nope", &panes, (100, 40), &MainPane::default()).is_none());
     }
 }
