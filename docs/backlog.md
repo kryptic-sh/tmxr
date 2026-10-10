@@ -211,8 +211,8 @@ table. What has been verified, and how:
 - **`socket-acl` flaked once on ubuntu** (run 38057623410, commit 0491b6e,
   2026-10-10). The step stalled about 34 s after the expected "Permission
   denied" and "server closed the connection", then exited 1 without saying which
-  command failed. Rerunning only that job passed. Not diagnosed. Next time, add
-  `set -x` to the step so the log names the failing command.
+  command failed. Rerunning only that job passed. Not diagnosed. The step now
+  runs with `set -x`, so a repeat names the failing command.
 - The `.deb` and `.rpm` are installed and run in clean Debian and Fedora
   containers by CI's `install-packages` job on every push to `main` (x86_64
   only; the aarch64 packages are built, not installed). The macOS release
