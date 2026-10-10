@@ -103,7 +103,8 @@ checks = [{ format = "#{window_index}", expect = "1" }]
 name = "the_right_button_opens_the_pane_menu"
 attach = true
 unix_only = true
-steps = [{ mouse = { action = "click", button = 3, at = [5, 5] } }]
+# Pressed, not let go: tmux runs the menu item a release lands on.
+steps = [{ mouse = { action = "down", button = 3, at = [5, 5] } }]
 checks = [{ screen_contains = "Horizontal Split", expect = true }]
 
 [[cases]]

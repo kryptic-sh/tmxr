@@ -149,8 +149,8 @@ restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "to
 # wheel up into copy mode, drag a border to resize, click a window in the
 # status line. A pane event nothing binds goes to the program.
 "MouseDown1Pane" = { cmd = "select-pane -t = ; send-keys -M", note = "Focus the pane clicked" }
-"MouseDrag1Pane" = { cmd = "if-shell -F '#{mouse_any_flag}' 'send-keys -M' 'copy-mode -M'", note = "Select text by dragging" }
-"WheelUpPane" = { cmd = "if-shell -F '#{mouse_any_flag}' 'send-keys -M' 'copy-mode -e ; send-keys -X -N 5 scroll-up'", note = "Scroll up into copy mode" }
+"MouseDrag1Pane" = { cmd = "if-shell -F '#{||:#{alternate_on},#{pane_in_mode},#{mouse_any_flag}}' 'send-keys -M' 'copy-mode -M'", note = "Select text by dragging" }
+"WheelUpPane" = { cmd = "if-shell -F '#{||:#{alternate_on},#{pane_in_mode},#{mouse_any_flag}}' 'send-keys -M' 'copy-mode -e'", note = "Scroll up into copy mode" }
 "MouseDrag1Border" = { cmd = "resize-pane -M", note = "Resize panes by dragging a border" }
 "MouseDown1Status" = { cmd = "select-window -t =", note = "Select the window clicked" }
 # tmux 3.6's menus on the right button, as its list-keys prints them.
@@ -168,8 +168,8 @@ restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "to
 "MouseDrag1ScrollbarSlider" = { cmd = "copy-mode -S", note = "Drag the scrollbar" }
 "WheelDownStatus" = { cmd = "next-window", note = "Next window" }
 "MouseDown2Pane" = { cmd = "select-pane -t = ; if-shell -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' { send-keys -M } { paste-buffer -p }", note = "Paste the latest buffer" }
-"DoubleClick1Pane" = { cmd = "select-pane -t = ; if-shell -F '#{mouse_any_flag}' 'send-keys -M' 'copy-mode ; send-keys -X select-word ; run-shell -d 0.3 ; send-keys -X copy-selection-and-cancel'", note = "Copy the word double-clicked" }
-"TripleClick1Pane" = { cmd = "select-pane -t = ; if-shell -F '#{mouse_any_flag}' 'send-keys -M' 'copy-mode ; send-keys -X select-line ; run-shell -d 0.3 ; send-keys -X copy-selection-and-cancel'", note = "Copy the line triple-clicked" }
+"DoubleClick1Pane" = { cmd = "select-pane -t = ; if-shell -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' 'send-keys -M' 'copy-mode -H ; send-keys -X select-word ; run-shell -d 0.3 ; send-keys -X copy-pipe-and-cancel'", note = "Copy the word double-clicked" }
+"TripleClick1Pane" = { cmd = "select-pane -t = ; if-shell -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' 'send-keys -M' 'copy-mode -H ; send-keys -X select-line ; run-shell -d 0.3 ; send-keys -X copy-pipe-and-cancel'", note = "Copy the line triple-clicked" }
 
 [keys.prefix]
 # tmux.conf: vim style pane selection.

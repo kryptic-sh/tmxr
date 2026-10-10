@@ -265,6 +265,16 @@ fn run_case(case: &Case, tmux: Option<&Path>, tmxr: &Path) -> Status {
     }
     for check in &case.checks {
         if let Some(status) = compare(&mut sides, check) {
+            // What each side showed, for the report.
+            for s in &sides {
+                if let Some(screen) = s.screen() {
+                    eprintln!(
+                        "{}: {:?} screen:
+{screen}",
+                        case.name, s.side
+                    );
+                }
+            }
             return status;
         }
     }

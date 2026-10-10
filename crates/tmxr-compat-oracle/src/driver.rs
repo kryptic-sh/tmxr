@@ -152,6 +152,11 @@ impl Server {
         self.run_args(&words)
     }
 
+    /// The client's screen, if the case attached one.
+    pub fn screen(&self) -> Option<String> {
+        self.client.as_ref().map(Client::screen)
+    }
+
     fn client(&self) -> Result<&Client, String> {
         self.client
             .as_ref()

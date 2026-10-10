@@ -8,6 +8,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`alternate_on`, `scroll_position` and `selection_present`** format
+  variables, as tmux's.
 - **A tmux compatibility oracle** (`crates/tmxr-compat-oracle`): the same steps
   run in tmux 3.6 and tmxr, their results compared, over a corpus of layouts,
   formats, list commands, popups, menus and the mouse; CI runs it against tmux
@@ -20,6 +22,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   columns it takes, hides it on the alternate screen, and its slider shows where
   the view is; clicking above or below the slider pages through the history and
   dragging it scrolls (`copy-mode -S`), bound as tmux binds them.
+
+### Changed
+
+- **The mouse binds are tmux 3.6's**: the wheel over a pane enters copy mode
+  without scrolling (the next tick scrolls), and the wheel, drags and double /
+  triple clicks pass to a program on the alternate screen or in copy mode, as
+  tmux's `#{||:#{alternate_on},#{pane_in_mode},#{mouse_any_flag}}` binds do.
+  Found by the oracle.
 
 ### Fixed
 

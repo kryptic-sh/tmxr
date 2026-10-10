@@ -204,6 +204,11 @@ impl Context for Vars<'_> {
                     String::new()
                 }
             }
+            "alternate_on" => flag(pane?.emu.screen().alternate_screen()),
+            // tmux's: how far the copy-mode view is above the bottom, and
+            // whether something is selected; only in copy mode.
+            "scroll_position" => pane?.copy.as_ref()?.position().0.to_string(),
+            "selection_present" => flag(pane?.copy.as_ref()?.anchor.is_some()),
             "pane_in_mode" => flag(pane?.copy.is_some()),
             "history_size" => pane?.emu.history_size().to_string(),
             "pane_pipe" => flag(pane?.pipe.is_some()),
