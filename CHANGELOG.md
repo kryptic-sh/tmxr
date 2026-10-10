@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Pane scrollbars, as tmux 3.5's**: `pane-scrollbars` (`off`, `modal` for copy
+  mode only, or `on`), `pane-scrollbars-position` (`right` or `left`) and
+  `pane-scrollbars-style` (with `width=` and `pad=`). A pane gives its bar the
+  columns it takes, hides it on the alternate screen, and its slider shows where
+  the view is; clicking above or below the slider pages through the history and
+  dragging it scrolls (`copy-mode -S`), bound as tmux binds them.
+
 ## [0.4.0] - 2026-10-11
 
 ### Added

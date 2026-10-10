@@ -244,13 +244,17 @@ fn draw_window(
     let w = win.cols.min(cols);
     let h = win.rows.min(rows);
 
+    let scrollbar = style_option(&srv.cfg.pane_scrollbars_style, &vars);
     let mut cursor = None;
-    for (pid, r) in &rects {
-        if let Some(c) = draw_pane(srv, *pid, *r, buf, w, h, &copy)
+    for (pid, cell) in &rects {
+        // The pane's own cells: its layout cell less any scrollbar.
+        let r = srv.panes.get(pid).map_or(*cell, |p| p.rect);
+        if let Some(c) = draw_pane(srv, *pid, r, buf, w, h, &copy)
             && *pid == win.active
         {
             cursor = Some(c);
         }
+        crate::scrollbar::draw(srv, *pid, buf, scrollbar);
     }
 
     // Borders: every cell of the window area that no pane covers.

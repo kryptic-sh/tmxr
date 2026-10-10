@@ -335,9 +335,14 @@ impl Server {
                 let Some(p) = self.panes.get_mut(&pid) else {
                     return;
                 };
+                let alternate = p.emu.screen().alternate_screen();
                 let replies = p.emu.process(&bytes);
                 if !replies.is_empty() {
                     let _ = p.pty.write(&replies);
+                }
+                // A scrollbar hides on the alternate screen, as tmux's.
+                if p.emu.screen().alternate_screen() != alternate {
+                    self.refit_scrollbar(pid);
                 }
                 self.copy_line_output(pid);
                 let Some(p) = self.panes.get_mut(&pid) else {

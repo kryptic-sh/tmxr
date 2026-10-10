@@ -40,6 +40,10 @@ silence-action = "other"
 visual-bell = "off"
 visual-activity = "off"
 visual-silence = "off"
+# tmux's defaults: no pane scrollbars ("on", or "modal" for copy mode only).
+pane-scrollbars = "off"
+pane-scrollbars-position = "right"
+pane-scrollbars-style = "bg=black,fg=white,width=1,pad=0"
 copy-command = ""
 # tmux's default; `lock-client` runs it in the client's terminal.
 lock-command = "lock -np"
@@ -157,6 +161,11 @@ restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "to
 "MouseDown3StatusLeft" = { cmd = '''display-menu -T "#[align=centre]#{session_name}" -t = -x M -y W Next n { switch-client -n } Previous p { switch-client -p } '' Renumber N { move-window -r } Rename n { command-prompt -I "#S" { rename-session "%%" } } '' "New Session" s { new-session } "New Window" w { new-window }''', note = "Session menu" }
 "M-MouseDown3StatusLeft" = { cmd = '''display-menu -T "#[align=centre]#{session_name}" -t = -x M -y W Next n { switch-client -n } Previous p { switch-client -p } '' Renumber N { move-window -r } Rename n { command-prompt -I "#S" { rename-session "%%" } } '' "New Session" s { new-session } "New Window" w { new-window }''', note = "Session menu" }
 "WheelUpStatus" = { cmd = "previous-window", note = "Previous window" }
+# Pane scrollbars (pane-scrollbars), as tmux binds them: a page above or
+# below the slider, the slider dragged.
+"MouseDown1ScrollbarUp" = { cmd = "copy-mode -u", note = "Scroll up a page" }
+"MouseDown1ScrollbarDown" = { cmd = "copy-mode -d", note = "Scroll down a page" }
+"MouseDrag1ScrollbarSlider" = { cmd = "copy-mode -S", note = "Drag the scrollbar" }
 "WheelDownStatus" = { cmd = "next-window", note = "Next window" }
 "MouseDown2Pane" = { cmd = "select-pane -t = ; if-shell -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' { send-keys -M } { paste-buffer -p }", note = "Paste the latest buffer" }
 "DoubleClick1Pane" = { cmd = "select-pane -t = ; if-shell -F '#{mouse_any_flag}' 'send-keys -M' 'copy-mode ; send-keys -X select-word ; run-shell -d 0.3 ; send-keys -X copy-selection-and-cancel'", note = "Copy the word double-clicked" }

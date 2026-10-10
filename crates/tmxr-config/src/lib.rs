@@ -64,6 +64,12 @@ pub struct Config {
     pub visual_bell: Visual,
     pub visual_activity: Visual,
     pub visual_silence: Visual,
+    /// tmux's pane scrollbars: `off`, `on`, or `modal` (in copy mode only),
+    /// on the `right` or `left`, drawn in `pane-scrollbars-style` (which also
+    /// takes `width=N` and `pad=N`).
+    pub pane_scrollbars: Scrollbars,
+    pub pane_scrollbars_position: ScrollbarPosition,
+    pub pane_scrollbars_style: String,
     /// Shell command `copy-pipe` sends the copied text to when it names none.
     pub copy_command: String,
     /// Shell command a locked client runs in its terminal; the client is
@@ -170,6 +176,63 @@ impl AlertAction {
             Self::None => false,
             Self::Current => current,
             Self::Other => !current,
+        }
+    }
+}
+
+/// When panes show a scrollbar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Scrollbars {
+    Off,
+    Modal,
+    On,
+}
+
+impl Scrollbars {
+    pub const NAMES: &str = "off, modal or on";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "off" => Some(Self::Off),
+            "modal" => Some(Self::Modal),
+            "on" => Some(Self::On),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Modal => "modal",
+            Self::On => "on",
+        }
+    }
+}
+
+/// Which side of a pane its scrollbar is on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ScrollbarPosition {
+    Right,
+    Left,
+}
+
+impl ScrollbarPosition {
+    pub const NAMES: &str = "right or left";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "right" => Some(Self::Right),
+            "left" => Some(Self::Left),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Right => "right",
+            Self::Left => "left",
         }
     }
 }

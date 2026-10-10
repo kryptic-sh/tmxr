@@ -901,7 +901,8 @@ pub fn enter(srv: &mut Server, pane: PaneId, page_up: bool) {
     let Some(p) = srv.panes.get_mut(&pane) else {
         return;
     };
-    if p.copy.is_none() {
+    let entered = p.copy.is_none();
+    if entered {
         p.copy = Some(CopyMode::new(p.emu.screen_mut()));
     }
     if page_up && let Some(cm) = p.copy.as_mut() {
@@ -909,6 +910,9 @@ pub fn enter(srv: &mut Server, pane: PaneId, page_up: bool) {
     }
     let w = p.window;
     srv.mark_window_dirty(w);
+    if entered {
+        srv.refit_scrollbar(pane);
+    }
 }
 
 fn leave(srv: &mut Server, pane: PaneId) {
@@ -916,6 +920,7 @@ fn leave(srv: &mut Server, pane: PaneId) {
         p.copy = None;
         let w = p.window;
         srv.mark_window_dirty(w);
+        srv.refit_scrollbar(pane);
     }
 }
 

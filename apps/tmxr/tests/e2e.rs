@@ -4559,6 +4559,90 @@ fn splits_size_panes_as_tmux_does() {
 }
 
 #[test]
+fn scrollbars_size_panes_as_tmux_does() {
+    let t = Tmxr::new("sbsize");
+    t.run(&["new-session", "-d", "-s", "s", "-x", "100", "-y", "30"]);
+    t.run(&["set-option", "-g", "pane-scrollbars", "on"]);
+    t.run(&["split-window", "-h", "-t", "s"]);
+    let panes = |t: &Tmxr| {
+        t.run(&["list-panes", "-t", "s", "-F", "#{pane_left}+#{pane_width}"])
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    // Each as tmux 3.6 laid out the same window.
+    assert_eq!(panes(&t), "0+49 51+48", "on, right");
+    t.run(&["set-option", "-g", "pane-scrollbars-position", "left"]);
+    assert_eq!(panes(&t), "1+49 52+48", "left");
+    t.run(&[
+        "set-option",
+        "-g",
+        "pane-scrollbars-style",
+        "bg=black,fg=white,width=2,pad=1",
+    ]);
+    assert_eq!(panes(&t), "3+47 54+46", "width 2, pad 1");
+    t.run(&["set-option", "-g", "pane-scrollbars", "modal"]);
+    assert_eq!(panes(&t), "0+50 51+49", "modal, no mode");
+    t.run(&["copy-mode", "-t", "s:0.0"]);
+    assert_eq!(panes(&t), "3+47 51+49", "modal, the left pane in copy mode");
+    t.run(&["send-keys", "-t", "s:0.0", "-X", "cancel"]);
+    assert_eq!(panes(&t), "0+50 51+49", "modal, copy mode left");
+}
+
+#[test]
+fn a_scrollbar_draws_and_scrolls_with_the_mouse() {
+    let t = Tmxr::new("sbmouse");
+    let s = t.attach(&["new", "-s", "sb"]);
+    s.wait_for("status line", |text| text.contains("sb"));
+    s.wait_mouse(true);
+    t.wait_prompt("sb");
+    let fill = if cfg!(windows) {
+        "for /l %i in (1,1,200) do @echo filler%i"
+    } else {
+        "seq -f filler%g 200"
+    };
+    t.run(&["send-keys", "-t", "sb", fill, "Enter"]);
+    s.wait_for("the history", |text| text.contains("filler200"));
+    t.run(&["set-option", "-g", "pane-scrollbars", "on"]);
+    // The bar is the last column; its slider has the style's colours
+    // swapped (fg=white,bg=black), down at the bottom of the history.
+    let bar = COLS - 1;
+    let slider_rows = |s: &Screen| -> Vec<u16> {
+        (0..ROWS - 1)
+            .filter(|&r| s.row_cells(r)[usize::from(bar)].2 == "Idx(7)")
+            .collect()
+    };
+    s.wait_for("the bar", |_| !slider_rows(&s).is_empty());
+    let slider = slider_rows(&s);
+    assert!(slider[0] > 0, "the slider is not at the top: {slider:?}");
+    assert_eq!(
+        *slider.last().unwrap(),
+        ROWS - 2,
+        "the slider ends at the bottom"
+    );
+    assert_eq!(
+        s.row_cells(0)[usize::from(bar)].2,
+        "Idx(0)",
+        "the bar above it"
+    );
+    // Above the slider: a page up, into copy mode.
+    s.click(0, bar, 0);
+    t.wait_run(
+        &["display-message", "-p", "-t", "sb", "#{pane_in_mode}"],
+        "copy mode",
+        |o| o.trim() == "1",
+    );
+    // The slider dragged to the top: the start of the history.
+    let top = slider_rows(&s)[0];
+    s.mouse(0, bar, top, false);
+    s.mouse(32, bar, 0, false);
+    s.mouse(0, bar, 0, true);
+    s.wait_for("the top of the history", |text| {
+        text.lines().any(|l| l.trim_end() == "filler1")
+    });
+}
+
+#[test]
 fn select_pane_titles_a_pane_and_resurrect_keeps_it() {
     let t = Tmxr::new("titles");
     t.run(&["new-session", "-d", "-s", "ti"]);

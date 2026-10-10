@@ -24,6 +24,9 @@ pub(super) fn run(
             if a.has('M') {
                 return crate::mouse::copy_mode_drag(srv, ctx).map(|()| true);
             }
+            if a.has('S') {
+                return crate::mouse::slider_drag(srv, ctx, a.has('e')).map(|()| true);
+            }
             let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
             // -q: out of copy mode (and clock mode), as tmux's.
             if a.has('q') {
@@ -32,6 +35,7 @@ pub(super) fn run(
                     p.clock = false;
                     let window = p.window;
                     srv.mark_window_dirty(window);
+                    srv.refit_scrollbar(pid);
                 }
                 return Ok(true);
             }

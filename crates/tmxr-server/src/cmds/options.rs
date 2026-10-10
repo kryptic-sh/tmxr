@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use tmxr_command::Parsed;
-use tmxr_config::{AlertAction, Visual};
+use tmxr_config::{AlertAction, ScrollbarPosition, Scrollbars, Visual};
 
 use super::{Ctx, Outcome, Res, attached_client, join_args, on_off};
 use crate::server::Server;
@@ -201,6 +201,18 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
                 _ => c.visual_silence = visual,
             }
         }
+        "pane-scrollbars" => {
+            let v = need()?;
+            c.pane_scrollbars = Scrollbars::parse(v)
+                .ok_or_else(|| format!("{name}: unknown value: {v} ({})", Scrollbars::NAMES))?;
+        }
+        "pane-scrollbars-position" => {
+            let v = need()?;
+            c.pane_scrollbars_position = ScrollbarPosition::parse(v).ok_or_else(|| {
+                format!("{name}: unknown value: {v} ({})", ScrollbarPosition::NAMES)
+            })?;
+        }
+        "pane-scrollbars-style" => need()?.clone_into(&mut c.pane_scrollbars_style),
         "remain-on-exit" => c.remain_on_exit = on_off(value, c.remain_on_exit)?,
         "allow-passthrough" => {
             let on = on_off(value, c.allow_passthrough)?;
@@ -229,6 +241,12 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
     }
     if name == "rgb-colour" {
         srv.apply_rgb_colour();
+    }
+    if name.starts_with("pane-scrollbars") {
+        let windows: Vec<_> = srv.windows.keys().copied().collect();
+        for w in windows {
+            srv.relayout(w);
+        }
     }
     srv.mark_all_dirty();
     Ok(())
@@ -269,6 +287,12 @@ pub fn option_lines(srv: &Server) -> Vec<String> {
         format!("visual-bell {}", c.visual_bell.as_str()),
         format!("visual-activity {}", c.visual_activity.as_str()),
         format!("visual-silence {}", c.visual_silence.as_str()),
+        format!("pane-scrollbars {}", c.pane_scrollbars.as_str()),
+        format!(
+            "pane-scrollbars-position {}",
+            c.pane_scrollbars_position.as_str()
+        ),
+        format!("pane-scrollbars-style {}", c.pane_scrollbars_style),
         format!("lock-after-time {}", c.lock_after_time),
         format!(
             "lock-command {}",

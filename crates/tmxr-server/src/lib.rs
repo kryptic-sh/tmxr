@@ -27,6 +27,7 @@ pub mod pipe;
 pub mod popup;
 pub mod render;
 pub mod resurrect;
+pub mod scrollbar;
 pub mod server;
 pub mod target;
 pub mod util;

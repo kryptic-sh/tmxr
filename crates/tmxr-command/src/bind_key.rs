@@ -44,6 +44,10 @@ pub enum MouseLocation {
     StatusRight,
     /// The status line outside both and the window list.
     StatusDefault,
+    /// A pane's scrollbar above its slider, on it, and below it.
+    ScrollbarUp,
+    ScrollbarSlider,
+    ScrollbarDown,
 }
 
 /// A mouse key, such as `MouseDown1Pane` or `M-WheelUpPane`.
@@ -78,6 +82,9 @@ const LOCATIONS: &[(&str, MouseLocation)] = &[
     ("StatusLeft", MouseLocation::StatusLeft),
     ("StatusRight", MouseLocation::StatusRight),
     ("StatusDefault", MouseLocation::StatusDefault),
+    ("ScrollbarUp", MouseLocation::ScrollbarUp),
+    ("ScrollbarSlider", MouseLocation::ScrollbarSlider),
+    ("ScrollbarDown", MouseLocation::ScrollbarDown),
 ];
 
 impl FromStr for MouseKey {

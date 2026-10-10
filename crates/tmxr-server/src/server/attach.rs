@@ -230,7 +230,18 @@ impl Server {
         let Some(win) = self.windows.get(&window) else {
             return;
         };
-        for (pid, r) in win.visible_rects() {
+        // Each pane gets its layout cell less its scrollbar, if it shows one.
+        let rects: Vec<_> = win
+            .visible_rects()
+            .into_iter()
+            .map(|(pid, cell)| {
+                (
+                    pid,
+                    crate::scrollbar::content(cell, crate::scrollbar::bar(self, pid)),
+                )
+            })
+            .collect();
+        for (pid, r) in rects {
             if let Some(p) = self.panes.get_mut(&pid) {
                 let resized = (p.rect.w, p.rect.h) != (r.w, r.h);
                 p.rect = r;
@@ -246,5 +257,16 @@ impl Server {
             }
         }
         self.mark_window_dirty(window);
+    }
+
+    /// Lay out `pane`'s window again if scrollbars are in use: whether it
+    /// shows one can change with copy mode and the alternate screen, and
+    /// its width with it, as tmux's `layout_fix_panes` calls do.
+    pub fn refit_scrollbar(&mut self, pane: crate::model::PaneId) {
+        if self.cfg.pane_scrollbars != tmxr_config::Scrollbars::Off
+            && let Some(w) = self.panes.get(&pane).map(|p| p.window)
+        {
+            self.relayout(w);
+        }
     }
 }

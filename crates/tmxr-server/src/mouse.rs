@@ -32,6 +32,8 @@ pub enum Drag {
     },
     /// Selecting text in `pane` in copy mode.
     Select { pane: PaneId },
+    /// Dragging `pane`'s scrollbar slider, held `grab` rows below its top.
+    Slider { pane: PaneId, grab: u16 },
 }
 
 /// A held mouse button: where it went down, and whether it has moved since,
@@ -77,6 +79,8 @@ pub struct MouseTarget {
     pub pane: Option<PaneId>,
     /// The border under the mouse, as `resize-pane -M` would drag it.
     pub border: Option<Drag>,
+    /// On a scrollbar's slider: how many rows below its top it was taken.
+    pub grab: u16,
 }
 
 const MODS: KeyModifiers = KeyModifiers::CONTROL
@@ -275,6 +279,7 @@ fn locate(
         window: None,
         pane: None,
         border: None,
+        grab: 0,
     };
     let sess = srv.sessions.get(&session)?;
     if row >= att.rows.saturating_sub(STATUS_ROWS) {
@@ -294,8 +299,14 @@ fn locate(
         .iter()
         .find(|(_, r)| col >= r.x && col < r.x + r.w && row >= r.y && row < r.y + r.h)
     {
-        t.location = MouseLocation::Pane;
         t.pane = Some(*pane);
+        t.location = match crate::scrollbar::hit(srv, *pane, col, row) {
+            Some((location, grab)) => {
+                t.grab = grab;
+                location
+            }
+            None => MouseLocation::Pane,
+        };
         return Some(t);
     }
     let border = border_at(&rects, col, row)?;
@@ -354,6 +365,9 @@ fn follow_drag(srv: &mut Server, id: ClientId, m: MouseEvent) -> bool {
                 );
             }
         }
+        (Drag::Slider { pane, grab }, MouseEventKind::Drag(MouseButton::Left)) => {
+            scroll_to_slider(srv, pane, grab, row, false);
+        }
         (Drag::Select { pane }, MouseEventKind::Drag(MouseButton::Left)) => {
             move_copy_cursor(srv, pane, col, row);
         }
@@ -379,6 +393,7 @@ fn follow_drag(srv: &mut Server, id: ClientId, m: MouseEvent) -> bool {
                     window: index.map(|i| (i, window)),
                     pane: Some(pane),
                     border: None,
+                    grab: 0,
                 };
                 dispatch(srv, id, MouseAction::DragEnd(1), target);
             }
@@ -428,6 +443,67 @@ pub fn copy_mode_drag(srv: &mut Server, ctx: &Ctx) -> Result<(), String> {
     crate::copy::enter(srv, pane, false);
     start_selection(srv, ctx, pane, t);
     Ok(())
+}
+
+/// `copy-mode -S`: the scrollbar slider under the mouse follows it, the
+/// pane in copy mode, until the button is let go (`-e`: leaving copy mode
+/// at the bottom).
+pub fn slider_drag(srv: &mut Server, ctx: &Ctx, exit: bool) -> Result<(), String> {
+    let t = ctx.mouse.ok_or("copy-mode -S needs a mouse event")?;
+    let pane = t.pane.ok_or("no pane under the mouse")?;
+    let id = ctx.client.ok_or("no client")?;
+    let (_, oy) = srv
+        .clients
+        .get(&id)
+        .and_then(|c| c.att.as_ref())
+        .map_or((0, 0), |a| crate::render::window_offset(srv, a));
+    crate::copy::enter(srv, pane, false);
+    if let Some(cm) = srv.panes.get_mut(&pane).and_then(|p| p.copy.as_mut())
+        && exit
+    {
+        cm.scroll_exit = true;
+    }
+    scroll_to_slider(srv, pane, t.grab, t.event.row + oy, exit);
+    set_drag(srv, id, Some(Drag::Slider { pane, grab: t.grab }));
+    Ok(())
+}
+
+/// Move `pane`'s copy-mode view so its slider follows the mouse at window
+/// row `my`, held `grab` rows below the slider's top: tmux 3.6's
+/// `window_copy_scroll1`, the inverse of the slider's own formula. With
+/// `exit`, reaching the bottom leaves copy mode.
+fn scroll_to_slider(srv: &mut Server, pane: PaneId, grab: u16, my: u16, exit: bool) {
+    let Some(p) = srv.panes.get_mut(&pane) else {
+        return;
+    };
+    let (top, h) = (i32::from(p.rect.y), i32::from(p.rect.h));
+    let (_, slider_h) = crate::scrollbar::slider(p, p.rect.h);
+    let (my, grab, slider_h) = (i32::from(my), i32::from(grab), i32::from(slider_h));
+    let new_y = if my <= top + grab {
+        0
+    } else if my - grab > top + h - slider_h {
+        h - slider_h
+    } else {
+        my - top - grab + 1
+    };
+    let Some(cm) = p.copy.as_mut() else {
+        return;
+    };
+    let size = cm.lines.len().saturating_sub(usize::from(cm.rows));
+    let offset =
+        (f64::from(new_y.max(0)) * ((size as f64 + f64::from(h)) / f64::from(h.max(1)))) as usize;
+    cm.top = offset.min(size);
+    let rows = usize::from(cm.rows.max(1));
+    cm.cy = cm.cy.clamp(cm.top, cm.top + rows - 1);
+    let at_bottom = cm.top == size;
+    let window = p.window;
+    srv.mark_window_dirty(window);
+    if exit && at_bottom {
+        if let Some(p) = srv.panes.get_mut(&pane) {
+            p.copy = None;
+        }
+        srv.refit_scrollbar(pane);
+    }
 }
 
 /// `resize-pane -M`: drag the border under the mouse.

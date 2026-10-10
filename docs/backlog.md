@@ -38,16 +38,18 @@ table. What has been verified, and how:
 
 ## Known gaps and follow-ups
 
-- **tmux default binds tmxr lacks** (compared with tmux 3.6's `list-keys` on
-  2026-10-10; 21 of its 267). Each needs something tmxr does not have yet:
-  - Menus: all of tmux's are bound (`prefix <` / `>`, the right button over a
-    pane or the status line, and their `M-` forms) and tested; the pane menu's
-    hyperlink items never show, as tmxr keeps no OSC 8 links.
-  - Scrollbars: tmux 3.5's `pane-scrollbars` (off by default) and the
-    `MouseDown1Scrollbar*` / `MouseDrag1ScrollbarSlider` binds that drive them
-    (`copy-mode -S`); tmxr draws no scrollbars.
-  - Declined: the digit binds (`1`-`9` in vi, `M-1`-`M-9` in emacs) that open a
-    "(repeat)" prompt: tmxr's copy mode takes counts directly (`5j`).
+- **tmux default binds**: all of tmux 3.6's 267 are bound (compared with its
+  `list-keys`, 2026-10-11) except the 18 digit binds (`1`-`9` in vi, `M-1`-`M-9`
+  in emacs) that open a "(repeat)" prompt, declined: tmxr's copy mode takes
+  counts directly (`5j`). The pane menu's hyperlink items never show, as tmxr
+  keeps no OSC 8 links.
+- **Scrollbars** follow tmux 3.6 (`layout_fix_panes`, the slider formula,
+  `window_copy_scroll1`), checked against tmux's pane sizes. Differences: the
+  three options are server-wide (tmux also sets them per window, and the style
+  per pane); `MouseDragEnd1ScrollbarSlider` is never sent; and outside copy mode
+  the slider reads the history size by cloning the pane's screen
+  (`Emulator::history_size`), every frame while bars show, which costs with a
+  long history. Not measured.
 - **`paste-buffer` without `-p` still brackets** a paste when the program asked
   for bracketed paste; tmux brackets only with `-p`. Not changed: no bind or
   report depends on it.
