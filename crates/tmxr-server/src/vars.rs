@@ -154,6 +154,13 @@ impl Context for Vars<'_> {
                     .unwrap_or_default()
             }
             "pane_pid" => pane?.pty.pid()?.to_string(),
+            "copy_cursor_word" => pane?.copy.as_ref()?.cursor_word(),
+            // tmux's: the column, and the row in the view.
+            "copy_cursor_x" => pane?.copy.as_ref()?.cx.to_string(),
+            "copy_cursor_y" => {
+                let cm = pane?.copy.as_ref()?;
+                cm.cy.saturating_sub(cm.top).to_string()
+            }
             "pane_in_mode" => flag(pane?.copy.is_some()),
             "history_size" => pane?.emu.history_size().to_string(),
             "pane_pipe" => flag(pane?.pipe.is_some()),

@@ -44,11 +44,10 @@ table. What has been verified, and how:
   (`split_geometry`), so matching tmux cell for cell means changing how that
   crate rounds, or splitting by cells; not started.
 - **tmux default binds tmxr lacks** (compared with tmux 3.6's `list-keys` on
-  2026-10-10; 39 of its 267). Each needs something tmxr does not have yet:
+  2026-10-10; 37 of its 267). Each needs something tmxr does not have yet:
   - Menus: `prefix <` / `>`, `MouseDown3Pane`, `MouseDown3Status`,
     `MouseDown3StatusLeft` and their `M-` forms. Their items use `-t =`, `#{?…}`
     conditionals and `{ … }` blocks (now parsed); not tried.
-  - vi `#` / `*`, which need `send-keys -F` and `#{copy_cursor_word}`.
   - `select-layout main-horizontal-mirrored` / `main-vertical-mirrored`
     (`prefix M-6` / `M-7`), `customize-mode -Z` (`prefix C`),
     `refresh-client -c` and `-D` / `-L` / `-R` / `-U` panning (`prefix DC`,

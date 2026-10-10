@@ -277,6 +277,8 @@ restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "to
 "A" = { cmd = "send-keys -X append-selection-and-cancel", note = "Add the selection to the newest buffer" }
 "o" = { cmd = "send-keys -X other-end", note = "Cursor to the selection's other end" }
 "z" = { cmd = "send-keys -X scroll-middle", note = "Scroll the cursor's line to the middle" }
+"#" = { cmd = "send-keys -FX search-backward -- '#{copy_cursor_word}'", note = "Search back for the word at the cursor" }
+"*" = { cmd = "send-keys -FX search-forward -- '#{copy_cursor_word}'", note = "Search for the word at the cursor" }
 "P" = { cmd = "send-keys -X toggle-position", note = "Show or hide the position" }
 "BSpace" = { cmd = "send-keys -X cursor-left", note = "Cursor left" }
 "Home" = { cmd = "send-keys -X start-of-line", note = "Start of line" }

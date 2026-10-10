@@ -287,3 +287,21 @@ fn toggle_position_hides_and_shows_the_indicator() {
     cm.apply("toggle-position", None);
     assert!(!cm.hide_position);
 }
+
+#[test]
+fn the_cursor_word_is_tmuxs() {
+    let word_at = |text: &str, x: usize| {
+        let mut cm = at_start(text);
+        cm.cx = x;
+        cm.cursor_word()
+    };
+    // Punctuation (but `_`) and blanks separate words; other characters,
+    // non-ASCII ones too, do not.
+    assert_eq!(word_at("foo.bar baz", 1), "foo");
+    assert_eq!(word_at("foo.bar baz", 9), "baz");
+    assert_eq!(word_at("snake_case x", 3), "snake_case");
+    assert_eq!(word_at("héllo→wörld", 2), "héllo→wörld");
+    // On a separator: the word just after it.
+    assert_eq!(word_at("foo.bar baz", 3), "bar");
+    assert_eq!(word_at("foo  bar", 3), "");
+}

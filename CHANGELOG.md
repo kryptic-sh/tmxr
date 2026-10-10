@@ -8,6 +8,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **vi `#` / `*` in copy mode** search back and on for the word at the cursor,
+  as tmux's, through the new `send-keys -F` (arguments are formats) and the
+  `copy_cursor_word`, `copy_cursor_x` and `copy_cursor_y` variables. A copy
+  command's arguments may start with `--`, as in tmux's binds.
 - **Copy-mode actions from tmux**: `other-end` (vi `o`), `scroll-middle` (vi
   `z`), `append-selection-and-cancel` (vi `A`), `toggle-position` (`P`) and
   `cursor-centre-vertical` / `cursor-centre-horizontal` (emacs `C-l` / `M-l`),

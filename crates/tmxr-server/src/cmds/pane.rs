@@ -347,8 +347,22 @@ pub(super) fn run(
                 return crate::mouse::forward(srv, ctx).map(|()| true);
             }
             let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
+            // -F: each argument is a format, expanded for the target pane.
+            let expanded: Vec<String>;
+            let pos = if a.has('F') {
+                expanded = pos
+                    .iter()
+                    .map(|w| super::expand_for(srv, ctx, Some(pid), w))
+                    .collect();
+                &expanded[..]
+            } else {
+                pos
+            };
             if a.has('X') {
                 let (name, rest) = pos.split_first().ok_or("send-keys -X needs a command")?;
+                // A copy command's own arguments may start with `--`, as
+                // tmux's default `#` / `*` binds do; it marks their end.
+                let rest = rest.strip_prefix(&["--".to_owned()][..]).unwrap_or(rest);
                 // -N: repeat count, as typed digits would give.
                 if let Some(n) = a.value('N') {
                     let n: usize = n.parse().map_err(|_| format!("bad count: {n}"))?;

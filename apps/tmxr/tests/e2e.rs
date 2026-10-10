@@ -4240,6 +4240,59 @@ fn append_selection_and_toggle_position_do_what_tmuxs_do() {
 }
 
 #[test]
+fn star_and_hash_search_for_the_word_at_the_cursor() {
+    let t = Tmxr::new("starhash");
+    let s = t.attach(&["new", "-s", "sh"]);
+    s.wait_for("status line", |text| text.contains("sh"));
+    t.wait_prompt("sh");
+    t.run(&[
+        "send-keys",
+        "-t",
+        "sh",
+        "echo one target two target",
+        "Enter",
+    ]);
+    s.wait_for("the output", |text| {
+        text.lines()
+            .any(|l| l.trim_end() == "one target two target")
+    });
+    t.run(&["copy-mode", "-t", "sh"]);
+    let x = |args: &[&str]| {
+        let mut cmd = vec!["send-keys", "-t", "sh", "-X"];
+        cmd.extend_from_slice(args);
+        t.run(&cmd);
+    };
+    // The output line, nearest above; then onto its first "target".
+    x(&["search-backward", "one target"]);
+    x(&["next-word"]);
+    let at = |t: &Tmxr| {
+        t.run(&[
+            "display-message",
+            "-p",
+            "-t",
+            "sh",
+            "#{copy_cursor_word} #{copy_cursor_x}",
+        ])
+        .trim()
+        .to_owned()
+    };
+    assert_eq!(at(&t), "target 4");
+    // vi *: on to the next "target"; #: back.
+    s.send(b"*");
+    t.wait_run(
+        &["display-message", "-p", "-t", "sh", "#{copy_cursor_x}"],
+        "*",
+        |o| o.trim() == "15",
+    );
+    s.send(b"#");
+    t.wait_run(
+        &["display-message", "-p", "-t", "sh", "#{copy_cursor_x}"],
+        "#",
+        |o| o.trim() == "4",
+    );
+}
+
+#[test]
 fn select_pane_titles_a_pane_and_resurrect_keeps_it() {
     let t = Tmxr::new("titles");
     t.run(&["new-session", "-d", "-s", "ti"]);

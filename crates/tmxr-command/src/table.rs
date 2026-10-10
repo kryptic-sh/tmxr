@@ -498,10 +498,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "send-keys",
         Some("send"),
-        "lMN:t:X",
+        "FlMN:t:X",
         0,
         ANY,
-        "[-lMX] [-N repeat-count] [-t target-pane] key ..."
+        "[-FlMX] [-N repeat-count] [-t target-pane] key ..."
     ),
     cmd!("send-prefix", None, "t:", 0, 0, "[-t target-pane]"),
     cmd!("server-access", None, "adlrw", 0, 1, "[-adlrw] [user]"),
