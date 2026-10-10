@@ -230,8 +230,12 @@ jobs:
           net user $name /delete | Out-Null
 
   socket-acl:
-    name: socket admits only named users (linux)
-    runs-on: ubuntu-latest
+    name: socket admits only named users (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v2
@@ -244,14 +248,22 @@ jobs:
       - name: Connect as the owner and as another user
         run: |
           set -eu
-          sudo useradd --create-home tmxrother
+          if [ "$(uname)" = Darwin ]; then
+            home=/Users/tmxrother
+            sudo sysadminctl -addUser tmxrother -home "$home" \
+              -password "tmxr-$(uuidgen)"
+            sudo createhomedir -c -u tmxrother >/dev/null
+          else
+            home=/home/tmxrother
+            sudo useradd --create-home tmxrother
+          fi
           # A directory the other user can reach, as tmux asks for -S.
           dir=$(mktemp -d /tmp/tmxr-acl.XXXXXX)
           chmod 0755 "$dir"
           cp target/debug/tmxr "$dir/tmxr"
           chmod 0755 "$dir/tmxr"
           other() {
-            sudo -u tmxrother env HOME=/home/tmxrother "$dir/tmxr" "$@"
+            sudo -u tmxrother env HOME="$home" "$dir/tmxr" "$@"
           }
 
           # The default socket-access: the socket file itself refuses them.
