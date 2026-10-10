@@ -4429,6 +4429,53 @@ fn tmuxs_pane_menu_works_from_the_prefix_and_the_right_button() {
 }
 
 #[test]
+fn tmuxs_status_line_menus_act_on_what_was_clicked() {
+    let t = Tmxr::new("statusmenu");
+    let s = t.attach(&["new", "-s", "sm", "-n", "clickme"]);
+    s.wait_for("status line", |text| text.contains("sm"));
+    s.wait_mouse(true);
+    t.run(&["set-option", "-g", "status-left", "LEFTPART "]);
+    t.run(&["new-window", "-t", "sm:1", "-n", "current"]);
+    s.wait_for("both windows listed", |text| {
+        text.contains("clickme") && text.contains("LEFTPART")
+    });
+    let cells = s.status_cells();
+    let find = |word: &str| {
+        (0..cells.len())
+            .find(|&i| {
+                cells[i..]
+                    .iter()
+                    .take(word.chars().count())
+                    .map(|c| c.0.as_str())
+                    .collect::<String>()
+                    == word
+            })
+            .map_or_else(
+                || panic!("{word} in the status line"),
+                |c| u16::try_from(c).unwrap(),
+            )
+    };
+    // On a window's name: that window's menu, though another is current;
+    // Rename starts from the name of the window clicked.
+    s.click(2, find("clickme"), ROWS - 1);
+    s.wait_for("the window menu", |text| text.contains("0:clickme"));
+    s.send(b"n");
+    s.wait_for("the prompt", |text| {
+        text.contains("clickme") && !text.contains("Swap Right")
+    });
+    s.send(b"");
+    // On the left part: the session's menu; New Window adds one.
+    s.click(2, find("LEFTPART"), ROWS - 1);
+    s.wait_for("the session menu", |text| text.contains("New Window"));
+    s.send(b"w");
+    t.wait_run(
+        &["display-message", "-p", "-t", "sm", "#{session_windows}"],
+        "a new window",
+        |o| o.trim() == "3",
+    );
+}
+
+#[test]
 fn select_pane_titles_a_pane_and_resurrect_keeps_it() {
     let t = Tmxr::new("titles");
     t.run(&["new-session", "-d", "-s", "ti"]);

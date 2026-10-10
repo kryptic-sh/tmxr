@@ -44,13 +44,10 @@ table. What has been verified, and how:
   (`split_geometry`), so matching tmux cell for cell means changing how that
   crate rounds, or splitting by cells; not started.
 - **tmux default binds tmxr lacks** (compared with tmux 3.6's `list-keys` on
-  2026-10-10; 32 of its 267). Each needs something tmxr does not have yet:
-  - Menus: `prefix <`, `prefix >` and `MouseDown3Pane` are tmux's own window and
-    pane menus (`tmuxs_window_menu_works`,
-    `tmuxs_pane_menu_works_from_the_prefix_and_the_right_button`). Left:
-    `MouseDown3Status` / `MouseDown3StatusLeft` and their `M-` forms (not
-    tried); the pane menu's hyperlink items never show, as tmxr keeps no OSC 8
-    links.
+  2026-10-10; 27 of its 267). Each needs something tmxr does not have yet:
+  - Menus: all of tmux's are bound (`prefix <` / `>`, the right button over a
+    pane or the status line, and their `M-` forms) and tested; the pane menu's
+    hyperlink items never show, as tmxr keeps no OSC 8 links.
   - `customize-mode -Z` (`prefix C`), `refresh-client -c` and `-D` / `-L` / `-R`
     / `-U` panning (`prefix DC`, `S-arrows`), and tmux's pane scrollbars
     (`MouseDown1Scrollbar*`, which also use `copy-mode -S`).

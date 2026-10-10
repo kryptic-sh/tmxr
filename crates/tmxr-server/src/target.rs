@@ -120,7 +120,21 @@ pub fn window(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, u3
     let spec = spec.unwrap_or("");
     if is_mouse(spec) {
         let t = ctx.mouse.ok_or("no mouse target")?;
-        let (idx, wid) = t.window.ok_or("no window under the mouse")?;
+        // Off any window (the status line's left part): the session's
+        // current one, as tmux's cmd_mouse_window.
+        let (idx, wid) = match t.window {
+            Some(w) => w,
+            None => {
+                let s = srv
+                    .sessions
+                    .get(&t.session)
+                    .ok_or("no session under the mouse")?;
+                (
+                    s.current,
+                    s.current_window().ok_or("no window under the mouse")?,
+                )
+            }
+        };
         return Ok((t.session, idx, wid));
     }
     if let Some(id) = spec
@@ -235,7 +249,18 @@ pub fn pane(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, Wind
     let spec = spec.unwrap_or("");
     if is_mouse(spec) {
         let t = ctx.mouse.ok_or("no mouse target")?;
-        let pane = t.pane.ok_or("no pane under the mouse")?;
+        // Off a pane (the status line): that window's active pane, as
+        // tmux's cmd_mouse_pane.
+        let pane = match t.pane {
+            Some(p) => p,
+            None => {
+                let (_, _, wid) = window(srv, ctx, Some("="))?;
+                srv.windows
+                    .get(&wid)
+                    .ok_or("no window under the mouse")?
+                    .active
+            }
+        };
         let p = srv.panes.get(&pane).ok_or("no pane under the mouse")?;
         return Ok((t.session, p.window, pane));
     }

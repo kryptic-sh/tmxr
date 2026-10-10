@@ -8,10 +8,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **tmux's window and pane menus** on `prefix <`, `prefix >` and the right
-  button over a pane, bound as tmux 3.6 binds them. A menu item runs against the
-  menu's target and the mouse event that opened it, as tmux's: a right-click's
-  items act on the pane clicked.
+- **tmux's menus** on `prefix <`, `prefix >` and the right button over a pane, a
+  window's name or the status line's left part, bound as tmux 3.6 binds them. A
+  menu item runs against the menu's target and the mouse event that opened it,
+  as tmux's: a right-click's items act on the pane clicked.
 - **`mouse_word`, `mouse_line`, `mouse_x`, `mouse_y` and `pane_mode`** for
   commands a mouse event runs, and **`copy-mode -q`, `-d` and `-H`**.
 - **More of tmux's format language**: `#{<:…}`, `#{>:…}`, `#{<=:…}`, `#{>=:…}`
@@ -111,6 +111,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`-t =` off a pane or window** (a click on the status line) means the
+  window's active pane, or the session's current window, as tmux's does; it
+  failed with "no pane under the mouse".
 - **`display-menu` follows tmux's item rules**: an item whose name expands to
   nothing is left out (tmxr showed a separator), and a separator at the top or
   after another is dropped. `#[…]` styles in a menu's title and items are
