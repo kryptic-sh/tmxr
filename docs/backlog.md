@@ -38,6 +38,12 @@ table. What has been verified, and how:
 
 ## Known gaps and follow-ups
 
+- **`a_32_bit_programs_directory_is_read` failed once** (2026-10-10, CI's
+  bundled-ConPTY Windows job, run 38044583669): the 32-bit `cmd`'s directory
+  read as `C:\Windows\System32` for the whole 20 s, the symptom the WOW64 fix in
+  0.2.4 addressed. The next run on the same code passed, and nothing in that
+  change touched `tmxr-term`. Unexplained; if it recurs, log which process
+  `current_dir` read and whether its PEB was read as 32-bit.
 - **`server-access` coverage**: a second user is exercised by CI on Windows
   (`pipe-acl`) and Linux (`socket-acl`), not on macOS, where the same
   `getpeereid` path runs untested by another account. `socket-access` is read at
