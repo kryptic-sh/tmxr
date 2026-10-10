@@ -115,14 +115,15 @@ table. What has been verified, and how:
 - **Resurrect**: pane titles are not saved (restored programs set their own).
   Arguments are restored only for programs in `resurrect.restore-args`.
   Arguments that are not UTF-8 are not saved.
-- **`prefix y` (`copy-command-line`) relies on the shell's line keys**: a shell
-  in vi mode, or one bound differently, does not move to the line's ends on
-  `C-a` / `C-e` (Home / End on Windows), and the copy is then wrong, as with
-  tmux-yank. It waits for the pane to settle rather than a fixed time, but a
-  shell slower than `copyline::STEP_LIMIT` to redraw is read early. Shell
-  integration (OSC 133 prompt marks) would find the command line without keys;
-  the emulator does not track those marks yet. Tested end to end with cmd
-  (Windows) and bash (CI), not PowerShell, zsh or fish.
+- **`prefix y` (`copy-command-line`) without prompt marks relies on the shell's
+  line keys**: a shell that sends OSC 133 prompt marks needs no keys, but one
+  that does not, in vi mode or bound differently, does not move to the line's
+  ends on `C-a` / `C-e` (Home / End on Windows), and the copy is then wrong, as
+  with tmux-yank's. That path waits for the pane to settle, but a shell slower
+  than `copyline::STEP_LIMIT` to redraw is read early. A mark is dropped once
+  the history is full (`Emulator::input_start`), since lines then scroll away
+  uncounted. Tested end to end with cmd (Windows; ConPTY passes OSC 133 through)
+  and bash (CI), with and without marks; not PowerShell, zsh or fish.
 - **Windows `kill()` on a pane child** returned "There are no more files" (os
   error 18) in a test; not a bug in practice. `Server::kill_pane` calls `kill()`
   and then drops the pane, closing the ConPTY, and that does end the programs

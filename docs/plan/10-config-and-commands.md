@@ -128,12 +128,14 @@ pane's directory) without a helper script. tmux's `set-buffer` stores the text
 literally.
 
 `prefix y` is `copy-command-line`, tmxr's own take on tmux-yank's
-`copy_line.sh`: it sends the shell its beginning-of-line key, waits until the
-pane has been quiet a moment (`copyline::SETTLE`, at most `STEP_LIMIT`), reads
-the cursor, does the same with the end-of-line key, and copies the text between
-as a copy-mode copy does. The keys are `Home` / `End` for PowerShell and cmd
-(whose `C-a` selects all or does nothing) and tmux-yank's `C-a` / `C-e` for the
-rest.
+`copy_line.sh`. When the shell marks its prompts (OSC 133;B, tracked by
+`Emulator::input_start`), the input runs from the mark to the end of the
+cursor's line and no keys are sent. Otherwise it sends the shell its
+beginning-of-line key, waits until the pane has been quiet a moment
+(`copyline::SETTLE`, at most `STEP_LIMIT`), reads the cursor, does the same with
+the end-of-line key, and copies the text between as a copy-mode copy does. The
+keys are `Home` / `End` for PowerShell and cmd (whose `C-a` selects all or does
+nothing) and tmux-yank's `C-a` / `C-e` for the rest.
 
 ## CLI (`apps/tmxr`)
 

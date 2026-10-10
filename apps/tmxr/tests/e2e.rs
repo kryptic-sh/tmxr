@@ -3332,3 +3332,49 @@ fn prefix_y_copies_the_shells_command_line() {
         o == "echo yank-me-now"
     });
 }
+
+#[test]
+fn prefix_y_uses_the_shells_prompt_mark() {
+    let t = Tmxr::new("yankmark");
+    let (new, shell, mark) = if cfg!(windows) {
+        (vec!["new", "-s", "ym"], "cmd", r"prompt $P$G$e]133;B$e\")
+    } else {
+        (
+            vec!["new", "-s", "ym", "bash --norc --noprofile -i"],
+            "bash",
+            r"PS1='$ \[\e]133;B\a\]'",
+        )
+    };
+    let s = t.attach(&new);
+    s.wait_for("status line", |text| text.contains("ym"));
+    t.wait_run(
+        &[
+            "display-message",
+            "-p",
+            "-t",
+            "ym",
+            "#{pane_current_command}",
+        ],
+        "the shell",
+        |o| o.trim().eq_ignore_ascii_case(shell),
+    );
+    // The prompt now ends with an OSC 133;B mark.
+    s.send(mark.as_bytes());
+    s.send(b"\r");
+    std::thread::sleep(Duration::from_millis(500));
+    s.send(b"echo yank-me-now");
+    s.wait_for("the typing", |text| text.contains("echo yank-me-now"));
+    for _ in 0..4 {
+        s.send(b"\x1b[D");
+    }
+    s.send(PREFIX);
+    s.send(b"y");
+    t.wait_run(&["show-buffer"], "the command line copied", |o| {
+        o == "echo yank-me-now"
+    });
+    // With the mark no keys were sent: the cursor is still mid-word.
+    s.send(b"Z");
+    s.wait_for("Z typed where the cursor was", |text| {
+        text.contains("echo yank-meZ-now")
+    });
+}

@@ -20,6 +20,19 @@ pub struct Hooks {
     modify_other_keys: u8,
     /// kitty keyboard flags stack (`CSI > f u` pushes, `CSI < n u` pops).
     kitty_flags: Vec<u8>,
+    /// Where the shell's input starts, from its OSC 133;B prompt mark:
+    /// (lines of history then, screen row, column).
+    input_mark: Option<(usize, u16, u16)>,
+}
+
+/// Lines of history above `screen`, read by moving its view to the top and
+/// back.
+fn history_lines(screen: &mut vt100::Screen) -> usize {
+    let view = screen.scrollback();
+    screen.set_scrollback(usize::MAX);
+    let lines = screen.scrollback();
+    screen.set_scrollback(view);
+    lines
 }
 
 impl vt100::Callbacks for Hooks {
@@ -94,8 +107,16 @@ impl vt100::Callbacks for Hooks {
         }
     }
 
-    fn unhandled_osc(&mut self, _: &mut vt100::Screen, params: &[&[u8]]) {
+    fn unhandled_osc(&mut self, screen: &mut vt100::Screen, params: &[&[u8]]) {
         match params {
+            // Shell integration (FinalTerm / OSC 133): B ends the prompt, so
+            // the input starts at the cursor; A (a new prompt), C (the
+            // command runs) and D (it finished) end that input.
+            [b"133", b"B", ..] => {
+                let (row, col) = screen.cursor_position();
+                self.input_mark = Some((history_lines(screen), row, col));
+            }
+            [b"133", b"A" | b"C" | b"D", ..] => self.input_mark = None,
             [b"7", uri, ..] => {
                 if let Some(path) = file_uri_path(&String::from_utf8_lossy(uri)) {
                     self.cwd = Some(path);
@@ -171,6 +192,21 @@ impl Emulator {
 
     /// Lines of history above the screen (tmux's `#{history_size}`). vt100
     /// tells only by moving its scrollback view, so a copy is measured.
+    /// Where the shell's input starts on the screen, as its last OSC 133
+    /// prompt mark said: `None` without a mark, on the alternate screen, or
+    /// once the history is full (lines then scroll away uncounted, and the
+    /// mark's row is no longer known).
+    pub fn input_start(&self) -> Option<(u16, u16)> {
+        let (marked_history, row, col) = self.parser.callbacks().input_mark?;
+        let now = self.history_size();
+        let screen = self.parser.screen();
+        if screen.alternate_screen() || now >= self.scrollback || now < marked_history {
+            return None;
+        }
+        let row = usize::from(row).checked_sub(now - marked_history)?;
+        Some((u16::try_from(row).ok()?, col))
+    }
+
     pub fn history_size(&self) -> usize {
         let mut screen = self.parser.screen().clone();
         screen.set_scrollback(usize::MAX);
@@ -324,6 +360,29 @@ mod tests {
         assert_eq!(e.process(b"\x1b[c"), b"\x1b[?62;22c");
         assert_eq!(e.process(b"\x1b[5n"), b"\x1b[0n");
         assert!(e.process(b"plain text").is_empty());
+    }
+
+    #[test]
+    fn prompt_marks_say_where_the_input_starts() {
+        let mut e = Emulator::new(3, 20, 100);
+        assert_eq!(e.input_start(), None);
+        e.process(b"PS> \x1b]133;B\x07echo hi");
+        assert_eq!(e.input_start(), Some((0, 4)));
+        // The command runs: no input any more.
+        e.process(b"\x1b]133;C\x07\r\nhi\r\n");
+        assert_eq!(e.input_start(), None);
+        // A mark on the last row moves up as the screen scrolls.
+        e.process(b"$ \x1b]133;B\x07");
+        assert_eq!(e.input_start(), Some((2, 2)));
+        e.process(b"a\r\n");
+        assert_eq!(e.input_start(), Some((1, 2)));
+        // Scrolled off the screen: gone.
+        e.process(b"b\r\nc\r\n");
+        assert_eq!(e.input_start(), None);
+        // A full history no longer counts what scrolls away.
+        let mut small = Emulator::new(2, 20, 1);
+        small.process(b"x\r\ny\r\nz\r\n$ \x1b]133;B\x07");
+        assert_eq!(small.input_start(), None);
     }
 
     #[test]

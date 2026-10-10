@@ -20,7 +20,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   tmux-yank's does, through the new `copy-command-line` command: tmxr moves the
   shell's cursor to the line's start and end itself (`Home` / `End` for
   PowerShell and cmd, `C-a` / `C-e` elsewhere) and waits for the pane to settle
-  rather than for a fixed time.
+  rather than for a fixed time. A shell that sends OSC 133 prompt marks needs no
+  keys at all: the copy starts where its prompt said the input does.
 
 ### Changed
 

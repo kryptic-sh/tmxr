@@ -2,10 +2,11 @@
 //! tmux-yank's `copy_line` does, but timed by the pane rather than by
 //! sleeps.
 //!
-//! The shell is sent its beginning-of-line key; once the pane has gone quiet
+//! A shell that marks its prompts (OSC 133) has said where its input starts,
+//! and the input runs from there to the end of the cursor's line. Otherwise
+//! the shell is sent its beginning-of-line key; once the pane has gone quiet
 //! the cursor marks the start. Then its end-of-line key, and the cursor marks
-//! the end. The text between is copied as a copy-mode copy is, and the cursor
-//! is left at the end of the line.
+//! the end. Either way the text is copied as a copy-mode copy is.
 
 use std::time::{Duration, Instant};
 
@@ -40,6 +41,24 @@ impl CopyLine {
     }
 }
 
+/// The input after the shell's last prompt mark: from the mark to the end of
+/// the cursor's line, wrapped rows included. `None` without a usable mark.
+fn marked_input(emu: &tmxr_term::Emulator) -> Option<String> {
+    let (row, col) = emu.input_start()?;
+    let screen = emu.screen();
+    let (rows, cols) = screen.size();
+    let mut end = screen.cursor_position().0.max(row);
+    while end + 1 < rows && screen.row_wrapped(end) {
+        end += 1;
+    }
+    Some(
+        screen
+            .contents_between(row, col, end, cols)
+            .trim_end()
+            .to_owned(),
+    )
+}
+
 /// The line-editing keys `program` takes: Home and End for the Windows
 /// shells, whose `C-a` selects everything (PowerShell) or does nothing
 /// (cmd), and tmux-yank's `C-a` / `C-e` for the rest.
@@ -63,6 +82,11 @@ impl Server {
     /// Start copying `pane`'s command line; one at a time, a new one
     /// replacing any under way.
     pub fn copy_command_line(&mut self, pane: PaneId) -> Result<(), String> {
+        if let Some(text) = self.panes.get(&pane).and_then(|p| marked_input(&p.emu)) {
+            self.copy_line = None;
+            self.copy_text(text);
+            return Ok(());
+        }
         let program = crate::resurrect::foreground(self, pane).unwrap_or_default();
         let keys = keys_for(&program);
         let now = Instant::now();
@@ -115,18 +139,23 @@ impl Server {
                         .screen()
                         .contents_between(start.0, start.1, cursor.0, cursor.1)
                 });
-                let text = text.unwrap_or_default().trim_end().to_owned();
-                if text.is_empty() {
-                    return;
-                }
-                let pipe = self.cfg.copy_command.clone();
-                if !pipe.is_empty() {
-                    crate::server::pipe_to_shell(self, pipe, text.clone());
-                }
-                self.set_clipboard(&text);
-                self.add_buffer(text, None);
+                self.copy_text(text.unwrap_or_default().trim_end().to_owned());
             }
         }
+    }
+
+    /// Copy a command line as a copy-mode copy is: to the clipboard, a new
+    /// buffer, and `copy-command` when set. Nothing for an empty line.
+    fn copy_text(&mut self, text: String) {
+        if text.is_empty() {
+            return;
+        }
+        let pipe = self.cfg.copy_command.clone();
+        if !pipe.is_empty() {
+            crate::server::pipe_to_shell(self, pipe, text.clone());
+        }
+        self.set_clipboard(&text);
+        self.add_buffer(text, None);
     }
 
     /// Send `key` to `pane` alone, whatever synchronize-panes says.
@@ -141,6 +170,17 @@ impl Server {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_prompt_mark_gives_the_input_without_keys() {
+        let mut emu = tmxr_term::Emulator::new(4, 12, 100);
+        assert_eq!(marked_input(&emu), None, "no mark");
+        // A prompt, then input wrapping onto the next row, cursor moved back.
+        emu.process(b"$ \x1b]133;B\x07echo wrapped-text\x1b[5D");
+        assert_eq!(marked_input(&emu).as_deref(), Some("echo wrapped-text"));
+        emu.process(b"\x1b]133;C\x07\r\n");
+        assert_eq!(marked_input(&emu), None, "the command ran");
+    }
 
     #[test]
     fn windows_shells_get_home_and_end() {
