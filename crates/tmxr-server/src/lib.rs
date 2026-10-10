@@ -7,6 +7,7 @@
 //! See `docs/plan/02-architecture.md`.
 
 pub mod access;
+pub mod alerts;
 pub mod backend;
 pub mod cmds;
 pub mod conn;

@@ -32,6 +32,14 @@ remain-on-exit = false
 # tmux's defaults: no activity or silence alerts.
 monitor-activity = false
 monitor-silence = 0
+# tmux's defaults: which windows' alerts act (any, none, current or other),
+# and how: the terminal's bell (off), a status message (on), or both.
+bell-action = "any"
+activity-action = "other"
+silence-action = "other"
+visual-bell = "off"
+visual-activity = "off"
+visual-silence = "off"
 copy-command = ""
 # tmux's default; `lock-client` runs it in the client's terminal.
 lock-command = "lock -np"

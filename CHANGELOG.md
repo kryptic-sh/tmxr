@@ -8,6 +8,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Alert actions**: `bell-action`, `activity-action` and `silence-action`
+  (`any`, `none`, `current`, `other`) choose which windows' alerts act, and
+  `visual-bell`, `visual-activity` and `visual-silence` (`off`, `on`, `both`)
+  whether they ring the client's terminal bell, show "Bell in window 1" (or "in
+  current window"), or both, with tmux's defaults; `alert-bell`,
+  `alert-activity` and `alert-silence` hooks run when one acts. Alerts used to
+  set window flags only, so a bell never reached the terminal.
 - **Other users**: `server-access` (`-a` / `-d` user, `-r` / `-w`, `-l`) admits
   other local users to a server, read-only or not, checked on every connection
   by the user its process runs as. The new `socket-access = "users"` config
@@ -60,6 +67,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Alert flags follow tmux**: a window is flagged for a bell, activity or
+  silence unless a client is looking at it. A bell in the window on screen used
+  to flag it anyway, and the current window of a session nobody was attached to
+  was never flagged for activity or silence.
 - **Passthrough lands where it was printed**: a pane's `tmux;` passthrough (an
   inline sixel, say) is now sent to the terminal from the cell the program's
   cursor was on, inside the pane, as tmux does. It used to go from wherever the

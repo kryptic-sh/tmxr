@@ -1181,6 +1181,96 @@ fn passthrough_is_forwarded_where_the_platform_allows() {
 }
 
 #[test]
+fn alerts_follow_the_action_and_visual_options() {
+    let t = Tmxr::new("alerts");
+    // Rings, then says so where capture-pane can see it.
+    #[cfg(unix)]
+    let ring = ["/bin/sh", "-c", r"printf '\007rung'; sleep 30"];
+    #[cfg(windows)]
+    let ring = [
+        "powershell.exe",
+        "-NoProfile",
+        "-Command",
+        "[Console]::Out.Write([string][char]7 + 'rung'); Start-Sleep 30",
+    ];
+    t.run(&["new-session", "-d", "-s", "va"]);
+    t.run(&["new-window", "-d", "-t", "va:1"]);
+    let s = t.attach(&["attach", "-t", "va:0"]);
+    s.wait_for("status line", |text| text.contains("va"));
+    t.run(&["set-hook", "-g", "alert-bell", "set-option -ga @rang x"]);
+    let rang = |t: &Tmxr| {
+        t.run(&["display-message", "-p", "#{@rang}"])
+            .trim()
+            .to_owned()
+    };
+    let flags = |t: &Tmxr, w: &str| {
+        t.run(&["display-message", "-p", "-t", w, "#{window_flags}"])
+            .trim()
+            .to_owned()
+    };
+    let ring_in = |t: &Tmxr, w: &str| {
+        let mut cmd = vec!["respawn-window", "-k", "-t", w];
+        cmd.extend(ring);
+        t.run(&cmd);
+    };
+    // A bare BEL reaching the client's terminal, outside any OSC string.
+    let bells = |s: &Screen| {
+        let raw = s.raw_text();
+        let mut n = 0;
+        let mut in_osc = false;
+        let mut prev = '\0';
+        for c in raw.chars() {
+            match c {
+                ']' if prev == '\x1b' => in_osc = true,
+                '\x07' if in_osc => in_osc = false,
+                '\\' if prev == '\x1b' => in_osc = false,
+                '\x07' => n += 1,
+                _ => {}
+            }
+            prev = c;
+        }
+        n
+    };
+
+    // visual-bell on: a message, not the terminal's bell.
+    t.run(&["set-option", "-g", "visual-bell", "on"]);
+    let before = bells(&s);
+    ring_in(&t, "va:1");
+    s.wait_for("the message", |text| text.contains("Bell in window 1"));
+    t.wait_run(&["display-message", "-p", "#{@rang}"], "the hook", |o| {
+        o.trim() == "x"
+    });
+    assert!(flags(&t, "va:1").contains('!'), "{}", flags(&t, "va:1"));
+    assert_eq!(bells(&s), before, "visual-bell on rang the terminal");
+
+    // both, in the window in sight: message and bell, and no flag.
+    t.run(&["set-option", "-g", "visual-bell", "both"]);
+    let before = bells(&s);
+    ring_in(&t, "va:0");
+    s.wait_for("the message", |text| {
+        text.contains("Bell in current window")
+    });
+    s.wait_for("the terminal's bell", |_| bells(&s) > before);
+    assert!(!flags(&t, "va:0").contains('!'), "{}", flags(&t, "va:0"));
+
+    // bell-action other: a bell in sight does nothing at all.
+    t.run(&["set-option", "-g", "bell-action", "other"]);
+    let before = (bells(&s), rang(&t));
+    ring_in(&t, "va:0");
+    t.wait_run(&["capture-pane", "-p", "-t", "va:0"], "the ring", |o| {
+        o.contains("rung")
+    });
+    std::thread::sleep(Duration::from_secs(1));
+    assert_eq!((bells(&s), rang(&t)), before, "bell-action other acted");
+    assert_eq!(
+        t.run(&["show-options", "-v", "bell-action"]).trim(),
+        "other"
+    );
+    let bad = t.output(&["set-option", "-g", "visual-bell", "loud"]);
+    assert!(!bad.status.success(), "{bad:?}");
+}
+
+#[test]
 fn next_window_with_alert_skips_quiet_windows() {
     let t = Tmxr::new("alert");
     #[cfg(unix)]
@@ -3109,11 +3199,16 @@ fn monitor_activity_and_silence_flag_windows_out_of_sight() {
         |o| o.trim() == "1",
     );
     assert!(flags(&t, "1").contains('#'));
-    // The current window is in sight: no flag.
+    // No client is looking at the current window, so it is flagged too, as
+    // tmux 3.6 does; `alerts_follow_the_action_and_visual_options` covers a
+    // window in sight.
     t.wait_prompt("al:0");
     t.run(&["send-keys", "-t", "al:0", "echo here", "Enter"]);
-    std::thread::sleep(Duration::from_millis(500));
-    assert!(!flags(&t, "0").contains('#'), "{}", flags(&t, "0"));
+    t.wait_run(
+        &["display-message", "-p", "-t", "al:0", "#{window_flags}"],
+        "activity in the unseen current window",
+        |o| o.contains('#'),
+    );
     // next-window -a goes to it, and selecting it clears the flag.
     t.run(&["next-window", "-a", "-t", "al"]);
     assert_eq!(

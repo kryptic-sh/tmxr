@@ -122,6 +122,7 @@ impl Server {
                 activity: false,
                 silence: false,
                 last_output: Instant::now(),
+                silence_raised: false,
                 hooks: crate::hooks::HookTable::new(),
             },
         );
@@ -363,6 +364,7 @@ impl Server {
                 activity: false,
                 silence: false,
                 last_output: Instant::now(),
+                silence_raised: false,
                 hooks: crate::hooks::HookTable::new(),
             },
         );

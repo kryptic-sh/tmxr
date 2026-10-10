@@ -107,6 +107,8 @@ pub struct Window {
     pub activity: bool,
     /// It was quiet for `monitor-silence` seconds.
     pub silence: bool,
+    /// `monitor-silence` has fired since the window last printed.
+    pub silence_raised: bool,
     /// When one of its panes last printed.
     pub last_output: Instant,
     /// `set-hook -w`: hooks for events in this window.

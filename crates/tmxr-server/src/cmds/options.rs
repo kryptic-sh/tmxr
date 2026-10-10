@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use tmxr_command::Parsed;
+use tmxr_config::{AlertAction, Visual};
 
 use super::{Ctx, Outcome, Res, attached_client, join_args, on_off};
 use crate::server::Server;
@@ -180,6 +181,26 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
                 "socket-access is read when the server starts: set it in the config file".into(),
             );
         }
+        "bell-action" | "activity-action" | "silence-action" => {
+            let v = need()?;
+            let action = AlertAction::parse(v)
+                .ok_or_else(|| format!("{name}: unknown value: {v} ({})", AlertAction::NAMES))?;
+            match name {
+                "bell-action" => c.bell_action = action,
+                "activity-action" => c.activity_action = action,
+                _ => c.silence_action = action,
+            }
+        }
+        "visual-bell" | "visual-activity" | "visual-silence" => {
+            let v = need()?;
+            let visual = Visual::parse(v)
+                .ok_or_else(|| format!("{name}: unknown value: {v} ({})", Visual::NAMES))?;
+            match name {
+                "visual-bell" => c.visual_bell = visual,
+                "visual-activity" => c.visual_activity = visual,
+                _ => c.visual_silence = visual,
+            }
+        }
         "remain-on-exit" => c.remain_on_exit = on_off(value, c.remain_on_exit)?,
         "allow-passthrough" => {
             let on = on_off(value, c.allow_passthrough)?;
@@ -242,6 +263,12 @@ pub fn option_lines(srv: &Server) -> Vec<String> {
             if c.monitor_activity { "on" } else { "off" }
         ),
         format!("monitor-silence {}", c.monitor_silence),
+        format!("bell-action {}", c.bell_action.as_str()),
+        format!("activity-action {}", c.activity_action.as_str()),
+        format!("silence-action {}", c.silence_action.as_str()),
+        format!("visual-bell {}", c.visual_bell.as_str()),
+        format!("visual-activity {}", c.visual_activity.as_str()),
+        format!("visual-silence {}", c.visual_silence.as_str()),
         format!("lock-after-time {}", c.lock_after_time),
         format!(
             "lock-command {}",

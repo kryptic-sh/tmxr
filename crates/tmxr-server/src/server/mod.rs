@@ -737,18 +737,16 @@ impl Server {
             .filter(|w| {
                 let secs = w.monitor_silence.unwrap_or(self.cfg.monitor_silence);
                 secs > 0
-                    && !w.silence
+                    && !w.silence_raised
                     && now.duration_since(w.last_output) >= Duration::from_secs(secs)
             })
             .map(|w| w.id)
             .collect();
         for w in quiet {
-            if !self.window_is_current(w)
-                && let Some(win) = self.windows.get_mut(&w)
-            {
-                win.silence = true;
-                self.mark_window_dirty(w);
+            if let Some(win) = self.windows.get_mut(&w) {
+                win.silence_raised = true;
             }
+            crate::alerts::raise(self, w, crate::alerts::Alert::Silence);
         }
         let clock_windows: Vec<WindowId> = self
             .panes

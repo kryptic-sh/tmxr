@@ -338,20 +338,24 @@ impl Server {
                 let clips = p.emu.take_clipboard();
                 let passthrough = p.emu.take_passthrough();
                 let wid = p.window;
-                if bell && let Some(w) = self.windows.get_mut(&wid) {
-                    w.bell = true;
+                if bell {
+                    crate::alerts::raise(self, wid, crate::alerts::Alert::Bell);
                 }
                 let watched = self
                     .windows
                     .get(&wid)
                     .is_some_and(|w| w.monitor_activity.unwrap_or(self.cfg.monitor_activity));
-                let seen = self.window_is_current(wid);
+                let mut activity = false;
                 if let Some(w) = self.windows.get_mut(&wid) {
                     w.last_output = std::time::Instant::now();
                     w.silence = false;
-                    if watched && !seen {
-                        w.activity = true;
-                    }
+                    w.silence_raised = false;
+                    // As tmux: once flagged, a window's activity is not
+                    // raised again until it is seen.
+                    activity = watched && !w.activity;
+                }
+                if activity {
+                    crate::alerts::raise(self, wid, crate::alerts::Alert::Activity);
                 }
                 for (_, data) in clips {
                     self.forward_osc52(&data);

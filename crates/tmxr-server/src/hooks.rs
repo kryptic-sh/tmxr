@@ -19,6 +19,9 @@ pub type HookTable = BTreeMap<String, Vec<String>>;
 
 /// The named events tmxr fires, besides `after-<command>` for every command.
 pub const EVENTS: &[&str] = &[
+    "alert-activity",
+    "alert-bell",
+    "alert-silence",
     "client-attached",
     "client-detached",
     "pane-exited",

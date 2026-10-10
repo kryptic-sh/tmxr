@@ -96,11 +96,13 @@ table. What has been verified, and how:
     owner chose hjkl-style pickers, where typing always filters, so letter keys
     cannot be commands. Its `-f` is a text query, not a format filter.
 - **tmux default binds**: all of tmux's defaults are bound; `prefix C-z`
-  (suspend-client) errors on Windows, which has no job control. Alerts for `M-n`
-  / `M-p` are bells, `monitor-activity` and `monitor-silence`; tmux's
-  `visual-activity` / `visual-bell` / `visual-silence` messages and
-  `activity-action` / `bell-action` / `silence-action` are not implemented
-  (alerts only set window flags).
+  (suspend-client) errors on Windows, which has no job control. Alerts follow
+  tmux 3.6's, as recorded from a running tmux on 2026-10-10 (WSL Ubuntu, a
+  client on a pty): flags unless a client is looking at the window, `*-action`
+  and `visual-*` as tmux's, the `alert-*` hooks. Not compared: windows linked
+  into two sessions (tmux flags each session's link; tmxr has one flag per
+  window), and an activity alert in the window in sight rings on every burst of
+  output, as tmux's did there, which was not looked at more closely.
 - **`rgb-colour auto`** decides from the client's environment only:
   `COLORTERM=truecolor` / `24bit`, a `TERM` ending in `-direct`, or
   `WT_SESSION`. Terminals that take 24-bit colour without saying so (some

@@ -54,6 +54,16 @@ pub struct Config {
     /// Flag a window quiet for this many seconds; 0 is off (tmux's
     /// `monitor-silence`), for every window without its own setting.
     pub monitor_silence: u64,
+    /// Which windows' bells, activity and silence act on the clients (tmux's
+    /// `bell-action`, `activity-action`, `silence-action`).
+    pub bell_action: AlertAction,
+    pub activity_action: AlertAction,
+    pub silence_action: AlertAction,
+    /// How they act (tmux's `visual-bell`, `visual-activity`,
+    /// `visual-silence`).
+    pub visual_bell: Visual,
+    pub visual_activity: Visual,
+    pub visual_silence: Visual,
     /// Shell command `copy-pipe` sends the copied text to when it names none.
     pub copy_command: String,
     /// Shell command a locked client runs in its terminal; the client is
@@ -118,6 +128,89 @@ pub struct Resurrect {
     /// Programs from `processes` restored with their arguments, not just by
     /// name (tmux-resurrect restores its default list this way).
     pub restore_args: Vec<String>,
+}
+
+/// Which windows' alerts act, relative to their session's current window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AlertAction {
+    Any,
+    None,
+    Current,
+    Other,
+}
+
+impl AlertAction {
+    pub const NAMES: &str = "any, none, current or other";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "any" => Some(Self::Any),
+            "none" => Some(Self::None),
+            "current" => Some(Self::Current),
+            "other" => Some(Self::Other),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Any => "any",
+            Self::None => "none",
+            Self::Current => "current",
+            Self::Other => "other",
+        }
+    }
+
+    /// Whether an alert in a window that is (or is not) its session's
+    /// current one acts.
+    pub const fn applies(self, current: bool) -> bool {
+        match self {
+            Self::Any => true,
+            Self::None => false,
+            Self::Current => current,
+            Self::Other => !current,
+        }
+    }
+}
+
+/// How an alert acts: the terminal's bell (`off`), a status message (`on`),
+/// or both.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Visual {
+    Off,
+    On,
+    Both,
+}
+
+impl Visual {
+    pub const NAMES: &str = "off, on or both";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "off" => Some(Self::Off),
+            "on" => Some(Self::On),
+            "both" => Some(Self::Both),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::On => "on",
+            Self::Both => "both",
+        }
+    }
+
+    pub const fn bell(self) -> bool {
+        matches!(self, Self::Off | Self::Both)
+    }
+
+    pub const fn message(self) -> bool {
+        matches!(self, Self::On | Self::Both)
+    }
 }
 
 /// One entry in a key table: a bind, or `false` to remove a default bind.
