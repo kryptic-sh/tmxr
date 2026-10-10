@@ -49,6 +49,17 @@ table. What has been verified, and how:
   fixed. Menus take the mouse as tmux's (`Menu::mouse`, from `menu_key_cb`),
   checked by the oracle's menu cases. Still missing: nothing has been tried by
   hand in a real terminal.
+- **Alt+Escape reaches a pane as Escape on Unix** (found by the oracle,
+  2026-10-11; `known_divergences.toml`,
+  `an_escape_and_a_click_in_one_read_are_typed`). The client reads its terminal
+  through crossterm 0.29, whose parser (`event/sys/unix/parse.rs`,
+  `parse_event`) turns `ESC ESC` into a plain `Esc` with no Alt, so an
+  `M-Escape` bind never matches and the program gets one ESC; tmux passes
+  `ESC ESC`. Not fixable inside tmxr without touching the dependency, so the
+  owner's call: (a) fix it upstream in crossterm and take the release, (b) patch
+  a fork (`[patch.crates-io]`), or (c) parse the client's input in tmxr instead
+  of crossterm (most work, most control). Windows reads console key events, not
+  bytes, and was not checked.
 - **tmux default binds**: all of tmux 3.6's 267 are bound (compared with its
   `list-keys`, 2026-10-11) except the 18 digit binds (`1`-`9` in vi, `M-1`-`M-9`
   in emacs) that open a "(repeat)" prompt, declined: tmxr's copy mode takes

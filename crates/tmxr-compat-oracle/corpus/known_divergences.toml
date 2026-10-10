@@ -1,4 +1,16 @@
 # Known differences from tmux: run and reported by known_divergences_report,
 # never failing. Move a case to its corpus file once it matches.
 
-cases = []
+[[cases]]
+name = "an_escape_and_a_click_in_one_read_are_typed"
+# tmux reads ESC ESC [<2;6;6M as Alt+Escape and then typed text, and so
+# passes it all to the program; no click. tmxr's Unix client reads ESC ESC
+# as a plain Escape (crossterm 0.29's parser), so the program gets one ESC.
+attach = true
+unix_only = true
+program = "stty raw -echo; exec cat -v"
+steps = [{ sleep = 0.5 }, { keys = "\u001b\u001b[<2;6;6M" }, { sleep = 0.5 }]
+checks = [
+  { screen_contains = "^[^[[<2;6;6M", expect = true },
+  { format = "#{window_panes}", expect = "1" },
+]

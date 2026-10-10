@@ -171,16 +171,3 @@ steps = [
 ]
 # tmux 3.6 sends these for two quick clicks (checked with a pty client).
 checks = [{ format = "#{@seen}", expect = "DUSU2" }]
-
-[[cases]]
-name = "an_escape_and_a_click_in_one_read_are_typed"
-# tmux reads ESC ESC [<2;6;6M as Alt+Escape and then typed text, and so
-# passes it all to the program; no click.
-attach = true
-unix_only = true
-program = "stty raw -echo; exec cat -v"
-steps = [{ sleep = 0.5 }, { keys = "\u001b\u001b[<2;6;6M" }, { sleep = 0.5 }]
-checks = [
-  { screen_contains = "^[^[[<2;6;6M", expect = true },
-  { format = "#{window_panes}", expect = "1" },
-]
