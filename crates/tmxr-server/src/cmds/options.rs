@@ -174,6 +174,11 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
         },
         "copy-command" => need()?.clone_into(&mut c.copy_command),
         "lock-command" => need()?.clone_into(&mut c.lock_command),
+        "socket-access" => {
+            return Err(
+                "socket-access is read when the server starts: set it in the config file".into(),
+            );
+        }
         "remain-on-exit" => c.remain_on_exit = on_off(value, c.remain_on_exit)?,
         "allow-passthrough" => {
             let on = on_off(value, c.allow_passthrough)?;

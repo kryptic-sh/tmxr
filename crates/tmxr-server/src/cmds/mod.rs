@@ -1,6 +1,7 @@
 //! Command execution. Each command family lives in its own module; `run_one`
 //! hands a parsed command to each in turn.
 
+mod access;
 mod binds;
 mod buffer;
 mod env;
@@ -260,7 +261,19 @@ pub fn join_args(words: &[String]) -> String {
 }
 
 fn run_one(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res {
+    // A read-only client runs only what looks; a hook's commands are the
+    // owner's, whoever's event fired it.
+    if !srv.in_hook
+        && !access::READ_ONLY.contains(&p.name())
+        && ctx
+            .client
+            .and_then(|c| srv.clients.get(&c))
+            .is_some_and(crate::server::Client::read_only)
+    {
+        return Err(format!("{}: the client is read-only", p.name()));
+    }
     for family in [
+        access::run,
         session::run,
         window::run,
         pane::run,

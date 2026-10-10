@@ -249,7 +249,7 @@ fn dispatch(srv: &mut Server, id: ClientId, action: MouseAction, target: MouseTa
     };
     match srv.keys.get(table, &key.into()).cloned() {
         Some(b) => srv.run_bind_ctx(id, &ctx, &b.cmd),
-        None if on_pane && !in_copy => {
+        None if on_pane && !in_copy && !srv.client_read_only(id) => {
             let _ = forward(srv, &ctx);
         }
         None => {}

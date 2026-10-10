@@ -37,10 +37,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "attach-session",
         Some("attach"),
-        "dt:",
+        "drt:",
         0,
         0,
-        "[-d] [-t target-session]"
+        "[-dr] [-t target-session]"
     ),
     cmd!(
         "bind-key",
@@ -489,6 +489,7 @@ pub const COMMANDS: &[CommandSpec] = &[
         "[-lMX] [-N repeat-count] [-t target-pane] key ..."
     ),
     cmd!("send-prefix", None, "t:", 0, 0, "[-t target-pane]"),
+    cmd!("server-access", None, "adlrw", 0, 1, "[-adlrw] [user]"),
     cmd!(
         "set-buffer",
         Some("setb"),

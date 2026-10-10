@@ -14,14 +14,16 @@ use interprocess::local_socket::traits::{ListenerExt as _, Stream as _};
 use tmxr_proto::{ClientMsg, ServerMsg, read_msg, write_msg};
 use tracing::{debug, warn};
 
+use crate::access::SharedAcl;
 use crate::model::ClientId;
 use crate::server::Event;
 
 /// Frames queued per client before the server starts skipping frames.
 const CLIENT_QUEUE: usize = 256;
 
-/// Accept connections forever, announcing each to the server.
-pub fn accept_loop(listener: Listener, events: Sender<Event>) {
+/// Accept connections forever, announcing each one `acl` admits to
+/// `owner`'s server.
+pub fn accept_loop(listener: Listener, events: Sender<Event>, acl: &SharedAcl, owner: &str) {
     let mut next_id: ClientId = 0;
     for conn in listener.incoming() {
         let stream = match conn {
@@ -31,22 +33,31 @@ pub fn accept_loop(listener: Listener, events: Sender<Event>) {
                 continue;
             }
         };
-        match tmxr_proto::socket::peer_is_trusted(&stream) {
-            Ok(true) => {}
-            Ok(false) => {
-                warn!("refused a connection from another user");
-                continue;
-            }
+        let user = match crate::access::peer_user(&stream) {
+            Ok(user) => user,
             Err(e) => {
-                warn!(error = %e, "could not check peer credentials; refusing");
+                warn!(error = %e, "could not tell who connected; refusing");
                 continue;
             }
-        }
+        };
+        let Some(read_only) = crate::access::lock(acl).admit(owner, &user) else {
+            warn!(
+                user,
+                "refused a connection from a user server-access does not admit"
+            );
+            continue;
+        };
         next_id += 1;
         let id = next_id;
         let (mut recv, mut send) = stream.split();
         let (tx, rx): (SyncSender<ServerMsg>, Receiver<ServerMsg>) = sync_channel(CLIENT_QUEUE);
-        if events.send(Event::Connected { id, tx }).is_err() {
+        let connected = Event::Connected {
+            id,
+            tx,
+            user,
+            read_only,
+        };
+        if events.send(connected).is_err() {
             return;
         }
         let ev = events.clone();

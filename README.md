@@ -22,7 +22,8 @@ listed in [docs/backlog.md](docs/backlog.md).
 - A long-lived **server** owns every session, window, pane and child process;
   **clients** attach from any terminal and detach without killing anything — the
   tmux model, on all three platforms (openpty and Unix sockets; ConPTY and an
-  owner-only named pipe on Windows). The server starts on demand.
+  owner-only named pipe on Windows; `server-access` can admit other users). The
+  server starts on demand.
 - tmux's **command language**, key names and formats:
   `tmxr split-window -h -c '#{pane_current_path}'` means what it means in tmux,
   on the command line, in binds and at the `prefix :` prompt.

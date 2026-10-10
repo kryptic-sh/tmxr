@@ -79,6 +79,18 @@ impl Tmxr {
             .unwrap()
     }
 
+    /// Run a command client against the server at `socket` (`-S`) in place
+    /// of the test's label.
+    fn output_at(&self, socket: &str, rest: &[&str]) -> std::process::Output {
+        Command::new(env!("CARGO_BIN_EXE_tmxr"))
+            .args(["-S", socket, "-f"])
+            .arg(&self.config)
+            .args(rest)
+            .envs(self.env())
+            .output()
+            .unwrap()
+    }
+
     /// Run a command client and return its stdout.
     fn run(&self, rest: &[&str]) -> String {
         String::from_utf8_lossy(&self.output(rest).stdout).into_owned()
@@ -3188,4 +3200,97 @@ fn run_shell_holds_its_command_list_and_reply() {
         "the rest of the bind",
         |o| o.trim() == "yes",
     );
+}
+
+#[test]
+fn read_only_clients_look_but_do_not_touch() {
+    let t = Tmxr::new("readonly");
+    t.run(&["new-session", "-d", "-s", "ro"]);
+    let s = t.attach(&["attach", "-r", "-t", "ro"]);
+    s.wait_for("status line", |text| text.contains("ro"));
+    // Typing reaches no pane.
+    s.send(b"echo ro-typed\r");
+    std::thread::sleep(Duration::from_millis(500));
+    let pane = t.run(&["capture-pane", "-p", "-t", "ro"]);
+    assert!(!pane.contains("ro-typed"), "{pane}");
+    // A bind that changes something is refused, and says so.
+    s.send(PREFIX);
+    s.send(b"c");
+    s.wait_for("the refusal", |text| text.contains("read-only"));
+    assert_eq!(t.run(&["list-windows", "-t", "ro"]).lines().count(), 1);
+    // Detaching still works.
+    s.send(PREFIX);
+    s.send(b"d");
+    s.wait_for("detached", |text| text.contains("[detached"));
+}
+
+#[test]
+fn server_access_lists_who_may_connect() {
+    let t = Tmxr::new("access");
+    let me = std::env::var(if cfg!(windows) { "USERNAME" } else { "USER" }).ok();
+    let other = if cfg!(windows) { "Guest" } else { "nobody" };
+    // The default socket-access keeps everyone else out: -a says why.
+    t.run(&["new-session", "-d", "-s", "own"]);
+    let refused = t.output(&["server-access", "-a", other]);
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains("socket-access"),
+        "{refused:?}"
+    );
+    assert!(
+        !t.output(&["set-option", "-g", "socket-access", "users"])
+            .status
+            .success()
+    );
+    t.run(&["kill-server"]);
+
+    // socket-access users, on a socket outside tmxr's private directory.
+    let config = std::fs::read_to_string(&t.config).unwrap();
+    std::fs::write(&t.config, format!("socket-access = \"users\"\n{config}")).unwrap();
+    let sock = if cfg!(windows) {
+        format!(r"\\.\pipe\tmxr-e2e-access-{}", std::process::id())
+    } else {
+        t.dir
+            .path()
+            .join("shared")
+            .join("tmxr.sock")
+            .display()
+            .to_string()
+    };
+    let at = |rest: &[&str]| t.output_at(&sock, rest);
+    let started = at(&["new-session", "-d", "-s", "sa"]);
+    assert!(started.status.success(), "{started:?}");
+    let list = || String::from_utf8_lossy(&at(&["server-access", "-l"]).stdout).into_owned();
+    assert_eq!(list(), "");
+    if let Some(me) = &me {
+        let own = at(&["server-access", "-a", me]);
+        assert!(
+            String::from_utf8_lossy(&own.stderr).contains("owns the server"),
+            "{own:?}"
+        );
+    }
+    assert!(at(&["server-access", "-a", other]).status.success());
+    assert_eq!(list().trim(), format!("{other} (W)"));
+    assert!(at(&["server-access", "-r", other]).status.success());
+    assert_eq!(list().trim(), format!("{other} (R)"));
+    assert!(at(&["server-access", "-w", other]).status.success());
+    assert_eq!(list().trim(), format!("{other} (W)"));
+    assert!(at(&["server-access", "-d", other]).status.success());
+    assert_eq!(list(), "");
+    assert!(!at(&["server-access", "-d", other]).status.success());
+    assert!(
+        !at(&["server-access", "-a", "no-such-user-tmxr"])
+            .status
+            .success()
+    );
+    at(&["kill-server"]);
+
+    // A label's socket is in tmxr's private directory on Unix: -a says so.
+    if cfg!(unix) {
+        t.run(&["new-session", "-d", "-s", "lbl"]);
+        let private = t.output(&["server-access", "-a", other]);
+        assert!(
+            String::from_utf8_lossy(&private.stderr).contains("-S"),
+            "{private:?}"
+        );
+    }
 }

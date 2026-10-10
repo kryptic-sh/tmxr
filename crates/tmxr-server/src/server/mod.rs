@@ -33,6 +33,10 @@ pub enum Event {
     Connected {
         id: ClientId,
         tx: SyncSender<ServerMsg>,
+        /// The user the client's process runs as.
+        user: crate::access::UserId,
+        /// `server-access -r` made that user read-only.
+        read_only: bool,
     },
     Msg(ClientId, ClientMsg),
     Disconnected(ClientId),
@@ -52,6 +56,19 @@ pub struct Client {
     pub tx: SyncSender<ServerMsg>,
     pub hello: Option<Hello>,
     pub att: Option<Attached>,
+    /// The user its process runs as.
+    pub user: crate::access::UserId,
+    /// `server-access -r` made its user read-only.
+    pub user_read_only: bool,
+    /// It attached with `attach -r`.
+    pub attach_read_only: bool,
+}
+
+impl Client {
+    /// Its keys reach no pane and its commands change nothing.
+    pub fn read_only(&self) -> bool {
+        self.user_read_only || self.attach_read_only
+    }
 }
 
 pub struct Attached {
@@ -128,6 +145,12 @@ pub struct Server {
     pub prompt_history: BTreeMap<String, Vec<String>>,
     /// `wait-for` channels and the command clients waiting on them.
     pub waits: crate::waits::Waits,
+    /// The user running the server, always admitted.
+    pub owner: crate::access::UserId,
+    /// Other users `server-access` admits; shared with the accept thread.
+    pub acl: crate::access::SharedAcl,
+    /// Who could open the endpoint when it was bound (`socket-access`).
+    pub socket_access: tmxr_proto::socket::Access,
     /// Global hooks (`set-hook -g`).
     pub hooks: crate::hooks::HookTable,
     /// Events whose hooks run once the current event is handled.
@@ -217,6 +240,9 @@ impl Server {
             global_env: Environment::default(),
             prompt_history: BTreeMap::new(),
             waits: crate::waits::Waits::default(),
+            owner: String::new(),
+            acl: crate::access::SharedAcl::default(),
+            socket_access: tmxr_proto::socket::Access::Owner,
             hooks: crate::hooks::HookTable::new(),
             pending_hooks: Vec::new(),
             in_hook: false,
@@ -280,7 +306,12 @@ impl Server {
 
     fn handle(&mut self, ev: Event) {
         match ev {
-            Event::Connected { id, tx } => {
+            Event::Connected {
+                id,
+                tx,
+                user,
+                read_only,
+            } => {
                 self.clients.insert(
                     id,
                     Client {
@@ -288,6 +319,9 @@ impl Server {
                         tx,
                         hello: None,
                         att: None,
+                        user,
+                        user_read_only: read_only,
+                        attach_read_only: false,
                     },
                 );
             }

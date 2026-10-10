@@ -153,7 +153,7 @@ jobs:
   # The server's named pipe admits its owner and refuses other users (its
   # DACL is owner + SYSTEM only). Needs a second account, which only CI has.
   pipe-acl:
-    name: pipe refuses other users (windows)
+    name: pipe admits only named users (windows)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -195,7 +195,92 @@ jobs:
           if ($err -notmatch 'os error 5') { throw "not an access-denied refusal: $err" }
 
           & "$dir\tmxr.exe" -S $pipe kill-server
+
+          # socket-access users: the pipe opens to everyone, and the server
+          # admits the other user only once server-access names them.
+          Set-Content -Path "$dir\users.toml" -Value 'socket-access = "users"'
+          $open = '\\.\pipe\tmxr-acl-users'
+          & "$dir\tmxr.exe" -S $open -f "$dir\users.toml" new-session -d -s owner
+          if ($LASTEXITCODE -ne 0) { throw 'the users server did not start' }
+          function Invoke-Other([string[]] $cmd) {
+            $p = Start-Process -FilePath "$dir\tmxr.exe" -ArgumentList (@('-S', $open) + $cmd) `
+              -Credential $cred -WorkingDirectory $dir -Wait -PassThru `
+              -RedirectStandardOutput "$dir\out.txt" -RedirectStandardError "$dir\err.txt"
+            $out = Get-Content -Raw "$dir\out.txt"
+            $err = Get-Content -Raw "$dir\err.txt"
+            Write-Output "other user, $($cmd -join ' '): exit $($p.ExitCode), stdout: $out, stderr: $err"
+            return @{ Code = $p.ExitCode; Out = "$out"; Err = "$err" }
+          }
+          $r = Invoke-Other @('ls')
+          if ($r.Code -eq 0) { throw 'admitted before server-access named the user' }
+          & "$dir\tmxr.exe" -S $open server-access -a $name -r
+          if ($LASTEXITCODE -ne 0) { throw 'server-access -a failed' }
+          $r = Invoke-Other @('ls')
+          if ($r.Code -ne 0 -or $r.Out -notmatch 'owner:') { throw 'the named user could not list' }
+          $r = Invoke-Other @('kill-server')
+          if ($r.Code -eq 0 -or $r.Err -notmatch 'read-only') { throw 'a read-only user ran kill-server' }
+          & "$dir\tmxr.exe" -S $open server-access -w $name
+          $r = Invoke-Other @('rename-session', '-t', 'owner', 'renamed')
+          if ($r.Code -ne 0) { throw 'a writable user was refused' }
+          & "$dir\tmxr.exe" -S $open server-access -d $name
+          $r = Invoke-Other @('ls')
+          if ($r.Code -eq 0) { throw 'admitted after server-access -d' }
+          & "$dir\tmxr.exe" -S $open kill-server
           net user $name /delete | Out-Null
+
+  socket-acl:
+    name: socket admits only named users (linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          toolchain: stable
+          cache: false
+      - run: rustup update --no-self-update stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --locked -p tmxr-cli
+      - name: Connect as the owner and as another user
+        run: |
+          set -eu
+          sudo useradd --create-home tmxrother
+          # A directory the other user can reach, as tmux asks for -S.
+          dir=$(mktemp -d /tmp/tmxr-acl.XXXXXX)
+          chmod 0755 "$dir"
+          cp target/debug/tmxr "$dir/tmxr"
+          chmod 0755 "$dir/tmxr"
+          other() {
+            sudo -u tmxrother env HOME=/home/tmxrother "$dir/tmxr" "$@"
+          }
+
+          # The default socket-access: the socket file itself refuses them.
+          "$dir/tmxr" -S "$dir/private" new-session -d -s owner
+          if other -S "$dir/private" ls 2>"$dir/err"; then
+            echo 'another user listed the sessions'; exit 1
+          fi
+          cat "$dir/err"
+          grep -qi 'permission denied' "$dir/err"
+          "$dir/tmxr" -S "$dir/private" kill-server
+
+          printf 'socket-access = "users"\n' > "$dir/users.toml"
+          sock="$dir/open"
+          "$dir/tmxr" -S "$sock" -f "$dir/users.toml" new-session -d -s owner
+          if other -S "$sock" ls; then
+            echo 'admitted before server-access named the user'; exit 1
+          fi
+          "$dir/tmxr" -S "$sock" server-access -a tmxrother -r
+          other -S "$sock" ls | grep -q '^owner:'
+          if other -S "$sock" kill-server 2>"$dir/err"; then
+            echo 'a read-only user ran kill-server'; exit 1
+          fi
+          grep -q 'read-only' "$dir/err"
+          "$dir/tmxr" -S "$sock" server-access -w tmxrother
+          other -S "$sock" rename-session -t owner renamed
+          "$dir/tmxr" -S "$sock" server-access -d tmxrother
+          if other -S "$sock" ls; then
+            echo 'admitted after server-access -d'; exit 1
+          fi
+          "$dir/tmxr" -S "$sock" kill-server
 
   build:
     name: Build ${{ matrix.target }}
@@ -417,6 +502,7 @@ jobs:
         test,
         test-conpty,
         pipe-acl,
+        socket-acl,
       ]
     if: >-
       github.event_name == 'workflow_dispatch' || (github.event_name == 'push'
@@ -762,6 +848,7 @@ jobs:
         test,
         test-conpty,
         pipe-acl,
+        socket-acl,
         smoke,
         build,
         publish-github-release,

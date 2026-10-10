@@ -1,12 +1,16 @@
-//! Where a server listens and who may connect.
+//! Where a server listens and who may open it.
 //!
 //! - Unix: a socket file named after the label inside a per-user directory
 //!   `<base>/tmxr-<uid>`, where `<base>` is `$TMXR_TMPDIR`, `$XDG_RUNTIME_DIR`,
 //!   `$TMPDIR` or `/tmp` (first set wins). The directory is created `0700` and
 //!   refused unless it is a real directory owned by us with no group/other
-//!   access; connecting peers must run as our uid.
+//!   access. A `-S` socket's directory is the user's choice, as in tmux.
 //! - Windows: the named pipe `\\.\pipe\tmxr-<user>-<label>`, created with a
-//!   DACL that grants access to its owner and SYSTEM only.
+//!   DACL that grants access to its owner and SYSTEM.
+//!
+//! [`Access::Users`] opens the socket file or pipe to every local user; the
+//! server then admits only the users `server-access` names, by checking each
+//! connection's user.
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -20,6 +24,16 @@ pub const ENV_TMXR: &str = "TMXR";
 pub const ENV_TMXR_PANE: &str = "TMXR_PANE";
 /// Label used when neither `-L` nor `-S` is given.
 pub const DEFAULT_LABEL: &str = "default";
+
+/// Who may open the endpoint (`socket-access`), fixed when it is bound.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Access {
+    /// The user running the server, and root or SYSTEM.
+    Owner,
+    /// Every local user: the socket file is `0666`, the pipe's DACL also
+    /// grants authenticated users. The server checks who each one is.
+    Users,
+}
 
 /// A server's address.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,49 +100,81 @@ impl Endpoint {
         Stream::connect(self.name()?)
     }
 
-    /// Bind a listener at this endpoint, replacing a stale socket file left
-    /// by a server that died. Fails with `AddrInUse` if a live server owns it.
-    pub fn listen(&self) -> io::Result<Listener> {
+    /// Whether this is a label's socket, in tmxr's own per-user directory,
+    /// which other users cannot reach whatever the socket's own mode.
+    pub fn in_private_dir(&self) -> bool {
         #[cfg(unix)]
         {
+            label_path(DEFAULT_LABEL).is_ok_and(|p| p.parent() == self.path.parent())
+        }
+        #[cfg(windows)]
+        {
+            false
+        }
+    }
+
+    /// Bind a listener at this endpoint, open to `access`, replacing a stale
+    /// socket file left by a server that died. Fails with `AddrInUse` if a
+    /// live server owns it.
+    pub fn listen(&self, access: Access) -> io::Result<Listener> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt as _;
             if let Some(dir) = self.path.parent() {
-                ensure_private_dir(dir)?;
+                if self.in_private_dir() {
+                    ensure_private_dir(dir)?;
+                } else {
+                    std::fs::DirBuilder::new()
+                        .recursive(true)
+                        .mode(0o700)
+                        .create(dir)?;
+                }
             }
-            match self.bind() {
+            match self.bind(access) {
                 Err(e) if e.kind() == io::ErrorKind::AddrInUse => {
                     if self.connect().is_ok() {
                         return Err(e);
                     }
                     std::fs::remove_file(&self.path)?;
-                    self.bind()
+                    self.bind(access)
                 }
                 other => other,
             }
         }
         #[cfg(windows)]
         {
-            self.bind()
+            self.bind(access)
         }
     }
 
     #[cfg(unix)]
-    fn bind(&self) -> io::Result<Listener> {
+    fn bind(&self, access: Access) -> io::Result<Listener> {
         use std::os::unix::fs::PermissionsExt;
         let listener = ListenerOptions::new()
             .name(self.name()?)
             .reclaim_name(true)
             .create_sync()?;
-        std::fs::set_permissions(&self.path, std::fs::Permissions::from_mode(0o600))?;
+        // Connecting needs write permission on the socket file.
+        let mode = match access {
+            Access::Owner => 0o600,
+            Access::Users => 0o666,
+        };
+        std::fs::set_permissions(&self.path, std::fs::Permissions::from_mode(mode))?;
         Ok(listener)
     }
 
     #[cfg(windows)]
-    fn bind(&self) -> io::Result<Listener> {
+    fn bind(&self, access: Access) -> io::Result<Listener> {
         use interprocess::os::windows::local_socket::ListenerOptionsExt;
         use interprocess::os::windows::security_descriptor::SecurityDescriptor;
         // Protected DACL: full access for the pipe's owner (the user running
-        // the server) and SYSTEM; nobody else, inherited ACEs ignored.
-        let sddl = widestring::U16CString::from_str("D:P(A;;GA;;;OW)(A;;GA;;;SY)")
+        // the server) and SYSTEM, and with `Users` read and write for
+        // authenticated users; inherited ACEs ignored.
+        let sddl = match access {
+            Access::Owner => "D:P(A;;GA;;;OW)(A;;GA;;;SY)",
+            Access::Users => "D:P(A;;GA;;;OW)(A;;GA;;;SY)(A;;GRGW;;;AU)",
+        };
+        let sddl = widestring::U16CString::from_str(sddl)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
         ListenerOptions::new()
             .name(self.name()?)
@@ -138,24 +184,6 @@ impl Endpoint {
 
     fn name(&self) -> io::Result<interprocess::local_socket::Name<'static>> {
         self.path.clone().to_fs_name::<GenericFilePath>()
-    }
-}
-
-/// Whether the peer on `stream` runs as the same user as this process.
-///
-/// Unix compares effective uids. On Windows the pipe's DACL already limits
-/// who can open it, so every peer that got this far is accepted.
-pub fn peer_is_trusted(stream: &Stream) -> io::Result<bool> {
-    #[cfg(unix)]
-    {
-        use interprocess::local_socket::traits::StreamCommon as _;
-        let creds = stream.peer_creds()?;
-        Ok(creds.euid() == Some(current_uid()))
-    }
-    #[cfg(windows)]
-    {
-        let _ = stream;
-        Ok(true)
     }
 }
 
@@ -315,10 +343,9 @@ mod tests {
         use interprocess::local_socket::traits::Listener as _;
         let tmp = tempfile::tempdir().unwrap();
         let ep = unique_endpoint(tmp.path());
-        let listener = ep.listen().unwrap();
+        let listener = ep.listen(Access::Owner).unwrap();
         let server = std::thread::spawn(move || {
             let mut s = listener.accept().unwrap();
-            assert!(peer_is_trusted(&s).unwrap());
             let mut buf = [0u8; 4];
             s.read_exact(&mut buf).unwrap();
             s.write_all(&buf).unwrap();
@@ -336,8 +363,11 @@ mod tests {
     fn stale_socket_file_is_replaced_but_live_one_is_not() {
         let tmp = tempfile::tempdir().unwrap();
         let ep = unique_endpoint(tmp.path());
-        let _live = ep.listen().unwrap();
-        assert_eq!(ep.listen().unwrap_err().kind(), io::ErrorKind::AddrInUse);
+        let _live = ep.listen(Access::Owner).unwrap();
+        assert_eq!(
+            ep.listen(Access::Owner).unwrap_err().kind(),
+            io::ErrorKind::AddrInUse
+        );
 
         // A crashed server leaves its socket file behind with nobody listening.
         let stale = Endpoint {
@@ -345,7 +375,30 @@ mod tests {
         };
         drop(std::os::unix::net::UnixListener::bind(stale.path()).unwrap());
         assert!(stale.path().exists());
-        stale.listen().unwrap();
+        stale.listen(Access::Owner).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn users_access_opens_the_socket_file() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let ep = unique_endpoint(tmp.path());
+        let mode =
+            |ep: &Endpoint| std::fs::metadata(ep.path()).unwrap().permissions().mode() & 0o777;
+        let owner = ep.listen(Access::Owner).unwrap();
+        assert_eq!(mode(&ep), 0o600);
+        drop(owner);
+        let _users = ep.listen(Access::Users).unwrap();
+        assert_eq!(mode(&ep), 0o666);
+    }
+
+    #[test]
+    fn only_label_sockets_are_in_the_private_dir() {
+        let label = Endpoint::for_label("x").unwrap();
+        assert_eq!(label.in_private_dir(), cfg!(unix));
+        let explicit = Endpoint::resolve(Some(Path::new("/srv/shared/sock")), None).unwrap();
+        assert!(!explicit.in_private_dir());
     }
 
     #[cfg(unix)]

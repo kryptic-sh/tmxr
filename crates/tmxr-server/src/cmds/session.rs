@@ -65,6 +65,12 @@ pub(super) fn run(
                     srv.detach(c, "detached");
                 }
             }
+            // -r: this client may look but not type.
+            if a.has('r')
+                && let Some(c) = ctx.client.and_then(|c| srv.clients.get_mut(&c))
+            {
+                c.attach_read_only = true;
+            }
             match attached_client(srv, ctx) {
                 Some(c) => srv.switch_client(c, sid),
                 None => out.attach = Some(sid),

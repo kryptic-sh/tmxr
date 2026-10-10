@@ -31,7 +31,7 @@ impl Server {
                 {
                     ov.paste(&text);
                     self.mark_client_dirty(id);
-                } else {
+                } else if !self.client_read_only(id) {
                     self.paste_to_active(session, &text);
                 }
             }
@@ -199,9 +199,16 @@ impl Server {
             self.run_bind(id, &b.cmd, Some(ev));
             return;
         }
-        if let Some(p) = active {
+        if let Some(p) = active
+            && !self.client_read_only(id)
+        {
             self.send_key_to_pane(p, &ev);
         }
+    }
+
+    /// Whether `id` is a read-only client, whose input reaches no pane.
+    pub fn client_read_only(&self, id: ClientId) -> bool {
+        self.clients.get(&id).is_some_and(super::Client::read_only)
     }
 
     /// Run a bind's command list for an attached client; errors become a

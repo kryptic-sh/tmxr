@@ -17,14 +17,24 @@ _its_ server), then the default.
 
 ### Access control
 
-- Unix: the directory is created `0700` and verified (owner, mode, not a
-  symlink) — the same treatment as `buffr`'s single-instance socket. Every
-  accepted connection is checked with `SO_PEERCRED` / `getpeereid`; a peer that
-  is not our uid is dropped.
-- Windows: the pipe is created with a security descriptor granting only the
-  current user's SID (and SYSTEM). If `interprocess` cannot set one, the default
-  DACL (creator + admins + SYSTEM) is the fallback and that gap is recorded in
-  the backlog.
+- Unix: a label's directory is created `0700` and verified (owner, mode, not a
+  symlink) — the same treatment as `buffr`'s single-instance socket. A `-S`
+  socket's directory is the user's choice, as in tmux.
+- Windows: the pipe is created with a protected DACL granting its owner and
+  SYSTEM.
+- `socket-access`, read when the server starts, opens the endpoint further:
+  `users` makes the socket file `0666` and adds read/write for authenticated
+  users to the pipe's DACL. It is fixed at start because the pipe's DACL is:
+  `interprocess` creates each new pipe instance from the listener's options,
+  without `WRITE_DAC`, and holds its lock while waiting for a client, so neither
+  the server nor the accept thread can change it afterwards.
+- Every accepted connection is identified by the user its process runs as (the
+  peer's uid from `SO_PEERCRED` / `getpeereid`; on Windows the SID in the token
+  of the process `GetNamedPipeClientProcessId` names) and admitted only when it
+  is the owner, root or SYSTEM, or a user `server-access` named. Others are
+  dropped before the server sees them. A `server-access -r` user's clients, and
+  an `attach -r` client, are read-only: their input reaches no pane and their
+  commands are limited to `cmds::access::READ_ONLY`.
 
 ## Framing
 

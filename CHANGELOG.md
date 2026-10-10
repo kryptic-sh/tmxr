@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Other users**: `server-access` (`-a` / `-d` user, `-r` / `-w`, `-l`) admits
+  other local users to a server, read-only or not, checked on every connection
+  by the user its process runs as. The new `socket-access = "users"` config
+  option, read when the server starts, opens the socket file (`0666`) or pipe
+  (authenticated users) for them; on Unix give the server a `-S` path they can
+  reach, as with tmux.
+- `attach -r`: a read-only client, whose keys reach no pane and whose commands
+  are limited to attaching, detaching, switching and looking.
+
+### Changed
+
+- A `-S` socket's directory is no longer required to be private to its owner, as
+  in tmux; a `-L` label's directory still is.
+
 ## [0.3.0] - 2026-10-10
 
 ### Added

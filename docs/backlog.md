@@ -5,8 +5,8 @@ verified. Delete an entry when it ships; `git log` keeps the history.
 
 ## Where the implementation stands (2026-10-10)
 
-Milestones M1–M7 are in code, and every tmux 3.x command except `server-access`
-(a decision, below) is in the command table. What has been verified, and how:
+Milestones M1–M7 are in code, and every tmux 3.x command is in the command
+table. What has been verified, and how:
 
 - **Unit tests** in every crate (Windows locally; CI on Linux and macOS too):
   `tmxr-proto` (codec, golden wire bytes, endpoints, owner-only pipe DACL),
@@ -38,6 +38,15 @@ Milestones M1–M7 are in code, and every tmux 3.x command except `server-access
 
 ## Known gaps and follow-ups
 
+- **`server-access` coverage**: a second user is exercised by CI on Windows
+  (`pipe-acl`) and Linux (`socket-acl`), not on macOS, where the same
+  `getpeereid` path runs untested by another account. `socket-access` is read at
+  start only (see plan/03-protocol.md for why the pipe cannot change). A Windows
+  peer is identified through its process, so a client whose process exits
+  between connecting and being checked is refused. A label's socket on Unix sits
+  in tmxr's private directory, unreachable by other users whatever
+  `socket-access` says; `server-access -a` then says to use `-S`, as tmux
+  documents.
 - **`display-popup` gaps.** The box keeps the size it opened with when the
   client resizes; `-x` / `-y` take a number or `C` (tmux's other position forms
   and formats are errors); `-e` may be given once; `-b`, `-s`, `-S`, `-k` and
@@ -55,10 +64,9 @@ Milestones M1–M7 are in code, and every tmux 3.x command except `server-access
   (`tmxr_command::table::lookup`): exact name or alias first, then an
   unambiguous prefix of a full name; unit-tested there. Every tmux alias on a
   list of tmux 3.x's aliases written from memory is present; check it against a
-  real `tmux list-commands`. Every tmux 3.x command is in the table except
-  `server-access` (awaiting a decision, below). Checked against a running server
-  on 2026-10-10: `pipe`, `custom`, `linkw`, `popup`, `resizew` and `lockc`
-  resolve, and `displ` is ambiguous as in tmux.
+  real `tmux list-commands`. Every tmux 3.x command is in the table. Checked
+  against a running server on 2026-10-10: `pipe`, `custom`, `linkw`, `popup`,
+  `resizew` and `lockc` resolve, and `displ` is ambiguous as in tmux.
 - **Partial tmux commands**: `pipe-pane -I` is an error; `wait-for` must end its
   command list and come from a command client; hooks are global or per session
   (no pane or window hooks); `display-menu` and `display-popup` ignore tmux's
@@ -161,19 +169,6 @@ The provisional decisions in
 [plan/16-open-questions.md](plan/16-open-questions.md) (index base, `prefix X`
 kill-pane, theme, config format, vim navigation, picker mode, Windows current
 directory) are defaults the implementation follows until answered.
-
-- **`server-access` (multi-user access): build it or not?** tmux 3.3's
-  `server-access -a user [-r|-w]` lets other users attach to a server, read-only
-  or read-write, checked against the peer's uid. tmxr's endpoint is owner-only
-  by design (a `0700` socket directory; a named pipe whose ACL CI's `pipe-acl`
-  job proves refuses a second Windows user), so the command is missing on
-  purpose. Options: (a) leave it out, documented — no change to the trust model;
-  (b) a command that lists the owner and rejects changes, so scripts calling it
-  get a clear error — small, still owner-only; (c) the real thing: widen the
-  socket directory and pipe ACL, check each connection's user (`SO_PEERCRED` /
-  `getpeereid`, `GetNamedPipeClientProcessId` plus its token) against an allow
-  list, and refuse input from read-only clients — a larger change that opens the
-  server to other local users, with its own tests across all three OSes.
 
 ## Release channels
 

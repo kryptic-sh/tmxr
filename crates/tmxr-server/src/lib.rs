@@ -6,6 +6,7 @@
 //! [`render`] into a ratatui buffer and diffed into ANSI by [`backend`].
 //! See `docs/plan/02-architecture.md`.
 
+pub mod access;
 pub mod backend;
 pub mod cmds;
 pub mod conn;
@@ -67,13 +68,27 @@ pub fn close_inherited_fds() {
 /// Bind `endpoint` and serve until the last session exits or `kill-server`.
 /// `config` is the `-f` path, if any.
 pub fn run(endpoint: Endpoint, config: Option<PathBuf>) -> std::io::Result<()> {
-    let listener = endpoint.listen()?;
     let (cfg, errors) = match tmxr_config::load(config.as_deref()) {
         Ok((cfg, _)) => (cfg, None),
         Err(e) => (tmxr_config::defaults(), Some(e.to_string())),
     };
+    let socket_access = match cfg.socket_access.as_str() {
+        "users" => tmxr_proto::socket::Access::Users,
+        "owner" => tmxr_proto::socket::Access::Owner,
+        other => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("socket-access: unknown value: {other} (owner or users)"),
+            ));
+        }
+    };
+    let listener = endpoint.listen(socket_access)?;
+    let owner = access::current_user()?;
     let (tx, rx) = mpsc::channel();
     let mut srv = Server::new(endpoint, cfg, config, tx.clone());
+    srv.owner.clone_from(&owner);
+    srv.socket_access = socket_access;
+    let acl = std::sync::Arc::clone(&srv.acl);
     if let Some(e) = errors {
         tracing::warn!("config: {e}");
         srv.log_message(format!("config error, using defaults: {e}"));
@@ -85,7 +100,7 @@ pub fn run(endpoint: Endpoint, config: Option<PathBuf>) -> std::io::Result<()> {
     }
     std::thread::Builder::new()
         .name("tmxr-accept".into())
-        .spawn(move || conn::accept_loop(listener, tx))?;
+        .spawn(move || conn::accept_loop(listener, tx, &acl, &owner))?;
     server::signals::install();
     srv.run(rx);
     Ok(())

@@ -35,6 +35,9 @@ monitor-silence = 0
 copy-command = ""
 # tmux's default; `lock-client` runs it in the client's terminal.
 lock-command = "lock -np"
+# Who may open the server's socket or pipe, read when it starts: "owner", or
+# "users" for every local user, of whom `server-access` admits those it names.
+socket-access = "owner"
 update-environment = [
   "DISPLAY",
   "SSH_ASKPASS",
