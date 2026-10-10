@@ -31,6 +31,8 @@ pub enum OverlayAction {
 }
 
 pub enum Overlay {
+    /// `display-popup`.
+    Popup(Box<crate::popup::Popup>),
     /// `display-menu`.
     Menu(Box<crate::menu::Menu>),
     Prompt(Prompt),
@@ -236,6 +238,7 @@ impl Overlay {
         match self {
             Self::Prompt(p) => p.key(ev),
             Self::Menu(m) => m.key(ev),
+            Self::Popup(p) => p.key(ev),
             Self::Confirm { cmd, .. } => match ev.code {
                 KeyCode::Char('y' | 'Y') => OverlayAction::Run(cmd.clone()),
                 _ => OverlayAction::Close,
@@ -277,11 +280,15 @@ impl Overlay {
     }
 
     pub fn paste(&mut self, text: &str) {
-        if let Self::Prompt(p) = self {
-            for c in text.chars().filter(|c| !c.is_control()) {
-                p.input.insert(p.cursor, c);
-                p.cursor += 1;
+        match self {
+            Self::Prompt(p) => {
+                for c in text.chars().filter(|c| !c.is_control()) {
+                    p.input.insert(p.cursor, c);
+                    p.cursor += 1;
+                }
             }
+            Self::Popup(p) => p.paste(text),
+            _ => {}
         }
     }
 

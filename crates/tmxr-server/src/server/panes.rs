@@ -10,6 +10,18 @@ use tracing::debug;
 use super::{Event, Server, SplitSize};
 use crate::model::{Pane, PaneId, SessionId, WindowId};
 
+/// A program [`Server::start_pty`] started.
+pub struct Started {
+    pub pty: Pty,
+    pub output: crate::output::OutputHandle,
+    /// Which start this is, to tell its events from a previous one's.
+    pub spawn: u64,
+    /// The argv actually run (the shell filled in).
+    pub argv: Vec<String>,
+    /// The directory it started in.
+    pub cwd: PathBuf,
+}
+
 impl Server {
     #[allow(clippy::too_many_arguments)]
     pub fn spawn_pane(
@@ -22,6 +34,42 @@ impl Server {
         cols: u16,
         rows: u16,
     ) -> Result<(), String> {
+        let started = self.start_pty(pid, session, argv, cwd, &[], cols, rows)?;
+        self.panes.insert(
+            pid,
+            Pane {
+                id: pid,
+                window,
+                pty: started.pty,
+                emu: Emulator::new(rows.max(1), cols.max(1), self.cfg.history_limit),
+                rect: hjkl_layout::LayoutRect::new(0, 0, cols, rows),
+                start_cwd: started.cwd,
+                copy: None,
+                spawn: started.spawn,
+                argv: started.argv,
+                dead: None,
+                clock: false,
+                output: started.output,
+                pipe: None,
+            },
+        );
+        Ok(())
+    }
+
+    /// Start `argv` (the default shell when empty, a shell command line when
+    /// one word with spaces) on a PTY whose events arrive as pane `pid`'s,
+    /// in `session`'s environment plus `extra_env`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn start_pty(
+        &mut self,
+        pid: PaneId,
+        session: SessionId,
+        argv: &[String],
+        cwd: PathBuf,
+        extra_env: &[(String, String)],
+        cols: u16,
+        rows: u16,
+    ) -> Result<Started, String> {
         // The server's environment, then the global changes, then the
         // session's, as tmux layers them.
         let layered = self
@@ -46,6 +94,7 @@ impl Server {
             tmxr_proto::socket::format_tmxr_env(&self.endpoint, self.pid, session),
         ));
         env.push((tmxr_proto::socket::ENV_TMXR_PANE.into(), format!("%{pid}")));
+        env.extend(extra_env.iter().cloned());
         let argv = if argv.is_empty() {
             self.cfg
                 .default_shell
@@ -53,7 +102,7 @@ impl Server {
                 .map(|s| vec![s])
                 .unwrap_or_default()
         } else if argv.len() == 1 && argv[0].contains(' ') {
-            crate::util::shell_command(&argv[0])
+            crate::util::shell_command(&argv[0], self.cfg.default_shell.as_deref())
         } else {
             argv.to_vec()
         };
@@ -85,25 +134,13 @@ impl Server {
         });
         let pty = Pty::spawn(&spec, sink).map_err(|e| format!("could not start pane: {e}"))?;
         self.next_pane = self.next_pane.max(pid + 1);
-        self.panes.insert(
-            pid,
-            Pane {
-                id: pid,
-                window,
-                pty,
-                emu: Emulator::new(rows.max(1), cols.max(1), self.cfg.history_limit),
-                rect: hjkl_layout::LayoutRect::new(0, 0, cols, rows),
-                start_cwd: cwd,
-                copy: None,
-                spawn,
-                argv,
-                dead: None,
-                clock: false,
-                output,
-                pipe: None,
-            },
-        );
-        Ok(())
+        Ok(Started {
+            pty,
+            output,
+            spawn,
+            argv,
+            cwd,
+        })
     }
 
     /// `respawn-pane -k`: end the pane's program and start `argv` (else the

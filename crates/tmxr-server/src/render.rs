@@ -289,10 +289,27 @@ fn draw_pane(
         }
         return None;
     }
-    let screen = pane.emu.screen();
-    for row in 0..h {
-        for col in 0..w {
-            let Some(out) = buf.cell_mut((r.x + col, r.y + row)) else {
+    let cursor = draw_screen(pane.emu.screen(), buf, Rect::new(r.x, r.y, w, h));
+    if let Some(code) = pane.dead {
+        // tmux's remain-on-exit line, over the pane's last row.
+        let status = code.map_or_else(|| "unknown".to_owned(), |c| c.to_string());
+        let line = format!("Pane is dead (status {status})");
+        if h > 0 {
+            let row = r.y + h - 1;
+            buf.set_style(Rect::new(r.x, row, w, 1), copy.selection);
+            buf.set_stringn(r.x, row, &line, usize::from(w), copy.selection);
+        }
+        return None;
+    }
+    cursor
+}
+
+/// Draw a program's screen into `area`. Returns where its cursor is, if
+/// shown and inside the area.
+fn draw_screen(screen: &vt100::Screen, buf: &mut Buffer, area: Rect) -> Option<Position> {
+    for row in 0..area.height {
+        for col in 0..area.width {
+            let Some(out) = buf.cell_mut((area.x + col, area.y + row)) else {
                 continue;
             };
             match screen.cell(row, col) {
@@ -309,22 +326,11 @@ fn draw_pane(
             }
         }
     }
-    if let Some(code) = pane.dead {
-        // tmux's remain-on-exit line, over the pane's last row.
-        let status = code.map_or_else(|| "unknown".to_owned(), |c| c.to_string());
-        let line = format!("Pane is dead (status {status})");
-        if h > 0 {
-            let row = r.y + h - 1;
-            buf.set_style(Rect::new(r.x, row, w, 1), copy.selection);
-            buf.set_stringn(r.x, row, &line, usize::from(w), copy.selection);
-        }
-        return None;
-    }
     if screen.hide_cursor() {
         return None;
     }
     let (cy, cx) = screen.cursor_position();
-    (cy < h && cx < w).then(|| Position::new(r.x + cx, r.y + cy))
+    (cy < area.height && cx < area.width).then(|| Position::new(area.x + cx, area.y + cy))
 }
 
 fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u16) -> StatusRanges {
@@ -477,6 +483,20 @@ fn draw_overlay(
         Overlay::Menu(m) => {
             m.draw(buf, cols, y, border, mode_style);
             None
+        }
+        Overlay::Popup(p) => {
+            let area = p.rect.intersection(Rect::new(0, 0, cols, rows));
+            Clear.render(area, buf);
+            if p.border {
+                let mut block = Block::default().borders(Borders::ALL).border_style(border);
+                if !p.title.is_empty() {
+                    block = block.title(p.title.as_str());
+                }
+                block.render(area, buf);
+            }
+            let inner = p.inner().intersection(area);
+            let cursor = draw_screen(p.emu.screen(), buf, inner);
+            cursor.filter(|_| !p.exited)
         }
     }
 }

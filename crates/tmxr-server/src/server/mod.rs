@@ -114,7 +114,8 @@ pub struct Server {
     pub host: String,
     next_session: SessionId,
     next_window: WindowId,
-    next_pane: PaneId,
+    /// The id the next pane (or popup) takes.
+    pub next_pane: PaneId,
     next_spawn: u64,
     next_buffer: u32,
     had_session: bool,
@@ -307,7 +308,12 @@ impl Server {
                 // A respawned pane's previous program can still report.
                 if self.panes.get(&pane).is_some_and(|p| p.spawn == spawn) {
                     self.pty_event(pane, ev);
+                } else if let PtyEvent::Exited(code) = ev {
+                    self.popup_exited(pane, spawn, code);
                 }
+            }
+            Event::PtyOutput(pane, spawn) if !self.panes.contains_key(&pane) => {
+                self.popup_output(pane, spawn);
             }
             Event::PtyOutput(pane, spawn) => {
                 let bytes = self

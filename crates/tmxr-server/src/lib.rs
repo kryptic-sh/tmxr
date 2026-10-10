@@ -20,6 +20,7 @@ pub mod moves;
 pub mod output;
 pub mod overlay;
 pub mod pipe;
+pub mod popup;
 pub mod render;
 pub mod resurrect;
 pub mod server;

@@ -70,24 +70,34 @@ pub fn pane_term(configured: &str) -> String {
     }
 }
 
-/// argv that runs a shell command line, as tmux runs `new-window 'cmd args'`.
-pub fn shell_command(line: &str) -> Vec<String> {
-    #[cfg(unix)]
-    {
-        let sh = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
-        vec![sh, "-c".into(), line.to_owned()]
+/// argv that runs a shell command line, as tmux runs `new-window 'cmd args'`:
+/// with `default-shell` when set, else the shell panes start by default.
+pub fn shell_command(line: &str, default_shell: Option<&str>) -> Vec<String> {
+    let sh = default_shell.filter(|s| !s.is_empty()).map_or_else(
+        || {
+            tmxr_term::pty::default_shell()
+                .to_string_lossy()
+                .into_owned()
+        },
+        str::to_owned,
+    );
+    // Each shell's own flag for "run this line": cmd's /c and PowerShell's
+    // -Command on Windows, -c for the rest (sh, bash, zsh, fish, nu, ...).
+    // Split on both separators: a Windows path is read the same anywhere.
+    let stem = sh
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let stem = stem.strip_suffix(".exe").unwrap_or(&stem);
+    let mut argv = vec![sh];
+    match stem {
+        "cmd" => argv.push("/c".into()),
+        "pwsh" | "powershell" => argv.extend(["-NoLogo".into(), "-Command".into()]),
+        _ => argv.push("-c".into()),
     }
-    #[cfg(windows)]
-    {
-        let sh = tmxr_term::pty::default_shell()
-            .to_string_lossy()
-            .into_owned();
-        if sh.to_ascii_lowercase().ends_with("cmd.exe") {
-            vec![sh, "/c".into(), line.to_owned()]
-        } else {
-            vec![sh, "-NoLogo".into(), "-Command".into(), line.to_owned()]
-        }
-    }
+    argv.push(line.to_owned());
+    argv
 }
 
 /// The display name of the program a window starts with: the first word of
@@ -212,6 +222,27 @@ mod tests {
         ] {
             assert_eq!(base64(input.as_bytes()), want, "{input:?}");
         }
+    }
+
+    #[test]
+    fn shell_commands_use_the_shells_own_flag() {
+        let argv = |sh| shell_command("echo hi", Some(sh));
+        assert_eq!(argv("/bin/sh"), ["/bin/sh", "-c", "echo hi"]);
+        assert_eq!(argv("cmd.exe"), ["cmd.exe", "/c", "echo hi"]);
+        assert_eq!(
+            argv(r"C:\Program Files\PowerShell\7\pwsh.exe"),
+            [
+                r"C:\Program Files\PowerShell\7\pwsh.exe",
+                "-NoLogo",
+                "-Command",
+                "echo hi"
+            ]
+        );
+        assert_eq!(
+            argv("powershell"),
+            ["powershell", "-NoLogo", "-Command", "echo hi"]
+        );
+        assert_eq!(argv("/usr/bin/fish"), ["/usr/bin/fish", "-c", "echo hi"]);
     }
 
     #[test]

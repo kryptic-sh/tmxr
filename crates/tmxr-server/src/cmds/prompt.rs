@@ -45,20 +45,7 @@ pub(super) fn run(
         "display-menu" => {
             // tmux's -b/-H/-s/-S styles, -O and -x/-y placement are accepted and
             // not followed: the menu is centred in tmxr's own colours.
-            let c = match a.value('c') {
-                Some(name) => srv
-                    .clients
-                    .values()
-                    .find(|cl| cl.att.is_some() && cl.id.to_string() == name)
-                    .map(|cl| cl.id)
-                    .ok_or_else(|| format!("can't find client: {name}"))?,
-                None => super::display_client(srv, ctx).ok_or("no current client")?,
-            };
-            let pane = a
-                .value('t')
-                .map(|t| crate::target::pane(srv, ctx, Some(t)).map(|(_, _, p)| p))
-                .transpose()?
-                .or(ctx.pane);
+            let (c, pane) = shown_on(srv, ctx, a)?;
             let words: Vec<String> = pos.iter().map(|w| expand_for(srv, ctx, pane, w)).collect();
             let title = a
                 .value('T')
@@ -71,6 +58,83 @@ pub(super) fn run(
             }
             // Shown now, not at the next repaint: from a command client
             // nothing else marks the attached client.
+            srv.mark_client_dirty(c);
+        }
+        "display-popup" => {
+            // tmux's -b/-s/-S styles, -k and -N are accepted and not followed.
+            let (c, pane) = shown_on(srv, ctx, a)?;
+            if a.has('C') {
+                if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut())
+                    && matches!(att.overlay, Some(Overlay::Popup(_)))
+                {
+                    att.overlay = None;
+                }
+                srv.mark_client_dirty(c);
+                return Ok(true);
+            }
+            let (cols, rows) = srv.clients[&c]
+                .att
+                .as_ref()
+                .map(|att| (att.cols, att.rows))
+                .ok_or("no current client")?;
+            let rect = popup_rect(a, cols, rows)?;
+            let sid = pane
+                .and_then(|p| srv.panes.get(&p))
+                .and_then(|p| srv.session_of_window(p.window))
+                .or_else(|| srv.clients[&c].att.as_ref().map(|att| att.session))
+                .ok_or("no session")?;
+            let cwd = match a.value('d') {
+                Some(d) => std::path::PathBuf::from(expand_for(srv, ctx, pane, d)),
+                None => pane
+                    .and_then(|p| crate::vars::pane_current_path(srv, p))
+                    .or_else(|| srv.sessions.get(&sid).map(|s| s.cwd.clone()))
+                    .unwrap_or_else(crate::util::home_dir),
+            };
+            if a.count('e') > 1 {
+                return Err("display-popup: -e may be given once".into());
+            }
+            let env: Vec<(String, String)> = a
+                .value('e')
+                .map(|e| {
+                    e.split_once('=')
+                        .map(|(k, v)| (k.to_owned(), v.to_owned()))
+                        .ok_or_else(|| format!("display-popup: -e {e}: not NAME=VALUE"))
+                })
+                .transpose()?
+                .into_iter()
+                .collect();
+            let title = a
+                .value('T')
+                .map(|t| expand_for(srv, ctx, pane, t))
+                .unwrap_or_default();
+            let border = !a.has('B');
+            let inner = crate::popup::Popup::inner_of(rect, border);
+            let id = srv.next_pane;
+            let started = srv.start_pty(
+                id,
+                sid,
+                pos,
+                cwd,
+                &env,
+                inner.width.max(1),
+                inner.height.max(1),
+            )?;
+            let popup = crate::popup::Popup {
+                id,
+                spawn: started.spawn,
+                pty: started.pty,
+                emu: tmxr_term::Emulator::new(inner.height.max(1), inner.width.max(1), 0),
+                output: started.output,
+                rect,
+                border,
+                title,
+                close_on_exit: a.count('E'),
+                exited: false,
+                extended_keys: srv.cfg.extended_keys == "always",
+            };
+            if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
+                att.overlay = Some(Overlay::Popup(Box::new(popup)));
+            }
             srv.mark_client_dirty(c);
         }
         "show-prompt-history" => {
@@ -199,4 +263,66 @@ fn run_nested(srv: &mut Server, ctx: &Ctx, line: &str, out: &mut Outcome) -> Res
     } else {
         Err(inner.stderr)
     }
+}
+
+/// The client an overlay command shows on (`-c`, else the best one) and the
+/// pane its formats and directory come from (`-t`, else the caller's).
+fn shown_on(
+    srv: &Server,
+    ctx: &Ctx,
+    a: &tmxr_command::Args,
+) -> Result<(crate::model::ClientId, Option<crate::model::PaneId>), String> {
+    let c = match a.value('c') {
+        Some(name) => srv
+            .clients
+            .values()
+            .find(|cl| cl.att.is_some() && cl.id.to_string() == name)
+            .map(|cl| cl.id)
+            .ok_or_else(|| format!("can't find client: {name}"))?,
+        None => super::display_client(srv, ctx).ok_or("no current client")?,
+    };
+    let pane = a
+        .value('t')
+        .map(|t| target::pane(srv, ctx, Some(t)).map(|(_, _, p)| p))
+        .transpose()?
+        .or(ctx.pane);
+    Ok((c, pane))
+}
+
+/// A popup's box in a `cols` x `rows` client: `-w` / `-h` in cells or
+/// percent (half the client by default), at `-x` / `-y` or centred (`C`).
+fn popup_rect(
+    a: &tmxr_command::Args,
+    cols: u16,
+    rows: u16,
+) -> Result<ratatui::layout::Rect, String> {
+    let size = |flag: char, total: u16| -> Result<u16, String> {
+        let n = match a.value(flag) {
+            None => total / 2,
+            Some(v) => match v.strip_suffix('%') {
+                Some(pct) => {
+                    let pct: u32 = pct.parse().map_err(|_| format!("bad size: {v}"))?;
+                    u16::try_from(u32::from(total) * pct.min(100) / 100).unwrap_or(total)
+                }
+                None => v.parse().map_err(|_| format!("bad size: {v}"))?,
+            },
+        };
+        Ok(n.clamp(1, total.max(1)))
+    };
+    let at = |flag: char, len: u16, total: u16| -> Result<u16, String> {
+        match a.value(flag) {
+            None | Some("C") => Ok(total.saturating_sub(len) / 2),
+            Some(v) => v
+                .parse::<u16>()
+                .map(|n| n.min(total.saturating_sub(len)))
+                .map_err(|_| format!("-{flag} {v}: tmxr takes a number or C")),
+        }
+    };
+    let (w, h) = (size('w', cols)?, size('h', rows)?);
+    Ok(ratatui::layout::Rect::new(
+        at('x', w, cols)?,
+        at('y', h, rows)?,
+        w,
+        h,
+    ))
 }

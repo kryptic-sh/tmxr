@@ -8,10 +8,11 @@ use crate::model::ClientId;
 /// its output to `client` (unless `background`).
 pub fn run_shell(srv: &Server, client: Option<ClientId>, line: String, background: bool) {
     let events = srv.events.clone();
+    let shell = srv.cfg.default_shell.clone();
     let _ = std::thread::Builder::new()
         .name("tmxr-run-shell".into())
         .spawn(move || {
-            let text = match shell_output(&line) {
+            let text = match shell_output(&line, shell.as_deref()) {
                 Ok(o) => {
                     let mut t = String::from_utf8_lossy(&o.stdout).into_owned();
                     t.push_str(&String::from_utf8_lossy(&o.stderr));
@@ -34,10 +35,11 @@ pub fn run_shell(srv: &Server, client: Option<ClientId>, line: String, backgroun
 /// successfully, else `otherwise`, with `ctx` as the command context.
 pub fn if_shell(srv: &Server, ctx: Ctx, line: String, then: String, otherwise: Option<String>) {
     let events = srv.events.clone();
+    let shell = srv.cfg.default_shell.clone();
     let _ = std::thread::Builder::new()
         .name("tmxr-if-shell".into())
         .spawn(move || {
-            let ok = shell_output(&line).is_ok_and(|o| o.status.success());
+            let ok = shell_output(&line, shell.as_deref()).is_ok_and(|o| o.status.success());
             if let Some(cmd) = if ok { Some(then) } else { otherwise } {
                 let _ = events.send(Event::Run { ctx, cmd });
             }
@@ -50,10 +52,11 @@ pub fn pipe_to_shell(srv: &Server, line: String, input: String) {
     use std::io::Write as _;
     use std::process::{Command, Stdio};
     let events = srv.events.clone();
+    let shell = srv.cfg.default_shell.clone();
     let _ = std::thread::Builder::new()
         .name("tmxr-copy-pipe".into())
         .spawn(move || {
-            let argv = crate::util::shell_command(&line);
+            let argv = crate::util::shell_command(&line, shell.as_deref());
             let run = Command::new(&argv[0])
                 .args(&argv[1..])
                 .stdin(Stdio::piped())
@@ -76,8 +79,8 @@ pub fn pipe_to_shell(srv: &Server, line: String, input: String) {
 }
 
 /// Run a shell command line to completion with no input.
-fn shell_output(line: &str) -> std::io::Result<std::process::Output> {
-    let argv = crate::util::shell_command(line);
+fn shell_output(line: &str, shell: Option<&str>) -> std::io::Result<std::process::Output> {
+    let argv = crate::util::shell_command(line, shell);
     std::process::Command::new(&argv[0])
         .args(&argv[1..])
         .stdin(std::process::Stdio::null())

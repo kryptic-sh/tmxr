@@ -20,6 +20,8 @@ pub enum ArgsError {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Args {
     flags: BTreeMap<char, Option<String>>,
+    /// How many times each flag was given (`-EE`).
+    counts: BTreeMap<char, usize>,
     positional: Vec<String>,
 }
 
@@ -44,6 +46,7 @@ impl Args {
                 if c == ':' {
                     return Err(ArgsError::UnknownFlag(c));
                 }
+                *out.counts.entry(c).or_default() += 1;
                 if !takes_value {
                     out.flags.insert(c, None);
                     continue;
@@ -68,6 +71,11 @@ impl Args {
         self.flags.contains_key(&flag)
     }
 
+    /// How many times `flag` was given: tmux's `-EE` differs from `-E`.
+    pub fn count(&self, flag: char) -> usize {
+        self.counts.get(&flag).copied().unwrap_or(0)
+    }
+
     pub fn value(&self, flag: char) -> Option<&str> {
         self.flags.get(&flag).and_then(|v| v.as_deref())
     }
@@ -83,6 +91,14 @@ mod tests {
 
     fn v(args: &[&str]) -> Vec<String> {
         args.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    #[test]
+    fn repeated_flags_are_counted() {
+        let a = Args::parse("Et:", &v(&["-EE", "-E", "-t", "x"])).unwrap();
+        assert_eq!(a.count('E'), 3);
+        assert_eq!(a.count('t'), 1);
+        assert_eq!(a.count('d'), 0);
     }
 
     #[test]

@@ -45,9 +45,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   several sessions, with `-k` to replace the window at the target index and
   `unlink-window -k` to kill a window's last link. A linked window outlives a
   killed session that held it, and `#{window_linked}` says whether it is linked.
+- `display-popup` (`popup`): run a command in a box over the panes, which takes
+  the client's keys. `-E` closes it when the command exits (`-EE` only on
+  success); otherwise it stays until a key. `-w` / `-h` in cells or percent,
+  `-x` / `-y`, `-T` title, `-B` no border, `-d` directory (default: the pane's
+  current one), `-e` one variable, `-C` to close.
 
 ### Fixed
 
+- Shell commands (`new-window 'cmd'`, `run-shell`, `if-shell`, `copy-pipe`,
+  `pipe-pane`, popups) now run with `default-shell` when it is set, as in tmux,
+  each with that shell's own flag (`/c` for cmd, `-Command` for PowerShell, `-c`
+  for the rest). They used `$SHELL` on Unix and the first PowerShell or cmd
+  found on Windows, whatever `default-shell` said.
 - `move-window -k` onto the only window of a session ended that session first,
   so the move then failed with `no such session`; the window is now replaced in
   place, as in tmux.

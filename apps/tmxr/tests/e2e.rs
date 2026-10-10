@@ -1505,6 +1505,9 @@ fn copy_pipe_sends_the_selection_to_copy_command() {
     let s = t.attach(&["new", "-s", "pp"]);
     s.wait_for("status line", |text| text.contains("pp"));
     t.run(&["set-option", "-g", "copy-command", &command]);
+    // The command is PowerShell, and shell commands run with default-shell.
+    #[cfg(windows)]
+    t.run(&["set-option", "-g", "default-shell", "powershell.exe"]);
     s.send(b"echo pipeme-77\r");
     s.wait_for("echoed", |text| text.matches("pipeme-77").count() >= 2);
     s.send(PREFIX);
@@ -2217,6 +2220,9 @@ fn pipe_pane_copies_output_to_a_command() {
         log.display()
     );
     t.run(&["new-session", "-d", "-s", "pp"]);
+    // The command is PowerShell, and shell commands run with default-shell.
+    #[cfg(windows)]
+    t.run(&["set-option", "-g", "default-shell", "powershell.exe"]);
     let piped = |t: &Tmxr| t.run(&["display-message", "-p", "-t", "pp", "#{pane_pipe}"]);
     t.run(&["pipep", "-t", "pp", &command]);
     assert_eq!(piped(&t).trim(), "1");
@@ -2669,4 +2675,63 @@ fn link_window_shows_one_window_in_two_sessions() {
     t.run(&["new-window", "-d", "-t", "d", "-n", "spare"]);
     t.run(&["unlink-window", "-k", "-t", "d:both"]);
     assert_eq!(windows(&t, "d").trim(), "spare");
+}
+
+#[test]
+fn display_popup_runs_a_command_over_the_panes() {
+    let t = Tmxr::new("popup");
+    let s = t.attach(&["new", "-s", "pp"]);
+    s.wait_for("status line", |text| text.contains("pp"));
+    let read_line = if cfg!(windows) {
+        "echo POPUP-UP& set /p x="
+    } else {
+        "echo POPUP-UP; read x"
+    };
+    // -E: the keys go to the popup's command, which closes it by exiting.
+    t.run(&[
+        "display-popup",
+        "-E",
+        "-w",
+        "40",
+        "-h",
+        "8",
+        "-T",
+        "Pop",
+        read_line,
+    ]);
+    s.wait_for("the popup", |text| {
+        text.contains("POPUP-UP") && text.contains("Pop")
+    });
+    s.send(b"typed\r");
+    s.wait_for("the popup closed", |text| !text.contains("POPUP-UP"));
+    let pane = t.run(&["capture-pane", "-p", "-t", "pp"]);
+    assert!(
+        !pane.contains("typed"),
+        "the pane got the popup's keys:\n{pane}"
+    );
+
+    // Without -E it stays after its command, until a key.
+    t.run(&["display-popup", "echo DONE-HERE"]);
+    s.wait_for("the finished popup", |text| text.contains("DONE-HERE"));
+    std::thread::sleep(Duration::from_millis(300));
+    assert!(s.text().contains("DONE-HERE"), "closed by itself");
+    s.send(b"q");
+    s.wait_for("closed by a key", |text| !text.contains("DONE-HERE"));
+
+    // -C closes a running popup and ends its command.
+    let marker = t.dir.path().join("late-marker");
+    let late = if cfg!(windows) {
+        format!(
+            "echo RUNNING& ping -n 3 127.0.0.1 >nul& echo x> {}",
+            marker.display()
+        )
+    } else {
+        format!("echo RUNNING; sleep 2; touch '{}'", marker.display())
+    };
+    t.run(&["display-popup", &late]);
+    s.wait_for("the running popup", |text| text.contains("RUNNING"));
+    t.run(&["display-popup", "-C"]);
+    s.wait_for("closed by -C", |text| !text.contains("RUNNING"));
+    std::thread::sleep(Duration::from_secs(4));
+    assert!(!marker.exists(), "the popup's command outlived it");
 }

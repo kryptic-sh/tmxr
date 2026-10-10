@@ -17,9 +17,10 @@ pub struct PanePipe {
 }
 
 impl PanePipe {
-    /// Start `line` with the shell, its input fed from the pane.
-    pub fn open(line: &str) -> std::io::Result<Self> {
-        let argv = crate::util::shell_command(line);
+    /// Start `line` with the shell (`default-shell`, when set), its input
+    /// fed from the pane.
+    pub fn open(line: &str, default_shell: Option<&str>) -> std::io::Result<Self> {
+        let argv = crate::util::shell_command(line, default_shell);
         let mut child = Command::new(&argv[0])
             .args(&argv[1..])
             .stdin(Stdio::piped())

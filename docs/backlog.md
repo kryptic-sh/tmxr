@@ -54,6 +54,14 @@ what was not.
 
 ## Known gaps and follow-ups
 
+- **`display-popup` gaps.** The box keeps the size it opened with when the
+  client resizes; `-x` / `-y` take a number or `C` (tmux's other position forms
+  and formats are errors); `-e` may be given once; `-b`, `-s`, `-S`, `-k` and
+  `-N` are accepted and ignored. Closing a running popup kills its command
+  (`Popup`'s `Drop`, as `kill-pane` does); removing that kill does not turn the
+  e2e test red on Windows, because closing the ConPTY ends the program anyway.
+  Whether the explicit kill is what ends it on Unix (where the PTY reader thread
+  holds its own copy of the master) is not verified.
 - **Resurrect and linked windows** (`link-window`): a save walks each session's
   windows, so a window linked into two sessions is saved twice and restored as
   two separate windows. Saving it once and re-linking it on restore needs a
@@ -65,8 +73,8 @@ what was not.
   `splitw` resolve; unit-tested there. Every tmux alias on a list of tmux 3.x's
   aliases written from memory is present; check it against a real
   `tmux list-commands`. The gap is the tmux commands tmxr does not have, whose
-  names and shorthands are therefore unknown: `customize-mode`, `display-popup`
-  and `server-access` (`move-pane`, `previous-layout`, `show-window-options`,
+  names and shorthands are therefore unknown: `customize-mode` and
+  `server-access` (`move-pane`, `previous-layout`, `show-window-options`,
   `start-server`, `set-environment`, `show-environment`, `clear-history`,
   `respawn-window` `pipe-pane` (output only; `-I` is an error),
   `show-prompt-history`, `clear-prompt-history` and `wait-for` (ending its
@@ -77,10 +85,11 @@ what was not.
   not followed), `lock-client`, `lock-session` and `lock-server`
   (`lock-command`, default `lock -np`; no `lock-after-time`) and `resize-window`
   (a manual size, undone with `set-window-option window-size latest`; resurrect
-  does not save it), `link-window` and `unlink-window` were added on
-  2026-10-09). Checked against a running server on 2026-10-09: `ls`, `list-s`,
-  `show` (`show-options`) and `kill-ser` resolve, `displ` is ambiguous as in
-  tmux, and `pipe` is an unknown command where `tmux pipe` runs `pipe-pane`.
+  does not save it), `link-window`, `unlink-window` and `display-popup` were
+  added on 2026-10-09). Checked against a running server on 2026-10-09: `ls`,
+  `list-s`, `show` (`show-options`) and `kill-ser` resolve, `displ` is ambiguous
+  as in tmux, and `pipe` is an unknown command where `tmux pipe` runs
+  `pipe-pane`.
 - **tmux default binds**: all of tmux's defaults are bound; `prefix C-z`
   (suspend-client) errors on Windows, which has no job control. Alerts for `M-n`
   / `M-p` are bells only (no `monitor-activity` / `monitor-silence`).

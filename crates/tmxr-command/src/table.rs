@@ -143,6 +143,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         "[-p] [-t target-pane] [message]"
     ),
     cmd!("display-panes", Some("displayp"), "", 0, 0, ""),
+    cmd!(
+        "display-popup",
+        Some("popup"),
+        "Bb:Cc:d:e:Eh:kNs:S:t:T:w:x:y:",
+        0,
+        ANY,
+        "[-BCEkN] [-c target-client] [-d start-directory] [-e environment] [-h height] [-t target-pane] [-T title] [-w width] [-x position] [-y position] [shell-command]"
+    ),
     cmd!("find-window", Some("findw"), "Z", 1, 1, "[-Z] match-string"),
     cmd!(
         "has-session",
