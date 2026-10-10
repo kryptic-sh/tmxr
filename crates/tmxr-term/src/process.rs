@@ -269,6 +269,20 @@ mod win {
     /// How long `pid` has been running, in 100 ns units; `None` if the
     /// process cannot be opened (gone, or not ours to inspect).
     pub fn age_100ns(pid: u32) -> Option<u64> {
+        let zero = FILETIME {
+            dwLowDateTime: 0,
+            dwHighDateTime: 0,
+        };
+        let mut now = zero;
+        let created = created_100ns(pid)?;
+        // SAFETY: `now` is a live, writable FILETIME.
+        unsafe { GetSystemTimeAsFileTime(&mut now) };
+        Some(ticks(now).saturating_sub(created))
+    }
+
+    /// When `pid` was created, in 100 ns units since 1601; `None` if the
+    /// process cannot be opened (gone, or not ours to inspect).
+    pub fn created_100ns(pid: u32) -> Option<u64> {
         // SAFETY: OpenProcess takes no pointers; the handle is checked and
         // closed below.
         let h = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
@@ -279,17 +293,14 @@ mod win {
             dwLowDateTime: 0,
             dwHighDateTime: 0,
         };
-        let (mut created, mut exited, mut kernel, mut user, mut now) =
-            (zero, zero, zero, zero, zero);
+        let (mut created, mut exited, mut kernel, mut user) = (zero, zero, zero, zero);
         // SAFETY: every out-pointer is a live, writable FILETIME and `h` is a
         // process handle opened with query rights.
         let ok =
             unsafe { GetProcessTimes(h, &mut created, &mut exited, &mut kernel, &mut user) } != 0;
         // SAFETY: `h` is valid and closed exactly once.
         unsafe { CloseHandle(h) };
-        // SAFETY: `now` is a live, writable FILETIME.
-        unsafe { GetSystemTimeAsFileTime(&mut now) };
-        ok.then(|| ticks(now).saturating_sub(ticks(created)))
+        ok.then(|| ticks(created))
     }
 
     /// The command line `pid` was started with, as one string.
@@ -566,14 +577,39 @@ const SETTLE_100NS: u64 = 5_000_000;
 
 /// The newest direct child of `pid` that has been running for at least
 /// [`SETTLE_100NS`] (the snapshot lists processes in creation order).
+///
+/// Windows keeps a process's parent pid after the parent exits, and pids
+/// are reused, so a process whose parent pid matches may be an orphan of an
+/// older process that had `pid`: only one created after `pid` was is its
+/// child.
 #[cfg(windows)]
 fn newest_child(pid: u32) -> Option<u32> {
-    win::snapshot()
+    let processes: Vec<(u32, u32)> = win::snapshot()
         .into_iter()
-        .filter(|(child, parent, _)| *parent == pid && *child != pid)
-        .map(|(child, _, _)| child)
+        .map(|(child, parent, _)| (child, parent))
+        .collect();
+    pick_child(pid, &processes, win::created_100ns, win::age_100ns)
+}
+
+/// [`newest_child`]'s choice among `processes` (`(pid, parent pid)`, oldest
+/// first), given each process's creation time and age in 100 ns units.
+#[cfg(windows)]
+fn pick_child(
+    pid: u32,
+    processes: &[(u32, u32)],
+    created: impl Fn(u32) -> Option<u64>,
+    age: impl Fn(u32) -> Option<u64>,
+) -> Option<u32> {
+    let born = created(pid)?;
+    processes
+        .iter()
+        .filter(|(child, parent)| *parent == pid && *child != pid)
+        .map(|(child, _)| *child)
         .rev()
-        .find(|child| win::age_100ns(*child).is_some_and(|age| age >= SETTLE_100NS))
+        .find(|child| {
+            created(*child).is_some_and(|c| c >= born)
+                && age(*child).is_some_and(|a| a >= SETTLE_100NS)
+        })
 }
 
 #[cfg(windows)]
@@ -649,6 +685,34 @@ mod tests {
         let mut short = 3i32.to_ne_bytes().to_vec();
         short.extend_from_slice(b"/bin/x\0x\0");
         assert_eq!(parse_procargs2(&short), None);
+    }
+
+    /// A process left with a reused pid's old children is not their parent:
+    /// only processes created after it count.
+    #[cfg(windows)]
+    #[test]
+    fn an_orphan_of_a_reused_pid_is_not_a_child() {
+        let settled = SETTLE_100NS;
+        // Pane process 10, created at 1000. Process 20 claims it as parent
+        // but was created at 500, by an older process that had pid 10;
+        // process 30 is a real child.
+        let created = |pid| match pid {
+            10 => Some(1000),
+            20 => Some(500),
+            30 => Some(2000),
+            _ => None,
+        };
+        let age = |_| Some(settled);
+        assert_eq!(pick_child(10, &[(10, 1), (30, 10)], created, age), Some(30));
+        assert_eq!(pick_child(10, &[(10, 1), (20, 10)], created, age), None);
+        // The orphan is newest in the list: the real child is still found.
+        assert_eq!(
+            pick_child(10, &[(30, 10), (20, 10)], created, age),
+            Some(30)
+        );
+        // A child too young to have settled is passed over.
+        let young = |pid| Some(if pid == 30 { 0 } else { settled });
+        assert_eq!(pick_child(10, &[(30, 10)], created, young), None);
     }
 
     /// A 32-bit program's directory comes from its own (32-bit) PEB: the

@@ -40,19 +40,22 @@ table. What has been verified, and how:
 
 - **`a_32_bit_programs_directory_is_read` failed once** (2026-10-10, CI's
   bundled-ConPTY Windows job, run 38044583669): the 32-bit `cmd`'s directory
-  read as `C:\Windows\System32` for the whole 20 s, the symptom the WOW64 fix in
-  0.2.4 addressed. The next run on the same code passed, and nothing in that
-  change touched `tmxr-term`. Unexplained; if it recurs, log which process
-  `current_dir` read and whether its PEB was read as 32-bit.
+  read as `C:\Windows\System32` for the whole 20 s. It passed 25 runs in a row
+  alone locally. Probable cause, found and fixed the same day: `newest_child`
+  took any process naming the pane's pid as its parent, and Windows keeps a dead
+  parent's pid in its children while pids are reused, so under a busy parallel
+  run an orphan of an older process (a console host, which runs in `System32`)
+  could pass for the pane's child. Children created before the pane's process
+  are now skipped (`pick_child`, unit-tested). Not confirmed as this failure's
+  cause; if it recurs, log which process `current_dir` read.
 - **`server-access` coverage**: a second user is exercised by CI on Windows
-  (`pipe-acl`) and Linux (`socket-acl`), not on macOS, where the same
-  `getpeereid` path runs untested by another account. `socket-access` is read at
-  start only (see plan/03-protocol.md for why the pipe cannot change). A Windows
-  peer is identified through its process, so a client whose process exits
-  between connecting and being checked is refused. A label's socket on Unix sits
-  in tmxr's private directory, unreachable by other users whatever
-  `socket-access` says; `server-access -a` then says to use `-S`, as tmux
-  documents.
+  (`pipe-acl`), Linux and macOS (`socket-acl`), each shown to fail with
+  admission broken. `socket-access` is read at start only (see
+  plan/03-protocol.md for why the pipe cannot change). A Windows peer is
+  identified through its process, so a client whose process exits between
+  connecting and being checked is refused. A label's socket on Unix sits in
+  tmxr's private directory, unreachable by other users whatever `socket-access`
+  says; `server-access -a` then says to use `-S`, as tmux documents.
 - **`display-popup` gaps.** The box keeps the size it opened with when the
   client resizes; `-x` / `-y` take a number or `C` (tmux's other position forms
   and formats are errors); `-e` may be given once; `-b`, `-s`, `-S`, `-k` and

@@ -27,6 +27,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A `-S` socket's directory is no longer required to be private to its owner, as
   in tmux; a `-L` label's directory still is.
 
+### Fixed
+
+- Windows: a pane's program, and the directory splits open in, could be read
+  from an unrelated process. Windows keeps a dead parent's pid in its children
+  and reuses pids, so an orphan of an older process could pass for the pane
+  program's child; only processes started after the pane's program now count.
+
 ## [0.3.0] - 2026-10-10
 
 ### Added
