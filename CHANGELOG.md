@@ -11,7 +11,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Panning, as tmux's**: a window larger than the client (from `resize-window`)
   follows the active pane's cursor, and `refresh-client -L` / `-R` / `-U` /
   `-D [n]` move the view, `-c` goes back to following the cursor; bound to
-  `prefix S-arrows` and `prefix DC`. Before, only the window's top-left corner
+  `prefix S-arrows` and `prefix DC`. Clicks, border drags and boxes placed at
+  the mouse or a pane follow the view. Before, only the window's top-left corner
   showed. `refresh-client` from a command client acts on the current client.
 - **`prefix C`** opens `customize-mode`, as tmux's.
 - **tmux's menus** on `prefix <`, `prefix >` and the right button over a pane, a
