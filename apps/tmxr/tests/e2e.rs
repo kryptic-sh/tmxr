@@ -4203,6 +4203,43 @@ fn the_wheel_on_the_status_line_and_a_middle_click_do_what_tmuxs_do() {
 }
 
 #[test]
+fn append_selection_and_toggle_position_do_what_tmuxs_do() {
+    let t = Tmxr::new("appendsel");
+    let s = t.attach(&["new", "-s", "ap"]);
+    s.wait_for("status line", |text| text.contains("ap"));
+    t.wait_prompt("ap");
+    t.run(&["send-keys", "-t", "ap", "echo apword", "Enter"]);
+    s.wait_for("the output", |text| {
+        text.lines().any(|l| l.trim_end() == "apword")
+    });
+    t.run(&["set-buffer", "base-"]);
+    t.run(&["copy-mode", "-t", "ap"]);
+    s.wait_for("the position", |text| text.contains("[0/"));
+    // toggle-position hides the indicator, and shows it again.
+    let x = |args: &[&str]| {
+        let mut cmd = vec!["send-keys", "-t", "ap", "-X"];
+        cmd.extend_from_slice(args);
+        t.run(&cmd);
+    };
+    x(&["toggle-position"]);
+    s.wait_for("the position hidden", |text| !text.contains("[0/"));
+    x(&["toggle-position"]);
+    s.wait_for("the position back", |text| text.contains("[0/"));
+    // The selection goes on the end of the newest buffer, and copy mode
+    // ends.
+    x(&["search-backward", "apword"]);
+    x(&["begin-selection"]);
+    x(&["-N", "5", "cursor-right"]);
+    x(&["append-selection-and-cancel"]);
+    assert_eq!(t.run(&["show-buffer"]), "base-apword");
+    assert_eq!(
+        t.run(&["display-message", "-p", "-t", "ap", "#{pane_in_mode}"])
+            .trim(),
+        "0"
+    );
+}
+
+#[test]
 fn select_pane_titles_a_pane_and_resurrect_keeps_it() {
     let t = Tmxr::new("titles");
     t.run(&["new-session", "-d", "-s", "ti"]);

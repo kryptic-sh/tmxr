@@ -243,3 +243,47 @@ fn search_finds_forward_backward_and_wraps() {
     cm.apply("search-reverse", None);
     assert_eq!((cm.cy, cm.cx), (2, 4));
 }
+
+#[test]
+fn other_end_swaps_cursor_and_anchor_and_a_count_by_parity() {
+    let mut cm = at_start("hello world");
+    cm.apply("begin-selection", None);
+    cm.cx = 4;
+    cm.apply("other-end", None);
+    assert_eq!((cm.cx, cm.anchor), (0, Some((0, 4))));
+    // Twice is back where it was, as tmux's prefix parity.
+    cm.count = 2;
+    cm.apply_counted("other-end", None);
+    assert_eq!((cm.cx, cm.anchor), (0, Some((0, 4))));
+    // Nothing to swap without a selection.
+    cm.apply("clear-selection", None);
+    cm.apply("other-end", None);
+    assert_eq!((cm.cx, cm.anchor), (0, None));
+}
+
+#[test]
+fn centring_and_scroll_middle_place_the_cursor_and_the_view() {
+    // 30 numbered lines in a 5-row, 20-column pane.
+    let text: String = (0..30).map(|i| format!("{i}\r\n")).collect();
+    let mut cm = mode(&text);
+    cm.apply("history-top", None);
+    cm.apply("cursor-centre-vertical", None);
+    assert_eq!(cm.cy, 2, "the middle row of the view");
+    cm.apply("cursor-centre-horizontal", None);
+    // tmux's: half the pane's width, whatever the line holds.
+    assert_eq!(cm.cx, 10, "the middle column");
+    // The cursor's line comes to the middle of the view.
+    cm.cy = 15;
+    cm.apply("scroll-middle", None);
+    assert_eq!((cm.top, cm.cy), (13, 15));
+}
+
+#[test]
+fn toggle_position_hides_and_shows_the_indicator() {
+    let mut cm = at_start("x");
+    assert!(!cm.hide_position);
+    cm.apply("toggle-position", None);
+    assert!(cm.hide_position);
+    cm.apply("toggle-position", None);
+    assert!(!cm.hide_position);
+}

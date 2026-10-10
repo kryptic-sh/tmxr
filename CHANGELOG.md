@@ -8,6 +8,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Copy-mode actions from tmux**: `other-end` (vi `o`), `scroll-middle` (vi
+  `z`), `append-selection-and-cancel` (vi `A`), `toggle-position` (`P`) and
+  `cursor-centre-vertical` / `cursor-centre-horizontal` (emacs `C-l` / `M-l`),
+  bound as tmux 3.6 binds them.
 - **More of tmux's default binds**: the wheel over a window's name on the status
   line switches windows, the middle button pastes the latest buffer, and vi copy
   mode has `BSpace`, `Home`, `End`, `J`, `K`, `C-Up`, `C-Down` and `C-c`, as

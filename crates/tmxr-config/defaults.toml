@@ -274,6 +274,10 @@ restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "to
 "Escape" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
 "q" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
 "C-c" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
+"A" = { cmd = "send-keys -X append-selection-and-cancel", note = "Add the selection to the newest buffer" }
+"o" = { cmd = "send-keys -X other-end", note = "Cursor to the selection's other end" }
+"z" = { cmd = "send-keys -X scroll-middle", note = "Scroll the cursor's line to the middle" }
+"P" = { cmd = "send-keys -X toggle-position", note = "Show or hide the position" }
 "BSpace" = { cmd = "send-keys -X cursor-left", note = "Cursor left" }
 "Home" = { cmd = "send-keys -X start-of-line", note = "Start of line" }
 "End" = { cmd = "send-keys -X end-of-line", note = "End of line" }
@@ -346,6 +350,9 @@ restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "to
 # M-1 … M-9.
 [keys.copy-mode]
 "Escape" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
+"C-l" = { cmd = "send-keys -X cursor-centre-vertical", note = "Cursor to the middle row" }
+"M-l" = { cmd = "send-keys -X cursor-centre-horizontal", note = "Cursor to the middle column" }
+"P" = { cmd = "send-keys -X toggle-position", note = "Show or hide the position" }
 "C-c" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
 "q" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
 "C-Space" = { cmd = "send-keys -X begin-selection", note = "Start selection" }

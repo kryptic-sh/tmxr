@@ -315,10 +315,16 @@ fn draw_pane(
         }
         // tmux's position indicator, top right.
         let (offset, total) = cm.position();
-        // A count being typed shows first, as tmux's `(repeat)` prompt.
+        // A count being typed shows first, as tmux's `(repeat)` prompt;
+        // `toggle-position` hides the position itself.
+        let position = if cm.hide_position {
+            String::new()
+        } else {
+            format!("[{offset}/{total}]")
+        };
         let tag = match cm.count {
-            0 => format!("[{offset}/{total}]"),
-            n => format!("(repeat) {n} [{offset}/{total}]"),
+            0 => position,
+            n => format!("(repeat) {n} {position}").trim_end().to_owned(),
         };
         let tw = tag.len() as u16;
         if tw < w {

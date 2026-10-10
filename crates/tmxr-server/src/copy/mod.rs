@@ -84,6 +84,8 @@ pub struct CopyMode {
     mark: Option<(usize, usize)>,
     /// `copy-mode -e`: scrolling back to the bottom leaves copy mode.
     pub scroll_exit: bool,
+    /// `toggle-position`: the position indicator is not drawn.
+    pub hide_position: bool,
 }
 
 /// Columns where `needle` starts in `line`: literal, and case-insensitive
@@ -261,6 +263,7 @@ impl CopyMode {
             last_jump: None,
             mark: None,
             scroll_exit: false,
+            hide_position: false,
         }
     }
 
@@ -277,6 +280,7 @@ impl CopyMode {
         self.mark = old.mark.map(clamp);
         self.last_jump = old.last_jump;
         self.scroll_exit = old.scroll_exit;
+        self.hide_position = old.hide_position;
         self.scroll_to_cursor();
     }
 
@@ -757,6 +761,25 @@ impl CopyMode {
                 };
             }
             "clear-selection" => self.anchor = None,
+            // tmux's: the cursor goes to the selection's other end, which is
+            // where the selection is now held from. A count swaps that many
+            // times.
+            "other-end" => {
+                if let Some(other) = self.anchor {
+                    self.anchor = Some((self.cy, self.cx));
+                    (self.cy, self.cx) = other;
+                }
+            }
+            "cursor-centre-vertical" => self.cy = (self.top + rows / 2).min(last),
+            "cursor-centre-horizontal" => self.cx = usize::from(self.cols) / 2,
+            // The view moves so the cursor's line is in its middle.
+            "scroll-middle" => {
+                self.top = self
+                    .cy
+                    .saturating_sub((rows - 1) / 2)
+                    .min(self.lines.len().saturating_sub(rows));
+            }
+            "toggle-position" => self.hide_position = !self.hide_position,
             "search-forward" | "search-backward" => {
                 let forward = name == "search-forward";
                 let needle = arg.unwrap_or_default().to_owned();
@@ -877,6 +900,18 @@ pub fn command(
     };
     match name {
         "cancel" => leave(srv, pane),
+        // tmux's: the clipboard gets the selection, the newest buffer gets it
+        // added to its end (a new buffer when there is none).
+        "append-selection-and-cancel" => {
+            if let Some(text) = cm.selection_text() {
+                srv.set_clipboard(&text);
+                match srv.buffers.front_mut() {
+                    Some(top) => top.data.push_str(&text),
+                    None => srv.add_buffer(text, None),
+                }
+            }
+            leave(srv, pane);
+        }
         "copy-selection"
         | "copy-selection-and-cancel"
         | "copy-selection-no-newlines-and-cancel"
