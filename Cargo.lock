@@ -2288,6 +2288,7 @@ name = "tmxr-command"
 version = "0.3.0"
 dependencies = [
  "crossterm",
+ "regex",
  "thiserror 2.0.21",
 ]
 

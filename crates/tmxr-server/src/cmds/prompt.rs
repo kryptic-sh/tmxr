@@ -46,13 +46,14 @@ pub(super) fn run(
         "display-menu" => {
             // tmux's -O is accepted and not followed.
             let (c, pane) = shown_on(srv, ctx, a)?;
-            let words: Vec<String> = pos.iter().map(|w| expand_for(srv, ctx, pane, w)).collect();
+
             let title = a
                 .value('T')
                 .map(|t| expand_for(srv, ctx, pane, t))
                 .unwrap_or_default();
             let start = a.value('C').and_then(|n| n.parse().ok()).unwrap_or(0);
-            let mut menu = crate::menu::Menu::parse(title, &words, start)?;
+            let mut menu =
+                crate::menu::Menu::parse(title, pos, start, &|w| expand_for(srv, ctx, pane, w))?;
             menu.look = crate::overlay::BoxLook::from_args(a)?;
             let (cols, rows) = client_size(srv, c)?;
             let places = places(srv, ctx, c, pane);

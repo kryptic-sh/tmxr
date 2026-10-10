@@ -236,6 +236,8 @@ restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "to
 "M-5" = { cmd = "select-layout tiled", note = "Layout: tiled" }
 "M-6" = { cmd = "select-layout main-horizontal-mirrored", note = "Layout: main horizontal, mirrored" }
 "M-7" = { cmd = "select-layout main-vertical-mirrored", note = "Layout: main vertical, mirrored" }
+# tmux 3.6's window menu, as its list-keys prints it.
+"<" = { cmd = '''display-menu -T "#[align=centre]#{window_index}:#{window_name}" -x W -y W "#{?#{>:#{session_windows},1},,-}Swap Left" l { swap-window -t :-1 } "#{?#{>:#{session_windows},1},,-}Swap Right" r { swap-window -t :+1 } "#{?pane_marked_set,,-}Swap Marked" s { swap-window } '' Kill X { kill-window } Respawn R { respawn-window -k } "#{?pane_marked,Unmark,Mark}" m { select-pane -m } Rename n { command-prompt -F -I "#W" { rename-window -t "#{window_id}" "%%" } } '' "New After" w { new-window -a } "New At End" W { new-window }''', note = "Window menu" }
 "Up" = { cmd = "select-pane -U", note = "Focus pane up" }
 "Down" = { cmd = "select-pane -D", note = "Focus pane down" }
 "Left" = { cmd = "select-pane -L", note = "Focus pane left" }

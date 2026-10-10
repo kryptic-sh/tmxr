@@ -4293,6 +4293,67 @@ fn star_and_hash_search_for_the_word_at_the_cursor() {
 }
 
 #[test]
+fn tmuxs_window_menu_works() {
+    let t = Tmxr::new("winmenu");
+    let s = t.attach(&["new", "-s", "wm", "-n", "first"]);
+    s.wait_for("status line", |text| text.contains("wm"));
+    t.run(&["new-window", "-d", "-t", "wm:1", "-n", "second"]);
+    // tmux's own prefix < bind, in tmxr's defaults.
+    let open = |s: &Screen| {
+        s.send(PREFIX);
+        s.send(b"<");
+        s.wait_for("the menu", |text| text.contains("Swap Right"));
+    };
+    open(&s);
+    // The title's #[align=centre] is a style: not shown, and centred over
+    // the menu's items.
+    let text = s.text();
+    assert!(!text.contains("#["), "{text}");
+    let title = text
+        .lines()
+        .find(|l| l.contains("0:first"))
+        .expect("the title");
+    let item = text.lines().find(|l| l.contains("Swap Right")).unwrap();
+    // In characters: the box's lines are wider than a byte.
+    let column = |line: &str, byte: usize| line[..byte].chars().count();
+    let left = column(item, item.find('│').unwrap());
+    let right = column(item, item.rfind('│').unwrap());
+    let at = column(title, title.find("0:first").unwrap());
+    let (before, after) = (at - left, right - (at + "0:first".len()));
+    assert!(
+        before.abs_diff(after) <= 2,
+        "not centred:
+{title}
+{item}"
+    );
+    // Swap Right: this window and the next change places.
+    s.send(b"r");
+    t.wait_run(
+        &[
+            "list-windows",
+            "-t",
+            "wm",
+            "-F",
+            "#{window_index}:#{window_name}",
+        ],
+        "swapped",
+        |o| {
+            o == "0:second
+1:first
+"
+        },
+    );
+    // Mark: the pane is marked.
+    open(&s);
+    s.send(b"m");
+    t.wait_run(
+        &["display-message", "-p", "-t", "wm", "#{pane_marked}"],
+        "marked",
+        |o| o.trim() == "1",
+    );
+}
+
+#[test]
 fn select_pane_titles_a_pane_and_resurrect_keeps_it() {
     let t = Tmxr::new("titles");
     t.run(&["new-session", "-d", "-s", "ti"]);

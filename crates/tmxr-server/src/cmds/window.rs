@@ -119,7 +119,12 @@ pub(super) fn run(
                         .ok_or("window not in session")?;
                     (sid, idx)
                 }
-                (None, None) => return Err("swap-window needs -s or a marked pane".into()),
+                // tmux's CMD_FIND_DEFAULT_MARKED: the marked window, else the
+                // current one.
+                (None, None) => {
+                    let (sid, idx, _) = target::window(srv, ctx, None)?;
+                    (sid, idx)
+                }
             };
             let (sid, idx, _) = target::window(srv, ctx, a.value('t'))?;
             srv.swap_windows(src, (sid, idx), a.has('d'))?;

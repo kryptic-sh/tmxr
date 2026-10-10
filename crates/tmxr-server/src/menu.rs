@@ -37,18 +37,33 @@ pub struct Menu {
 impl Menu {
     /// Build a menu from `display-menu`'s arguments: `name key command`
     /// triples, where an empty name is a separator taking no key or command.
-    pub fn parse(title: String, args: &[String], start: usize) -> Result<Self, String> {
-        let mut items = Vec::new();
+    /// Names and commands go through `expand`, as tmux's `menu_add_item`:
+    /// an item whose name expands to nothing is left out, and a separator is
+    /// dropped at the top or after another.
+    pub fn parse(
+        title: String,
+        args: &[String],
+        start: usize,
+        expand: &dyn Fn(&str) -> String,
+    ) -> Result<Self, String> {
+        let mut items: Vec<MenuItem> = Vec::new();
         let mut rest = args;
-        while let Some((name, tail)) = rest.split_first() {
-            if name.is_empty() {
-                items.push(MenuItem::Separator);
+        while let Some((raw, tail)) = rest.split_first() {
+            if raw.is_empty() {
+                if items.last().is_some_and(|i| *i != MenuItem::Separator) {
+                    items.push(MenuItem::Separator);
+                }
                 rest = tail;
                 continue;
             }
             let [key, cmd, tail @ ..] = tail else {
-                return Err(format!("display-menu: {name}: needs a key and a command"));
+                return Err(format!("display-menu: {raw}: needs a key and a command"));
             };
+            rest = tail;
+            let name = expand(raw);
+            if name.is_empty() {
+                continue;
+            }
             let key = if key.is_empty() {
                 None
             } else {
@@ -64,10 +79,9 @@ impl Menu {
             items.push(MenuItem::Command {
                 name,
                 key,
-                cmd: cmd.clone(),
+                cmd: expand(cmd),
                 disabled,
             });
-            rest = tail;
         }
         let mut menu = Self {
             title,
@@ -158,7 +172,9 @@ impl Menu {
                 let (name, key) = Self::label(i);
                 name.chars().count() + key.chars().count() + 3
             })
-            .chain(std::iter::once(self.title.chars().count() + 2))
+            .chain(std::iter::once(
+                usize::from(crate::render::runs_width(&self.title)) + 2,
+            ))
             .max()
             .unwrap_or(0);
         (
@@ -195,12 +211,25 @@ impl Menu {
             Some(lines) => Block::default()
                 .borders(Borders::ALL)
                 .border_type(lines)
-                .border_style(border)
-                .title(format!(" {} ", self.title)),
+                .border_style(border),
             None => Block::default(),
         };
         let inner = block.inner(area);
         block.render(area, buf);
+        // The title on the top border, its `#[…]` styles applied, and
+        // centred for tmux's `#[align=centre]` (its default menus use it).
+        if self.look.lines.is_some() && !self.title.is_empty() && area.width > 2 {
+            let text = format!(" {} ", self.title);
+            let width = crate::render::runs_width(&text);
+            let centre = self.title.contains("align=centre") || self.title.contains("align=center");
+            let right = area.x + area.width - 1;
+            let x = if centre {
+                area.x + area.width.saturating_sub(width) / 2
+            } else {
+                area.x + 1
+            };
+            crate::render::draw_runs(buf, x.max(area.x + 1), area.y, right, base, &text);
+        }
         for (row, item) in self
             .items
             .iter()
@@ -266,13 +295,57 @@ mod tests {
                 "kill-pane",
             ]),
             0,
+            &|w| w.to_owned(),
         )
         .unwrap();
         assert_eq!(m.items.len(), 4);
         assert_eq!(m.items[1], MenuItem::Separator);
         assert!(!m.selectable(2), "a - name is disabled");
-        assert!(Menu::parse("t".into(), &args(&["Only", "o"]), 0).is_err());
-        assert!(Menu::parse("t".into(), &args(&["-Off", "", "ls"]), 0).is_err());
+        assert!(Menu::parse("t".into(), &args(&["Only", "o"]), 0, &|w| w.to_owned()).is_err());
+        assert!(Menu::parse("t".into(), &args(&["-Off", "", "ls"]), 0, &|w| w.to_owned()).is_err());
+    }
+
+    #[test]
+    fn items_follow_tmuxs_rules_after_expansion() {
+        // "HIDE" expands to nothing, as a false #{?…} would.
+        let expand = |w: &str| {
+            if w == "HIDE" {
+                String::new()
+            } else {
+                w.replace("CMD", "ran")
+            }
+        };
+        let m = Menu::parse(
+            "t".into(),
+            &args(&[
+                "", "HIDE", "h", "x", "One", "1", "CMD-one", "", "", "HIDE", "z", "y", "Two", "2",
+                "two",
+            ]),
+            0,
+            &expand,
+        )
+        .unwrap();
+        // The leading separator goes, the hidden items go, and two
+        // separators in a row are one.
+        let names: Vec<String> = m
+            .items
+            .iter()
+            .map(|i| match i {
+                MenuItem::Command { name, .. } => name.clone(),
+                MenuItem::Separator => "--".into(),
+            })
+            .collect();
+        assert_eq!(names, ["One", "--", "Two"]);
+        // Commands are expanded too.
+        assert_eq!(
+            m.items[0],
+            MenuItem::Command {
+                name: "One".into(),
+                key: Some("1".parse().unwrap()),
+                cmd: "ran-one".into(),
+                disabled: false
+            }
+        );
     }
 
     #[test]
@@ -283,6 +356,7 @@ mod tests {
                 "One", "1", "cmd-one", "", "-Off", "", "ls", "Two", "j", "cmd-two",
             ]),
             0,
+            &|w| w.to_owned(),
         )
         .unwrap();
         assert_eq!(m.key(&k(KeyCode::Down)), OverlayAction::Keep);

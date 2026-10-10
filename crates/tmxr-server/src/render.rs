@@ -98,7 +98,14 @@ fn style_option(spec: &str, vars: &Vars<'_>) -> Style {
 
 /// Draw expanded, styled text at (`x`, `y`) without passing `max_x`.
 /// Returns the column after the text.
-fn draw_runs(buf: &mut Buffer, x: u16, y: u16, max_x: u16, base: Style, text: &str) -> u16 {
+pub(crate) fn draw_runs(
+    buf: &mut Buffer,
+    x: u16,
+    y: u16,
+    max_x: u16,
+    base: Style,
+    text: &str,
+) -> u16 {
     let mut x = x;
     for (st, chunk) in format::styled(text) {
         if x >= max_x {
@@ -112,7 +119,7 @@ fn draw_runs(buf: &mut Buffer, x: u16, y: u16, max_x: u16, base: Style, text: &s
 }
 
 /// Display width of expanded, styled text.
-fn runs_width(text: &str) -> u16 {
+pub(crate) fn runs_width(text: &str) -> u16 {
     format::styled(text)
         .iter()
         .map(|(_, t)| Line::raw(t.as_str()).width() as u16)

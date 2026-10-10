@@ -213,7 +213,8 @@ pub(super) fn run(
             let src = match (a.value('s'), srv.marked_pane()) {
                 (Some(s), _) => target::pane(srv, ctx, Some(s))?.2,
                 (None, Some(m)) => m,
-                (None, None) => return Err("join-pane needs -s or a marked pane".into()),
+                // The marked pane, else the current one, as tmux's.
+                (None, None) => target::pane(srv, ctx, None)?.2,
             };
             let dst = target::pane(srv, ctx, a.value('t'))?.2;
             let size = split_size(a)?;

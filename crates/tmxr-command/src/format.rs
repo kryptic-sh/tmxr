@@ -2,9 +2,13 @@
 //!
 //! Supported: `#{name}`, `#{?cond,then,else}`, `#{E:name}` (expand the
 //! variable's value as a format again), `#{T:name}` (same), `#{=N:x}` /
-//! `#{=-N:x}` (keep the first / last N characters), `#{==:a,b}`, `#{!=:a,b}`,
-//! `#{||:a,b}`, `#{&&:a,b}`, the short aliases `#S #W #I #P #H #h #F #D #T`
-//! and `##` for a literal `#`. Commas inside nested `#{…}` do not split.
+//! `#{=-N:x}` (keep the first / last N characters; `#{=/N/marker:x}` marks a
+//! cut), `#{==:a,b}`, `#{!=:a,b}`, `#{<:a,b}`, `#{>:a,b}`, `#{<=:a,b}`,
+//! `#{>=:a,b}` (compared as strings, as tmux's), `#{m:glob,text}`,
+//! `#{m/r:regex,text}` (`i` ignores case), `#{q:x}` (shell-quoted) and
+//! `#{q/e:x}` (`#` doubled), `#{||:a,b}`, `#{&&:a,b}`, the short aliases
+//! `#S #W #I #P #H #h #F #D #T` and `##` for a literal `#`. Commas inside
+//! nested `#{…}` do not split.
 //!
 //! `#[…]` is left in the expanded text; [`styled`] splits text into styled
 //! runs afterwards.
@@ -158,6 +162,11 @@ fn expand_item(body: &str, ctx: &dyn Context, depth: usize) -> String {
         ("!=:", |a, b| a != b),
         ("||:", |a, b| truthy(a) || truthy(b)),
         ("&&:", |a, b| truthy(a) && truthy(b)),
+        // tmux compares with strcmp: as strings, not numbers.
+        ("<=:", |a, b| a <= b),
+        (">=:", |a, b| a >= b),
+        ("<:", |a, b| a < b),
+        (">:", |a, b| a > b),
     ] {
         if let Some(rest) = body.strip_prefix(op) {
             let parts = split_top(rest);
@@ -170,23 +179,145 @@ fn expand_item(body: &str, ctx: &dyn Context, depth: usize) -> String {
         let raw = ctx.get(name).unwrap_or_default();
         return ex(&raw);
     }
-    if let Some(rest) = body.strip_prefix('=')
-        && let Some((n, inner)) = rest.split_once(':')
-        && let Ok(n) = n.parse::<i64>()
-    {
+    if let Some((flags, rest)) = body.strip_prefix('m').and_then(modifier_args) {
+        let parts = split_top(rest);
+        let pattern = ex(parts.first().copied().unwrap_or_default());
+        let text = ex(parts.get(1).copied().unwrap_or_default());
+        return if format_match(flags, &pattern, &text) {
+            "1"
+        } else {
+            "0"
+        }
+        .to_owned();
+    }
+    if let Some((flags, inner)) = body.strip_prefix('q').and_then(modifier_args) {
+        let text = expand_item(inner, ctx, depth + 1);
+        return if flags.contains('e') || flags.contains('h') {
+            text.replace('#', "##")
+        } else {
+            quote_shell(&text)
+        };
+    }
+    // `=N:` keeps the first N characters, `=-N:` the last; `=/N/marker:`
+    // also puts `marker` where text was cut off.
+    if let Some((args, inner)) = body.strip_prefix('=').and_then(|rest| {
+        rest.split_once(':')
+            .filter(|(n, _)| n.parse::<i64>().is_ok())
+            .or_else(|| modifier_args(rest).filter(|(a, _)| !a.is_empty()))
+    }) {
+        let mut args = args.split('/');
+        let Ok(n) = args.next().unwrap_or_default().parse::<i64>() else {
+            return String::new();
+        };
+        let marker = args.next().unwrap_or_default();
         let text = expand_item(inner, ctx, depth + 1);
         let chars: Vec<char> = text.chars().collect();
         let keep = n.unsigned_abs() as usize;
+        if chars.len() <= keep {
+            return text;
+        }
         return if n >= 0 {
-            chars.iter().take(keep).collect()
+            chars.iter().take(keep).collect::<String>() + marker
         } else {
-            chars[chars.len().saturating_sub(keep)..].iter().collect()
+            marker.to_owned() + &chars[chars.len() - keep..].iter().collect::<String>()
         };
     }
     if body.contains("#{") {
         return ex(body);
     }
     ctx.get(body).unwrap_or_default()
+}
+
+/// A modifier's `/`-separated arguments and what follows its `:`, for
+/// `rest` after the modifier's letter: `:x` gives no arguments, `/ri:x`
+/// gives `ri`. `None` when `rest` is not a modifier at all (a variable whose
+/// name starts with the letter).
+fn modifier_args(rest: &str) -> Option<(&str, &str)> {
+    if let Some(after) = rest.strip_prefix(':') {
+        return Some(("", after));
+    }
+    rest.strip_prefix('/')?.split_once(':')
+}
+
+/// tmux's `m:`: `pattern` as fnmatch(3) with no flags against all of
+/// `text`, or with `r` as an extended regular expression found anywhere in
+/// it; `i` ignores case. A pattern that does not compile matches nothing.
+fn format_match(flags: &str, pattern: &str, text: &str) -> bool {
+    let regex = if flags.contains('r') {
+        pattern.to_owned()
+    } else {
+        glob_regex(pattern)
+    };
+    regex::RegexBuilder::new(&regex)
+        .case_insensitive(flags.contains('i'))
+        .build()
+        .is_ok_and(|r| r.is_match(text))
+}
+
+/// fnmatch(3) with no flags as an anchored regex: `*` any run (`/`
+/// included), `?` any character, `[…]` a class (`[!…]` negated, a leading
+/// `]` literal), `\x` the character x; anything else literal. An unclosed
+/// `[` is a literal `[`.
+fn glob_regex(glob: &str) -> String {
+    let lit = |c: char| regex::escape(c.encode_utf8(&mut [0; 4]));
+    let chars: Vec<char> = glob.chars().collect();
+    let mut out = String::from("^");
+    let mut i = 0;
+    while i < chars.len() {
+        match chars[i] {
+            '*' => out.push_str(".*"),
+            '?' => out.push('.'),
+            '\\' if i + 1 < chars.len() => {
+                i += 1;
+                out.push_str(&lit(chars[i]));
+            }
+            '[' => {
+                let mut j = i + 1;
+                let negate = chars.get(j) == Some(&'!');
+                if negate {
+                    j += 1;
+                }
+                let first = j;
+                while j < chars.len() && (chars[j] != ']' || j == first) {
+                    j += 1;
+                }
+                if j >= chars.len() {
+                    out.push_str(&lit('['));
+                } else {
+                    out.push('[');
+                    if negate {
+                        out.push('^');
+                    }
+                    for &c in &chars[first..j] {
+                        if c == '-' {
+                            out.push('-');
+                        } else {
+                            out.push_str(&lit(c));
+                        }
+                    }
+                    out.push(']');
+                    i = j;
+                }
+            }
+            c => out.push_str(&lit(c)),
+        }
+        i += 1;
+    }
+    out.push('$');
+    out
+}
+
+/// tmux's `q:`: a backslash before each character a shell would read
+/// specially.
+fn quote_shell(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() * 2);
+    for c in s.chars() {
+        if "|&;<>()$`\\\"'*?[# =%".contains(c) {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
 }
 
 /// A colour in a `#[…]` style.
@@ -318,6 +449,8 @@ mod tests {
                 "zero" => "0",
                 "@status_session" => "[#S]",
                 "@self" => "#{E:@self}",
+                "@sp" => "a b;c#d",
+                "@w" => "hjkl",
                 _ => return None,
             }
             .to_owned(),
@@ -326,6 +459,37 @@ mod tests {
 
     fn x(f: &str) -> String {
         expand(f, &ctx)
+    }
+
+    #[test]
+    fn comparisons_matches_quoting_and_cut_markers_are_tmuxs() {
+        // Each as tmux 3.6's display-message -p printed it.
+        for (format, tmux) in [
+            (r"#{>:2,10}", r"1"),
+            (r"#{<:a,b}", r"1"),
+            (r"#{<=:b,b}", r"1"),
+            (r"#{>=:a,b}", r"0"),
+            (r"#{m:*foo*,xfooy}", r"1"),
+            (r"#{m:f?o,foo}", r"1"),
+            (r"#{m:[!a]x,bx}", r"1"),
+            (r"#{m:[!a]x,ax}", r"0"),
+            (r"#{m:foo,FOO}", r"0"),
+            (r"#{m/i:FOO,foo}", r"1"),
+            (r"#{m:[a-c]z,bz}", r"1"),
+            (r"#{m:a\*,a*}", r"1"),
+            (r"#{m:a\*,ab}", r"0"),
+            (r"#{m/r:(copy|view)-mode,copy-mode}", r"1"),
+            (r"#{m/r:^view,copy-mode}", r"0"),
+            (r"#{m/ri:COPY,copy-mode}", r"1"),
+            (r"#{q:@sp}", r"a\ b\;c\#d"),
+            (r"#{q/e:@sp}", r"a b;c##d"),
+            (r"#{=/2/...:@w}", r"hj..."),
+            (r"#{=/-2/...:@w}", r"...kl"),
+            (r"#{=/9/...:@w}", r"hjkl"),
+            (r"#{=2:@w}", r"hj"),
+        ] {
+            assert_eq!(x(format), tmux, "{format}");
+        }
     }
 
     #[test]

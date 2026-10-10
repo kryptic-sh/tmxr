@@ -8,6 +8,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **tmux's window menu on `prefix <`**, bound as tmux 3.6 binds it.
+- **More of tmux's format language**: `#{<:…}`, `#{>:…}`, `#{<=:…}`, `#{>=:…}`
+  (string comparisons, as tmux's), `#{m:glob,text}` and `#{m/r:regex,text}`
+  (with `i` for any case), `#{q:…}` and `#{q/e:…}` quoting, and
+  `#{=/N/marker:…}` truncation, each checked against tmux 3.6's output.
 - **`main-horizontal-mirrored` and `main-vertical-mirrored` layouts** (main pane
   below or to the right), in `next-layout`'s order and on `prefix M-6` / `M-7`,
   as tmux 3.5 added them.
@@ -101,6 +106,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`display-menu` follows tmux's item rules**: an item whose name expands to
+  nothing is left out (tmxr showed a separator), and a separator at the top or
+  after another is dropped. A menu title's `#[…]` styles are applied, and
+  `#[align=centre]` centres it, instead of being shown as text.
+- **`swap-window`, `join-pane` and `move-pane` without `-s`** use the current
+  window or pane when none is marked, as tmux's do; they failed with "needs -s
+  or a marked pane".
 - **`new-session -d -x W -y H` makes a W x H window**, as tmux does; a row was
   taken off for the status line.
 - **`kill-server` could fail on Linux and macOS** with "server closed the
