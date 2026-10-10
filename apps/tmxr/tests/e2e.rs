@@ -4154,7 +4154,7 @@ fn a_brace_block_runs_as_commands() {
         "F5",
         "if-shell -F 1 { set-option -g @a x ; set-option -g @b y }",
     ]);
-    s.send(b"[15~");
+    s.send(b"\x1b[15~");
     t.wait_run(&["display-message", "-p", "#{@a}#{@b}"], "both ran", |o| {
         o.trim() == "xy"
     });
@@ -4377,7 +4377,7 @@ fn tmuxs_pane_menu_works_from_the_prefix_and_the_right_button() {
     let text = s.text();
     assert!(!text.contains("Go To Top"), "{text}");
     assert!(!text.contains("Search For"), "{text}");
-    s.send(b"");
+    s.send(b"\x1b");
     s.wait_for("closed", |text| !text.contains("Horizontal Split"));
     // The right button on a word: the menu offers that word, and Copy
     // puts it in a buffer.
@@ -4463,7 +4463,12 @@ fn tmuxs_status_line_menus_act_on_what_was_clicked() {
     s.wait_for("the prompt", |text| {
         text.contains("clickme") && !text.contains("Swap Right")
     });
-    s.send(b"");
+    s.send(b"\x1b");
+    // The prompt gone, the status line back: a click sent along with the
+    // Escape would be read as part of an Alt+Escape.
+    s.wait_for("the prompt closed", |text| {
+        text.lines().last().is_some_and(|l| l.contains("LEFTPART"))
+    });
     // On the left part: the session's menu; New Window adds one.
     s.click(2, find("LEFTPART"), ROWS - 1);
     s.wait_for("the session menu", |text| text.contains("New Window"));
