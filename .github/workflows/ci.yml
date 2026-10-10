@@ -362,6 +362,44 @@ jobs:
         working-directory: navigator
         run: bash tests/integration.sh
 
+  # tmxr against tmux itself (crates/tmxr-compat-oracle): the same steps in
+  # both, compared. The corpus is measured against one tmux, built here from
+  # its release and checked, not the runner's.
+  oracle:
+    name: tmux compatibility oracle
+    runs-on: ubuntu-latest
+    env:
+      TMUX_VERSION: '3.6'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          toolchain: stable
+          cache: false
+      - run: rustup update --no-self-update stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build tmux ${{ env.TMUX_VERSION }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libevent-dev libncurses-dev bison pkg-config
+          url="https://github.com/tmux/tmux/releases/download/$TMUX_VERSION/tmux-$TMUX_VERSION.tar.gz"
+          curl -fsSL "$url" | tar -xz -C "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP/tmux-$TMUX_VERSION"
+          ./configure --prefix="$RUNNER_TEMP/tmux"
+          make -j"$(nproc)"
+          make install
+      - name: Check it is that tmux
+        run: |
+          "$RUNNER_TEMP/tmux/bin/tmux" -V
+          "$RUNNER_TEMP/tmux/bin/tmux" -V | grep -qx "tmux $TMUX_VERSION"
+      - run: cargo build --locked -p tmxr-cli
+      - name: Run the oracle
+        run: |
+          export TMUX_BIN="$RUNNER_TEMP/tmux/bin/tmux"
+          export TMXR_BIN="$GITHUB_WORKSPACE/target/debug/tmxr"
+          export ORACLE_REQUIRE_TMUX=1
+          cargo test --locked -p tmxr-compat-oracle -- --nocapture
+
   build:
     name: Build ${{ matrix.target }}
     needs: [test]
@@ -630,6 +668,7 @@ jobs:
         pipe-acl,
         socket-acl,
         handoff,
+        oracle,
       ]
     if: >-
       github.event_name == 'workflow_dispatch' || (github.event_name == 'push'
@@ -977,6 +1016,7 @@ jobs:
         pipe-acl,
         socket-acl,
         handoff,
+        oracle,
         smoke,
         build,
         publish-github-release,

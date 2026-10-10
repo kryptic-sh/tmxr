@@ -8,6 +8,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A tmux compatibility oracle** (`crates/tmxr-compat-oracle`): the same steps
+  run in tmux 3.6 and tmxr, their results compared, over a corpus of layouts,
+  formats, list commands, popups, menus and the mouse; CI runs it against tmux
+  built from its release.
 - **`set-option -F` and `set-window-option -F`** expand the value as a format
   for the target (else the current pane) before setting it, as tmux's.
 - **Pane scrollbars, as tmux 3.5's**: `pane-scrollbars` (`off`, `modal` for copy
@@ -16,6 +20,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   columns it takes, hides it on the alternate screen, and its slider shows where
   the view is; clicking above or below the slider pages through the history and
   dragging it scrolls (`copy-mode -S`), bound as tmux binds them.
+
+### Fixed
+
+- **Sessions list in tmux's order**, by name: `list-sessions`,
+  `list-windows -a`, `list-panes -a` and `switch-client -n` / `-p` went by
+  creation order. Found by the oracle.
 
 ## [0.4.0] - 2026-10-11
 

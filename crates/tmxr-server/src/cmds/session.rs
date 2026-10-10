@@ -191,7 +191,11 @@ pub(super) fn run(
             }
         }
         "list-sessions" => {
-            for s in srv.sessions.values() {
+            for s in srv
+                .sessions_by_name()
+                .iter()
+                .filter_map(|s| srv.sessions.get(s))
+            {
                 let window = s.current_window();
                 let vars = Vars {
                     srv,
@@ -257,7 +261,7 @@ pub(super) fn run(
                     .filter(|s| srv.sessions.contains_key(s))
                     .ok_or("no last session")?
             } else if a.has('n') || a.has('p') {
-                let ids: Vec<SessionId> = srv.sessions.keys().copied().collect();
+                let ids = srv.sessions_by_name();
                 let i = ids.iter().position(|s| *s == cur).unwrap_or(0);
                 let n = ids.len();
                 if a.has('n') {

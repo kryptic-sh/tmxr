@@ -1,0 +1,71 @@
+# Splits, sizes and scrollbars. Expected values are tmux 3.6's, as its
+# list-panes printed them for the same steps.
+
+[[cases]]
+name = "new_session_size_is_the_window_size"
+checks = [{ format = "#{window_width}x#{window_height}", expect = "100x30" }]
+
+[[cases]]
+name = "split_h_gives_the_new_pane_the_smaller_half"
+steps = [{ run = "split-window -h -t o" }]
+checks = [{ command = "list-panes -t o -F '#{pane_left}+#{pane_width}'", expect = "0+50\n51+49" }]
+
+[[cases]]
+name = "split_v_gives_the_new_pane_the_smaller_half"
+steps = [{ run = "split-window -v -t o" }]
+checks = [{ command = "list-panes -t o -F '#{pane_top}+#{pane_height}'", expect = "0+15\n16+14" }]
+
+[[cases]]
+name = "split_l_sizes_the_new_pane"
+steps = [{ run = "split-window -h -l 30 -t o" }]
+checks = [{ command = "list-panes -t o -F '#{pane_width}'", expect = "69\n30" }]
+
+[[cases]]
+name = "split_b_l_sizes_the_pane_before"
+steps = [{ run = "split-window -h -b -l 30 -t o" }]
+checks = [{ command = "list-panes -t o -F '#{pane_width}'", expect = "30\n69" }]
+
+[[cases]]
+name = "scrollbars_on_take_a_column"
+steps = [{ run = "set -g pane-scrollbars on" }, { run = "split-window -h -t o" }]
+checks = [{ command = "list-panes -t o -F '#{pane_left}+#{pane_width}'", expect = "0+49\n51+48" }]
+
+[[cases]]
+name = "scrollbars_on_the_left"
+steps = [
+  { run = "set -g pane-scrollbars on" },
+  { run = "set -g pane-scrollbars-position left" },
+  { run = "split-window -h -t o" },
+]
+checks = [{ command = "list-panes -t o -F '#{pane_left}+#{pane_width}'", expect = "1+49\n52+48" }]
+
+[[cases]]
+name = "scrollbars_width_and_pad"
+steps = [
+  { run = "set -g pane-scrollbars on" },
+  { run = "set -g pane-scrollbars-position left" },
+  { run = "set -g pane-scrollbars-style bg=black,fg=white,width=2,pad=1" },
+  { run = "split-window -h -t o" },
+]
+checks = [{ command = "list-panes -t o -F '#{pane_left}+#{pane_width}'", expect = "3+47\n54+46" }]
+
+[[cases]]
+name = "scrollbars_modal_only_in_copy_mode"
+steps = [
+  { run = "set -g pane-scrollbars modal" },
+  { run = "set -g pane-scrollbars-position left" },
+  { run = "set -g pane-scrollbars-style bg=black,fg=white,width=2,pad=1" },
+  { run = "split-window -h -t o" },
+]
+checks = [{ command = "list-panes -t o -F '#{pane_left}+#{pane_width}'", expect = "0+50\n51+49" }]
+
+[[cases]]
+name = "scrollbars_modal_in_copy_mode"
+steps = [
+  { run = "set -g pane-scrollbars modal" },
+  { run = "set -g pane-scrollbars-position left" },
+  { run = "set -g pane-scrollbars-style bg=black,fg=white,width=2,pad=1" },
+  { run = "split-window -h -t o" },
+  { run = "copy-mode -t o:0.0" },
+]
+checks = [{ command = "list-panes -t o -F '#{pane_left}+#{pane_width}'", expect = "3+47\n51+49" }]

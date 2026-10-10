@@ -2293,6 +2293,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tmxr-compat-oracle"
+version = "0.4.0"
+dependencies = [
+ "portable-pty",
+ "serde",
+ "tempfile",
+ "toml",
+ "vt100",
+]
+
+[[package]]
 name = "tmxr-config"
 version = "0.4.0"
 dependencies = [

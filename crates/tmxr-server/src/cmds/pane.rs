@@ -257,8 +257,9 @@ pub(super) fn run(
                 } else {
                     Some(target::session(srv, ctx, a.value('t'))?)
                 };
-                srv.sessions
-                    .values()
+                srv.sessions_by_name()
+                    .iter()
+                    .filter_map(|s| srv.sessions.get(s))
                     .filter(|s| only.is_none_or(|o| o == s.id))
                     .flat_map(|s| s.windows.iter().map(|(i, w)| (s.id, *i, *w)))
                     .collect()

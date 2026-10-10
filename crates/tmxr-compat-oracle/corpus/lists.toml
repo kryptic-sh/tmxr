@@ -1,0 +1,18 @@
+# List commands with -F and -f, on a second session, window and a buffer.
+
+[[cases]]
+name = "list_commands_take_formats_and_filters"
+steps = [
+  { run = "new-window -d -t o:1" },
+  { run = "new-session -d -s b -x 100 -y 30" },
+  { run = "split-window -h -t o:0" },
+  { run = "set-buffer -b one 'hello world'" },
+]
+checks = [
+  { command = "list-sessions -F '#{session_name} #{session_windows}'", expect = "b 1\no 2" },
+  { command = "list-sessions -F '#{session_name}' -f '#{==:#{session_name},b}'", expect = "b" },
+  { command = "list-windows -a -F '#{session_name}:#{window_index}'", expect = "b:0\no:0\no:1" },
+  { command = "list-panes -s -t o -F '#{window_index}.#{pane_index}'", expect = "0.0\n0.1\n1.0" },
+  { command = "list-panes -a -F '#{session_name}:#{window_index}.#{pane_index}' -f '#{pane_active}'", expect = "b:0.0\no:0.1\no:1.0" },
+  { command = "list-buffers -F '#{buffer_name} #{buffer_size} #{buffer_sample}'", expect = "one 11 hello world" },
+]

@@ -1,0 +1,12 @@
+# Known differences from tmux: run and reported by known_divergences_report,
+# never failing. Move a case to its corpus file once it matches.
+
+[[cases]]
+name = "main_horizontal_sizes_the_main_pane"
+# tmux gives the main pane main-pane-height (24 lines); tmxr gives it 60%.
+steps = [
+  { run = "split-window -t o" },
+  { run = "split-window -t o" },
+  { run = "select-layout -t o main-horizontal" },
+]
+checks = [{ command = "list-panes -t o -F '#{pane_top}+#{pane_height}'" }]

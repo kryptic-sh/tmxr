@@ -1,0 +1,92 @@
+# Where popups and menus go: the corner tmux 3.6 drew for the same steps,
+# a 100x30 client with its window split left/right (the right pane active).
+
+[[cases]]
+name = "popup_r_s"
+attach = true
+unix_only = true
+steps = [
+  { run = "split-window -h -t o" },
+  { spawn = "display-popup -x R -y S -w 20 -h 5 'sleep 30'" },
+]
+checks = [{ screen_find = "┌", expect = "80,24" }]
+
+[[cases]]
+name = "popup_number_formats"
+attach = true
+unix_only = true
+steps = [
+  { run = "split-window -h -t o" },
+  { spawn = "display-popup -x '#{pane_index}' -y 3 -w 20 -h 5 'sleep 30'" },
+]
+checks = [{ screen_find = "┌", expect = "1,0" }]
+
+[[cases]]
+name = "popup_numbers_are_left_and_bottom"
+attach = true
+unix_only = true
+steps = [
+  { run = "split-window -h -t o" },
+  { spawn = "display-popup -x 3 -y 12 -w 20 -h 5 'sleep 30'" },
+]
+checks = [{ screen_find = "┌", expect = "3,7" }]
+
+[[cases]]
+name = "popup_centred"
+attach = true
+unix_only = true
+steps = [
+  { run = "split-window -h -t o" },
+  { spawn = "display-popup -w 20 -h 5 'sleep 30'" },
+]
+checks = [{ screen_find = "┌", expect = "39,11" }]
+
+[[cases]]
+name = "popup_by_the_pane"
+attach = true
+unix_only = true
+steps = [
+  { run = "split-window -h -t o" },
+  { spawn = "display-popup -x P -y P -w 20 -h 5 'sleep 30'" },
+]
+checks = [{ screen_find = "┌", expect = "51,24" }]
+
+[[cases]]
+name = "popup_variables"
+attach = true
+unix_only = true
+steps = [
+  { run = "split-window -h -t o" },
+  { spawn = "display-popup -x '#{popup_pane_right}' -y '#{popup_centre_y}' -w 20 -h 5 'sleep 30'" },
+]
+checks = [{ screen_find = "┌", expect = "80,11" }]
+
+[[cases]]
+name = "menu_numbers"
+attach = true
+unix_only = true
+steps = [
+  { run = "split-window -h -t o" },
+  { spawn = "display-menu -T t -x 3 -y 12 aaa a '' bbb b ''" },
+]
+checks = [{ screen_find = "┌", expect = "3,8" }]
+
+[[cases]]
+name = "menu_centred"
+attach = true
+unix_only = true
+steps = [
+  { run = "split-window -h -t o" },
+  { spawn = "display-menu -T t aaa a '' bbb b ''" },
+]
+checks = [{ screen_find = "┌", expect = "44,12" }]
+
+[[cases]]
+name = "menu_r_s"
+attach = true
+unix_only = true
+steps = [
+  { run = "split-window -h -t o" },
+  { spawn = "display-menu -T t -x R -y S aaa a '' bbb b ''" },
+]
+checks = [{ screen_find = "┌", expect = "89,25" }]

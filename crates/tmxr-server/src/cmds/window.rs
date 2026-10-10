@@ -243,7 +243,7 @@ pub(super) fn run(
         }
         "list-windows" => {
             let sessions: Vec<SessionId> = if a.has('a') {
-                srv.sessions.keys().copied().collect()
+                srv.sessions_by_name()
             } else {
                 vec![target::session(srv, ctx, a.value('t'))?]
             };

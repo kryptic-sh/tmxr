@@ -157,6 +157,14 @@ impl Server {
 
     /// Whether `window` is the current window of a session holding it:
     /// alerts are for windows out of sight.
+    /// Every session, in tmux's order: by name (`strcmp`), which lists show
+    /// and `switch-client -n` / `-p` step through.
+    pub fn sessions_by_name(&self) -> Vec<SessionId> {
+        let mut all: Vec<_> = self.sessions.values().collect();
+        all.sort_by(|a, b| a.name.cmp(&b.name));
+        all.into_iter().map(|s| s.id).collect()
+    }
+
     pub fn window_is_current(&self, window: WindowId) -> bool {
         self.sessions
             .values()
