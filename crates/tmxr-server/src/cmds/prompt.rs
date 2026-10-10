@@ -76,7 +76,6 @@ pub(super) fn run(
             srv.mark_client_dirty(c);
         }
         "display-popup" => {
-            // tmux's -k and -N are accepted and not followed.
             let (c, pane) = shown_on(srv, ctx, a)?;
             if a.has('C') {
                 if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut())
@@ -86,6 +85,45 @@ pub(super) fn run(
                 }
                 srv.mark_client_dirty(c);
                 return Ok(true);
+            }
+            // tmux's: on an open popup, display-popup changes it (its title,
+            // empty without -T, styles, border and closing); over a menu it
+            // does nothing.
+            let title = a
+                .value('T')
+                .map(|t| expand_for(srv, ctx, pane, t))
+                .unwrap_or_default();
+            let look = crate::overlay::BoxLook::from_args(a)?;
+            let border = !a.has('B') && look.lines.is_some();
+            let close_on_exit = a.count('E').min(2);
+            let closing = a.has('N') || a.has('E') || a.has('k');
+            match srv
+                .clients
+                .get_mut(&c)
+                .and_then(|c| c.att.as_mut())
+                .and_then(|att| att.overlay.as_mut())
+            {
+                Some(Overlay::Popup(p)) => {
+                    p.title = title;
+                    if look.style.is_some() {
+                        p.look.style = look.style;
+                    }
+                    if look.border_style.is_some() {
+                        p.look.border_style = look.border_style;
+                    }
+                    if a.has('B') || a.has('b') {
+                        p.look.lines = look.lines;
+                        p.set_border(border);
+                    }
+                    if closing {
+                        p.close_on_exit = close_on_exit;
+                        p.any_key = a.has('k');
+                    }
+                    srv.mark_client_dirty(c);
+                    return Ok(true);
+                }
+                Some(Overlay::Menu(_)) => return Ok(true),
+                _ => {}
             }
             let (cols, rows) = client_size(srv, c)?;
             let places = places(srv, ctx, c, pane);
@@ -107,12 +145,6 @@ pub(super) fn run(
                     .unwrap_or_else(crate::util::home_dir),
             };
             let env = super::env_flags(a)?;
-            let title = a
-                .value('T')
-                .map(|t| expand_for(srv, ctx, pane, t))
-                .unwrap_or_default();
-            let look = crate::overlay::BoxLook::from_args(a)?;
-            let border = !a.has('B') && look.lines.is_some();
             let inner = crate::popup::Popup::inner_of(rect, border);
             let id = srv.next_pane;
             let started = srv.start_pty(
@@ -134,7 +166,8 @@ pub(super) fn run(
                 border,
                 title,
                 look,
-                close_on_exit: a.count('E'),
+                close_on_exit,
+                any_key: a.has('k'),
                 exited: false,
                 extended_keys: srv.cfg.extended_keys == "always",
             };

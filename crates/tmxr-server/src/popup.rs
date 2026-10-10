@@ -6,7 +6,7 @@
 //! PTY's events carry an id from the pane id space and are routed here when
 //! no pane has that id.
 
-use crossterm::event::KeyEvent;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Rect;
 use tmxr_term::{Emulator, Pty, encode_key, encode_paste};
 
@@ -29,8 +29,11 @@ pub struct Popup {
     /// `-s`, `-S` and `-b`; `border` says whether there is one at all.
     pub look: crate::overlay::BoxLook,
     /// tmux's `-E` count: 0 keeps the popup open after its command exits
-    /// (a key then closes it), 1 closes it then, 2 only when it succeeded.
+    /// (Escape or C-c then closes it), 1 closes it then, 2 only when it
+    /// succeeded.
     pub close_on_exit: usize,
+    /// `-k`: any key closes the popup once its command has exited.
+    pub any_key: bool,
     pub exited: bool,
     /// `extended-keys always`, for encoding keys as for a pane.
     pub extended_keys: bool,
@@ -65,6 +68,19 @@ impl Popup {
         let y = self.rect.y.min(rows.saturating_sub(h));
         let before = self.inner();
         self.rect = Rect::new(x, y, w, h);
+        self.refit(before);
+    }
+
+    /// Draw a border or not (`display-popup -b` / `-B` on an open popup),
+    /// the command's screen resized to what is inside.
+    pub fn set_border(&mut self, border: bool) {
+        let before = self.inner();
+        self.border = border;
+        self.refit(before);
+    }
+
+    /// Resize the command's screen if its area changed from `before`.
+    fn refit(&mut self, before: Rect) {
         let inner = self.inner();
         if (inner.width, inner.height) != (before.width, before.height) {
             let (iw, ih) = (inner.width.max(1), inner.height.max(1));
@@ -75,9 +91,22 @@ impl Popup {
         }
     }
 
+    /// A key, as tmux 3.6's `popup_key_cb`: Escape or C-c closes a popup
+    /// whose command has exited, or one its command's exit would not close
+    /// (no `-E`); with `-k` any key closes it once the command has exited.
+    /// The rest go to the command while it runs.
     pub fn key(&mut self, ev: &KeyEvent) -> OverlayAction {
-        if self.exited {
+        let escape = (ev.code == KeyCode::Esc && ev.modifiers.is_empty())
+            || (ev.code == KeyCode::Char('c') && ev.modifiers == KeyModifiers::CONTROL);
+        if escape && (self.exited || self.close_on_exit == 0) {
             return OverlayAction::Close;
+        }
+        if self.exited {
+            return if self.any_key {
+                OverlayAction::Close
+            } else {
+                OverlayAction::Keep
+            };
         }
         let bytes = encode_key(ev, self.emu.input_modes(), self.extended_keys);
         if !bytes.is_empty() {

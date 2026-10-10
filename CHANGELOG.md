@@ -8,6 +8,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`display-popup -k`, `-N`, and `display-popup` on an open popup**, as tmux's:
+  `-k` lets any key close a popup whose command has exited, and a second
+  `display-popup` changes the open popup (title, styles, border and, with `-N`,
+  `-E` or `-k`, how it closes) instead of replacing it.
 - **`paste-buffer -r` and `-s separator`**, as tmux's.
 - **Menus take the mouse, as tmux 3.6's**: one the mouse opened (or
   `display-menu -M`) highlights the item under the pointer and runs the one the
@@ -34,6 +38,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Popups close on tmux's keys**: a popup whose command has exited closes on
+  Escape or C-c (any key with `-k`), not on any key; and a running popup without
+  `-E` closes on Escape or C-c, as tmux's does.
 - **`paste-buffer` sends what tmux's sends**: each newline as a carriage return
   (unless `-r` or `-s`), bracketed only with `-p` (it bracketed whenever the
   program asked), and to the target pane alone, not every synchronized pane.

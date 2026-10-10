@@ -90,3 +90,97 @@ steps = [
   { spawn = "display-menu -T t -x R -y S aaa a '' bbb b ''" },
 ]
 checks = [{ screen_find = "┌", expect = "89,25" }]
+
+# Which keys close a popup, and display-popup on one already open.
+
+[[cases]]
+name = "a_finished_popup_ignores_q"
+attach = true
+unix_only = true
+steps = [
+  { spawn = "display-popup 'echo POPDONE'" },
+  { wait_text = "POPDONE" },
+  { keys = "q" },
+  { sleep = 0.5 },
+]
+checks = [{ screen_contains = "POPDONE", expect = true }]
+
+[[cases]]
+name = "escape_closes_a_finished_popup"
+attach = true
+unix_only = true
+steps = [
+  { spawn = "display-popup 'echo POPDONE'" },
+  { wait_text = "POPDONE" },
+  { keys = "\u001b" },
+  { sleep = 0.5 },
+]
+checks = [{ screen_contains = "POPDONE", expect = false }]
+
+[[cases]]
+name = "k_lets_any_key_close_a_finished_popup"
+attach = true
+unix_only = true
+steps = [
+  { spawn = "display-popup -k 'echo POPDONE'" },
+  { wait_text = "POPDONE" },
+  { keys = "q" },
+  { sleep = 0.5 },
+]
+checks = [{ screen_contains = "POPDONE", expect = false }]
+
+[[cases]]
+name = "escape_closes_a_running_popup_without_e"
+attach = true
+unix_only = true
+steps = [
+  { spawn = "display-popup 'echo POPRUN; sleep 30'" },
+  { wait_text = "POPRUN" },
+  { keys = "\u001b" },
+  { sleep = 0.5 },
+]
+checks = [{ screen_contains = "POPRUN", expect = false }]
+
+[[cases]]
+name = "escape_goes_to_a_running_popup_with_e"
+attach = true
+unix_only = true
+steps = [
+  { spawn = "display-popup -E 'echo POPRUN; sleep 30'" },
+  { wait_text = "POPRUN" },
+  { keys = "\u001b" },
+  { sleep = 0.5 },
+]
+checks = [{ screen_contains = "POPRUN", expect = true }]
+
+[[cases]]
+name = "display_popup_retitles_an_open_popup"
+attach = true
+unix_only = true
+steps = [
+  { spawn = "display-popup -T First 'echo POPRUN; sleep 30'" },
+  { wait_text = "First" },
+  { spawn = "display-popup -T Second" },
+  { sleep = 0.5 },
+]
+checks = [
+  { screen_contains = "Second", expect = true },
+  { screen_contains = "First", expect = false },
+  { screen_contains = "POPRUN", expect = true },
+]
+
+[[cases]]
+name = "display_popup_without_t_clears_the_title"
+attach = true
+unix_only = true
+steps = [
+  { spawn = "display-popup -T First 'echo POPRUN; sleep 30'" },
+  { wait_text = "First" },
+  { spawn = "display-popup -B" },
+  { sleep = 0.5 },
+]
+checks = [
+  { screen_contains = "First", expect = false },
+  { screen_contains = "POPRUN", expect = true },
+  { screen_find = "┌", expect = "none" },
+]

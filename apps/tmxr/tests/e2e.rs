@@ -3102,13 +3102,22 @@ fn display_popup_runs_a_command_over_the_panes() {
         "the pane got the popup's keys:\n{pane}"
     );
 
-    // Without -E it stays after its command, until a key.
+    // Without -E it stays after its command, until Escape (or C-c), as
+    // tmux's; other keys only with -k.
     t.run(&["display-popup", "echo DONE-HERE"]);
     s.wait_for("the finished popup", |text| text.contains("DONE-HERE"));
     std::thread::sleep(Duration::from_millis(300));
     assert!(s.text().contains("DONE-HERE"), "closed by itself");
     s.send(b"q");
-    s.wait_for("closed by a key", |text| !text.contains("DONE-HERE"));
+    std::thread::sleep(Duration::from_millis(300));
+    assert!(s.text().contains("DONE-HERE"), "closed by q without -k");
+    s.send(b"\x1b");
+    s.wait_for("closed by Escape", |text| !text.contains("DONE-HERE"));
+    t.run(&["display-popup", "-k", "echo DONE-ANYKEY"]);
+    s.wait_for("the -k popup", |text| text.contains("DONE-ANYKEY"));
+    std::thread::sleep(Duration::from_millis(300));
+    s.send(b"q");
+    s.wait_for("closed by any key", |text| !text.contains("DONE-ANYKEY"));
 
     // -C closes a running popup and ends its command.
     let marker = t.dir.path().join("late-marker");
