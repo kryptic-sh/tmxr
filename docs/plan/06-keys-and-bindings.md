@@ -113,6 +113,7 @@ vim-tmux-navigator; **(sens)** = tmux-sensible; **(yank)** = tmux-yank;
 | `r`                     | `refresh-client`                                     | Redraw                                                         | (tmux)                |
 | `y`                     | copy the pane's current command line to clipboard    | Copy the command line to the clipboard                         | (yank) stretch        |
 | `Y`                     | copy `#{pane_current_path}` to clipboard             | Copy the pane's working directory to the clipboard             | (yank)                |
+| `y`                     | `copy-command-line`                                  | Copy the shell's command line to the clipboard                 | (yank)                |
 | `C-s` / `C-r`           | resurrect save / restore                             | Save sessions / Restore saved sessions                         | (res) stretch         |
 
 Dropped from tmux's defaults because the config reuses the key: `'`

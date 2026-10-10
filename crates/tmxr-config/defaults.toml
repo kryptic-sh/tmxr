@@ -167,6 +167,8 @@ restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "to
 "C-r" = { cmd = "resurrect-restore", note = "Restore saved sessions" }
 # tmux-yank.
 "Y" = { cmd = 'set-buffer -w "#{pane_current_path}"', note = "Copy the pane's working directory to the clipboard" }
+# tmux-yank: the shell's command line to the clipboard.
+"y" = { cmd = "copy-command-line", note = "Copy the shell's command line to the clipboard" }
 # tmux built-ins kept as they are.
 "C-b" = { cmd = "send-prefix", note = "Send the prefix key" }
 "s" = { cmd = "choose-tree -Zs", note = "Switch session" }

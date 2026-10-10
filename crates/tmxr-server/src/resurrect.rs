@@ -125,7 +125,7 @@ pub fn dir(endpoint: &Endpoint) -> Result<PathBuf, String> {
 /// The pane's foreground program, read now: the cache `refresh_commands`
 /// keeps is only as fresh as the last status tick, which a save right after
 /// a program started would miss.
-fn foreground(srv: &Server, pane: PaneId) -> Option<String> {
+pub fn foreground(srv: &Server, pane: PaneId) -> Option<String> {
     srv.panes
         .get(&pane)
         .and_then(|p| tmxr_term::process::foreground_command(&p.pty))

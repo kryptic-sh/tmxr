@@ -315,6 +315,10 @@ impl Server {
                 if !replies.is_empty() {
                     let _ = p.pty.write(&replies);
                 }
+                self.copy_line_output(pid);
+                let Some(p) = self.panes.get_mut(&pid) else {
+                    return;
+                };
                 if let Some(pipe) = &p.pipe {
                     pipe.send(&bytes);
                 }

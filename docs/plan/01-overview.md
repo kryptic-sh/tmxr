@@ -63,7 +63,8 @@ are MVP.
   the server starts with nothing to attach to
   ([11-resurrect.md](11-resurrect.md)).
 - **Clipboard integration** à la `tmux-yank` beyond plain `y` in copy mode
-  (`prefix Y` copy the pane's directory, `Y` / `M-y` copy-and-paste).
+  (`prefix y` copy the shell's command line, `prefix Y` copy the pane's
+  directory, `Y` / `M-y` copy-and-paste).
 - `tmux-sensible`'s binds and options (they cost almost nothing once the key
   tables exist, so they are planned as MVP defaults).
 

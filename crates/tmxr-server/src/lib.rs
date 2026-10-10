@@ -11,6 +11,7 @@ pub mod backend;
 pub mod cmds;
 pub mod conn;
 pub mod copy;
+pub mod copyline;
 pub mod hooks;
 pub mod jobs;
 pub mod keys;

@@ -16,6 +16,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   reach, as with tmux.
 - `attach -r`: a read-only client, whose keys reach no pane and whose commands
   are limited to attaching, detaching, switching and looking.
+- **`prefix y`** copies the shell's command line to the clipboard, as
+  tmux-yank's does, through the new `copy-command-line` command: tmxr moves the
+  shell's cursor to the line's start and end itself (`Home` / `End` for
+  PowerShell and cmd, `C-a` / `C-e` elsewhere) and waits for the pane to settle
+  rather than for a fixed time.
 
 ### Changed
 

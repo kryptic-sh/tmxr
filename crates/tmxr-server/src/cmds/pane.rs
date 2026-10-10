@@ -162,6 +162,10 @@ pub(super) fn run(
             let cwd = cwd_arg(srv, ctx, Some(first), a);
             srv.respawn_pane(first, pos.to_vec(), cwd)?;
         }
+        "copy-command-line" => {
+            let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
+            srv.copy_command_line(pid)?;
+        }
         "pipe-pane" => {
             let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
             if a.has('I') {

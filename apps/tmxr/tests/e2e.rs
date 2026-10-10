@@ -3294,3 +3294,41 @@ fn server_access_lists_who_may_connect() {
         );
     }
 }
+
+#[test]
+fn prefix_y_copies_the_shells_command_line() {
+    let t = Tmxr::new("yankline");
+    // A shell with line editing: dash (Ubuntu's /bin/sh) has none.
+    let (new, shell) = if cfg!(windows) {
+        (vec!["new", "-s", "yk"], "cmd")
+    } else {
+        (
+            vec!["new", "-s", "yk", "bash --norc --noprofile -i"],
+            "bash",
+        )
+    };
+    let s = t.attach(&new);
+    s.wait_for("status line", |text| text.contains("yk"));
+    t.wait_run(
+        &[
+            "display-message",
+            "-p",
+            "-t",
+            "yk",
+            "#{pane_current_command}",
+        ],
+        "the shell",
+        |o| o.trim().eq_ignore_ascii_case(shell),
+    );
+    // Typed, not run, with the cursor left in the middle of it.
+    s.send(b"echo yank-me-now");
+    s.wait_for("the typing", |text| text.contains("echo yank-me-now"));
+    for _ in 0..4 {
+        s.send(b"\x1b[D");
+    }
+    s.send(PREFIX);
+    s.send(b"y");
+    t.wait_run(&["show-buffer"], "the command line copied", |o| {
+        o == "echo yank-me-now"
+    });
+}

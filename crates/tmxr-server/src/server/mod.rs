@@ -145,6 +145,8 @@ pub struct Server {
     pub prompt_history: BTreeMap<String, Vec<String>>,
     /// `wait-for` channels and the command clients waiting on them.
     pub waits: crate::waits::Waits,
+    /// `copy-command-line` under way, waiting for its pane to settle.
+    pub copy_line: Option<crate::copyline::CopyLine>,
     /// The user running the server, always admitted.
     pub owner: crate::access::UserId,
     /// Other users `server-access` admits; shared with the accept thread.
@@ -240,6 +242,7 @@ impl Server {
             global_env: Environment::default(),
             prompt_history: BTreeMap::new(),
             waits: crate::waits::Waits::default(),
+            copy_line: None,
             owner: String::new(),
             acl: crate::access::SharedAcl::default(),
             socket_access: tmxr_proto::socket::Access::Owner,
@@ -260,8 +263,13 @@ impl Server {
     pub fn run(mut self, rx: Receiver<Event>) {
         let tick = Duration::from_millis(250);
         loop {
-            // Wake for a pending DoubleClick on time, not at the next tick.
-            let wait = crate::mouse::next_double_click(&self).map_or(tick, |due| {
+            // Wake for a pending DoubleClick or command-line copy on time,
+            // not at the next tick.
+            let due = crate::mouse::next_double_click(&self)
+                .into_iter()
+                .chain(self.copy_line.map(|c| c.due()))
+                .min();
+            let wait = due.map_or(tick, |due| {
                 due.saturating_duration_since(Instant::now()).min(tick)
             });
             match rx.recv_timeout(wait) {
@@ -669,6 +677,7 @@ impl Server {
 
     fn tick(&mut self) {
         crate::mouse::fire_double_clicks(self);
+        self.advance_copy_line();
         let now = Instant::now();
         for c in self.clients.values_mut() {
             if let Some(a) = c.att.as_mut() {

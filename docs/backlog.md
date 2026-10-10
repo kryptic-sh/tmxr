@@ -112,17 +112,14 @@ table. What has been verified, and how:
 - **Resurrect**: pane titles are not saved (restored programs set their own).
   Arguments are restored only for programs in `resurrect.restore-args`.
   Arguments that are not UTF-8 are not saved.
-- **tmux-yank `prefix y`** (copy the shell's command line) is not bound, on
-  purpose for now. tmux-yank's `copy_line.sh` sends `C-a` to the shell, enters
-  copy mode at the shell's cursor, selects to the end of the command and sends
-  `C-e`; it works because each step is a separate `tmux` call, slow enough for
-  the shell to redraw. As one tmxr command list the copy-mode snapshot would be
-  taken before the shell moved its cursor. A delay between the steps is now
-  possible on every platform (`run-shell -d 0.1`, which holds the rest of its
-  command list), so the bind could be built as tmux-yank's steps with delays
-  between them; whether to bind `prefix y` at all, and whether a fixed delay is
-  reliable enough against a slow shell redraw, is still open. Shell integration
-  (OSC 133 prompt marks) would find the command line without timing.
+- **`prefix y` (`copy-command-line`) relies on the shell's line keys**: a shell
+  in vi mode, or one bound differently, does not move to the line's ends on
+  `C-a` / `C-e` (Home / End on Windows), and the copy is then wrong, as with
+  tmux-yank. It waits for the pane to settle rather than a fixed time, but a
+  shell slower than `copyline::STEP_LIMIT` to redraw is read early. Shell
+  integration (OSC 133 prompt marks) would find the command line without keys;
+  the emulator does not track those marks yet. Tested end to end with cmd
+  (Windows) and bash (CI), not PowerShell, zsh or fish.
 - **Windows `kill()` on a pane child** returned "There are no more files" (os
   error 18) in a test; not a bug in practice. `Server::kill_pane` calls `kill()`
   and then drops the pane, closing the ConPTY, and that does end the programs

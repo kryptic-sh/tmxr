@@ -109,6 +109,7 @@ pub const COMMANDS: &[CommandSpec] = &[
         ANY,
         "[-p prompt] command"
     ),
+    cmd!("copy-command-line", None, "t:", 0, 0, "[-t target-pane]"),
     cmd!("copy-mode", None, "eMut:", 0, 0, "[-eMu] [-t target-pane]"),
     cmd!(
         "customize-mode",
