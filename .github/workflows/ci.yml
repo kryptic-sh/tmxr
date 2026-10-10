@@ -501,6 +501,52 @@ jobs:
             tmxr-*.rpm
             tmxr-*.rpm.sha256
 
+  install-packages:
+    name: Install the ${{ matrix.image }} package
+    needs: [build]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:stable-slim
+            install: |
+              # Slim images keep man pages and docs out; this package's
+              # man page is part of what is checked.
+              rm -f /etc/dpkg/dpkg.cfg.d/docker
+              apt-get update -qq
+              apt-get install -y -qq /dist/tmxr_*_amd64.deb
+          - image: fedora:latest
+            install: |
+              dnf install -y -q --setopt=tsflags= /dist/tmxr-*.x86_64.rpm
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tmxr-x86_64-unknown-linux-gnu
+          path: dist
+      - name: Install, run a server, check the installed files
+        env:
+          INSTALL: ${{ matrix.install }}
+        run: |
+          cat > check.sh <<'EOF'
+          set -eu
+          sh -c "$INSTALL"
+          tmxr --version
+          tmxr -L pkg new-session -d -s installed
+          tmxr -L pkg ls | grep -q '^installed:'
+          tmxr -L pkg kill-server
+          for f in /usr/share/man/man1/tmxr.1 \
+                   /usr/share/bash-completion/completions/tmxr \
+                   /usr/share/fish/vendor_completions.d/tmxr.fish; do
+            # Packagers may gzip man pages.
+            test -s "$f" || test -s "$f.gz" || { echo "missing: $f"; exit 1; }
+          done
+          echo 'installed and ran'
+          EOF
+          docker run --rm -e INSTALL -v "$PWD/dist:/dist:ro" \
+            -v "$PWD/check.sh:/check.sh:ro" ${{ matrix.image }} sh /check.sh
+
   publish-github-release:
     name: Publish GitHub Release
     needs:
