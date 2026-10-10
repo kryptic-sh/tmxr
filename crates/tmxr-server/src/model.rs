@@ -86,6 +86,10 @@ pub struct Window {
     /// Follow the active pane's command until the user renames the window.
     pub auto_name: bool,
     pub layout: LayoutTree,
+    /// tmux's pane list, which numbers the panes, where it differs from the
+    /// layout's order (a mirrored layout puts the first pane last); empty
+    /// while they agree.
+    pub order: Vec<PaneId>,
     pub active: PaneId,
     pub last_pane: Option<PaneId>,
     pub zoomed: bool,
@@ -117,11 +121,30 @@ pub struct Window {
 
 impl Window {
     pub fn panes(&self) -> Vec<PaneId> {
-        self.layout
+        let leaves: Vec<PaneId> = self
+            .layout
             .leaves()
             .into_iter()
             .map(|p| p as PaneId)
-            .collect()
+            .collect();
+        if self.order.is_empty() {
+            return leaves;
+        }
+        // Killed panes leave the list here; every way a pane is added
+        // inserts it (`Server::insert_leaf`), but one that was not still
+        // gets a number, last.
+        let mut panes: Vec<PaneId> = self
+            .order
+            .iter()
+            .copied()
+            .filter(|p| leaves.contains(p))
+            .collect();
+        for p in leaves {
+            if !panes.contains(&p) {
+                panes.push(p);
+            }
+        }
+        panes
     }
 
     /// Pane rects as displayed: only the active pane, full size, when zoomed.

@@ -1,14 +1,4 @@
 # Known differences from tmux: run and reported by known_divergences_report,
 # never failing. Move a case to its corpus file once it matches.
 
-[[cases]]
-name = "mirrored_layouts_keep_pane_numbers"
-# Sizes match, but tmxr numbers panes by their place in the layout, so the
-# main pane, last in a mirrored layout, becomes the last pane; tmux keeps
-# each pane's number (it lists "6+24 0+5 0+5").
-steps = [
-  { run = "split-window -t o" },
-  { run = "split-window -t o" },
-  { run = "select-layout -t o main-horizontal-mirrored" },
-]
-checks = [{ command = "list-panes -t o -F '#{pane_top}+#{pane_height}'" }]
+cases = []

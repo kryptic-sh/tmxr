@@ -108,3 +108,21 @@ steps = [
   { run = "select-layout -t o main-horizontal" },
 ]
 checks = [{ command = "list-panes -t o -F '#{pane_height}'" }]
+
+[[cases]]
+name = "mirrored_layouts_keep_pane_numbers"
+# The main pane is laid out last but stays pane 0; splits, rotations and
+# swaps then follow tmux's pane list, not the layout's order.
+steps = [
+  { run = "split-window -t o" },
+  { run = "split-window -t o" },
+  { run = "select-layout -t o main-horizontal-mirrored" },
+  { run = "split-window -b -t o:.1" },
+  { run = "rotate-window -t o" },
+  { run = "rotate-window -D -t o" },
+  { run = "rotate-window -D -t o" },
+  { run = "swap-pane -s o:.0 -t o:.2" },
+]
+checks = [
+  { command = "list-panes -t o -F '#{pane_index}#{pane_id}@#{pane_top}+#{pane_height}'", expect = "0%3@6+24\n1%0@0+2\n2%2@3+2\n3%1@0+5" },
+]

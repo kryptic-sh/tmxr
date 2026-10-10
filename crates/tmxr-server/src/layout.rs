@@ -188,17 +188,18 @@ pub fn swap(tree: &LayoutTree, x: PaneId, y: PaneId) -> LayoutTree {
 }
 
 /// Move every pane one position forward (`up == false`) or backward in
-/// layout order, keeping the shape.
-pub fn rotate(tree: &LayoutTree, up: bool) -> LayoutTree {
-    let leaves = tree.leaves();
-    let n = leaves.len();
+/// `order` (the window's panes), keeping the shape.
+pub fn rotate(tree: &LayoutTree, order: &[PaneId], up: bool) -> LayoutTree {
+    let n = order.len();
     if n < 2 {
         return tree.clone();
     }
     relabel(tree, &|id| {
-        let i = leaves.iter().position(|l| *l == id).unwrap_or(0);
+        let Some(i) = order.iter().position(|p| *p as usize == id) else {
+            return id;
+        };
         let j = if up { (i + 1) % n } else { (i + n - 1) % n };
-        leaves[j]
+        order[j] as usize
     })
 }
 
@@ -499,9 +500,13 @@ mod tests {
     fn swap_and_rotate_keep_the_shape() {
         let t = swap(&three(), 0, 2);
         assert_eq!(t.leaves(), vec![2, 1, 0]);
-        let r = rotate(&three(), true);
+        let r = rotate(&three(), &[0, 1, 2], true);
         assert_eq!(r.leaves(), vec![1, 2, 0]);
-        let r = rotate(&three(), false);
+        let r = rotate(&three(), &[0, 1, 2], false);
+        assert_eq!(r.leaves(), vec![2, 0, 1]);
+        // By the pane list, not the layout: each pane takes the cell of the
+        // one after it in the list.
+        let r = rotate(&three(), &[0, 2, 1], true);
         assert_eq!(r.leaves(), vec![2, 0, 1]);
     }
 

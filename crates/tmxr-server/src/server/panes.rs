@@ -279,6 +279,10 @@ impl Server {
             };
             LayoutTree::split(dir, ratio, a, b)
         });
+        // tmux's pane list: the new pane after its target, before with -b.
+        if let Some(i) = win.order.iter().position(|p| *p == target) {
+            win.order.insert(if before { i } else { i + 1 }, new);
+        }
         Ok(())
     }
 

@@ -41,6 +41,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Panes keep their numbers in mirrored layouts**, as tmux's: the main pane
+  stays pane 0 though laid out last, and `split-window`, `rotate-window` and
+  `swap-pane` then follow tmux's pane list. Found by the oracle.
 - **`main-horizontal` and `main-vertical` size the main pane as tmux does**: 24
   rows or 80 columns by default (tmxr gave it 60%). Found by the oracle.
 - **Sessions list in tmux's order**, by name: `list-sessions`,

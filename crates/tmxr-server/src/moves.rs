@@ -201,6 +201,10 @@ impl Server {
         for w in windows {
             let win = self.windows.get_mut(&w).ok_or("no such window")?;
             win.layout = crate::layout::swap(&win.layout, src, dst);
+            // tmux's pane list swaps them too.
+            for p in &mut win.order {
+                *p = swapped(*p, src, dst);
+            }
             if ws != wd {
                 // Only one of the two is in this window; it is replaced.
                 win.active = swapped(win.active, src, dst);

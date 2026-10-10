@@ -223,8 +223,19 @@ pub(super) fn run(
         "rotate-window" => {
             let (_, wid, _) = target::window(srv, ctx, a.value('t'))?;
             let w = srv.windows.get_mut(&wid).ok_or("no window")?;
-            // tmux rotates up unless -D.
-            w.layout = crate::layout::rotate(&w.layout, !a.has('D'));
+            // tmux rotates up unless -D: its pane list turns, each place in
+            // it keeping its cell.
+            let panes = w.panes();
+            w.layout = crate::layout::rotate(&w.layout, &panes, !a.has('D'));
+            if !w.order.is_empty() {
+                let mut order = panes;
+                if a.has('D') {
+                    order.rotate_right(1);
+                } else {
+                    order.rotate_left(1);
+                }
+                w.order = order;
+            }
             srv.relayout(wid);
         }
         "break-pane" => {
