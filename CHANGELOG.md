@@ -30,6 +30,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Resurrect keeps a window's `resize-window` size; it was restored following its
+  clients again.
+
 - Resurrect saved a window linked into several sessions once per session, so a
   restore made separate copies of it; it is now saved once and linked again.
 

@@ -3470,3 +3470,32 @@ fn resurrect_restores_a_linked_window_as_one_window() {
     assert_eq!(windows("b"), 2);
     assert!(!id("c:9").is_empty());
 }
+
+#[test]
+fn resurrect_keeps_a_manual_window_size() {
+    let t = Tmxr::new("ressize");
+    t.run(&["new-session", "-d", "-s", "rz"]);
+    t.run(&["resize-window", "-t", "rz", "-x", "41", "-y", "11"]);
+    t.run(&["resurrect-save"]);
+    t.run(&["kill-server"]);
+    t.wait_run(&["ls"], "server gone", str::is_empty);
+    let config = std::fs::read_to_string(&t.config).unwrap();
+    std::fs::write(
+        &t.config,
+        config.replace("restore-on-start = false", "restore-on-start = true"),
+    )
+    .unwrap();
+    t.run(&["new-session", "-d", "-s", "other"]);
+    // A client attached would size an automatic window to itself.
+    let s = t.attach(&["attach", "-t", "rz"]);
+    s.wait_for("status line", |text| text.contains("rz"));
+    std::thread::sleep(Duration::from_millis(300));
+    let size = t.run(&[
+        "display-message",
+        "-p",
+        "-t",
+        "rz",
+        "#{window_width}x#{window_height}",
+    ]);
+    assert_eq!(size.trim(), "41x11");
+}

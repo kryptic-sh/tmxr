@@ -55,6 +55,9 @@ pub struct SavedWindow {
     /// layout and panes are left empty).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub link: Option<SavedLink>,
+    /// `resize-window`'s size (columns, rows), when it set one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manual_size: Option<(u16, u16)>,
 }
 
 /// Where a linked window was saved first.
@@ -269,6 +272,7 @@ pub fn capture(srv: &Server) -> Save {
                             layout: SavedLayout::Leaf(0),
                             panes: Vec::new(),
                             link: Some(link.clone()),
+                            manual_size: None,
                         });
                     }
                     first_seen.insert(
@@ -302,6 +306,7 @@ pub fn capture(srv: &Server) -> Save {
                             })
                             .collect(),
                         link: None,
+                        manual_size: w.manual_size.then_some((w.cols, w.rows)),
                     })
                 })
                 .collect(),
@@ -569,6 +574,11 @@ fn restore_session(
             win.zoomed = w.zoomed && panes.len() > 1;
             win.synchronize = w.synchronize;
             win.auto_name = w.auto_name;
+            if let Some((cols, rows)) = w.manual_size {
+                win.manual_size = true;
+                win.cols = cols;
+                win.rows = rows;
+            }
             if !w.auto_name {
                 win.name.clone_from(&w.name);
             }
@@ -638,6 +648,7 @@ mod tests {
                         },
                     ],
                     link: None,
+                    manual_size: None,
                 }],
             }],
         }

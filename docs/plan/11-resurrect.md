@@ -31,9 +31,9 @@ first of them and as a link (`link: {session, index}`) under the rest, and
 restored as one window linked again; a link whose first session was not restored
 (one of that name already ran) is reported and skipped.
 
-Each window's last pane is saved too. Not saved: pane titles, arguments of
-programs outside `restore-args`, pane contents (tmux-resurrect's
-`capture-pane-contents`).
+Each window's last pane is saved too, and a `resize-window` size. Not saved:
+pane titles, arguments of programs outside `restore-args`, pane contents
+(tmux-resurrect's `capture-pane-contents`).
 
 ## Format and location
 
