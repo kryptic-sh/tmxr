@@ -115,6 +115,18 @@ impl Tmxr {
         }
     }
 
+    /// Wait until `target`'s shell shows its prompt: keys sent to a pane on
+    /// Windows before its shell first reads can leave the Enter held in
+    /// ConPTY until more input arrives.
+    fn wait_prompt(&self, target: &str) {
+        self.wait_run(&["capture-pane", "-p", "-t", target], "the prompt", |o| {
+            o.lines()
+                .rev()
+                .find(|l| !l.trim().is_empty())
+                .is_some_and(|l| l.trim_end().ends_with(['>', '$', '#']))
+        });
+    }
+
     /// The newest resurrect save's text.
     fn newest_save(&self) -> String {
         let dir = self.dir.path().join("data").join("tmxr").join("resurrect");
@@ -687,6 +699,7 @@ fn respawn_pane_restarts_the_program_in_place() {
     t.run(&["split-window", "-d", "-t", "r"]);
     let id = t.run(&["display-message", "-p", "-t", "r.0", "#{pane_id}"]);
     assert!(id.starts_with('%'), "{id:?}");
+    t.wait_prompt("r.0");
     t.run(&["send-keys", "-t", "r.0", "echo before-respawn", "Enter"]);
     t.wait_run(&["capture-pane", "-p", "-t", "r.0"], "marker", |o| {
         o.matches("before-respawn").count() >= 2
@@ -1430,6 +1443,7 @@ fn resurrect_skips_unchanged_saves_and_reports_missing_dirs() {
 fn session_picker_previews_the_highlighted_session() {
     let t = Tmxr::new("preview");
     t.run(&["new-session", "-d", "-s", "alpha"]);
+    t.wait_prompt("alpha");
     t.run(&["send-keys", "-t", "alpha", "echo preview-marker", "Enter"]);
     t.wait_run(
         &["capture-pane", "-p", "-t", "alpha"],
@@ -2093,6 +2107,7 @@ fn panes_inherit_the_servers_path() {
     } else {
         "echo ${PATH%%:*}"
     };
+    t.wait_prompt("pa");
     t.run(&["send-keys", "-t", "pa", echo, "Enter"]);
     let want = extra.display().to_string();
     t.wait_run(
@@ -2310,6 +2325,7 @@ fn environment_commands_set_show_and_reach_new_panes() {
         r#"echo "[$TMXR_GLOBAL][$TMXR_SESSION][$TMXR_TMPDIR]""#,
         "[from-global][from-session][]",
     );
+    t.wait_prompt("ev:1");
     t.run(&["send-keys", "-t", "ev:1", echo, "Enter"]);
     t.wait_run(
         &["capture-pane", "-p", "-t", "ev:1"],
@@ -2334,6 +2350,7 @@ fn clear_history_and_respawn_window() {
     #[cfg(windows)]
     let (lines, done) = ("for /l %i in (1,1,80) do @echo %i", "80");
     t.run(&["new-session", "-d", "-s", "ch"]);
+    t.wait_prompt("ch");
     t.run(&["send-keys", "-t", "ch", lines, "Enter"]);
     let history = |t: &Tmxr| -> usize {
         t.run(&["display-message", "-p", "-t", "ch", "#{history_size}"])
@@ -2379,6 +2396,7 @@ fn pipe_pane_copies_output_to_a_command() {
     let piped = |t: &Tmxr| t.run(&["display-message", "-p", "-t", "pp", "#{pane_pipe}"]);
     t.run(&["pipep", "-t", "pp", &command]);
     assert_eq!(piped(&t).trim(), "1");
+    t.wait_prompt("pp");
     t.run(&["send-keys", "-t", "pp", "echo @piped-text", "Enter"]);
     t.wait_run(&["capture-pane", "-p", "-t", "pp"], "the echo", |o| {
         o.lines().any(|l| l.trim_end() == "@piped-text")
@@ -2935,6 +2953,7 @@ fn monitor_activity_and_silence_flag_windows_out_of_sight() {
         .to_owned()
     };
     // Off by default: output alone flags nothing.
+    t.wait_prompt("al:1");
     t.run(&["send-keys", "-t", "al:1", "echo quiet-one", "Enter"]);
     std::thread::sleep(Duration::from_millis(500));
     assert!(!flags(&t, "1").contains('#'), "{}", flags(&t, "1"));
@@ -2958,6 +2977,7 @@ fn monitor_activity_and_silence_flag_windows_out_of_sight() {
     );
     assert!(flags(&t, "1").contains('#'));
     // The current window is in sight: no flag.
+    t.wait_prompt("al:0");
     t.run(&["send-keys", "-t", "al:0", "echo here", "Enter"]);
     std::thread::sleep(Duration::from_millis(500));
     assert!(!flags(&t, "0").contains('#'), "{}", flags(&t, "0"));
@@ -2985,6 +3005,7 @@ fn find_window_matches_names_and_pane_contents() {
     let s = t.attach(&["new", "-s", "fw", "-n", "alpha"]);
     s.wait_for("status line", |text| text.contains("fw"));
     t.run(&["new-window", "-d", "-t", "fw", "-n", "beta"]);
+    t.wait_prompt("fw:beta");
     t.run(&["send-keys", "-t", "fw:beta", "echo needle-in-pane", "Enter"]);
     t.wait_run(
         &["capture-pane", "-p", "-t", "fw:beta"],

@@ -38,6 +38,16 @@ table. What has been verified, and how:
 
 ## Known gaps and follow-ups
 
+- **Windows: an Enter sent before the shell's first read can stall**
+  (2026-10-10). Probing with the real binary, `new-window -d` then at once
+  `send-keys 'echo markN' Enter`, about 1 in 100 cmd panes showed the text but
+  never ran it; one more Enter then ran the line and gave an extra empty prompt,
+  so the first Enter had reached ConPTY and was held there until more input
+  arrived. Rates varied with load (later rounds of 240 showed none, with the
+  keys in one write or two), so the cause is not pinned beyond "ConPTY, before
+  the shell reads". The e2e tests that type into a new pane wait for its prompt
+  first (`Tmxr::wait_prompt`);
+  `environment_commands_set_show_and_reach_new_panes` failed this way once.
 - **`a_32_bit_programs_directory_is_read` failed once** (2026-10-10, CI's
   bundled-ConPTY Windows job, run 38044583669): the 32-bit `cmd`'s directory
   read as `C:\Windows\System32` for the whole 20 s. It passed 25 runs in a row
@@ -154,34 +164,13 @@ table. What has been verified, and how:
   s). Servers no longer inherit anything (`spawn::spawn_detached` on Windows,
   `close_inherited_fds` on Unix). If nextest reports "leaky" again, its `LEAK`
   line names the test; it would be a different cause.
-- **`session_picker_previews_the_highlighted_session` timed out once** (30 s) in
-  a full Windows run on 2026-10-09 that took 50 s instead of the usual 20 s, and
-  passed on nextest's retry. 15 isolated runs and 5 more full runs were clean.
-  Not investigated; the timeout message was not captured. It timed out once more
-  on 2026-10-09, again in a slow (57 s) full run, and passed on retry; 8 full
-  runs after it were clean (26 s each). Both failures came under load. The panic
-  message names the `wait_for` step that timed out; next time, keep the whole
-  failure output rather than filtering it.
-
-## Decisions awaiting the owner
-
-The provisional decisions in
-[plan/16-open-questions.md](plan/16-open-questions.md) (index base, `prefix X`
-kill-pane, theme, config format, vim navigation, picker mode, Windows current
-directory) are defaults the implementation follows until answered.
-
-## Release channels
-
-Every channel of hrdr's pipeline is in CI from 2026-10-09 (`publish-crates`,
-`aur-bin`, `brew-tap`, `scoop-bucket`, `alpine`), and kryptic-sh/tmxr was added
-to the org secrets `AUR_SSH_KEY` and `BREW_SSH_KEY` (`SCOOP_SSH_KEY` and
-`CARGO_REGISTRY_TOKEN` are shared with every org repo). crates.io's `tmxr` is
-another project (crates.io owner `slaptijack`), so the app crate is `tmxr-cli`,
-installing the `tmxr` binary. The kryptic.sh page (`/projects/tmxr/`) went live
-the same day.
-
-## Cross-repo work
-
+- **`session_picker_previews_the_highlighted_session` timed out now and then**
+  (twice recorded, both in slow full runs). Probable cause, found 2026-10-10: it
+  typed `echo preview-marker` into a session made a moment before, the ConPTY
+  Enter stall above, so the marker never printed. It now waits for the prompt
+  first, as do the other tests that type into a new pane; 10 full runs without
+  retries afterwards had no failure, against 2 failures in the 16 runs before.
+  If it fails again, the stall is not the whole story.
 - **hjkl `$TMXR` fall-through** is in hjkl `main` (`074ef614`, CI green on
   2026-10-09) but not in an hjkl release yet: `dispatch_tmux_navigate` runs
   `tmxr select-pane` when `$TMXR` is set. Not tested end to end with a real hjkl
