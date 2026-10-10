@@ -74,22 +74,22 @@ what was not.
   aliases written from memory is present; check it against a real
   `tmux list-commands`. The gap is the tmux commands tmxr does not have, whose
   names and shorthands are therefore unknown: `customize-mode` and
-  `server-access` (`move-pane`, `previous-layout`, `show-window-options`,
-  `start-server`, `set-environment`, `show-environment`, `clear-history`,
-  `respawn-window` `pipe-pane` (output only; `-I` is an error),
-  `show-prompt-history`, `clear-prompt-history` and `wait-for` (ending its
-  command list, from a command client), `set-hook` and `show-hooks` (global and
-  session hooks; `after-<command>` plus `client-attached`, `client-detached`,
-  `pane-exited`, `session-closed`, `session-created`; no pane or window hooks)
-  and `display-menu` (centred; tmux's placement and style flags are accepted and
-  not followed), `lock-client`, `lock-session` and `lock-server`
-  (`lock-command`, default `lock -np`; no `lock-after-time`) and `resize-window`
-  (a manual size, undone with `set-window-option window-size latest`; resurrect
-  does not save it), `link-window`, `unlink-window` and `display-popup` were
-  added on 2026-10-09). Checked against a running server on 2026-10-09: `ls`,
-  `list-s`, `show` (`show-options`) and `kill-ser` resolve, `displ` is ambiguous
-  as in tmux, and `pipe` is an unknown command where `tmux pipe` runs
-  `pipe-pane`.
+  `server-access` (the latter awaiting a decision, below) (`move-pane`,
+  `previous-layout`, `show-window-options`, `start-server`, `set-environment`,
+  `show-environment`, `clear-history`, `respawn-window` `pipe-pane` (output
+  only; `-I` is an error), `show-prompt-history`, `clear-prompt-history` and
+  `wait-for` (ending its command list, from a command client), `set-hook` and
+  `show-hooks` (global and session hooks; `after-<command>` plus
+  `client-attached`, `client-detached`, `pane-exited`, `session-closed`,
+  `session-created`; no pane or window hooks) and `display-menu` (centred;
+  tmux's placement and style flags are accepted and not followed),
+  `lock-client`, `lock-session` and `lock-server` (`lock-command`, default
+  `lock -np`; no `lock-after-time`) and `resize-window` (a manual size, undone
+  with `set-window-option window-size latest`; resurrect does not save it),
+  `link-window`, `unlink-window` and `display-popup` were added on 2026-10-09).
+  Checked against a running server on 2026-10-09: `ls`, `list-s`, `show`
+  (`show-options`) and `kill-ser` resolve, `displ` is ambiguous as in tmux, and
+  `pipe` is an unknown command where `tmux pipe` runs `pipe-pane`.
 - **tmux default binds**: all of tmux's defaults are bound; `prefix C-z`
   (suspend-client) errors on Windows, which has no job control. Alerts for `M-n`
   / `M-p` are bells only (no `monitor-activity` / `monitor-silence`).
@@ -179,6 +179,19 @@ The provisional decisions in
 [plan/16-open-questions.md](plan/16-open-questions.md) (index base, `prefix X`
 kill-pane, theme, config format, vim navigation, picker mode, Windows current
 directory) are defaults the implementation follows until answered.
+
+- **`server-access` (multi-user access): build it or not?** tmux 3.3's
+  `server-access -a user [-r|-w]` lets other users attach to a server, read-only
+  or read-write, checked against the peer's uid. tmxr's endpoint is owner-only
+  by design (a `0700` socket directory; a named pipe whose ACL CI's `pipe-acl`
+  job proves refuses a second Windows user), so the command is missing on
+  purpose. Options: (a) leave it out, documented — no change to the trust model;
+  (b) a command that lists the owner and rejects changes, so scripts calling it
+  get a clear error — small, still owner-only; (c) the real thing: widen the
+  socket directory and pipe ACL, check each connection's user (`SO_PEERCRED` /
+  `getpeereid`, `GetNamedPipeClientProcessId` plus its token) against an allow
+  list, and refuse input from read-only clients — a larger change that opens the
+  server to other local users, with its own tests across all three OSes.
 
 ## Release channels
 
