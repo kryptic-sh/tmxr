@@ -208,12 +208,13 @@ jobs:
               -RedirectStandardOutput "$dir\out.txt" -RedirectStandardError "$dir\err.txt"
             $out = Get-Content -Raw "$dir\out.txt"
             $err = Get-Content -Raw "$dir\err.txt"
-            Write-Output "other user, $($cmd -join ' '): exit $($p.ExitCode), stdout: $out, stderr: $err"
+            # Write-Host: anything written to output would join the return value.
+            Write-Host "other user, $($cmd -join ' '): exit $($p.ExitCode), stdout: $out, stderr: $err"
             return @{ Code = $p.ExitCode; Out = "$out"; Err = "$err" }
           }
           $r = Invoke-Other @('ls')
           if ($r.Code -eq 0) { throw 'admitted before server-access named the user' }
-          & "$dir\tmxr.exe" -S $open server-access -a $name -r
+          & "$dir\tmxr.exe" -S $open server-access -r -a $name
           if ($LASTEXITCODE -ne 0) { throw 'server-access -a failed' }
           $r = Invoke-Other @('ls')
           if ($r.Code -ne 0 -or $r.Out -notmatch 'owner:') { throw 'the named user could not list' }
@@ -268,7 +269,7 @@ jobs:
           if other -S "$sock" ls; then
             echo 'admitted before server-access named the user'; exit 1
           fi
-          "$dir/tmxr" -S "$sock" server-access -a tmxrother -r
+          "$dir/tmxr" -S "$sock" server-access -r -a tmxrother
           other -S "$sock" ls | grep -q '^owner:'
           if other -S "$sock" kill-server 2>"$dir/err"; then
             echo 'a read-only user ran kill-server'; exit 1
