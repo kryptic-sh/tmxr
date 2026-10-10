@@ -177,6 +177,9 @@ pub struct Emulator {
     split: bool,
     /// The history limit, for a fresh parser.
     scrollback: usize,
+    /// Lines of history above the screen, counted whenever they can change
+    /// ([`Emulator::count_history`]): a scrollbar reads it every frame.
+    history: usize,
 }
 
 impl Emulator {
@@ -187,11 +190,10 @@ impl Emulator {
             passthrough: Vec::new(),
             split: passthrough_supported(),
             scrollback,
+            history: 0,
         }
     }
 
-    /// Lines of history above the screen (tmux's `#{history_size}`). vt100
-    /// tells only by moving its scrollback view, so a copy is measured.
     /// Where the shell's input starts on the screen, as its last OSC 133
     /// prompt mark said: `None` without a mark, on the alternate screen, or
     /// once the history is full (lines then scroll away uncounted, and the
@@ -207,10 +209,13 @@ impl Emulator {
         Some((u16::try_from(row).ok()?, col))
     }
 
+    /// Lines of history above the screen (tmux's `#{history_size}`).
     pub fn history_size(&self) -> usize {
-        let mut screen = self.parser.screen().clone();
-        screen.set_scrollback(usize::MAX);
-        screen.scrollback()
+        self.history
+    }
+
+    fn count_history(&mut self) {
+        self.history = history_lines(self.parser.screen_mut());
     }
 
     /// Drop the history above the screen (tmux's `clear-history`), keeping
@@ -224,6 +229,7 @@ impl Emulator {
         let mut fresh = vt100::Parser::new_with_callbacks(rows, cols, self.scrollback, hooks);
         fresh.process(&state);
         self.parser = fresh;
+        self.count_history();
     }
 
     /// Feed program output. Returns bytes that must be written back to the
@@ -244,6 +250,7 @@ impl Emulator {
         } else {
             self.parser.process(bytes);
         }
+        self.count_history();
         std::mem::take(&mut self.parser.callbacks_mut().replies)
     }
 
@@ -251,12 +258,15 @@ impl Emulator {
         self.parser.screen()
     }
 
+    /// For moving the scrollback view; [`Emulator::resize`] resizes, so
+    /// the history stays counted.
     pub fn screen_mut(&mut self) -> &mut vt100::Screen {
         self.parser.screen_mut()
     }
 
     pub fn resize(&mut self, rows: u16, cols: u16) {
         self.parser.screen_mut().set_size(rows.max(1), cols.max(1));
+        self.count_history();
     }
 
     pub fn title(&self) -> Option<&str> {
@@ -359,6 +369,7 @@ mod tests {
         let (screen, cursor) = (emu.screen().contents(), emu.screen().cursor_position());
         emu.clear_history();
         assert_eq!(history(&mut emu), 0);
+        assert_eq!(emu.history_size(), 0);
         assert_eq!(emu.screen().contents(), screen);
         assert_eq!(emu.screen().cursor_position(), cursor);
         assert!(emu.screen().cell(2, 0).unwrap().bold(), "attributes kept");
