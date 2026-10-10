@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*", "apps/*"]
 
 [workspace.package]
-version = "0.2.4"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.95"
 license = "MIT"
@@ -24,12 +24,12 @@ redundant_pub_crate = "warn"
 
 [workspace.dependencies]
 # internal
-tmxr-proto = { path = "crates/tmxr-proto", version = "0.2.0" }
-tmxr-command = { path = "crates/tmxr-command", version = "0.2.0" }
-tmxr-config = { path = "crates/tmxr-config", version = "0.2.0" }
-tmxr-term = { path = "crates/tmxr-term", version = "0.2.0" }
-tmxr-server = { path = "crates/tmxr-server", version = "0.2.0" }
-tmxr-client = { path = "crates/tmxr-client", version = "0.2.0" }
+tmxr-proto = { path = "crates/tmxr-proto", version = "0.3.0" }
+tmxr-command = { path = "crates/tmxr-command", version = "0.3.0" }
+tmxr-config = { path = "crates/tmxr-config", version = "0.3.0" }
+tmxr-term = { path = "crates/tmxr-term", version = "0.3.0" }
+tmxr-server = { path = "crates/tmxr-server", version = "0.3.0" }
+tmxr-client = { path = "crates/tmxr-client", version = "0.3.0" }
 
 [profile.release]
 lto = "thin"
