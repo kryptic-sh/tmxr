@@ -29,6 +29,7 @@ pub struct Menu {
     pub title: String,
     pub items: Vec<MenuItem>,
     pub selected: usize,
+    pub look: crate::overlay::BoxLook,
 }
 
 impl Menu {
@@ -70,6 +71,7 @@ impl Menu {
             title,
             items,
             selected: 0,
+            look: crate::overlay::BoxLook::default(),
         };
         if !(0..menu.items.len()).any(|i| menu.selectable(i)) {
             return Err("display-menu: no items to choose".into());
@@ -134,8 +136,15 @@ impl Menu {
         OverlayAction::Keep
     }
 
-    /// Draw the menu centred in the `cols` × `rows` pane area.
-    pub fn draw(&self, buf: &mut Buffer, cols: u16, rows: u16, border: Style, selected: Style) {
+    /// Draw the menu centred in the `cols` × `rows` pane area: items in
+    /// `base`, the selected one in `selected`, the border in `border`.
+    pub fn draw(
+        &self,
+        buf: &mut Buffer,
+        cols: u16,
+        rows: u16,
+        (base, border, selected): (Style, Style, Style),
+    ) {
         let label = |item: &MenuItem| match item {
             MenuItem::Command { name, key, .. } => match key {
                 Some(k) => (name.clone(), format!("({k})")),
@@ -159,10 +168,15 @@ impl Menu {
             .min(rows);
         let area = Rect::new(cols.saturating_sub(w) / 2, rows.saturating_sub(h) / 2, w, h);
         Clear.render(area, buf);
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(border)
-            .title(format!(" {} ", self.title));
+        buf.set_style(area, base);
+        let block = match self.look.lines {
+            Some(lines) => Block::default()
+                .borders(Borders::ALL)
+                .border_type(lines)
+                .border_style(border)
+                .title(format!(" {} ", self.title)),
+            None => Block::default(),
+        };
         let inner = block.inner(area);
         block.render(area, buf);
         for (row, item) in self
@@ -181,9 +195,9 @@ impl Menu {
             let style = if row == self.selected {
                 selected
             } else if !self.selectable(row) {
-                Style::default().add_modifier(Modifier::DIM)
+                base.add_modifier(Modifier::DIM)
             } else {
-                Style::default()
+                base
             };
             buf.set_style(Rect::new(inner.x, y, inner.width, 1), style);
             buf.set_stringn(inner.x + 1, y, &name, usize::from(inner.width), style);

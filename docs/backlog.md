@@ -67,8 +67,10 @@ table. What has been verified, and how:
   tmxr's private directory, unreachable by other users whatever `socket-access`
   says; `server-access -a` then says to use `-S`, as tmux documents.
 - **`display-popup` gaps.** `-x` / `-y` take a number or `C` (tmux's other
-  position forms and formats are errors); `-b`, `-s`, `-S`, `-k` and `-N` are
-  accepted and ignored. Closing a running popup kills its command (`Popup`'s
+  position forms and formats are errors); `-b` draws single, rounded, double,
+  heavy or no lines (tmux's `simple` and `padded` are errors); `-k` and `-N` are
+  accepted and ignored. A menu's `-O` and `-x` / `-y` are accepted and not
+  followed: it is centred. Closing a running popup kills its command (`Popup`'s
   `Drop`, as `kill-pane` does); removing that kill does not turn the e2e test
   red on Windows, because closing the ConPTY ends the program anyway. Whether
   the explicit kill is what ends it on Unix (where the PTY reader thread holds
@@ -82,12 +84,11 @@ table. What has been verified, and how:
   against a running server on 2026-10-10: `pipe`, `custom`, `linkw`, `popup`,
   `resizew` and `lockc` resolve, and `displ` is ambiguous as in tmux.
 - **Partial tmux commands**: `wait-for` must end its command list and come from
-  a command client; hooks are global or per session (no pane or window hooks);
-  `display-menu` and `display-popup` ignore tmux's style flags (popup gaps
-  above); a window cannot be linked twice into the same session (tmux allows
-  it); `customize-mode` is a picker over the options and binds whose Enter puts
-  the setting command in the prompt, without tmux's tree, per-scope options or
-  `d` / `u` keys, and its `-f` is a text query, not a format filter.
+  a command client; hooks are global or per session (no pane or window hooks); a
+  window cannot be linked twice into the same session (tmux allows it);
+  `customize-mode` is a picker over the options and binds whose Enter puts the
+  setting command in the prompt, without tmux's tree, per-scope options or `d` /
+  `u` keys, and its `-f` is a text query, not a format filter.
 - **tmux default binds**: all of tmux's defaults are bound; `prefix C-z`
   (suspend-client) errors on Windows, which has no job control. Alerts for `M-n`
   / `M-p` are bells, `monitor-activity` and `monitor-silence`; tmux's

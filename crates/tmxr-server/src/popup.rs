@@ -26,6 +26,8 @@ pub struct Popup {
     pub rect: Rect,
     pub border: bool,
     pub title: String,
+    /// `-s`, `-S` and `-b`; `border` says whether there is one at all.
+    pub look: crate::overlay::BoxLook,
     /// tmux's `-E` count: 0 keeps the popup open after its command exits
     /// (a key then closes it), 1 closes it then, 2 only when it succeeded.
     pub close_on_exit: usize,

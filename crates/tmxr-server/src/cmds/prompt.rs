@@ -43,8 +43,8 @@ pub(super) fn run(
             }
         }
         "display-menu" => {
-            // tmux's -b/-H/-s/-S styles, -O and -x/-y placement are accepted and
-            // not followed: the menu is centred in tmxr's own colours.
+            // tmux's -O and -x/-y placement are accepted and not followed: the
+            // menu is centred.
             let (c, pane) = shown_on(srv, ctx, a)?;
             let words: Vec<String> = pos.iter().map(|w| expand_for(srv, ctx, pane, w)).collect();
             let title = a
@@ -52,7 +52,8 @@ pub(super) fn run(
                 .map(|t| expand_for(srv, ctx, pane, t))
                 .unwrap_or_default();
             let start = a.value('C').and_then(|n| n.parse().ok()).unwrap_or(0);
-            let menu = crate::menu::Menu::parse(title, &words, start)?;
+            let mut menu = crate::menu::Menu::parse(title, &words, start)?;
+            menu.look = crate::overlay::BoxLook::from_args(a)?;
             if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
                 att.overlay = Some(Overlay::Menu(Box::new(menu)));
             }
@@ -61,7 +62,7 @@ pub(super) fn run(
             srv.mark_client_dirty(c);
         }
         "display-popup" => {
-            // tmux's -b/-s/-S styles, -k and -N are accepted and not followed.
+            // tmux's -k and -N are accepted and not followed.
             let (c, pane) = shown_on(srv, ctx, a)?;
             if a.has('C') {
                 if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut())
@@ -95,7 +96,8 @@ pub(super) fn run(
                 .value('T')
                 .map(|t| expand_for(srv, ctx, pane, t))
                 .unwrap_or_default();
-            let border = !a.has('B');
+            let look = crate::overlay::BoxLook::from_args(a)?;
+            let border = !a.has('B') && look.lines.is_some();
             let inner = crate::popup::Popup::inner_of(rect, border);
             let id = srv.next_pane;
             let started = srv.start_pty(
@@ -116,6 +118,7 @@ pub(super) fn run(
                 rect,
                 border,
                 title,
+                look,
                 close_on_exit: a.count('E'),
                 exited: false,
                 extended_keys: srv.cfg.extended_keys == "always",

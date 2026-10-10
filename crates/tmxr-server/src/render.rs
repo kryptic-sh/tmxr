@@ -471,6 +471,9 @@ fn draw_overlay(
     let mode_style = style_option(&srv.cfg.status.mode_style, &vars);
     let border = style_option(&srv.cfg.status.pane_active_border_style, &vars);
     let y = rows.saturating_sub(STATUS_ROWS);
+    // A menu's or popup's own style (-s, -S, -H), else `or`.
+    let look =
+        |spec: &Option<String>, or: Style| spec.as_deref().map_or(or, |s| style_option(s, &vars));
     match att.overlay.as_ref()? {
         Overlay::Prompt(p) => {
             let before: String = p.input[..p.cursor].iter().collect();
@@ -520,14 +523,23 @@ fn draw_overlay(
         }
         Overlay::Picker(p) => draw_picker(srv, p, buf, cols, y, border, mode_style),
         Overlay::Menu(m) => {
-            m.draw(buf, cols, y, border, mode_style);
+            let styles = (
+                look(&m.look.style, Style::default()),
+                look(&m.look.border_style, border),
+                look(&m.look.selected_style, mode_style),
+            );
+            m.draw(buf, cols, y, styles);
             None
         }
         Overlay::Popup(p) => {
             let area = p.rect.intersection(Rect::new(0, 0, cols, rows));
             Clear.render(area, buf);
+            buf.set_style(area, look(&p.look.style, Style::default()));
             if p.border {
-                let mut block = Block::default().borders(Borders::ALL).border_style(border);
+                let mut block = Block::default()
+                    .borders(Borders::ALL)
+                    .border_type(p.look.lines.unwrap_or_default())
+                    .border_style(look(&p.look.border_style, border));
                 if !p.title.is_empty() {
                     block = block.title(p.title.as_str());
                 }

@@ -3609,3 +3609,72 @@ fn pipe_pane_input_types_the_commands_output() {
         "1"
     );
 }
+
+#[test]
+fn menu_and_popup_take_tmux_style_flags() {
+    let t = Tmxr::new("looks");
+    let s = t.attach(&["new", "-s", "lk"]);
+    s.wait_for("status line", |text| text.contains("lk"));
+    let all_cells = |s: &Screen| -> Vec<(String, String, String)> {
+        (0..ROWS).flat_map(|r| s.row_cells(r)).collect()
+    };
+    // -b double, -S the border's colour, -s the items', -H the selected one.
+    t.run(&[
+        "display-menu",
+        "-b",
+        "double",
+        "-S",
+        "fg=green",
+        "-s",
+        "bg=red",
+        "-H",
+        "bg=blue",
+        "-T",
+        "Look",
+        "First",
+        "f",
+        "rename-window first",
+        "Second",
+        "s",
+        "rename-window second",
+    ]);
+    s.wait_for("the menu", |text| text.contains("Second"));
+    let cells = all_cells(&s);
+    let corner = cells
+        .iter()
+        .find(|(c, _, _)| c == "╔")
+        .expect("a double border");
+    assert_eq!(corner.1, "Idx(2)", "border fg: {corner:?}");
+    let second = cells.iter().position(|(c, _, _)| c == "S").expect("Second");
+    assert_eq!(cells[second].2, "Idx(1)", "item bg: {:?}", cells[second]);
+    let first = cells.iter().position(|(c, _, _)| c == "F").expect("First");
+    assert_eq!(cells[first].2, "Idx(4)", "selected bg: {:?}", cells[first]);
+    s.send(b"\x1b");
+    s.wait_for("the menu closed", |text| !text.contains("Second"));
+
+    // A popup's -b rounded, and -b none for no border.
+    let hold = if cfg!(windows) {
+        "echo IN-THE-BOX& ping -n 30 127.0.0.1 >NUL"
+    } else {
+        "echo IN-THE-BOX; sleep 30"
+    };
+    t.run(&["display-popup", "-b", "rounded", hold]);
+    s.wait_for("the rounded popup", |text| {
+        text.contains("IN-THE-BOX") && text.contains('╭')
+    });
+    t.run(&["display-popup", "-C"]);
+    s.wait_for("closed", |text| !text.contains("IN-THE-BOX"));
+    t.run(&["display-popup", "-b", "none", hold]);
+    s.wait_for("the bare popup", |text| text.contains("IN-THE-BOX"));
+    assert!(
+        !s.text().contains(['╭', '┌', '│']),
+        "a border was drawn:\n{}",
+        s.text()
+    );
+    t.run(&["display-popup", "-C"]);
+    assert!(
+        !t.output(&["display-popup", "-b", "simple", "echo"])
+            .status
+            .success()
+    );
+}

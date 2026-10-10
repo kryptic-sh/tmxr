@@ -14,6 +14,44 @@ use crate::cmds::join_args;
 use crate::model::{ClientId, PaneId, SessionId};
 use crate::server::Server;
 
+/// How a menu or popup box is drawn, from tmux's `-s` (style), `-S` (border
+/// style), `-H` (a menu's selected item) and `-b` (border lines) flags: style
+/// specs as given, expanded when drawn; `None` keeps tmxr's own.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BoxLook {
+    pub style: Option<String>,
+    pub border_style: Option<String>,
+    pub selected_style: Option<String>,
+    /// The border's lines; `None` draws no border (`-b none`).
+    pub lines: Option<ratatui::widgets::BorderType>,
+}
+
+impl BoxLook {
+    /// From a command's flags; `-b` takes tmux's line names tmxr can draw.
+    pub fn from_args(a: &tmxr_command::Args) -> Result<Self, String> {
+        use ratatui::widgets::BorderType;
+        let lines = match a.value('b') {
+            None | Some("single") => Some(BorderType::Plain),
+            Some("rounded") => Some(BorderType::Rounded),
+            Some("double") => Some(BorderType::Double),
+            Some("heavy") => Some(BorderType::Thick),
+            Some("none") => None,
+            Some(other) => {
+                return Err(format!(
+                    "-b {other}: tmxr draws single, rounded, double, heavy or none"
+                ));
+            }
+        };
+        let spec = |f| a.value(f).map(str::to_owned);
+        Ok(Self {
+            style: spec('s'),
+            border_style: spec('S'),
+            selected_style: spec('H'),
+            lines,
+        })
+    }
+}
+
 /// What a key did to an overlay.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OverlayAction {

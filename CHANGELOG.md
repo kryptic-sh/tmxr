@@ -33,6 +33,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `pipe-pane -I`: the command's output is typed into the pane (`-IO` for both
   directions); closing such a pipe stops its command.
 
+- `display-menu` and `display-popup` follow tmux's style flags: `-s` (the box),
+  `-S` (its border), `-H` (a menu's selected item) and `-b` (border lines:
+  single, rounded, double, heavy or none). They were accepted and ignored.
+
 ### Changed
 
 - A `-S` socket's directory is no longer required to be private to its owner, as
