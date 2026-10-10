@@ -8,6 +8,9 @@
 //! without limit.
 
 use std::sync::mpsc::{Receiver, Sender, SyncSender, sync_channel};
+use std::sync::{Arc, Mutex, PoisonError};
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
 use interprocess::local_socket::Listener;
 use interprocess::local_socket::traits::{ListenerExt as _, Stream as _};
@@ -21,9 +24,39 @@ use crate::server::Event;
 /// Frames queued per client before the server starts skipping frames.
 const CLIENT_QUEUE: usize = 256;
 
+/// The client writer threads still running.
+pub type Writers = Arc<Mutex<Vec<JoinHandle<()>>>>;
+
+/// How long an exiting server waits for its clients' last frames to go out.
+const FLUSH_LIMIT: Duration = Duration::from_secs(1);
+
+/// Let every writer send what is queued: a `kill-server`'s reply, the
+/// "server exited" notice. Once the server has dropped its clients each
+/// queue ends and its writer returns; without this wait the process could
+/// exit first, and the command client would see the connection drop instead
+/// of its answer. Bounded by [`FLUSH_LIMIT`], for a client not reading.
+pub fn flush(writers: &Writers) {
+    let deadline = Instant::now() + FLUSH_LIMIT;
+    let handles = std::mem::take(&mut *writers.lock().unwrap_or_else(PoisonError::into_inner));
+    for handle in handles {
+        while !handle.is_finished() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        if handle.is_finished() {
+            let _ = handle.join();
+        }
+    }
+}
+
 /// Accept connections forever, announcing each one `acl` admits to
-/// `owner`'s server.
-pub fn accept_loop(listener: Listener, events: Sender<Event>, acl: &SharedAcl, owner: &str) {
+/// `owner`'s server; each writer thread goes in `writers`.
+pub fn accept_loop(
+    listener: Listener,
+    events: Sender<Event>,
+    acl: &SharedAcl,
+    owner: &str,
+    writers: &Writers,
+) {
     let mut next_id: ClientId = 0;
     for conn in listener.incoming() {
         let stream = match conn {
@@ -91,9 +124,16 @@ pub fn accept_loop(listener: Listener, events: Sender<Event>, acl: &SharedAcl, o
                         }
                     })
             });
-        if let Err(e) = spawned {
-            warn!(error = %e, "could not start client threads");
-            let _ = events.send(Event::Disconnected(id));
+        match spawned {
+            Ok(writer) => {
+                let mut all = writers.lock().unwrap_or_else(PoisonError::into_inner);
+                all.retain(|w| !w.is_finished());
+                all.push(writer);
+            }
+            Err(e) => {
+                warn!(error = %e, "could not start client threads");
+                let _ = events.send(Event::Disconnected(id));
+            }
         }
     }
 }

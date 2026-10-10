@@ -300,7 +300,7 @@ impl Server {
             self.render_all();
             if signals::exit_requested() {
                 info!("exit requested by the system");
-                self.exiting = true;
+                self.begin_exit();
             }
             if self.exiting {
                 break;
@@ -319,6 +319,18 @@ impl Server {
             let _ = p.pty.kill();
         }
         info!("server exiting");
+    }
+
+    /// Exit once this pass of the loop is done. The endpoint goes now, before
+    /// the reply to whatever asked is sent, so the asker's next command
+    /// cannot reach this server on its way out.
+    pub fn begin_exit(&mut self) {
+        if !self.exiting {
+            self.exiting = true;
+            if let Err(e) = self.endpoint.release() {
+                warn!("could not remove the socket: {e}");
+            }
+        }
     }
 
     fn handle(&mut self, ev: Event) {

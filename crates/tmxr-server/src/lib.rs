@@ -100,10 +100,14 @@ pub fn run(endpoint: Endpoint, config: Option<PathBuf>) -> std::io::Result<()> {
     {
         srv.log_message(format!("resurrect: {e}"));
     }
+    let writers = conn::Writers::default();
+    let accepted = std::sync::Arc::clone(&writers);
     std::thread::Builder::new()
         .name("tmxr-accept".into())
-        .spawn(move || conn::accept_loop(listener, tx, &acl, &owner))?;
+        .spawn(move || conn::accept_loop(listener, tx, &acl, &owner, &accepted))?;
     server::signals::install();
+    // Takes the server, so its clients' queues are closed when it returns.
     srv.run(rx);
+    conn::flush(&writers);
     Ok(())
 }

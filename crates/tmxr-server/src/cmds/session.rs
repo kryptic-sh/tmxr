@@ -105,7 +105,7 @@ pub(super) fn run(
         "has-session" => {
             target::session(srv, ctx, a.value('t'))?;
         }
-        "kill-server" => srv.exiting = true,
+        "kill-server" => srv.begin_exit(),
         "kill-session" => {
             let sid = target::session(srv, ctx, a.value('t'))?;
             if a.has('a') {

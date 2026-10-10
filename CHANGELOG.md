@@ -75,6 +75,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`kill-server` could fail on Linux and macOS** with "server closed the
+  connection": the server exited before its reply went out, and a command run
+  straight after could reach the server as it closed. The server now removes its
+  socket as soon as it starts to exit and sends what it owes its clients before
+  it goes.
 - **Alert flags follow tmux**: a window is flagged for a bell, activity or
   silence unless a client is looking at it. A bell in the window on screen used
   to flag it anyway, and the current window of a session nobody was attached to

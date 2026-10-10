@@ -222,11 +222,14 @@ table. What has been verified, and how:
 
 ## Not yet verified
 
-- **`socket-acl` flaked once on ubuntu** (run 38057623410, commit 0491b6e,
-  2026-10-10). The step stalled about 34 s after the expected "Permission
-  denied" and "server closed the connection", then exited 1 without saying which
-  command failed. Rerunning only that job passed. Not diagnosed. The step now
-  runs with `set -x`, so a repeat names the failing command.
+- **`socket-acl` flakes**: a traced repeat on macOS (run 38062106864) was a
+  `kill-server` that printed "server closed the connection": the server exited
+  before its reply was written, and right after a `kill-server` a new client
+  could still reach the dying server. Both fixed (`conn::flush`,
+  `Server::begin_exit`); a probe of 300 start/kill rounds lost 3 replies across
+  ubuntu and macOS before, none after. The first ubuntu failure
+  (run 38057623410) printed the same message but also stalled about 34 s first,
+  which this does not explain; untraced, as it predates `set -x`.
 - The `.deb` and `.rpm` are installed and run in clean Debian and Fedora
   containers by CI's `install-packages` job on every push to `main` (x86_64
   only; the aarch64 packages are built, not installed). The macOS release

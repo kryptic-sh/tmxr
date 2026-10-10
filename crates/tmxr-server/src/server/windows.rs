@@ -322,7 +322,7 @@ impl Server {
             }
         }
         if self.sessions.is_empty() && self.had_session {
-            self.exiting = true;
+            self.begin_exit();
         }
     }
 

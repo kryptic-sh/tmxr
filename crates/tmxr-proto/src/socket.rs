@@ -100,6 +100,24 @@ impl Endpoint {
         Stream::connect(self.name()?)
     }
 
+    /// Stop new clients reaching an exiting server: on Unix the socket file
+    /// goes, so a client that comes next finds no server and starts one,
+    /// rather than connecting to this one as it closes. A Windows pipe ends
+    /// with its listener; there is no name to take away first.
+    pub fn release(&self) -> io::Result<()> {
+        #[cfg(unix)]
+        {
+            match std::fs::remove_file(&self.path) {
+                Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
+                _ => Ok(()),
+            }
+        }
+        #[cfg(windows)]
+        {
+            Ok(())
+        }
+    }
+
     /// Whether this is a label's socket, in tmxr's own per-user directory,
     /// which other users cannot reach whatever the socket's own mode.
     pub fn in_private_dir(&self) -> bool {
