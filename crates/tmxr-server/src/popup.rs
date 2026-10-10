@@ -54,6 +54,25 @@ impl Popup {
         }
     }
 
+    /// Keep the box inside a `cols` x `rows` client, as tmux does when the
+    /// client is resized: moved in, and shrunk only if it no longer fits.
+    pub fn fit(&mut self, cols: u16, rows: u16) {
+        let w = self.rect.width.min(cols).max(1);
+        let h = self.rect.height.min(rows).max(1);
+        let x = self.rect.x.min(cols.saturating_sub(w));
+        let y = self.rect.y.min(rows.saturating_sub(h));
+        let before = self.inner();
+        self.rect = Rect::new(x, y, w, h);
+        let inner = self.inner();
+        if (inner.width, inner.height) != (before.width, before.height) {
+            let (iw, ih) = (inner.width.max(1), inner.height.max(1));
+            self.emu.resize(ih, iw);
+            if let Err(e) = self.pty.resize(ih, iw) {
+                tracing::debug!(popup = self.id, error = %e, "pty resize failed");
+            }
+        }
+    }
+
     pub fn key(&mut self, ev: &KeyEvent) -> OverlayAction {
         if self.exited {
             return OverlayAction::Close;

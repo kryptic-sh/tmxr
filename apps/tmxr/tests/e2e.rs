@@ -3378,3 +3378,52 @@ fn prefix_y_uses_the_shells_prompt_mark() {
         text.contains("echo yank-meZ-now")
     });
 }
+
+#[test]
+fn display_popup_stays_inside_a_resized_client() {
+    let t = Tmxr::new("popupfit");
+    let s = t.attach(&["new", "-s", "pf"]);
+    s.wait_for("status line", |text| text.contains("pf"));
+    // Kept running through the resize (cmd's pause would end on it).
+    let show = if cfg!(windows) {
+        "echo POPUP-READY& ping -n 30 127.0.0.1 >NUL"
+    } else {
+        "echo POPUP-READY; sleep 30"
+    };
+    // A wide box at the right edge.
+    t.run(&[
+        "display-popup",
+        "-E",
+        "-x",
+        "40",
+        "-w",
+        "56",
+        "-h",
+        "8",
+        show,
+    ]);
+    s.wait_for("the popup", |text| text.contains("POPUP-READY"));
+    // The client shrinks to less than the popup's width.
+    s.resize(20, 50);
+    // Row by row: full-width rows would run together in the screen's text.
+    let row_text = |s: &Screen, row: u16| -> String {
+        s.row_cells(row).into_iter().map(|(c, _, _)| c).collect()
+    };
+    let popup_row = |s: &Screen| (0..20).find(|&r| row_text(s, r).contains("POPUP-READY"));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        // The box moved in to the left edge and fits the new width.
+        if let Some(r) = popup_row(&s)
+            && row_text(&s, r).starts_with("│POPUP-READY")
+        {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "popup not moved in:
+{}",
+            s.text()
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}

@@ -45,6 +45,9 @@ impl Server {
                         t.backend_mut().set_size(att.cols, att.rows);
                         let _ = t.resize(Rect::new(0, 0, att.cols, att.rows));
                     }
+                    if let Some(crate::overlay::Overlay::Popup(p)) = att.overlay.as_mut() {
+                        p.fit(att.cols, att.rows);
+                    }
                 }
                 self.size_session(session);
             }

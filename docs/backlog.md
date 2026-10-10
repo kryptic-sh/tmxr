@@ -56,14 +56,13 @@ table. What has been verified, and how:
   connecting and being checked is refused. A label's socket on Unix sits in
   tmxr's private directory, unreachable by other users whatever `socket-access`
   says; `server-access -a` then says to use `-S`, as tmux documents.
-- **`display-popup` gaps.** The box keeps the size it opened with when the
-  client resizes; `-x` / `-y` take a number or `C` (tmux's other position forms
-  and formats are errors); `-e` may be given once; `-b`, `-s`, `-S`, `-k` and
-  `-N` are accepted and ignored. Closing a running popup kills its command
-  (`Popup`'s `Drop`, as `kill-pane` does); removing that kill does not turn the
-  e2e test red on Windows, because closing the ConPTY ends the program anyway.
-  Whether the explicit kill is what ends it on Unix (where the PTY reader thread
-  holds its own copy of the master) is not verified.
+- **`display-popup` gaps.** `-x` / `-y` take a number or `C` (tmux's other
+  position forms and formats are errors); `-e` may be given once; `-b`, `-s`,
+  `-S`, `-k` and `-N` are accepted and ignored. Closing a running popup kills
+  its command (`Popup`'s `Drop`, as `kill-pane` does); removing that kill does
+  not turn the e2e test red on Windows, because closing the ConPTY ends the
+  program anyway. Whether the explicit kill is what ends it on Unix (where the
+  PTY reader thread holds its own copy of the master) is not verified.
 - **Resurrect and linked windows** (`link-window`): a save walks each session's
   windows, so a window linked into two sessions is saved twice and restored as
   two separate windows. Saving it once and re-linking it on restore needs a

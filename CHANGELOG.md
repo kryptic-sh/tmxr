@@ -30,6 +30,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- A `display-popup` box stays inside its client when the client is resized:
+  moved in, and shrunk when it no longer fits. It used to keep its place and
+  size, running off the screen.
+
 - Windows: a pane's program, and the directory splits open in, could be read
   from an unrelated process. Windows keeps a dead parent's pid in its children
   and reuses pids, so an orphan of an older process could pass for the pane
