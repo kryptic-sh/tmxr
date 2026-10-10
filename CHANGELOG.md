@@ -44,6 +44,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `wait-for` works anywhere a command list runs, as in tmux: in the middle of a
+  list (the rest waits) and from binds, hooks and the prompt. It had to end its
+  list and come from a script.
+
 - A `-S` socket's directory is no longer required to be private to its owner, as
   in tmux; a `-L` label's directory still is.
 

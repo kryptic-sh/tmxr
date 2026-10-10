@@ -152,7 +152,7 @@ pub struct Server {
     /// Entries submitted at prompts, oldest first, by prompt type.
     pub prompt_history: BTreeMap<String, Vec<String>>,
     /// `wait-for` channels and the command clients waiting on them.
-    pub waits: crate::waits::Waits,
+    pub waits: crate::waits::Waits<crate::jobs::Done>,
     /// `copy-command-line` under way, waiting for its pane to settle.
     pub copy_line: Option<crate::copyline::CopyLine>,
     /// The user running the server, always admitted.
@@ -343,7 +343,10 @@ impl Server {
                 );
             }
             Event::Disconnected(id) => {
-                self.waits.forget(id);
+                // Its replies wait for nothing any more; a bind's list
+                // still goes on when signalled.
+                self.waits
+                    .forget(|d| d.then.reply.as_ref().is_some_and(|r| r.0 == id));
                 if let Some(c) = self.clients.remove(&id)
                     && c.att.is_some()
                 {
@@ -506,16 +509,10 @@ impl Server {
         }
     }
 
-    /// A command client's `wait-for` is over: it gets its reply.
-    /// Finish command client `id`'s command list: hold the reply for a
-    /// `wait-for` or a `run-shell` job, attach, or reply.
+    /// Finish command client `id`'s command list: hold the reply for a job
+    /// (`run-shell`, `wait-for`), attach, or reply.
     pub fn conclude_command(&mut self, id: ClientId, ctx: &Ctx, mut out: Outcome) {
-        // wait-for: the reply waits for a signal or the lock.
-        if let Some(wait) = out.wait.take() {
-            self.waits.enqueue(id, &wait);
-            return;
-        }
-        // run-shell: the reply, and the rest of the list, wait for the job.
+        // The reply, and the rest of the list, wait for the job.
         if let Some(job) = out.job.take() {
             let then = crate::jobs::Then {
                 ctx: ctx.clone(),
@@ -533,10 +530,6 @@ impl Server {
             }
             _ => self.finish_command(id, out),
         }
-    }
-
-    pub fn release_waiter(&mut self, id: ClientId) {
-        self.finish_command(id, Outcome::default());
     }
 
     fn finish_command(&mut self, id: ClientId, out: Outcome) {

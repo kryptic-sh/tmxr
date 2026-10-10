@@ -53,9 +53,8 @@ pub struct Outcome {
     pub stderr: String,
     /// Attach the client to this session when it can.
     pub attach: Option<SessionId>,
-    /// `wait-for`: hold the command client's reply until this happens.
-    pub wait: Option<crate::waits::Wait>,
-    /// `run-shell`: the rest of the list, and the reply, wait for this job.
+    /// `run-shell`, `wait-for`: the rest of the list, and the reply, wait
+    /// for this job.
     pub job: Option<crate::jobs::Job>,
 }
 
@@ -98,10 +97,6 @@ fn tokenize(line: &str) -> Result<Vec<Vec<String>>, String> {
 /// goes on by itself, its output shown on `ctx.client`.
 pub fn run_detached(srv: &mut Server, ctx: &Ctx, cmds: &[Vec<String>]) -> Outcome {
     let mut out = run_list(srv, ctx, cmds);
-    // Only a command client has a reply to hold back.
-    if out.wait.is_some() {
-        return Outcome::error("wait-for: only a command client can wait".into());
-    }
     if let Some(job) = out.job.take() {
         srv.start_job(
             job,
@@ -150,16 +145,10 @@ pub fn run_list(srv: &mut Server, ctx: &Ctx, cmds: &[Vec<String>]) -> Outcome {
                 .ok()
         });
         srv.queue_hook(&format!("after-{}", parsed.name()), ctx.clone(), session);
-        // run-shell: the rest of the list waits for its job.
+        // run-shell, wait-for: the rest of the list waits for the job.
         if let Some(job) = out.job.as_mut() {
             // After what an inner list (an if-shell branch) left waiting.
             job.rest.extend_from_slice(&cmds[i + 1..]);
-            return out;
-        }
-        if out.wait.is_some() && !std::ptr::eq(argv, cmds.last().expect("in cmds")) {
-            out.wait = None;
-            out.status = 1;
-            out.stderr.push_str("wait-for must end its command list");
             return out;
         }
     }

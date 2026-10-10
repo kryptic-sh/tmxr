@@ -25,6 +25,8 @@ pub enum Work {
     },
     /// Only the delay (`run-shell -d` with no command).
     Wait,
+    /// `wait-for`: a signal on a channel, or its lock.
+    Channel(crate::waits::Wait),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,9 +55,20 @@ pub struct Done {
 }
 
 impl Server {
-    /// Start `job` off the server thread; [`Server::job_done`] takes it up
-    /// when it finishes.
-    pub fn start_job(&self, job: Job, then: Then) {
+    /// Start `job` off the server thread, or for `wait-for` queue it on its
+    /// channel; [`Server::job_done`] takes it up when it finishes.
+    pub fn start_job(&mut self, job: Job, then: Then) {
+        if let Work::Channel(wait) = &job.work {
+            let wait = wait.clone();
+            let done = Done {
+                job,
+                output: String::new(),
+                ok: true,
+                then,
+            };
+            self.waits.enqueue(done, &wait);
+            return;
+        }
         let events = self.events.clone();
         let shell = self.cfg.default_shell.clone();
         let started = std::thread::Builder::new()
@@ -71,7 +84,7 @@ impl Server {
                         String::new(),
                         crate::server::shell_succeeds(line, shell.as_deref()),
                     ),
-                    Work::Command(_) | Work::Wait => (String::new(), true),
+                    Work::Command(_) | Work::Wait | Work::Channel(_) => (String::new(), true),
                 };
                 let done = Done {
                     job,
@@ -107,7 +120,7 @@ impl Server {
                 Some(cmd) => crate::cmds::run_line(self, ctx, cmd),
                 None => Outcome::default(),
             },
-            Work::Shell { .. } | Work::Wait => Outcome {
+            Work::Shell { .. } | Work::Wait | Work::Channel(_) => Outcome {
                 stdout: output,
                 ..Outcome::default()
             },
@@ -151,8 +164,8 @@ impl Server {
 }
 
 /// Add `more`, which ran after `out`, to it: the output follows, and what
-/// `more` asks for next (an error status, a job, a wait, an attach) is what
-/// happens next.
+/// `more` asks for next (an error status, a job, an attach) is what happens
+/// next.
 fn append(out: &mut Outcome, more: Outcome) {
     out.stdout.push_str(&more.stdout);
     out.stderr.push_str(&more.stderr);
@@ -161,9 +174,6 @@ fn append(out: &mut Outcome, more: Outcome) {
     }
     if more.job.is_some() {
         out.job = more.job;
-    }
-    if more.wait.is_some() {
-        out.wait = more.wait;
     }
     if more.attach.is_some() {
         out.attach = more.attach;

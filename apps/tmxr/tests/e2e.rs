@@ -2516,10 +2516,35 @@ fn wait_for_blocks_until_signalled_or_unlocked() {
             .success()
     );
 
-    let chained = t.output(&["wait-for", "x", ";", "ls"]);
+    // Mid-list, the rest of the list waits for the signal.
+    let mut chained = spawn(&["wait-for", "mid", ";", "set-option", "-g", "@after", "yes"]);
+    std::thread::sleep(Duration::from_millis(500));
+    assert_eq!(t.run(&["display-message", "-p", "#{@after}"]).trim(), "");
+    t.run(&["wait-for", "-S", "mid"]);
     assert!(
-        String::from_utf8_lossy(&chained.stderr).contains("must end its command list"),
-        "{chained:?}"
+        exits_within(&mut chained, TIMEOUT)
+            .expect("not released")
+            .success()
+    );
+    assert_eq!(t.run(&["display-message", "-p", "#{@after}"]).trim(), "yes");
+
+    // A bind waits too, with no command client behind it.
+    let s = t.attach(&["attach", "-t", "wf"]);
+    s.wait_for("status line", |text| text.contains("wf"));
+    t.run(&[
+        "bind-key",
+        "-n",
+        "F8",
+        "wait-for bound ; set-option -g @bound yes",
+    ]);
+    s.send(b"\x1b[19~");
+    std::thread::sleep(Duration::from_millis(500));
+    assert_eq!(t.run(&["display-message", "-p", "#{@bound}"]).trim(), "");
+    t.run(&["wait-for", "-S", "bound"]);
+    t.wait_run(
+        &["display-message", "-p", "#{@bound}"],
+        "the bind's rest",
+        |o| o.trim() == "yes",
     );
 }
 

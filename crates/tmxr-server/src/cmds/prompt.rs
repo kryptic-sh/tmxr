@@ -328,9 +328,6 @@ pub(super) fn run(
 /// `out`, and its failure fails the current command.
 fn run_nested(srv: &mut Server, ctx: &Ctx, line: &str, out: &mut Outcome) -> Res {
     let inner = super::run_line(srv, ctx, line);
-    if inner.wait.is_some() {
-        return Err("wait-for must end its command list".into());
-    }
     out.stdout.push_str(&inner.stdout);
     out.attach = inner.attach.or(out.attach);
     // A run-shell in it: the outer list waits for it too.

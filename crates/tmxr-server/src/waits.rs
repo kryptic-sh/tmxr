@@ -1,11 +1,10 @@
-//! `wait-for` channels: command clients wait on a channel until another
-//! command signals it (`-S`), or take turns holding its lock (`-L` / `-U`).
+//! `wait-for` channels: a command list waits on a channel until another
+//! command signals it (`-S`), or takes turns holding its lock (`-L` / `-U`).
+//! What waits is the rest of the list, as a job (`crate::jobs`).
 
 use std::collections::{HashMap, VecDeque};
 
-use crate::model::ClientId;
-
-/// What a command client waits for.
+/// What a command list waits for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Wait {
     /// A signal on the channel.
@@ -14,28 +13,43 @@ pub enum Wait {
     Lock(String),
 }
 
-#[derive(Debug, Default)]
-struct Channel {
-    /// Clients waiting for a signal.
-    waiters: Vec<ClientId>,
+struct Channel<T> {
+    /// Waiting for a signal.
+    waiters: Vec<T>,
     /// Signalled with nobody waiting: the next wait returns at once.
     woken: bool,
     locked: bool,
-    /// Clients waiting for the lock, first come first served.
-    lockers: VecDeque<ClientId>,
+    /// Waiting for the lock, first come first served.
+    lockers: VecDeque<T>,
 }
 
-impl Channel {
+impl<T> Default for Channel<T> {
+    fn default() -> Self {
+        Self {
+            waiters: Vec::new(),
+            woken: false,
+            locked: false,
+            lockers: VecDeque::new(),
+        }
+    }
+}
+
+impl<T> Channel<T> {
     fn idle(&self) -> bool {
         self.waiters.is_empty() && !self.woken && !self.locked && self.lockers.is_empty()
     }
 }
 
-/// Every channel in use.
-#[derive(Debug, Default)]
-pub struct Waits(HashMap<String, Channel>);
+/// Every channel in use, with what waits on each.
+pub struct Waits<T>(HashMap<String, Channel<T>>);
 
-impl Waits {
+impl<T> Default for Waits<T> {
+    fn default() -> Self {
+        Self(HashMap::new())
+    }
+}
+
+impl<T> Waits<T> {
     /// `wait-for name`: whether it returns at once (a signal came first).
     pub fn wait(&mut self, name: &str) -> bool {
         let ch = self.0.entry(name.to_owned()).or_default();
@@ -48,30 +62,30 @@ impl Waits {
         !std::mem::replace(&mut ch.locked, true)
     }
 
-    /// Queue `client` for what it waits for.
-    pub fn enqueue(&mut self, client: ClientId, wait: &Wait) {
+    /// Queue `waiter` for what it waits for.
+    pub fn enqueue(&mut self, waiter: T, wait: &Wait) {
         match wait {
-            Wait::Signal(name) => self.0.entry(name.clone()).or_default().waiters.push(client),
+            Wait::Signal(name) => self.0.entry(name.clone()).or_default().waiters.push(waiter),
             Wait::Lock(name) => self
                 .0
                 .entry(name.clone())
                 .or_default()
                 .lockers
-                .push_back(client),
+                .push_back(waiter),
         }
     }
 
-    /// `wait-for -S name`: the clients to release. With none waiting, the
-    /// next wait returns at once.
-    pub fn signal(&mut self, name: &str) -> Vec<ClientId> {
+    /// `wait-for -S name`: what to release. With nothing waiting, the next
+    /// wait returns at once.
+    pub fn signal(&mut self, name: &str) -> Vec<T> {
         let ch = self.0.entry(name.to_owned()).or_default();
         let woken = std::mem::take(&mut ch.waiters);
         ch.woken = woken.is_empty();
         woken
     }
 
-    /// `wait-for -U name`: the client the lock passes to, if one waits.
-    pub fn unlock(&mut self, name: &str) -> Result<Option<ClientId>, String> {
+    /// `wait-for -U name`: what the lock passes to, if anything waits.
+    pub fn unlock(&mut self, name: &str) -> Result<Option<T>, String> {
         let ch = self
             .0
             .get_mut(name)
@@ -85,11 +99,11 @@ impl Waits {
         Ok(next)
     }
 
-    /// A client that went away waits for nothing any more.
-    pub fn forget(&mut self, client: ClientId) {
+    /// Stop waiting for whatever `gone` matches (a client that went away).
+    pub fn forget(&mut self, gone: impl Fn(&T) -> bool) {
         for ch in self.0.values_mut() {
-            ch.waiters.retain(|c| *c != client);
-            ch.lockers.retain(|c| *c != client);
+            ch.waiters.retain(|w| !gone(w));
+            ch.lockers.retain(|w| !gone(w));
         }
         self.0.retain(|_, ch| !ch.idle());
     }
@@ -101,7 +115,7 @@ mod tests {
 
     #[test]
     fn a_signal_releases_waiters_or_wakes_the_next_wait() {
-        let mut w = Waits::default();
+        let mut w = Waits::<u32>::default();
         assert!(!w.wait("done"));
         w.enqueue(1, &Wait::Signal("done".into()));
         w.enqueue(2, &Wait::Signal("done".into()));
@@ -114,7 +128,7 @@ mod tests {
 
     #[test]
     fn the_lock_passes_in_turn_and_unlocking_twice_fails() {
-        let mut w = Waits::default();
+        let mut w = Waits::<u32>::default();
         assert!(w.lock("l"));
         assert!(!w.lock("l"));
         w.enqueue(7, &Wait::Lock("l".into()));
@@ -125,9 +139,9 @@ mod tests {
 
     #[test]
     fn a_departed_client_is_forgotten() {
-        let mut w = Waits::default();
+        let mut w = Waits::<u32>::default();
         w.enqueue(3, &Wait::Signal("x".into()));
-        w.forget(3);
+        w.forget(|c| *c == 3);
         assert!(w.signal("x").is_empty());
     }
 }
