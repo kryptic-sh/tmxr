@@ -79,11 +79,12 @@ table. What has been verified, and how:
 - **tmux command shorthand** (requested 2026-10-09: `tmux a` for
   `attach-session` and the like). The lookup works as tmux's does
   (`tmxr_command::table::lookup`): exact name or alias first, then an
-  unambiguous prefix of a full name; unit-tested there. Every tmux alias on a
-  list of tmux 3.x's aliases written from memory is present; check it against a
-  real `tmux list-commands`. Every tmux 3.x command is in the table. Checked
-  against a running server on 2026-10-10: `pipe`, `custom`, `linkw`, `popup`,
-  `resizew` and `lockc` resolve, and `displ` is ambiguous as in tmux.
+  unambiguous prefix of a full name; unit-tested there. Compared with a real
+  tmux 3.6's `list-commands` on 2026-10-10 (WSL Ubuntu): all 90 of its commands
+  are in the table and all 77 of its aliases match (the comparison was shown to
+  catch a changed alias and a missing command). Checked against a running server
+  on 2026-10-10: `pipe`, `custom`, `linkw`, `popup`, `resizew` and `lockc`
+  resolve, and `displ` is ambiguous as in tmux.
 - **Differences from tmux kept on purpose** (considered and declined):
   - A window cannot be linked twice into the same session (tmux allows it).
     Windows are found in a session by id in many places (`Session::index_of`,
@@ -100,14 +101,6 @@ table. What has been verified, and how:
   `visual-activity` / `visual-bell` / `visual-silence` messages and
   `activity-action` / `bell-action` / `silence-action` are not implemented
   (alerts only set window flags).
-- **Click sequence not checked against tmux**: tmxr sends `MouseDown1…` for the
-  first press, `SecondClick1…` (only) for a second press in the same cell within
-  the click time, `TripleClick1…` for a third, and `DoubleClick1…` from a timer
-  when no third press came. That is tmux 3.3's `server_client_check_mouse` as
-  recalled, not compared with a running tmux: if tmux also sends `MouseDown1…`
-  on the second press, binds on it would fire once fewer here. The default
-  double- and triple-click binds then show the selection for 0.3 s
-  (`run-shell -d 0.3`) before copying, as tmux's do.
 - **`rgb-colour auto`** decides from the client's environment only:
   `COLORTERM=truecolor` / `24bit`, a `TERM` ending in `-direct`, or
   `WT_SESSION`. Terminals that take 24-bit colour without saying so (some

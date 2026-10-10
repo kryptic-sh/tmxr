@@ -1940,6 +1940,50 @@ fn resurrect_restores_allowlisted_programs_with_their_arguments() {
 }
 
 #[test]
+fn clicks_send_the_keys_tmux_sends() {
+    let t = Tmxr::new("clickseq");
+    let s = t.attach(&["new", "-s", "cs"]);
+    s.wait_for("status line", |text| text.contains("cs"));
+    s.wait_mouse(true);
+    for (key, mark) in [
+        ("MouseDown1Pane", "D"),
+        ("MouseUp1Pane", "U"),
+        ("SecondClick1Pane", "S"),
+        ("DoubleClick1Pane", "2"),
+        ("TripleClick1Pane", "3"),
+    ] {
+        t.run(&[
+            "bind-key",
+            "-n",
+            key,
+            &format!("set-option -ga @seq {mark}"),
+        ]);
+    }
+    let seq = |t: &Tmxr| {
+        t.run(&["display-message", "-p", "#{@seq}"])
+            .trim()
+            .to_owned()
+    };
+    // What tmux 3.6 sends, recorded from a running tmux: the second and third
+    // presses replace MouseDown, a fourth starts over, and DoubleClick comes
+    // from the click timer only when no third press followed.
+    let clicks = |t: &Tmxr, n: usize, want: &str| {
+        t.run(&["set-option", "-g", "@seq", ""]);
+        for _ in 0..n {
+            s.click(0, 2, 0);
+        }
+        t.wait_run(&["display-message", "-p", "#{@seq}"], want, |o| {
+            o.trim().len() >= want.len()
+        });
+        // Past the click time, for a DoubleClick that should not come.
+        std::thread::sleep(Duration::from_secs(1));
+        assert_eq!(seq(t), want, "{n} clicks");
+    };
+    clicks(&t, 4, "DUSU3UDU");
+    clicks(&t, 2, "DUSU2");
+}
+
+#[test]
 fn copy_end_of_line_takes_the_rest_of_the_line() {
     let t = Tmxr::new("eol");
     let s = t.attach(&["new", "-s", "eo"]);
