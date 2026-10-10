@@ -22,11 +22,11 @@ table. What has been verified, and how:
   every command family including hooks, menus, popups, locking, `run-shell` /
   `if-shell` ordering and linked windows, resurrect, and the status line's cells
   and colours. The test names say what each covers.
-- **Not yet verified anywhere**: how the status line and borders look in a real
-  terminal emulator (the tests check cells and colours in a vt100 emulator, not
-  a terminal's rendering of the glyphs), and the navigator with a real hjkl or
-  vim in front (the test uses a renamed system program, so only the name match
-  and the key routing are covered).
+- **Seen in a real terminal** (2026-10-10, Windows Terminal 1.24, by
+  screenshot): two panes, the vertical border and the catppuccin status line
+  draw as the tests expect. hjkl's own handoff to tmxr was checked too (see
+  Cross-repo work). Not looked at in any other terminal, nor with vim in front
+  of the navigator.
 - **Not run on Linux/macOS locally**: the `cfg(unix)` arms (socket dir checks,
   peer uid, `setsid` spawn, `/proc` and `proc_pidinfo` inspection, the client's
   `/bin/sh` lock command) are compiled and tested by CI only, which runs on
@@ -153,8 +153,18 @@ table. What has been verified, and how:
   `pkg/windows/fetch-conpty.sh`) and `emulator::passthrough_supported` turns
   passthrough on when both sit beside `tmxr.exe`. Builds from source use the
   built-in ConPTY and keep it off. CI's `test-conpty` job runs the Windows suite
-  on the bundled one. Not tried with a real image protocol on the outer
-  terminal, on any platform.
+  on the bundled one. Tried once with a real image protocol (2026-10-10, the
+  then-current build with the bundled ConPTY, Windows Terminal 1.24, by
+  screenshot): a sixel wrapped in tmux passthrough and printed in a cmd pane was
+  drawn by the outer terminal. Open: Windows Terminal then showed a black
+  background from the image's row down across both panes, and the status line
+  and border below it were gone until tmxr next repainted the whole client
+  (switching windows brought them back; the image stayed, as Windows Terminal
+  keeps sixels in a layer text does not erase). A second, well-formed sixel
+  (raster attributes, transparent background `P0;1q`) was not drawn at all.
+  Repainting every client after passthrough would bring the frame back but may
+  erase images in terminals where text overwrites them, so nothing was changed;
+  compare with tmux in a terminal that has both before deciding.
 - **Windows `pane_current_path`** prefers what the shell announces (OSC 7 / OSC
   9;9), then reads the foreground process's directory from its PEB
   (`process::win::current_dir`, x64 offsets; tested with cmd's `cd /d`).
