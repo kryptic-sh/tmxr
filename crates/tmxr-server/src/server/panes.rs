@@ -358,8 +358,8 @@ impl Server {
                 }
                 // tmux drops passthrough unless it is allowed.
                 if self.cfg.allow_passthrough {
-                    for data in passthrough {
-                        self.forward_passthrough(pid, &data);
+                    for (data, cursor) in passthrough {
+                        self.forward_passthrough(pid, &data, cursor);
                     }
                 }
                 self.mark_window_dirty(wid);

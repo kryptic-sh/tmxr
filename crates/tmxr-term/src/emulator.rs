@@ -172,7 +172,7 @@ pub struct Emulator {
     dcs: DcsSplitter,
     /// tmux passthrough payloads (`ESC P tmux; … ESC \`) waiting to be
     /// forwarded to the outer terminal.
-    passthrough: Vec<Vec<u8>>,
+    passthrough: Vec<(Vec<u8>, (u16, u16))>,
     /// [`passthrough_supported`], read once.
     split: bool,
     /// The history limit, for a fresh parser.
@@ -231,8 +231,16 @@ impl Emulator {
     pub fn process(&mut self, bytes: &[u8]) -> Vec<u8> {
         if self.split {
             let split = self.dcs.split(bytes);
-            self.parser.process(&split.text);
-            self.passthrough.extend(split.passthrough);
+            // Each payload with the cursor where it was printed: the text
+            // before it is parsed first.
+            let mut done = 0;
+            for (at, payload) in split.passthrough {
+                self.parser.process(&split.text[done..at]);
+                done = at;
+                let cursor = self.parser.screen().cursor_position();
+                self.passthrough.push((payload, cursor));
+            }
+            self.parser.process(&split.text[done..]);
         } else {
             self.parser.process(bytes);
         }
@@ -274,8 +282,9 @@ impl Emulator {
         std::mem::take(&mut self.parser.callbacks_mut().clipboard)
     }
 
-    /// tmux passthrough payloads received since the last call.
-    pub fn take_passthrough(&mut self) -> Vec<Vec<u8>> {
+    /// tmux passthrough payloads received since the last call, each with the
+    /// cursor (row, column) it was printed at.
+    pub fn take_passthrough(&mut self) -> Vec<(Vec<u8>, (u16, u16))> {
         std::mem::take(&mut self.passthrough)
     }
 
@@ -365,6 +374,18 @@ mod tests {
         assert_eq!(e.process(b"\x1b[c"), b"\x1b[?62;22c");
         assert_eq!(e.process(b"\x1b[5n"), b"\x1b[0n");
         assert!(e.process(b"plain text").is_empty());
+    }
+
+    #[test]
+    fn passthrough_keeps_the_cursor_it_was_printed_at() {
+        let mut e = Emulator::new(4, 20, 0);
+        e.split = true;
+        e.process(b"ab\r\ncd\x1bPtmux;\x1b\x1b]1;x\x07\x1b\\ef");
+        assert_eq!(
+            e.take_passthrough(),
+            vec![(b"\x1b]1;x\x07".to_vec(), (1, 2))]
+        );
+        assert_eq!(e.screen().cursor_position(), (1, 4), "the rest parsed too");
     }
 
     #[test]

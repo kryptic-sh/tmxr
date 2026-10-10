@@ -1141,14 +1141,14 @@ fn passthrough_is_forwarded_where_the_platform_allows() {
     let program = [
         "/bin/sh",
         "-c",
-        r"printf '\033Ptmux;\033\033]1337;tmxr-pt-marker\007\033\\after-dcs'; sleep 30",
+        r"printf 'abc\033Ptmux;\033\033]1337;tmxr-pt-marker\007\033\\after-dcs'; sleep 30",
     ];
     #[cfg(windows)]
     let program = [
         "powershell.exe",
         "-NoProfile",
         "-Command",
-        r"$e=[char]27; [Console]::Out.Write($e+'Ptmux;'+$e+$e+']1337;tmxr-pt-marker'+[char]7+$e+'\'+'after-dcs'); Start-Sleep 30",
+        r"$e=[char]27; [Console]::Out.Write('abc'+$e+'Ptmux;'+$e+$e+']1337;tmxr-pt-marker'+[char]7+$e+'\'+'after-dcs'); Start-Sleep 30",
     ];
     let mut args = vec!["new", "-s", "pt"];
     args.extend(program);
@@ -1170,6 +1170,13 @@ fn passthrough_is_forwarded_where_the_platform_allows() {
         assert!(messages.contains("allow-passthrough"), "{messages}");
     } else {
         assert!(forwarded, "payload not forwarded: {:?}", s.raw_text());
+        // From the cell it was printed at, after "abc": row 1, column 4.
+        assert!(
+            s.raw_text()
+                .contains("\x1b[1;4H\x1b]1337;tmxr-pt-marker\x07"),
+            "not placed at the pane's cursor: {:?}",
+            s.raw_text()
+        );
     }
 }
 

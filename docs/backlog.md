@@ -153,18 +153,19 @@ table. What has been verified, and how:
   `pkg/windows/fetch-conpty.sh`) and `emulator::passthrough_supported` turns
   passthrough on when both sit beside `tmxr.exe`. Builds from source use the
   built-in ConPTY and keep it off. CI's `test-conpty` job runs the Windows suite
-  on the bundled one. Tried once with a real image protocol (2026-10-10, the
-  then-current build with the bundled ConPTY, Windows Terminal 1.24, by
-  screenshot): a sixel wrapped in tmux passthrough and printed in a cmd pane was
-  drawn by the outer terminal. Open: Windows Terminal then showed a black
-  background from the image's row down across both panes, and the status line
-  and border below it were gone until tmxr next repainted the whole client
-  (switching windows brought them back; the image stayed, as Windows Terminal
-  keeps sixels in a layer text does not erase). A second, well-formed sixel
-  (raster attributes, transparent background `P0;1q`) was not drawn at all.
-  Repainting every client after passthrough would bring the frame back but may
-  erase images in terminals where text overwrites them, so nothing was changed;
-  compare with tmux in a terminal that has both before deciding.
+  on the bundled one. Tried with a real image protocol (2026-10-10, Windows
+  Terminal 1.24, bundled ConPTY, by screenshot). Passthrough used to be sent
+  wherever the last frame left the terminal's cursor (the status line), so an
+  image drew at the bottom and scrolled the client; it now goes from the pane's
+  cursor (`Emulator::take_passthrough` returns it). Afterwards a single sixel
+  drew without damaging the frame. Open, and the terminal's, not tmxr's: with
+  several images printed in a row, Windows Terminal kept only some of them, in
+  the wrong colour. The client's exact output (captured in a test) replayed
+  straight into Windows Terminal drew all of them correctly, so the bytes are
+  right; live, frame redraws land between the images and Windows Terminal drops
+  image pixels under text written over them. tmux's passthrough has the same
+  property (it does not track passthrough images either). Not tried on
+  Linux/macOS terminals.
 - **Windows `pane_current_path`** prefers what the shell announces (OSC 7 / OSC
   9;9), then reads the foreground process's directory from its PEB
   (`process::win::current_dir`, x64 offsets; tested with cmd's `cd /d`).

@@ -37,8 +37,9 @@ enum State {
 pub struct Split {
     /// Everything but DCS strings, for the terminal parser.
     pub text: Vec<u8>,
-    /// Payloads of completed `ESC P tmux; … ESC \` strings.
-    pub passthrough: Vec<Vec<u8>>,
+    /// Payloads of completed `ESC P tmux; … ESC \` strings, each with how
+    /// much of `text` came before it: where in the output it was printed.
+    pub passthrough: Vec<(usize, Vec<u8>)>,
 }
 
 #[derive(Debug, Default)]
@@ -77,7 +78,7 @@ impl DcsSplitter {
                 // ESC \ (ST) ends the string.
                 (State::DcsEsc, b'\\') => {
                     if let Some(payload) = self.dcs.strip_prefix(PASSTHROUGH) {
-                        out.passthrough.push(payload.to_vec());
+                        out.passthrough.push((out.text.len(), payload.to_vec()));
                     }
                     self.dcs.clear();
                     State::Ground
@@ -125,8 +126,10 @@ mod tests {
         let mut all = Split::default();
         for c in chunks {
             let part = s.split(c);
+            let before = all.text.len();
             all.text.extend(part.text);
-            all.passthrough.extend(part.passthrough);
+            all.passthrough
+                .extend(part.passthrough.into_iter().map(|(at, p)| (before + at, p)));
         }
         all
     }
@@ -143,7 +146,8 @@ mod tests {
     fn tmux_passthrough_is_taken_out_with_escapes_undoubled() {
         let out = split_all(&[b"a\x1bPtmux;\x1b\x1b]52;c;aGk=\x07\x1b\\b"]);
         assert_eq!(out.text, b"ab");
-        assert_eq!(out.passthrough, vec![b"\x1b]52;c;aGk=\x07".to_vec()]);
+        // After the "a" it followed.
+        assert_eq!(out.passthrough, vec![(1, b"\x1b]52;c;aGk=\x07".to_vec())]);
     }
 
     #[test]
@@ -153,7 +157,10 @@ mod tests {
         let out = split_all(&bytes);
         assert_eq!(out, split_all(&[whole]));
         assert_eq!(out.text, b"xy");
-        assert_eq!(out.passthrough, vec![b"\x1b_Gf=100;AAAA\x1b\\".to_vec()]);
+        assert_eq!(
+            out.passthrough,
+            vec![(1, b"\x1b_Gf=100;AAAA\x1b\\".to_vec())]
+        );
     }
 
     #[test]

@@ -630,10 +630,16 @@ impl Server {
 
     /// `allow-passthrough`: write a program's passthrough payload as is to
     /// every client showing its pane's window.
-    fn forward_passthrough(&mut self, pane: PaneId, data: &[u8]) {
-        let Some(wid) = self.panes.get(&pane).map(|p| p.window) else {
+    /// Send a pane's passthrough to the clients showing its window, from the
+    /// cell where the pane's program printed it, as tmux does: an inline
+    /// image lands where it belongs, not wherever the last frame left the
+    /// terminal's cursor.
+    fn forward_passthrough(&mut self, pane: PaneId, data: &[u8], (row, col): (u16, u16)) {
+        let Some((wid, rect)) = self.panes.get(&pane).map(|p| (p.window, p.rect)) else {
             return;
         };
+        let mut out = format!("\x1b[{};{}H", rect.y + row + 1, rect.x + col + 1).into_bytes();
+        out.extend_from_slice(data);
         let viewers: Vec<ClientId> = self
             .clients
             .values()
@@ -648,7 +654,7 @@ impl Server {
             .map(|c| c.id)
             .collect();
         for id in viewers {
-            self.send(id, ServerMsg::Output(data.to_vec()));
+            self.send(id, ServerMsg::Output(out.clone()));
         }
     }
 
