@@ -136,15 +136,32 @@ pub fn run_list(srv: &mut Server, ctx: &Ctx, cmds: &[Vec<String>]) -> Outcome {
             out.stderr.push_str(&e);
             return out;
         }
-        // The session the command acted on, by its -t target.
-        let session = parsed.args.value('t').and_then(|t| {
+        // Where the command acted, by its -t target: its pane, window or
+        // session, as far as the target names one.
+        let scope = parsed.args.value('t').map_or_else(Default::default, |t| {
+            use crate::hooks::HookScope;
             crate::target::pane(srv, ctx, Some(t))
-                .map(|(s, _, _)| s)
-                .or_else(|_| crate::target::window(srv, ctx, Some(t)).map(|(s, _, _)| s))
-                .or_else(|_| crate::target::session(srv, ctx, Some(t)))
-                .ok()
+                .map(|(s, w, p)| HookScope {
+                    session: Some(s),
+                    window: Some(w),
+                    pane: Some(p),
+                })
+                .or_else(|_| {
+                    crate::target::window(srv, ctx, Some(t)).map(|(s, _, w)| HookScope {
+                        session: Some(s),
+                        window: Some(w),
+                        pane: None,
+                    })
+                })
+                .or_else(|_| {
+                    crate::target::session(srv, ctx, Some(t)).map(|s| HookScope {
+                        session: Some(s),
+                        ..HookScope::default()
+                    })
+                })
+                .unwrap_or_default()
         });
-        srv.queue_hook(&format!("after-{}", parsed.name()), ctx.clone(), session);
+        srv.queue_hook(&format!("after-{}", parsed.name()), ctx.clone(), scope);
         // run-shell, wait-for: the rest of the list waits for the job.
         if let Some(job) = out.job.as_mut() {
             // After what an inner list (an if-shell branch) left waiting.

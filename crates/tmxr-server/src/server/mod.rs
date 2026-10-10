@@ -164,7 +164,7 @@ pub struct Server {
     /// Global hooks (`set-hook -g`).
     pub hooks: crate::hooks::HookTable,
     /// Events whose hooks run once the current event is handled.
-    pub pending_hooks: Vec<(String, Ctx, Option<SessionId>)>,
+    pub pending_hooks: Vec<(String, Ctx, crate::hooks::HookScope)>,
     /// A hook's commands are running: they fire no further hooks.
     pub in_hook: bool,
     last_save: Instant,

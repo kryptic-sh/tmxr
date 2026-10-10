@@ -41,6 +41,8 @@ pub struct Pane {
     pub output: crate::output::OutputHandle,
     /// `pipe-pane`: the command this pane's output is copied to.
     pub pipe: Option<crate::pipe::PanePipe>,
+    /// `set-hook -p`: hooks for events in this pane.
+    pub hooks: crate::hooks::HookTable,
 }
 
 /// An environment as tmux keeps one: variables set, and names removed from
@@ -107,6 +109,8 @@ pub struct Window {
     pub silence: bool,
     /// When one of its panes last printed.
     pub last_output: Instant,
+    /// `set-hook -w`: hooks for events in this window.
+    pub hooks: crate::hooks::HookTable,
 }
 
 impl Window {

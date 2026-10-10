@@ -69,7 +69,7 @@ impl Server {
             pane: self.active_pane_of_session(id),
             ..Ctx::default()
         };
-        self.queue_hook("session-created", ctx, None);
+        self.queue_hook("session-created", ctx, crate::hooks::HookScope::default());
         Ok(id)
     }
 
@@ -122,6 +122,7 @@ impl Server {
                 activity: false,
                 silence: false,
                 last_output: Instant::now(),
+                hooks: crate::hooks::HookTable::new(),
             },
         );
         if let Err(e) = self.spawn_pane(pid, wid, session, &argv, cwd, env, cols, rows) {
@@ -282,7 +283,11 @@ impl Server {
         let Some(s) = self.sessions.remove(&sid) else {
             return;
         };
-        self.queue_hook("session-closed", Ctx::default(), None);
+        self.queue_hook(
+            "session-closed",
+            Ctx::default(),
+            crate::hooks::HookScope::default(),
+        );
         for w in s.windows.values().copied().collect::<Vec<_>>() {
             // A window linked to another session lives on there.
             if self.session_of_window(w).is_some() {
@@ -358,6 +363,7 @@ impl Server {
                 activity: false,
                 silence: false,
                 last_output: Instant::now(),
+                hooks: crate::hooks::HookTable::new(),
             },
         );
         if let Some(p) = self.panes.get_mut(&pane) {

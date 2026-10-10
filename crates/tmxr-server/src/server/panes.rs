@@ -52,6 +52,7 @@ impl Server {
                 clock: false,
                 output: started.output,
                 pipe: None,
+                hooks: crate::hooks::HookTable::new(),
             },
         );
         Ok(())
@@ -163,14 +164,20 @@ impl Server {
         };
         let cwd = cwd.unwrap_or_else(|| p.start_cwd.clone());
         let session = self.session_of_window(wid).ok_or("window has no session")?;
+        // The pane's hooks belong to the pane, not its program.
+        let mut hooks = crate::hooks::HookTable::new();
         if let Some(mut old) = self.panes.remove(&pid) {
             let _ = old.pty.kill();
+            hooks = std::mem::take(&mut old.hooks);
         }
         self.commands.remove(&pid);
         if let Err(e) = self.spawn_pane(pid, wid, session, &argv, cwd, env, rect.w, rect.h) {
             // The old program is gone: take its cell out of the layout too.
             self.remove_pane_from_window(wid, pid);
             return Err(e);
+        }
+        if let Some(p) = self.panes.get_mut(&pid) {
+            p.hooks = hooks;
         }
         self.relayout(wid);
         Ok(())
@@ -363,7 +370,7 @@ impl Server {
                     pane: Some(pid),
                     ..crate::cmds::Ctx::default()
                 };
-                self.queue_hook("pane-exited", ctx, None);
+                self.queue_hook("pane-exited", ctx, crate::hooks::HookScope::default());
                 if self.cfg.remain_on_exit
                     && let Some(p) = self.panes.get_mut(&pid)
                 {

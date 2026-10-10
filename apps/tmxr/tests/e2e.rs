@@ -2608,12 +2608,53 @@ fn hooks_run_after_commands_and_events() {
     t.run(&["set-hook", "-gu", "session-created"]);
     assert!(!t.run(&["show-hooks", "-g"]).contains("session-created"));
 
-    for bad in [
-        &["set-hook", "-g", "no-such-hook", "ls"][..],
-        &["set-hook", "-p", "after-new-window", "ls"],
-    ] {
-        assert!(!t.output(bad).status.success(), "{bad:?} was accepted");
-    }
+    assert!(
+        !t.output(&["set-hook", "-g", "no-such-hook", "ls"])
+            .status
+            .success()
+    );
+
+    // Window and pane hooks: the most specific one an event has runs.
+    t.run(&[
+        "set-hook",
+        "-g",
+        "after-select-pane",
+        "set-option -g @who global",
+    ]);
+    t.run(&["new-window", "-d", "-t", "hk:7"]);
+    t.run(&[
+        "set-hook",
+        "-w",
+        "-t",
+        "hk:7",
+        "after-select-pane",
+        "set-option -g @who window",
+    ]);
+    t.run(&["select-pane", "-t", "hk:7.0"]);
+    assert_eq!(opt(&t, "who"), "window");
+    t.run(&[
+        "set-hook",
+        "-p",
+        "-t",
+        "hk:7.0",
+        "after-select-pane",
+        "set-option -g @who pane",
+    ]);
+    t.run(&["select-pane", "-t", "hk:7.0"]);
+    assert_eq!(opt(&t, "who"), "pane");
+    // Elsewhere, the global one.
+    t.run(&["select-pane", "-t", "hk:0.0"]);
+    assert_eq!(opt(&t, "who"), "global");
+    // A respawned pane keeps its hooks.
+    t.run(&["respawn-pane", "-k", "-t", "hk:7.0"]);
+    t.run(&["select-pane", "-t", "hk:7.0"]);
+    assert_eq!(opt(&t, "who"), "pane");
+    let shown = t.run(&["show-hooks", "-w", "-t", "hk:7"]);
+    assert!(
+        shown.contains("after-select-pane[0] set-option -g @who window"),
+        "{shown}"
+    );
+    t.run(&["set-hook", "-gu", "after-select-pane"]);
 
     // A hook's own commands fire no hooks: one extra window, not a loop.
     t.run(&[

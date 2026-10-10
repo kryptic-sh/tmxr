@@ -19,18 +19,15 @@ pub(super) fn run(
     let pos = a.positional();
     match p.name() {
         "set-hook" => {
-            if a.has('p') || a.has('w') {
-                return Err("set-hook: pane and window hooks are not supported".into());
-            }
             let name = &pos[0];
             if !crate::hooks::known(name) {
                 return Err(format!("unknown hook: {name}"));
             }
             if a.has('R') {
-                srv.queue_hook(name, ctx.clone(), None);
+                srv.queue_hook(name, ctx.clone(), crate::hooks::HookScope::default());
                 return Ok(true);
             }
-            let table = hooks_mut(srv, ctx, a.has('g'), a.value('t'))?;
+            let table = hooks_mut(srv, ctx, a)?;
             if a.has('u') {
                 table.remove(name);
             } else {
@@ -45,12 +42,7 @@ pub(super) fn run(
             }
         }
         "show-hooks" => {
-            let table = if a.has('g') {
-                &srv.hooks
-            } else {
-                let sid = target::session(srv, ctx, a.value('t'))?;
-                &srv.sessions.get(&sid).ok_or("no such session")?.hooks
-            };
+            let table = hooks_mut(srv, ctx, a)?;
             for (name, cmds) in table {
                 for (i, cmd) in cmds.iter().enumerate() {
                     let _ = writeln!(out.stdout, "{name}[{i}] {cmd}");
@@ -62,16 +54,25 @@ pub(super) fn run(
     Ok(true)
 }
 
-/// The global table with `-g`, else the target (or current) session's.
+/// The table a command means: the global one with `-g`, the target pane's
+/// with `-p`, its window's with `-w`, else the target session's.
 fn hooks_mut<'s>(
     srv: &'s mut Server,
     ctx: &Ctx,
-    global: bool,
-    target: Option<&str>,
+    a: &tmxr_command::Args,
 ) -> Result<&'s mut HookTable, String> {
-    if global {
+    let t = a.value('t');
+    if a.has('g') {
         return Ok(&mut srv.hooks);
     }
-    let sid = target::session(srv, ctx, target)?;
+    if a.has('p') {
+        let (_, _, pid) = target::pane(srv, ctx, t)?;
+        return Ok(&mut srv.panes.get_mut(&pid).ok_or("no such pane")?.hooks);
+    }
+    if a.has('w') {
+        let (_, _, wid) = target::window(srv, ctx, t)?;
+        return Ok(&mut srv.windows.get_mut(&wid).ok_or("no such window")?.hooks);
+    }
+    let sid = target::session(srv, ctx, t)?;
     Ok(&mut srv.sessions.get_mut(&sid).ok_or("no such session")?.hooks)
 }

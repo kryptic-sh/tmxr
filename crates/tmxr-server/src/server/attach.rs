@@ -59,7 +59,7 @@ impl Server {
             pane: self.active_pane_of_session(session),
             ..Ctx::default()
         };
-        self.queue_hook("client-attached", ctx, None);
+        self.queue_hook("client-attached", ctx, crate::hooks::HookScope::default());
     }
 
     pub fn detach(&mut self, id: ClientId, reason: &str) {
@@ -87,7 +87,7 @@ impl Server {
             pane: self.active_pane_of_session(att.session),
             ..Ctx::default()
         };
-        self.queue_hook("client-detached", ctx, None);
+        self.queue_hook("client-detached", ctx, crate::hooks::HookScope::default());
     }
 
     /// Point an attached client at another session.

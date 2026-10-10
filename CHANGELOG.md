@@ -42,6 +42,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   window's name) and expand formats, and a popup or menu with no `-t` takes its
   formats from the client's current pane.
 
+- Window and pane hooks: `set-hook -w` / `-p` (and `show-hooks -w` / `-p`). An
+  event runs its pane's hooks, else its window's, its session's, the global
+  ones; a respawned pane keeps its hooks.
+
 ### Changed
 
 - `wait-for` works anywhere a command list runs, as in tmux: in the middle of a
