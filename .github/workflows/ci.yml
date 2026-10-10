@@ -247,7 +247,9 @@ jobs:
       - run: cargo build --locked -p tmxr-cli
       - name: Connect as the owner and as another user
         run: |
-          set -eu
+          # -x: a failure names its command (one flaked on ubuntu without
+          # saying which).
+          set -eux
           if [ "$(uname)" = Darwin ]; then
             home=/Users/tmxrother
             sudo sysadminctl -addUser tmxrother -home "$home" \
