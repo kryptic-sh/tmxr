@@ -63,10 +63,6 @@ table. What has been verified, and how:
   not turn the e2e test red on Windows, because closing the ConPTY ends the
   program anyway. Whether the explicit kill is what ends it on Unix (where the
   PTY reader thread holds its own copy of the master) is not verified.
-- **Resurrect and linked windows** (`link-window`): a save walks each session's
-  windows, so a window linked into two sessions is saved twice and restored as
-  two separate windows. Saving it once and re-linking it on restore needs a
-  window identity in the save format. Not started.
 - **tmux command shorthand** (requested 2026-10-09: `tmux a` for
   `attach-session` and the like). The lookup works as tmux's does
   (`tmxr_command::table::lookup`): exact name or alias first, then an

@@ -30,6 +30,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Resurrect saved a window linked into several sessions once per session, so a
+  restore made separate copies of it; it is now saved once and linked again.
+
 - A `display-popup` box stays inside its client when the client is resized:
   moved in, and shrunk when it no longer fits. It used to keep its place and
   size, running off the screen.

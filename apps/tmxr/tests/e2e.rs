@@ -3427,3 +3427,46 @@ fn display_popup_stays_inside_a_resized_client() {
         std::thread::sleep(Duration::from_millis(100));
     }
 }
+
+#[test]
+fn resurrect_restores_a_linked_window_as_one_window() {
+    let t = Tmxr::new("reslink");
+    t.run(&["new-session", "-d", "-s", "a"]);
+    t.run(&["new-window", "-d", "-t", "a:1", "-n", "shared"]);
+    t.run(&["new-session", "-d", "-s", "b", "-n", "own"]);
+    t.run(&["link-window", "-d", "-s", "a:shared", "-t", "b:5"]);
+    // In c the linked window is the first one, which a session is made with.
+    t.run(&["new-session", "-d", "-s", "c", "-n", "later"]);
+    t.run(&["move-window", "-s", "c:0", "-t", "c:9"]);
+    t.run(&["link-window", "-d", "-s", "a:shared", "-t", "c:0"]);
+    t.run(&["resurrect-save"]);
+    t.run(&["kill-server"]);
+    t.wait_run(&["ls"], "server gone", str::is_empty);
+
+    let config = std::fs::read_to_string(&t.config).unwrap();
+    std::fs::write(
+        &t.config,
+        config.replace("restore-on-start = false", "restore-on-start = true"),
+    )
+    .unwrap();
+    t.run(&["new-session", "-d", "-s", "other"]);
+    let id = |target: &str| {
+        t.run(&["display-message", "-p", "-t", target, "#{window_id}"])
+            .trim()
+            .to_owned()
+    };
+    let shared = id("a:shared");
+    assert!(!shared.is_empty());
+    assert_eq!(id("b:5"), shared, "b's link");
+    assert_eq!(id("c:0"), shared, "c's first window");
+    assert_eq!(
+        t.run(&["display-message", "-p", "-t", "c:0", "#{window_linked}"])
+            .trim(),
+        "1"
+    );
+    // c kept its own window, and no copy of the shared one exists.
+    let windows = |s: &str| t.run(&["list-windows", "-t", s]).lines().count();
+    assert_eq!(windows("c"), 2);
+    assert_eq!(windows("b"), 2);
+    assert!(!id("c:9").is_empty());
+}

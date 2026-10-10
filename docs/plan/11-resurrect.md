@@ -26,6 +26,11 @@ Stretch goal for the MVP; designed now so the model keeps what it needs.
   it, with a leading `~`) as `command`, split as a tmux command is. The first
   entry that matches wins.
 
+A window linked into several sessions (`link-window`) is saved in full under the
+first of them and as a link (`link: {session, index}`) under the rest, and
+restored as one window linked again; a link whose first session was not restored
+(one of that name already ran) is reported and skipped.
+
 Each window's last pane is saved too. Not saved: pane titles, arguments of
 programs outside `restore-args`, pane contents (tmux-resurrect's
 `capture-pane-contents`).

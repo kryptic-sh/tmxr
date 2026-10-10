@@ -15,7 +15,7 @@ use hjkl_layout::{LayoutTree, SplitDir};
 use serde::{Deserialize, Serialize};
 use tmxr_proto::socket::Endpoint;
 
-use crate::model::{PaneId, SessionId};
+use crate::model::{PaneId, SessionId, WindowId};
 use crate::server::Server;
 
 const VERSION: u32 = 1;
@@ -50,6 +50,18 @@ pub struct SavedWindow {
     pub last: Option<usize>,
     pub layout: SavedLayout,
     pub panes: Vec<SavedPane>,
+    /// A window linked into this session that an earlier session in the save
+    /// holds too: restored by linking that one, not as a copy (its own
+    /// layout and panes are left empty).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub link: Option<SavedLink>,
+}
+
+/// Where a linked window was saved first.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SavedLink {
+    pub session: String,
+    pub index: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -228,6 +240,10 @@ fn program_name(program: &str) -> &str {
 
 /// Capture the server's sessions.
 pub fn capture(srv: &Server) -> Save {
+    // Each window's first place in the save, for later sessions it is linked
+    // into.
+    let mut first_seen: std::collections::HashMap<WindowId, SavedLink> =
+        std::collections::HashMap::new();
     let sessions = srv
         .sessions
         .values()
@@ -241,6 +257,27 @@ pub fn capture(srv: &Server) -> Save {
                 .iter()
                 .filter_map(|(idx, wid)| {
                     let w = srv.windows.get(wid)?;
+                    if let Some(link) = first_seen.get(wid) {
+                        return Some(SavedWindow {
+                            index: *idx,
+                            name: w.name.clone(),
+                            auto_name: w.auto_name,
+                            zoomed: false,
+                            synchronize: false,
+                            active: 0,
+                            last: None,
+                            layout: SavedLayout::Leaf(0),
+                            panes: Vec::new(),
+                            link: Some(link.clone()),
+                        });
+                    }
+                    first_seen.insert(
+                        *wid,
+                        SavedLink {
+                            session: s.name.clone(),
+                            index: *idx,
+                        },
+                    );
                     let panes = w.panes();
                     Some(SavedWindow {
                         index: *idx,
@@ -264,6 +301,7 @@ pub fn capture(srv: &Server) -> Save {
                                 }
                             })
                             .collect(),
+                        link: None,
                     })
                 })
                 .collect(),
@@ -354,6 +392,9 @@ pub struct Restored {
     pub sessions: usize,
     /// Saved directories that are gone; their panes started in `$HOME`.
     pub missing_dirs: Vec<PathBuf>,
+    /// Linked windows whose first session was not restored (one of that
+    /// name already ran).
+    pub unlinked: usize,
 }
 
 impl Restored {
@@ -368,6 +409,13 @@ impl Restored {
                 .collect();
             let _ = write!(m, "; missing, started in $HOME: {}", dirs.join(", "));
         }
+        if self.unlinked > 0 {
+            let _ = write!(
+                m,
+                "; {} linked windows not restored (their first session already ran)",
+                self.unlinked
+            );
+        }
         m
     }
 }
@@ -375,16 +423,56 @@ impl Restored {
 /// Recreate saved sessions whose names are not already in use.
 pub fn apply(srv: &mut Server, save: &Save, size: (u16, u16)) -> Result<Restored, String> {
     let mut done = Restored::default();
+    let mut placed = Placed::default();
+    let mut current = Vec::new();
     for s in &save.sessions {
         if srv.sessions.values().any(|x| x.name == s.name) || s.windows.is_empty() {
             continue;
         }
-        restore_session(srv, s, size, &mut done.missing_dirs)?;
+        let sid = restore_session(srv, s, size, &mut done.missing_dirs, &mut placed)?;
+        current.push((sid, s.current, s.last));
         done.sessions += 1;
+    }
+    // Linked windows, now that every window they name exists.
+    for (sid, index, link) in placed.links {
+        let Some(&wid) = placed.windows.get(&(link.session, link.index)) else {
+            done.unlinked += 1;
+            continue;
+        };
+        // A placeholder holds the index when the link was the session's
+        // first window, which a session cannot be made without.
+        let placeholder = srv
+            .sessions
+            .get_mut(&sid)
+            .and_then(|s| s.windows.remove(&index));
+        srv.link_window(wid, sid, Some(index), false)?;
+        if let Some(old) = placeholder
+            && srv.session_of_window(old).is_none()
+        {
+            srv.kill_window(old);
+        }
+    }
+    // Last, as the current window may be a link.
+    for (sid, cur, last) in current {
+        if let Some(sess) = srv.sessions.get_mut(&sid) {
+            if sess.windows.contains_key(&cur) {
+                sess.current = cur;
+            }
+            sess.last = last.filter(|l| sess.windows.contains_key(l));
+        }
     }
     done.missing_dirs.sort();
     done.missing_dirs.dedup();
     Ok(done)
+}
+
+/// What a restore has placed so far, for the links made at its end.
+#[derive(Default)]
+struct Placed {
+    /// (session name, index) → the window restored there.
+    windows: std::collections::HashMap<(String, u32), WindowId>,
+    /// Links still to make: session, index, the window's first place.
+    links: Vec<(SessionId, u32, SavedLink)>,
 }
 
 /// `p` if it is still a directory, else `$HOME`, noting `p` in `missing`.
@@ -402,6 +490,7 @@ fn restore_session(
     s: &SavedSession,
     size: (u16, u16),
     missing: &mut Vec<PathBuf>,
+    placed: &mut Placed,
 ) -> Result<SessionId, String> {
     let first = &s.windows[0];
     let argv = |p: &SavedPane| {
@@ -433,6 +522,10 @@ fn restore_session(
         sess.current = first.index;
     }
     for (n, w) in s.windows.iter().enumerate() {
+        if let Some(link) = &w.link {
+            placed.links.push((sid, w.index, link.clone()));
+            continue;
+        }
         let wid = if n == 0 {
             srv.sessions[&sid].windows[&w.index]
         } else {
@@ -481,12 +574,7 @@ fn restore_session(
             }
         }
         srv.relayout(wid);
-    }
-    if let Some(sess) = srv.sessions.get_mut(&sid) {
-        if sess.windows.contains_key(&s.current) {
-            sess.current = s.current;
-        }
-        sess.last = s.last.filter(|l| sess.windows.contains_key(l));
+        placed.windows.insert((s.name.clone(), w.index), wid);
     }
     Ok(sid)
 }
@@ -549,6 +637,7 @@ mod tests {
                             args: Vec::new(),
                         },
                     ],
+                    link: None,
                 }],
             }],
         }
