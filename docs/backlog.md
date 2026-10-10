@@ -206,21 +206,15 @@ table. What has been verified, and how:
   first, as do the other tests that type into a new pane; 10 full runs without
   retries afterwards had no failure, against 2 failures in the 16 runs before.
   If it fails again, the stall is not the whole story.
-- **hjkl `$TMXR` fall-through** is in hjkl `main` (`074ef614`) but not in an
-  hjkl release yet: `dispatch_tmux_navigate` runs `tmxr select-pane` when
-  `$TMXR` is set. Checked end to end on Windows on 2026-10-10 with that hjkl
-  built from `main` in the left pane of a two-pane tmxr window: `C-l` at its
-  edge moved tmxr's focus to the right pane; the same with `$TMXR` cleared left
-  it where it was, with hjkl running (its status line on the screen). Not
-  repeated on Linux or macOS. WSL Ubuntu on the dev machine could run the Linux
-  check (tmux 3.6 runs there, and tmxr's Linux release binary would), but it has
-  no Rust toolchain, hjkl's `main` needs a C toolchain to build (tree-sitter,
-  libgit2, aws-lc), and its CI keeps no artifacts. Either install rustup and
-  `build-essential` in WSL (needs sudo) or wait for an hjkl release that has
-  `074ef614`, then repeat the Windows check there.
-- **nvim navigation** is the separate
+- **Handoffs to tmxr** at a program's edge: hjkl 0.42.2 (its `App::nav_step`,
+  unit-tested in hjkl's suite) and nvim with
   [tmxr-navigator.nvim](https://github.com/kryptic-sh/tmxr-navigator.nvim)
-  plugin (CI green on Linux, macOS and Windows, nvim stable and nightly).
+  (tested in its own CI against a tmxr release). tmxr's CI job `handoff` runs
+  both against the commit under test on Linux, macOS and Windows:
+  `apps/tmxr/tests/handoff/hjkl.sh` and the plugin's `tests/integration.sh`, at
+  the releases pinned in the job (`HJKL_VERSION`, `NAVIGATOR_VERSION`). The hjkl
+  script fails with hjkl 0.42.1, which has no handoff (checked on Windows,
+  2026-10-11).
 
 ## Not yet verified
 

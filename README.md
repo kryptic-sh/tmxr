@@ -68,8 +68,8 @@ tmxr kill-server
 The prefix is `C-b`. Inside a pane, `tmxr <command>` talks to the server that
 pane belongs to (via `$TMXR`), as `tmux` does.
 
-For hjkl's own splits to hand `C-h/j/k/l` over to tmxr panes, hjkl needs its
-`$TMXR` handoff, which is not in an hjkl release yet.
+hjkl 0.42.2 or later hands `C-h/j/k/l` over to tmxr panes at the edge of its own
+splits.
 
 ## Configuration
 

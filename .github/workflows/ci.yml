@@ -297,6 +297,71 @@ jobs:
           fi
           "$dir/tmxr" -S "$sock" kill-server
 
+  # Real programs in this commit's tmxr handing C-h/j/k/l over at their edge:
+  # hjkl, and nvim with tmxr-navigator.nvim, each at its release.
+  handoff:
+    name: hjkl and nvim hand off to tmxr (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+    env:
+      HJKL_VERSION: v0.42.2
+      NAVIGATOR_VERSION: v0.1.0
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: kryptic-sh/tmxr-navigator.nvim
+          ref: ${{ env.NAVIGATOR_VERSION }}
+          path: navigator
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          toolchain: stable
+          cache: false
+      - run: rustup update --no-self-update stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --locked -p tmxr-cli
+      - name: Put this tmxr on PATH
+        shell: bash
+        run: echo "$GITHUB_WORKSPACE/target/debug" >> "$GITHUB_PATH"
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+      - name: Install hjkl
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          dir="$RUNNER_TEMP/hjkl"
+          archive="hjkl-$HJKL_VERSION-${{ matrix.target }}.${{ matrix.archive }}"
+          gh release download "$HJKL_VERSION" -R kryptic-sh/hjkl -p "$archive" -D "$dir"
+          if [ "${{ matrix.archive }}" = zip ]; then
+            unzip -q "$dir/$archive" -d "$dir"
+          else
+            tar -xzf "$dir/$archive" -C "$dir"
+          fi
+          bin=$(find "$dir" -name 'hjkl' -type f -o -name 'hjkl.exe' -type f | head -1)
+          echo "$(dirname "$bin")" >> "$GITHUB_PATH"
+      - name: hjkl hands its edge to tmxr
+        shell: bash
+        run: bash apps/tmxr/tests/handoff/hjkl.sh
+      - name: nvim with tmxr-navigator.nvim hands its edge to tmxr
+        shell: bash
+        working-directory: navigator
+        run: bash tests/integration.sh
+
   build:
     name: Build ${{ matrix.target }}
     needs: [test]
@@ -564,6 +629,7 @@ jobs:
         test-conpty,
         pipe-acl,
         socket-acl,
+        handoff,
       ]
     if: >-
       github.event_name == 'workflow_dispatch' || (github.event_name == 'push'
@@ -910,6 +976,7 @@ jobs:
         test-conpty,
         pipe-acl,
         socket-acl,
+        handoff,
         smoke,
         build,
         publish-github-release,
