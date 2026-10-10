@@ -52,6 +52,9 @@ pub struct Click {
     pub row: u16,
     pub button: u8,
     pub count: u8,
+    /// After a second click: where the `DoubleClick` goes, sent once
+    /// `CLICK_TIME` passes with no third click.
+    pub double: Option<MouseTarget>,
 }
 
 /// How soon a press must follow the last to count as a double or triple
@@ -105,7 +108,7 @@ pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
             );
             let n = button(b);
             let action = match count_click(srv, id, m, n) {
-                2 => MouseAction::DoubleClick(n),
+                2 => MouseAction::SecondClick(n),
                 3 => MouseAction::TripleClick(n),
                 _ => MouseAction::Down(n),
             };
@@ -134,6 +137,15 @@ pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
     let Some(target) = locate(srv, id, m, at) else {
         return;
     };
+    if matches!(action, MouseAction::SecondClick(_))
+        && let Some(click) = srv
+            .clients
+            .get_mut(&id)
+            .and_then(|c| c.att.as_mut())
+            .and_then(|a| a.click.as_mut())
+    {
+        click.double = Some(target);
+    }
     dispatch(srv, id, action, target);
     // A drag a bind just started takes this event as its first motion.
     if matches!(action, MouseAction::Drag(_)) {
@@ -165,8 +177,39 @@ fn count_click(srv: &mut Server, id: ClientId, m: MouseEvent, button: u8) -> u8 
         row: m.row,
         button,
         count,
+        double: None,
     });
     count
+}
+
+/// When the next pending `DoubleClick` is due, for the server loop to wake.
+pub fn next_double_click(srv: &Server) -> Option<Instant> {
+    srv.clients
+        .values()
+        .filter_map(|c| c.att.as_ref()?.click.as_ref())
+        .filter(|c| c.double.is_some())
+        .map(|c| c.at + CLICK_TIME)
+        .min()
+}
+
+/// Send each `DoubleClick` whose second click no third followed in time,
+/// as tmux's click timer does.
+pub fn fire_double_clicks(srv: &mut Server) {
+    let now = Instant::now();
+    let due: Vec<(ClientId, u8, MouseTarget)> = srv
+        .clients
+        .values_mut()
+        .filter_map(|c| {
+            let click = c.att.as_mut()?.click.as_mut()?;
+            if now.duration_since(click.at) < CLICK_TIME {
+                return None;
+            }
+            Some((c.id, click.button, click.double.take()?))
+        })
+        .collect();
+    for (id, b, target) in due {
+        dispatch(srv, id, MouseAction::DoubleClick(b), target);
+    }
 }
 
 /// tmux's button numbers: 1 left, 2 middle, 3 right.

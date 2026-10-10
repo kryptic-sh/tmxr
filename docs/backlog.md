@@ -90,12 +90,14 @@ what was not.
   `visual-activity` / `visual-bell` / `visual-silence` messages and
   `activity-action` / `bell-action` / `silence-action` are not implemented
   (alerts only set window flags).
-- **Mouse keys**: `SecondClick` is not recognised, and a double click sends
-  `DoubleClick1…` in place of a second `MouseDown1…` (tmux sends both, the
-  `DoubleClick` after a timer). The default double- and triple-click binds show
-  the selection for 0.3 s (`run-shell -d 0.3`) before copying, as tmux's do; a
-  triple click also fires the double click's delayed copy, which then copies the
-  line.
+- **Click sequence not checked against tmux**: tmxr sends `MouseDown1…` for the
+  first press, `SecondClick1…` (only) for a second press in the same cell within
+  the click time, `TripleClick1…` for a third, and `DoubleClick1…` from a timer
+  when no third press came. That is tmux 3.3's `server_client_check_mouse` as
+  recalled, not compared with a running tmux: if tmux also sends `MouseDown1…`
+  on the second press, binds on it would fire once fewer here. The default
+  double- and triple-click binds then show the selection for 0.3 s
+  (`run-shell -d 0.3`) before copying, as tmux's do.
 - **`rgb-colour auto`** decides from the client's environment only:
   `COLORTERM=truecolor` / `24bit`, a `TERM` ending in `-direct`, or
   `WT_SESSION`. Terminals that take 24-bit colour without saying so (some

@@ -234,7 +234,11 @@ impl Server {
     pub fn run(mut self, rx: Receiver<Event>) {
         let tick = Duration::from_millis(250);
         loop {
-            match rx.recv_timeout(tick) {
+            // Wake for a pending DoubleClick on time, not at the next tick.
+            let wait = crate::mouse::next_double_click(&self).map_or(tick, |due| {
+                due.saturating_duration_since(Instant::now()).min(tick)
+            });
+            match rx.recv_timeout(wait) {
                 Ok(ev) => {
                     self.handle(ev);
                     self.run_pending_hooks();
@@ -630,6 +634,7 @@ impl Server {
     }
 
     fn tick(&mut self) {
+        crate::mouse::fire_double_clicks(self);
         let now = Instant::now();
         for c in self.clients.values_mut() {
             if let Some(a) = c.att.as_mut() {

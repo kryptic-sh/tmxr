@@ -20,7 +20,10 @@ pub enum MouseAction {
     /// A button released at the end of a drag: `MouseDragEnd1…`.
     DragEnd(u8),
     /// A second press in the same cell soon after the first:
-    /// `DoubleClick1…`.
+    /// `SecondClick1…`.
+    SecondClick(u8),
+    /// A second press that no third followed in time: `DoubleClick1…`,
+    /// sent once the click time has passed.
     DoubleClick(u8),
     /// A third: `TripleClick1…`.
     TripleClick(u8),
@@ -63,6 +66,7 @@ const ACTIONS: &[(&str, ButtonAction)] = &[
     ("MouseDrag", MouseAction::Drag),
     ("MouseDown", MouseAction::Down),
     ("MouseUp", MouseAction::Up),
+    ("SecondClick", MouseAction::SecondClick),
     ("DoubleClick", MouseAction::DoubleClick),
     ("TripleClick", MouseAction::TripleClick),
 ];
@@ -120,6 +124,7 @@ impl fmt::Display for MouseKey {
             MouseAction::Up(b) => write!(f, "MouseUp{b}")?,
             MouseAction::Drag(b) => write!(f, "MouseDrag{b}")?,
             MouseAction::DragEnd(b) => write!(f, "MouseDragEnd{b}")?,
+            MouseAction::SecondClick(b) => write!(f, "SecondClick{b}")?,
             MouseAction::DoubleClick(b) => write!(f, "DoubleClick{b}")?,
             MouseAction::TripleClick(b) => write!(f, "TripleClick{b}")?,
             MouseAction::WheelUp => f.write_str("WheelUp")?,
@@ -185,6 +190,7 @@ mod tests {
             "MouseDragEnd1Pane",
             "MouseDown2Status",
             "DoubleClick1Pane",
+            "SecondClick2Pane",
             "TripleClick3Pane",
             "WheelUpPane",
             "WheelDownStatus",

@@ -1942,6 +1942,50 @@ fn double_and_triple_clicks_copy_a_word_and_a_line() {
     t.wait_run(&["show-buffer"], "the line copied", |o| {
         o.trim_end() == "head @clicked tail"
     });
+
+    // The second press is SecondClick1Pane; DoubleClick1Pane comes from the
+    // click timer, so a third press in time cancels it.
+    let opt = |t: &Tmxr, name: &str| {
+        t.run(&["display-message", "-p", &format!("#{{@{name}}}")])
+            .trim()
+            .to_owned()
+    };
+    t.run(&[
+        "bind-key",
+        "-n",
+        "SecondClick1Pane",
+        "set-option -g @second yes",
+    ]);
+    t.run(&[
+        "bind-key",
+        "-n",
+        "DoubleClick1Pane",
+        "set-option -g @double fired",
+    ]);
+    t.run(&["set-option", "-g", "@double", "none"]);
+    s.click(0, 2, row);
+    s.click(0, 2, row);
+    s.click(0, 2, row);
+    t.wait_run(
+        &["display-message", "-p", "#{@second}"],
+        "SecondClick",
+        |o| o.trim() == "yes",
+    );
+    std::thread::sleep(Duration::from_secs(1));
+    assert_eq!(
+        opt(&t, "double"),
+        "none",
+        "a triple click fired DoubleClick"
+    );
+    // A double click alone does, once the click time has passed.
+    std::thread::sleep(Duration::from_millis(400));
+    s.click(0, 2, row);
+    s.click(0, 2, row);
+    t.wait_run(
+        &["display-message", "-p", "#{@double}"],
+        "DoubleClick",
+        |o| o.trim() == "fired",
+    );
 }
 
 #[test]

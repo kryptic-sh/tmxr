@@ -71,6 +71,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   command line starting with `match` as `command`) forms.
 - `run-shell -d delay` (seconds, before it runs; with no command, only the
   wait), `-C` (run a tmux command instead of a shell one) and `-c directory`.
+- `SecondClick1Pane` (and the other `SecondClick` keys): the second press of a
+  double click.
 
 ### Changed
 
@@ -80,6 +82,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   script its output goes to the script's standard output (it used to be shown on
   the attached client, with the rest of the list already run). `-b` keeps them
   in the background.
+- `DoubleClick` keys are sent once the click time passes after a second press,
+  and not at all when a third press follows, as in tmux: a triple click used to
+  fire the double click's bind as well.
 - The default double- and triple-click binds show the selection for 0.3 s before
   copying it, as tmux's do.
 - `find-window` (`prefix f`) matches as tmux's does: the text in window names,
