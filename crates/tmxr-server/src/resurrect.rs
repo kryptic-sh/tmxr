@@ -584,6 +584,14 @@ fn restore_session(
         }
         if let Some(win) = srv.windows.get_mut(&wid) {
             if let Some(tree) = load_layout(&w.layout, &panes) {
+                // Panes were saved in the window's pane list order, which a
+                // mirrored layout lays out in another.
+                let laid: Vec<PaneId> = tree.leaves().into_iter().map(|p| p as PaneId).collect();
+                win.order = if laid == panes {
+                    Vec::new()
+                } else {
+                    panes.clone()
+                };
                 win.layout = tree;
             }
             win.active = panes.get(w.active).copied().unwrap_or(win.active);

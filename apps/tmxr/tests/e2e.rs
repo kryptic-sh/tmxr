@@ -3757,6 +3757,46 @@ fn resurrect_keeps_a_manual_window_size() {
 }
 
 #[test]
+fn resurrect_keeps_a_mirrored_windows_pane_numbers() {
+    let t = Tmxr::new("resmirror");
+    t.run(&["new-session", "-d", "-s", "rm", "-x", "100", "-y", "30"]);
+    t.run(&["split-window", "-t", "rm"]);
+    t.run(&["split-window", "-t", "rm"]);
+    t.run(&["select-layout", "-t", "rm", "main-horizontal-mirrored"]);
+    // Pane 0, the main pane, laid out at the bottom.
+    let where_ = || {
+        t.run(&[
+            "list-panes",
+            "-t",
+            "rm",
+            "-F",
+            "#{pane_index}:#{?#{pane_top},low,high}",
+        ])
+    };
+    assert_eq!(
+        where_().split_whitespace().collect::<Vec<_>>(),
+        ["0:low", "1:high", "2:high"]
+    );
+    t.run(&["resurrect-save"]);
+    t.run(&["kill-server"]);
+    t.wait_run(&["ls"], "server gone", str::is_empty);
+    let config = std::fs::read_to_string(&t.config).unwrap();
+    std::fs::write(
+        &t.config,
+        config.replace("restore-on-start = false", "restore-on-start = true"),
+    )
+    .unwrap();
+    t.run(&["new-session", "-d", "-s", "other"]);
+    t.wait_run(&["list-panes", "-t", "rm"], "restored", |o| {
+        o.lines().count() == 3
+    });
+    assert_eq!(
+        where_().split_whitespace().collect::<Vec<_>>(),
+        ["0:low", "1:high", "2:high"]
+    );
+}
+
+#[test]
 fn lock_after_time_locks_an_idle_client() {
     let t = Tmxr::new("lockidle");
     let s = t.attach(&["new", "-s", "li"]);

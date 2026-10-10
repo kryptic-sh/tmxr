@@ -49,11 +49,6 @@ table. What has been verified, and how:
   fixed. Menus take the mouse as tmux's (`Menu::mouse`, from `menu_key_cb`),
   checked by the oracle's menu cases. Still missing: nothing has been tried by
   hand in a real terminal.
-- **Resurrect forgets a mirrored window's pane numbers**: `Window::order`
-  (tmux's pane list, kept where a mirrored layout lays the first pane out last)
-  is not saved by `resurrect.rs`, so a restored mirrored window numbers its
-  panes in layout order. Saving it means one more field in `SavedWindow`, mapped
-  through the restore's pane relabelling; not started.
 - **tmux default binds**: all of tmux 3.6's 267 are bound (compared with its
   `list-keys`, 2026-10-11) except the 18 digit binds (`1`-`9` in vi, `M-1`-`M-9`
   in emacs) that open a "(repeat)" prompt, declined: tmxr's copy mode takes
