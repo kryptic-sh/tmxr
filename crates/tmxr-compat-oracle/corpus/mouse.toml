@@ -116,3 +116,21 @@ steps = [
   { mouse = { action = "click", button = 2, at = [5, 5] } },
 ]
 checks = [{ screen_contains = "pastedtext", expect = true }]
+
+[[cases]]
+name = "clicks_send_the_keys_tmux_sends"
+attach = true
+program = "printf 'alpha beta gamma\n'; exec sleep 1000"
+steps = [
+  { wait_text = "alpha beta gamma" },
+  { run = "bind -n MouseDown1Pane set -ga @seen D" },
+  { run = "bind -n MouseUp1Pane set -ga @seen U" },
+  { run = "bind -n SecondClick1Pane set -ga @seen S" },
+  { run = "bind -n DoubleClick1Pane set -ga @seen 2" },
+  { run = "bind -n TripleClick1Pane set -ga @seen 3" },
+  { mouse = { action = "click", at = [7, 0] } },
+  { mouse = { action = "click", at = [7, 0] } },
+  { sleep = 1.0 },
+]
+# tmux 3.6 sends these for two quick clicks (checked with a pty client).
+checks = [{ format = "#{@seen}", expect = "DUSU2" }]
