@@ -230,7 +230,7 @@ impl Server {
 
     /// Show what a command run for an attached client printed: an error or a
     /// one-line result in the status line, longer output in a text view.
-    pub(super) fn report(&mut self, id: ClientId, out: &Outcome) {
+    pub fn report(&mut self, id: ClientId, out: &Outcome) {
         if !out.stderr.is_empty() {
             self.show_message(id, out.stderr.trim_end().to_owned());
         } else if !out.stdout.is_empty() {

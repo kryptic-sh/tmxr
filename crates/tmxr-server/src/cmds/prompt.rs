@@ -205,8 +205,52 @@ pub(super) fn run(
             }
         }
         "run-shell" => {
-            let line = expand_for(srv, ctx, None, &pos[0]);
-            crate::server::run_shell(srv, attached_client(srv, ctx), line, a.has('b'));
+            use crate::jobs::{Job, Then, Work};
+            let delay = match a.value('d') {
+                Some(d) => d
+                    .parse::<f64>()
+                    .ok()
+                    .and_then(|s| std::time::Duration::try_from_secs_f64(s).ok())
+                    .ok_or_else(|| format!("run-shell: bad delay: {d}"))?,
+                None => std::time::Duration::ZERO,
+            };
+            let pane = a
+                .value('t')
+                .map(|t| target::pane(srv, ctx, Some(t)).map(|(_, _, p)| p))
+                .transpose()?
+                .or(ctx.pane);
+            let work = match pos.first() {
+                Some(cmd) if a.has('C') => Work::Command(cmd.clone()),
+                Some(cmd) => Work::Shell {
+                    line: expand_for(srv, ctx, pane, cmd),
+                    cwd: a
+                        .value('c')
+                        .map(|c| std::path::PathBuf::from(expand_for(srv, ctx, pane, c))),
+                },
+                None if a.has('d') => Work::Wait,
+                None => return Err("run-shell: no command".into()),
+            };
+            let job = Job {
+                delay,
+                work,
+                rest: Vec::new(),
+            };
+            if a.has('b') {
+                // In the background: nothing waits, and its output is dropped.
+                let quiet = Ctx {
+                    client: None,
+                    ..ctx.clone()
+                };
+                srv.start_job(
+                    job,
+                    Then {
+                        ctx: quiet,
+                        reply: None,
+                    },
+                );
+            } else {
+                out.job = Some(job);
+            }
         }
         "if-shell" => {
             let mut ctx = ctx.clone();

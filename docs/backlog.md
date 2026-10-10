@@ -54,6 +54,11 @@ what was not.
 
 ## Known gaps and follow-ups
 
+- **`run-shell` inside a nested list** (`if-shell`'s branch, `run-shell -C`, a
+  hook): its job holds the rest of that inner list only. The outer list goes on
+  at once, and a command client's reply does not carry the job's output, which
+  goes to the attached client instead. tmux's queue holds the outer list too.
+  Hoisting the job out of `run_nested` into the outer `Outcome` would close it.
 - **`display-popup` gaps.** The box keeps the size it opened with when the
   client resizes; `-x` / `-y` take a number or `C` (tmux's other position forms
   and formats are errors); `-e` may be given once; `-b`, `-s`, `-S`, `-k` and
@@ -92,9 +97,10 @@ what was not.
   (alerts only set window flags).
 - **Mouse keys**: `SecondClick` is not recognised, and a double click sends
   `DoubleClick1…` in place of a second `MouseDown1…` (tmux sends both, the
-  `DoubleClick` after a timer). The default double- and triple-click binds copy
-  at once; tmux's show the selection for 0.3 s first (`run -d0.3`, which tmxr's
-  `run-shell` lacks).
+  `DoubleClick` after a timer). The default double- and triple-click binds show
+  the selection for 0.3 s (`run-shell -d 0.3`) before copying, as tmux's do; a
+  triple click also fires the double click's delayed copy, which then copies the
+  line.
 - **`rgb-colour auto`** decides from the client's environment only:
   `COLORTERM=truecolor` / `24bit`, a `TERM` ending in `-direct`, or
   `WT_SESSION`. Terminals that take 24-bit colour without saying so (some
@@ -116,9 +122,12 @@ what was not.
   copy mode at the shell's cursor, selects to the end of the command and sends
   `C-e`; it works because each step is a separate `tmux` call, slow enough for
   the shell to redraw. As one tmxr command list the copy-mode snapshot would be
-  taken before the shell moved its cursor. Doing it properly needs a delay
-  between steps (an `if-shell "sleep 0.1"` works on Unix only) or shell
-  integration (OSC 133 prompt marks) to find the command line.
+  taken before the shell moved its cursor. A delay between the steps is now
+  possible on every platform (`run-shell -d 0.1`, which holds the rest of its
+  command list), so the bind could be built as tmux-yank's steps with delays
+  between them; whether to bind `prefix y` at all, and whether a fixed delay is
+  reliable enough against a slow shell redraw, is still open. Shell integration
+  (OSC 133 prompt marks) would find the command line without timing.
 - **Windows `kill()` on a pane child** returned "There are no more files" (os
   error 18) in a test; not a bug in practice. `Server::kill_pane` calls `kill()`
   and then drops the pane, closing the ConPTY, and that does end the programs

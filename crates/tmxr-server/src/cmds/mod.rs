@@ -54,6 +54,8 @@ pub struct Outcome {
     pub attach: Option<SessionId>,
     /// `wait-for`: hold the command client's reply until this happens.
     pub wait: Option<crate::waits::Wait>,
+    /// `run-shell`: the rest of the list, and the reply, wait for this job.
+    pub job: Option<crate::jobs::Job>,
 }
 
 impl Outcome {
@@ -72,15 +74,29 @@ type Res = Result<(), String>;
 pub fn run_string(srv: &mut Server, ctx: &Ctx, line: &str) -> Outcome {
     let env = |k: &str| std::env::var(k).ok();
     match tmxr_command::tokenize(line, &env) {
-        // Only a command client has a reply to hold back.
-        Ok(cmds) => match run_list(srv, ctx, &cmds) {
-            out if out.wait.is_some() => {
-                Outcome::error("wait-for: only a command client can wait".into())
-            }
-            out => out,
-        },
+        Ok(cmds) => run_detached(srv, ctx, &cmds),
         Err(e) => Outcome::error(e.to_string()),
     }
+}
+
+/// Run commands with no command client waiting on them: a `run-shell` job
+/// goes on by itself, its output shown on `ctx.client`.
+pub fn run_detached(srv: &mut Server, ctx: &Ctx, cmds: &[Vec<String>]) -> Outcome {
+    let mut out = run_list(srv, ctx, cmds);
+    // Only a command client has a reply to hold back.
+    if out.wait.is_some() {
+        return Outcome::error("wait-for: only a command client can wait".into());
+    }
+    if let Some(job) = out.job.take() {
+        srv.start_job(
+            job,
+            crate::jobs::Then {
+                ctx: ctx.clone(),
+                reply: None,
+            },
+        );
+    }
+    out
 }
 
 /// Run an argv from the command line, where a `;` word separates commands.
@@ -96,7 +112,7 @@ pub fn run_argv_list(srv: &mut Server, ctx: &Ctx, argv: &[String]) -> Outcome {
 /// Run commands in order, stopping at the first error.
 pub fn run_list(srv: &mut Server, ctx: &Ctx, cmds: &[Vec<String>]) -> Outcome {
     let mut out = Outcome::default();
-    for argv in cmds {
+    for (i, argv) in cmds.iter().enumerate() {
         let parsed = match tmxr_command::parse(argv) {
             Ok(p) => p,
             Err(e) => {
@@ -119,6 +135,11 @@ pub fn run_list(srv: &mut Server, ctx: &Ctx, cmds: &[Vec<String>]) -> Outcome {
                 .ok()
         });
         srv.queue_hook(&format!("after-{}", parsed.name()), ctx.clone(), session);
+        // run-shell: the rest of the list waits for its job.
+        if let Some(job) = out.job.as_mut() {
+            job.rest = cmds[i + 1..].to_vec();
+            return out;
+        }
         if out.wait.is_some() && !std::ptr::eq(argv, cmds.last().expect("in cmds")) {
             out.wait = None;
             out.status = 1;

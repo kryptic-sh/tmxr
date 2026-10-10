@@ -3030,3 +3030,72 @@ fn resurrect_matches_command_lines_as_tmux_resurrect() {
     let none = save_with(&t, "\"~not-in-it\", \"zzz->x\"");
     assert!(!none.contains("\"command\": \""), "{none}");
 }
+
+#[test]
+fn run_shell_holds_its_command_list_and_reply() {
+    let t = Tmxr::new("runshell");
+    t.run(&["new-session", "-d", "-s", "rs"]);
+    // A command client gets the output, and the commands after it wait.
+    let out = t.run(&[
+        "run-shell",
+        "echo from-shell",
+        ";",
+        "display-message",
+        "-p",
+        "after",
+    ]);
+    let lines: Vec<&str> = out.lines().map(str::trim).collect();
+    assert_eq!(lines, ["from-shell", "after"], "{out:?}");
+    // -d delays, here with no command at all: the rest of the list waits.
+    let started = Instant::now();
+    t.run(&[
+        "run-shell",
+        "-d",
+        "0.5",
+        ";",
+        "set-option",
+        "-g",
+        "@after",
+        "yes",
+    ]);
+    assert!(
+        started.elapsed() >= Duration::from_millis(500),
+        "{:?}",
+        started.elapsed()
+    );
+    assert_eq!(t.run(&["display-message", "-p", "#{@after}"]).trim(), "yes");
+    // -C runs a tmux command; -c sets the shell's directory.
+    t.run(&["run-shell", "-C", "set-option -g @ran yes"]);
+    assert_eq!(t.run(&["display-message", "-p", "#{@ran}"]).trim(), "yes");
+    let dir = t.dir.path().join("there");
+    std::fs::create_dir(&dir).unwrap();
+    let pwd = if cfg!(windows) { "cd" } else { "pwd" };
+    let shown = t.run(&["run-shell", "-c", dir.to_str().unwrap(), pwd]);
+    assert!(shown.trim().ends_with("there"), "{shown:?}");
+    // -b does not wait.
+    let started = Instant::now();
+    t.run(&["run-shell", "-b", "-d", "3", "set-option -g @late yes"]);
+    assert!(
+        started.elapsed() < Duration::from_secs(2),
+        "{:?}",
+        started.elapsed()
+    );
+    // A failing command says so.
+    assert!(t.run(&["run-shell", "exit 3"]).contains("returned 3"));
+    // From a bind: the output shows on the client, then the rest runs.
+    let s = t.attach(&["attach", "-t", "rs"]);
+    s.wait_for("status line", |text| text.contains("rs"));
+    t.run(&[
+        "bind-key",
+        "-n",
+        "F7",
+        "run-shell 'echo bound-out' ; set-option -g @bound yes",
+    ]);
+    s.send(b"[18~");
+    s.wait_for("the output", |text| text.contains("bound-out"));
+    t.wait_run(
+        &["display-message", "-p", "#{@bound}"],
+        "the rest of the bind",
+        |o| o.trim() == "yes",
+    );
+}

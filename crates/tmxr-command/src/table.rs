@@ -443,10 +443,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "run-shell",
         Some("run"),
-        "bt:",
+        "bCc:d:t:",
+        0,
         1,
-        1,
-        "[-b] [-t target-pane] shell-command"
+        "[-bC] [-c start-directory] [-d delay] [-t target-pane] [shell-command]"
     ),
     cmd!(
         "save-buffer",

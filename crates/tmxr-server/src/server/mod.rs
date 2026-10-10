@@ -7,7 +7,7 @@ mod shell;
 pub mod signals;
 mod windows;
 
-pub use shell::{if_shell, pipe_to_shell, run_shell};
+pub use shell::{if_shell, pipe_to_shell, shell_text};
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::path::PathBuf;
@@ -41,11 +41,8 @@ pub enum Event {
     Pty(PaneId, u64, PtyEvent),
     /// Output is waiting in the pane's queue.
     PtyOutput(PaneId, u64),
-    /// A `run-shell` command finished.
-    Shell {
-        client: Option<ClientId>,
-        output: String,
-    },
+    /// A `run-shell` job finished.
+    JobDone(Box<crate::jobs::Done>),
     /// A line for the message log from work done off the state thread.
     Log(String),
     /// A command `if-shell` chose once its shell command finished.
@@ -326,20 +323,7 @@ impl Server {
                     self.pty_event(pane, PtyEvent::Output(bytes));
                 }
             }
-            Event::Shell { client, output } => {
-                let output = output.trim_end().to_owned();
-                if let Some(c) = client
-                    && !output.is_empty()
-                {
-                    let lines: Vec<String> = output.lines().map(str::to_owned).collect();
-                    if lines.len() == 1 {
-                        self.show_message(c, output);
-                    } else if let Some(a) = self.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
-                        a.overlay = Some(Overlay::text(lines));
-                        a.dirty = true;
-                    }
-                }
-            }
+            Event::JobDone(done) => self.job_done(*done),
             Event::Log(line) => self.log_message(line),
             Event::Run { ctx, cmd } => {
                 let out = crate::cmds::run_string(self, &ctx, &cmd);
@@ -412,21 +396,8 @@ impl Server {
                     argv
                 };
                 let ctx = self.command_client_ctx(id);
-                let mut out = crate::cmds::run_argv_list(self, &ctx, &argv);
-                // wait-for: the reply waits for a signal or the lock.
-                if let Some(wait) = out.wait.take() {
-                    self.waits.enqueue(id, &wait);
-                    return;
-                }
-                match out.attach {
-                    Some(session) if self.client_terminal(id).is_some() => {
-                        self.attach(id, session);
-                        if !out.stderr.is_empty() {
-                            self.show_message(id, out.stderr);
-                        }
-                    }
-                    _ => self.finish_command(id, out),
-                }
+                let out = crate::cmds::run_argv_list(self, &ctx, &argv);
+                self.conclude_command(id, &ctx, out);
             }
             ClientMsg::Input(ev) => self.input(id, ev),
             ClientMsg::Detach => self.detach(id, "detached"),
@@ -479,6 +450,34 @@ impl Server {
     }
 
     /// A command client's `wait-for` is over: it gets its reply.
+    /// Finish command client `id`'s command list: hold the reply for a
+    /// `wait-for` or a `run-shell` job, attach, or reply.
+    pub fn conclude_command(&mut self, id: ClientId, ctx: &Ctx, mut out: Outcome) {
+        // wait-for: the reply waits for a signal or the lock.
+        if let Some(wait) = out.wait.take() {
+            self.waits.enqueue(id, &wait);
+            return;
+        }
+        // run-shell: the reply, and the rest of the list, wait for the job.
+        if let Some(job) = out.job.take() {
+            let then = crate::jobs::Then {
+                ctx: ctx.clone(),
+                reply: Some((id, out)),
+            };
+            self.start_job(job, then);
+            return;
+        }
+        match out.attach {
+            Some(session) if self.client_terminal(id).is_some() => {
+                self.attach(id, session);
+                if !out.stderr.is_empty() {
+                    self.show_message(id, out.stderr);
+                }
+            }
+            _ => self.finish_command(id, out),
+        }
+    }
+
     pub fn release_waiter(&mut self, id: ClientId) {
         self.finish_command(id, Outcome::default());
     }

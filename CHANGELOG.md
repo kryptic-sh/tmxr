@@ -69,9 +69,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `resurrect.processes` takes tmux-resurrect's `~text` (restore a program whose
   command line holds `text`, with its arguments) and `match->command` (restore a
   command line starting with `match` as `command`) forms.
+- `run-shell -d delay` (seconds, before it runs; with no command, only the
+  wait), `-C` (run a tmux command instead of a shell one) and `-c directory`.
 
 ### Changed
 
+- `run-shell` waits, as tmux's does unless `-b`: the commands after it in its
+  list run once it finishes, and run from a script its output goes to the
+  script's standard output (it used to be shown on the attached client, with the
+  rest of the list already run). `-b` keeps it in the background.
+- The default double- and triple-click binds show the selection for 0.3 s before
+  copying it, as tmux's do.
 - `find-window` (`prefix f`) matches as tmux's does: the text in window names,
   pane titles and visible pane contents (`-N` / `-T` / `-C` to pick, `-i` to
   ignore case, `-r` for a regular expression), and lists only the windows that
