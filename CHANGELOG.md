@@ -66,6 +66,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   maps it to the nearest of the 256 colours (tmux's own mapping) for terminals
   without true colour, such as macOS Terminal.app, and `auto` decides per client
   from `COLORTERM`, a `-direct` `TERM` or Windows Terminal.
+- `resurrect.processes` takes tmux-resurrect's `~text` (restore a program whose
+  command line holds `text`, with its arguments) and `match->command` (restore a
+  command line starting with `match` as `command`) forms.
 
 ### Changed
 
