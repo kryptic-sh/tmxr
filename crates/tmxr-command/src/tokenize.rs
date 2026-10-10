@@ -5,7 +5,9 @@
 //! outside quotes `\x` is a literal `x`, `~` at the start of a word is
 //! `$HOME`, and `$VAR` expands. A `;` ending a word (or standing alone)
 //! separates commands; `\;` is a literal `;`. A word starting with `#` (other
-//! than a `#{format}`) starts a comment.
+//! than a `#{format}`) starts a comment. `{ … }` is one word holding the
+//! commands inside, joined by ` ; `, as tmux passes a block of commands to
+//! `if-shell`, `bind-key` and the like.
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum TokenizeError {
@@ -13,6 +15,8 @@ pub enum TokenizeError {
     Unterminated(char),
     #[error("unterminated ${{ in variable reference")]
     UnterminatedBrace,
+    #[error("unterminated {{ … }} block")]
+    UnterminatedBlock,
 }
 
 /// Parse `line` into commands, each a list of words. `env` resolves
@@ -42,6 +46,7 @@ pub fn tokenize(
                 }
             }
             '#' if !in_word && chars.peek() != Some(&'{') => break,
+            '{' if !in_word => words.push(block(&mut chars)?),
             ';' => {
                 // `;` ends the current word and the command.
                 if in_word {
@@ -113,6 +118,57 @@ pub fn tokenize(
     Ok(commands)
 }
 
+/// The commands in a `{ … }` block, its `{` already read, up to the
+/// matching `}`: one per line or `;`, joined by ` ; ` to be parsed again
+/// when they run. Quotes, escapes and nested braces (`#{format}` among them)
+/// are kept as written.
+fn block(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Result<String, TokenizeError> {
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    let mut depth = 0usize;
+    let mut quote = None;
+    loop {
+        let c = chars.next().ok_or(TokenizeError::UnterminatedBlock)?;
+        if let Some(q) = quote {
+            line.push(c);
+            if c == '\\' && q == '"' {
+                line.extend(chars.next());
+            } else if c == q {
+                quote = None;
+            }
+            continue;
+        }
+        match c {
+            '\'' | '"' => {
+                quote = Some(c);
+                line.push(c);
+            }
+            '\\' => {
+                line.push(c);
+                line.extend(chars.next());
+            }
+            '{' => {
+                depth += 1;
+                line.push(c);
+            }
+            '}' if depth == 0 => break,
+            '}' => {
+                depth -= 1;
+                line.push(c);
+            }
+            '\n' => lines.push(std::mem::take(&mut line)),
+            c => line.push(c),
+        }
+    }
+    lines.push(line);
+    Ok(lines
+        .iter()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ; "))
+}
+
 fn expand_var(
     chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
     word: &mut String,
@@ -164,6 +220,34 @@ mod tests {
 
     fn w(words: &[&str]) -> Vec<String> {
         words.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    #[test]
+    fn a_block_is_one_word_of_commands() {
+        // What tmux 3.6 stores for the same blocks.
+        assert_eq!(
+            t("if-shell -F 1 { display -p A ; display -p B }"),
+            vec![w(&["if-shell", "-F", "1", "display -p A ; display -p B"])]
+        );
+        assert_eq!(
+            t("bind -n F11 {\n  display -p one\n\n  display -p two\n}"),
+            vec![w(&["bind", "-n", "F11", "display -p one ; display -p two"])]
+        );
+        // Quotes, nested braces and formats inside are kept as written.
+        assert_eq!(
+            t(r#"set @z { display -p "q { x }" ; display '#{session_name}' }"#),
+            vec![w(&[
+                "set",
+                "@z",
+                r#"display -p "q { x }" ; display '#{session_name}'"#
+            ])]
+        );
+        // A block ends its word; a `;` after it ends the command.
+        assert_eq!(t("a {b} ; c"), vec![w(&["a", "b"]), w(&["c"])]);
+        assert_eq!(
+            tokenize("a { b", &env),
+            Err(TokenizeError::UnterminatedBlock)
+        );
     }
 
     #[test]

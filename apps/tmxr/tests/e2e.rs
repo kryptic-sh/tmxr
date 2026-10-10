@@ -4137,6 +4137,24 @@ fn list_commands_take_formats_and_filters() {
 }
 
 #[test]
+fn a_brace_block_runs_as_commands() {
+    let t = Tmxr::new("blocks");
+    let s = t.attach(&["new", "-s", "bl"]);
+    s.wait_for("status line", |text| text.contains("bl"));
+    // tmux's block: both commands are if-shell's one branch.
+    t.run(&[
+        "bind-key",
+        "-n",
+        "F5",
+        "if-shell -F 1 { set-option -g @a x ; set-option -g @b y }",
+    ]);
+    s.send(b"[15~");
+    t.wait_run(&["display-message", "-p", "#{@a}#{@b}"], "both ran", |o| {
+        o.trim() == "xy"
+    });
+}
+
+#[test]
 fn select_pane_titles_a_pane_and_resurrect_keeps_it() {
     let t = Tmxr::new("titles");
     t.run(&["new-session", "-d", "-s", "ti"]);

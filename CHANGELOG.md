@@ -8,6 +8,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`{ … }` command blocks**, as tmux's: a block is one argument holding the
+  commands inside (one per line or `;`), so tmux binds such as
+  `if-shell -F 1 { cmd ; cmd }` work in tmxr's commands and binds. Unlike tmux,
+  the commands in a block are checked when they run, not when parsed.
 - **`-F` and `-f` on the list commands**: `list-sessions`, `list-windows`,
   `list-panes`, `list-clients` and `list-buffers` print each item with a format
   and keep only those a filter is true for, as tmux's do; `list-panes -s` lists
