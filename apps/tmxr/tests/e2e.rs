@@ -127,6 +127,20 @@ impl Tmxr {
         });
     }
 
+    /// Wait until `target`'s shell has started: its prompt is showing, and
+    /// on Windows ConPTY has reported cmd's title, which arrives on its own
+    /// time and would otherwise land on what the test does next.
+    fn wait_settled(&self, target: &str) {
+        self.wait_prompt(target);
+        if cfg!(windows) {
+            self.wait_run(
+                &["display-message", "-p", "-t", target, "#{pane_title}"],
+                "the shell's title",
+                |o| o.contains("cmd"),
+            );
+        }
+    }
+
     /// The newest resurrect save's text.
     fn newest_save(&self) -> String {
         let dir = self.dir.path().join("data").join("tmxr").join("resurrect");
@@ -1418,6 +1432,8 @@ fn resurrect_skips_unchanged_saves_and_reports_missing_dirs() {
     std::fs::create_dir(&gone).unwrap();
     let gone_str = gone.display().to_string();
     t.run(&["new-session", "-d", "-s", "keep", "-c", &gone_str]);
+    // Saves include titles: one arriving late would change the next save.
+    t.wait_settled("keep");
     t.run(&["resurrect-save"]);
     assert_eq!(saves(&t), 1);
     // Nothing changed: the save on exit writes nothing new.
@@ -3711,10 +3727,22 @@ fn menu_and_popup_take_tmux_style_flags() {
         .find(|(c, _, _)| c == "╔")
         .expect("a double border");
     assert_eq!(corner.1, "Idx(2)", "border fg: {corner:?}");
-    let second = cells.iter().position(|(c, _, _)| c == "S").expect("Second");
-    assert_eq!(cells[second].2, "Idx(1)", "item bg: {:?}", cells[second]);
-    let first = cells.iter().position(|(c, _, _)| c == "F").expect("First");
-    assert_eq!(cells[first].2, "Idx(4)", "selected bg: {:?}", cells[first]);
+    // An item's first letter, on the row that holds its name.
+    let item = |name: &str| -> (String, String, String) {
+        (0..ROWS)
+            .find_map(|r| {
+                let row = s.row_cells(r);
+                let text: String = row.iter().map(|(c, _, _)| c.as_str()).collect();
+                text.find(name)?;
+                row.into_iter()
+                    .find(|(c, _, _)| name.starts_with(c.as_str()) && !c.is_empty())
+            })
+            .unwrap_or_else(|| panic!("{name} not on the screen"))
+    };
+    let second = item("Second");
+    assert_eq!(second.2, "Idx(1)", "item bg: {second:?}");
+    let first = item("First");
+    assert_eq!(first.2, "Idx(4)", "selected bg: {first:?}");
     s.send(b"\x1b");
     s.wait_for("the menu closed", |text| !text.contains("Second"));
 
@@ -3809,6 +3837,7 @@ fn display_popup_takes_tmux_position_letters() {
 fn select_pane_titles_a_pane_and_resurrect_keeps_it() {
     let t = Tmxr::new("titles");
     t.run(&["new-session", "-d", "-s", "ti"]);
+    t.wait_settled("ti");
     let title = |t: &Tmxr| {
         t.run(&["display-message", "-p", "-t", "ti", "#{pane_title}"])
             .trim()
