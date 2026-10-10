@@ -8,6 +8,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`set-option -F` and `set-window-option -F`** expand the value as a format
+  for the target (else the current pane) before setting it, as tmux's.
 - **Pane scrollbars, as tmux 3.5's**: `pane-scrollbars` (`off`, `modal` for copy
   mode only, or `on`), `pane-scrollbars-position` (`right` or `left`) and
   `pane-scrollbars-style` (with `width=` and `pad=`). A pane gives its bar the

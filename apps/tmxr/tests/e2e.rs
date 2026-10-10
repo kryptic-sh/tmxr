@@ -4643,6 +4643,22 @@ fn a_scrollbar_draws_and_scrolls_with_the_mouse() {
 }
 
 #[test]
+fn set_option_f_expands_the_value_for_the_current_pane() {
+    let t = Tmxr::new("setf");
+    t.run(&["new-session", "-d", "-s", "sf"]);
+    t.run(&[
+        "set-option",
+        "-gF",
+        "@expanded",
+        "#{session_name}-#{window_index}",
+    ]);
+    assert_eq!(t.run(&["show-options", "-v", "@expanded"]).trim(), "sf-0");
+    // Without -F the value is kept as written.
+    t.run(&["set-option", "-g", "@kept", "plain"]);
+    assert_eq!(t.run(&["show-options", "-v", "@kept"]).trim(), "plain");
+}
+
+#[test]
 fn select_pane_titles_a_pane_and_resurrect_keeps_it() {
     let t = Tmxr::new("titles");
     t.run(&["new-session", "-d", "-s", "ti"]);

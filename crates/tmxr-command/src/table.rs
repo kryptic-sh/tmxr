@@ -546,18 +546,18 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "set-option",
         Some("set"),
-        "agost:uw",
+        "aFgost:uw",
         1,
         2,
-        "[-agosuw] [-t target] option [value]"
+        "[-aFgosuw] [-t target] option [value]"
     ),
     cmd!(
         "set-window-option",
         Some("setw"),
-        "agot:u",
+        "aFgot:u",
         1,
         2,
-        "[-agou] [-t target-window] option [value]"
+        "[-aFgou] [-t target-window] option [value]"
     ),
     cmd!("show-buffer", Some("showb"), "b:", 0, 0, "[-b buffer-name]"),
     cmd!(

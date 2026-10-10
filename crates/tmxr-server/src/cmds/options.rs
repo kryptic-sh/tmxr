@@ -56,7 +56,15 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
     let a = &p.args;
     let pos = a.positional();
     let name = pos[0].as_str();
-    let value = pos.get(1).map(String::as_str);
+    // -F: the value is a format, expanded first for the target (else the
+    // current pane), as tmux's.
+    let expanded = pos.get(1).filter(|_| a.has('F')).map(|v| {
+        let pane = target::pane(srv, ctx, a.value('t')).ok().map(|(_, _, p)| p);
+        super::expand_for(srv, ctx, pane, v)
+    });
+    let value = expanded
+        .as_deref()
+        .or_else(|| pos.get(1).map(String::as_str));
     let _ = out;
     if name == "monitor-activity" || name == "monitor-silence" {
         // -g sets the global value; without it, the target window's own.
