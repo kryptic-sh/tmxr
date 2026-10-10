@@ -157,15 +157,17 @@ table. What has been verified, and how:
   Terminal 1.24, bundled ConPTY, by screenshot). Passthrough used to be sent
   wherever the last frame left the terminal's cursor (the status line), so an
   image drew at the bottom and scrolled the client; it now goes from the pane's
-  cursor (`Emulator::take_passthrough` returns it). Afterwards a single sixel
-  drew without damaging the frame. Open, and the terminal's, not tmxr's: with
-  several images printed in a row, Windows Terminal kept only some of them, in
-  the wrong colour. The client's exact output (captured in a test) replayed
-  straight into Windows Terminal drew all of them correctly, so the bytes are
-  right; live, frame redraws land between the images and Windows Terminal drops
-  image pixels under text written over them. tmux's passthrough has the same
-  property (it does not track passthrough images either). Not tried on
-  Linux/macOS terminals.
+  cursor (`Emulator::take_passthrough` returns it). Afterwards the frame stayed
+  intact under a single (transparent) sixel, but that sixel was not drawn. Open:
+  printed three in a row, Windows Terminal showed only one, in the last one's
+  colour, at the first one's place, over a black area. The client's exact output
+  (captured in a test) replayed straight into Windows Terminal drew all three
+  correctly, so the bytes and their positions are right; what differs live is
+  that frame redraws arrive between the images. Why Windows Terminal then loses
+  them is a guess (text over image cells), not checked. tmux 3.6 (WSL Ubuntu,
+  `allow-passthrough on`, two panes) in the same Windows Terminal gave the same
+  result, its black area also hiding the second pane and the status line, so
+  this is not tmxr-specific. Not tried in other terminals.
 - **Windows `pane_current_path`** prefers what the shell announces (OSC 7 / OSC
   9;9), then reads the foreground process's directory from its PEB
   (`process::win::current_dir`, x64 offsets; tested with cmd's `cd /d`).
