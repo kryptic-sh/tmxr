@@ -159,7 +159,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         ANY,
         "[-BCEkN] [-c target-client] [-d start-directory] [-e environment] [-h height] [-t target-pane] [-T title] [-w width] [-x position] [-y position] [shell-command]"
     ),
-    cmd!("find-window", Some("findw"), "Z", 1, 1, "[-Z] match-string"),
+    cmd!(
+        "find-window",
+        Some("findw"),
+        "CiNrt:TZ",
+        1,
+        1,
+        "[-CiNrTZ] [-t target-pane] match-string"
+    ),
     cmd!(
         "has-session",
         Some("has"),

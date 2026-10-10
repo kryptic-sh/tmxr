@@ -1087,12 +1087,12 @@ fn choose_buffer_pastes_and_find_window_switches() {
     });
     assert!(!s.text().contains("second-buffer-text"));
 
-    // prefix f asks for text and opens the window list filtered by it.
+    // prefix f asks for text and lists the windows it matches.
     s.send(PREFIX);
     s.send(b"f");
     s.wait_for("find prompt", |text| text.contains("(find-window)"));
     s.send(b"editor\r");
-    s.wait_for("filtered windows", |text| text.contains("windows 1/2"));
+    s.wait_for("the matching window", |text| text.contains("windows 1/1"));
     s.send(b"\r");
     t.wait_run(
         &["display-message", "-p", "-t", "cb", "#{window_name}"],
@@ -2826,4 +2826,35 @@ fn monitor_activity_and_silence_flag_windows_out_of_sight() {
         |o| o.contains('~'),
     );
     assert!(!flags(&t, "0").contains('~'), "only the window that asked");
+}
+
+#[test]
+fn find_window_matches_names_and_pane_contents() {
+    let t = Tmxr::new("findw");
+    let s = t.attach(&["new", "-s", "fw", "-n", "alpha"]);
+    s.wait_for("status line", |text| text.contains("fw"));
+    t.run(&["new-window", "-d", "-t", "fw", "-n", "beta"]);
+    t.run(&["send-keys", "-t", "fw:beta", "echo needle-in-pane", "Enter"]);
+    t.wait_run(
+        &["capture-pane", "-p", "-t", "fw:beta"],
+        "the output",
+        |o| o.lines().any(|l| l.trim() == "needle-in-pane"),
+    );
+    let found = |t: &Tmxr, s: &Screen, args: &[&str], want: &'static str| {
+        let mut cmd = vec!["find-window"];
+        cmd.extend_from_slice(args);
+        // The prompt's own command line must not match: run from outside.
+        t.run(&["send-keys", "-t", "fw:alpha", "C-l"]);
+        let out = t.output(&cmd);
+        assert!(out.status.success(), "{cmd:?}: {out:?}");
+        s.wait_for(want, |text| text.contains(want));
+        s.send(b"\x1b");
+        s.wait_for("the picker closed", |text| !text.contains("windows "));
+    };
+    found(&t, &s, &["needle-in"], "windows 1/1");
+    found(&t, &s, &["-N", "needle-in"], "windows 0/0");
+    found(&t, &s, &["ALPHA"], "windows 0/0");
+    found(&t, &s, &["-i", "ALPHA"], "windows 1/1");
+    found(&t, &s, &["-r", "need.e-in-p"], "windows 1/1");
+    assert!(!t.output(&["find-window", "-r", "("]).status.success());
 }

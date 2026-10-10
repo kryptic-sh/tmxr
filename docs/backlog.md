@@ -89,8 +89,7 @@ what was not.
   / `M-p` are bells, `monitor-activity` and `monitor-silence`; tmux's
   `visual-activity` / `visual-bell` / `visual-silence` messages and
   `activity-action` / `bell-action` / `silence-action` are not implemented
-  (alerts only set window flags). `find-window` matches window names through the
-  picker, not pane contents or titles as tmux's does.
+  (alerts only set window flags).
 - **Mouse keys**: `SecondClick` is not recognised, and a double click sends
   `DoubleClick1…` in place of a second `MouseDown1…` (tmux sends both, the
   `DoubleClick` after a timer). The default double- and triple-click binds copy

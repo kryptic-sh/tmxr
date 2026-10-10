@@ -238,18 +238,22 @@ pub(super) fn run(
             srv.mark_client_dirty(c);
         }
         "choose-tree" | "choose-buffer" | "choose-client" | "find-window" => {
-            let c = attached_client(srv, ctx).ok_or("no current client")?;
+            let c = super::display_client(srv, ctx).ok_or("no current client")?;
             let ov = match p.name() {
                 "choose-buffer" if srv.buffers.is_empty() => return Err("no buffers".into()),
                 "choose-buffer" => Overlay::buffer_picker(srv),
                 "choose-client" => Overlay::client_picker(srv),
-                "find-window" => Overlay::window_picker(srv, c, &pos[0]),
-                _ if a.has('w') => Overlay::window_picker(srv, c, ""),
+                "find-window" => {
+                    let found = window_matcher(srv, a, &pos[0])?;
+                    Overlay::found_windows(srv, c, found)
+                }
+                _ if a.has('w') => Overlay::window_picker(srv, c),
                 _ => Overlay::session_picker(srv, c),
             };
             if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
                 att.overlay = Some(ov);
             }
+            srv.mark_client_dirty(c);
         }
         "list-commands" => {
             for c in tmxr_command::table::COMMANDS {
@@ -335,4 +339,33 @@ fn popup_rect(
         w,
         h,
     ))
+}
+
+/// `find-window`'s test: `text` in a window's name (`-N`), a pane's title
+/// (`-T`) or a pane's visible contents (`-C`), all three when none is
+/// given, as tmux's `*text*` match; `-i` ignores case and `-r` makes `text`
+/// a regular expression.
+fn window_matcher<'s>(
+    srv: &'s Server,
+    a: &tmxr_command::Args,
+    text: &str,
+) -> Result<impl Fn(&crate::model::Window) -> bool + 's, String> {
+    let all = !(a.has('N') || a.has('T') || a.has('C'));
+    let (names, titles, contents) = (all || a.has('N'), all || a.has('T'), all || a.has('C'));
+    let pattern = if a.has('r') {
+        text.to_owned()
+    } else {
+        regex::escape(text)
+    };
+    let re = regex::RegexBuilder::new(&pattern)
+        .case_insensitive(a.has('i'))
+        .build()
+        .map_err(|e| format!("find-window: {e}"))?;
+    Ok(move |w: &crate::model::Window| {
+        (names && re.is_match(&w.name))
+            || w.panes().iter().filter_map(|p| srv.panes.get(p)).any(|p| {
+                (titles && p.emu.title().is_some_and(|t| re.is_match(t)))
+                    || (contents && re.is_match(&p.emu.screen().contents()))
+            })
+    })
 }

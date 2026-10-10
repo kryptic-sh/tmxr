@@ -59,6 +59,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `previous-window -a`) now stop at these as well as bells;
   `#{window_activity_flag}` and `#{window_silence_flag}` are new.
 
+### Changed
+
+- `find-window` (`prefix f`) matches as tmux's does: the text in window names,
+  pane titles and visible pane contents (`-N` / `-T` / `-C` to pick, `-i` to
+  ignore case, `-r` for a regular expression), and lists only the windows that
+  match. It used to open every window with the text as a fuzzy filter on names.
+- `choose-tree`, `choose-buffer`, `choose-client` and `find-window` run from a
+  script open on the attached client typed into last, as in tmux, rather than
+  failing with `no current client`.
+- The client/server protocol is now version 4, for locking: after upgrading,
+  restart a running server (`tmxr kill-server`) before attaching.
+
 ### Fixed
 
 - Shell commands (`new-window 'cmd'`, `run-shell`, `if-shell`, `copy-pipe`,
@@ -69,11 +81,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `move-window -k` onto the only window of a session ended that session first,
   so the move then failed with `no such session`; the window is now replaced in
   place, as in tmux.
-
-### Changed
-
-- The client/server protocol is now version 4, for locking: after upgrading,
-  restart a running server (`tmxr kill-server`) before attaching.
 
 ## [0.2.4] - 2026-10-09
 

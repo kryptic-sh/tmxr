@@ -161,9 +161,18 @@ impl Overlay {
         Self::Picker(Box::new(PickerOverlay::new("sessions", items)))
     }
 
-    /// Every session's windows, the client's session first; `query`
-    /// pre-filters them (`find-window`).
-    pub fn window_picker(srv: &Server, client: ClientId, query: &str) -> Self {
+    /// Every session's windows, the client's session first.
+    pub fn window_picker(srv: &Server, client: ClientId) -> Self {
+        Self::found_windows(srv, client, |_| true)
+    }
+
+    /// The windows `keep` accepts, laid out as [`Overlay::window_picker`]
+    /// (`find-window`).
+    pub fn found_windows(
+        srv: &Server,
+        client: ClientId,
+        keep: impl Fn(&crate::model::Window) -> bool,
+    ) -> Self {
         let current = srv
             .clients
             .get(&client)
@@ -174,7 +183,7 @@ impl Overlay {
         sessions.sort_by_key(|s| (Some(s.id) != current, s.name.clone()));
         for s in sessions {
             for (idx, wid) in &s.windows {
-                let Some(w) = srv.windows.get(wid) else {
+                let Some(w) = srv.windows.get(wid).filter(|w| keep(w)) else {
                     continue;
                 };
                 let mark = if Some(s.id) == current && *idx == s.current {
@@ -189,7 +198,7 @@ impl Overlay {
                 });
             }
         }
-        Self::Picker(Box::new(PickerOverlay::with_query("windows", items, query)))
+        Self::Picker(Box::new(PickerOverlay::new("windows", items)))
     }
 
     /// The attached clients; Enter detaches one (`choose-client`).
