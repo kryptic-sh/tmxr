@@ -78,7 +78,18 @@ pub(super) fn run(
                 .as_ref()
                 .map(|att| (att.cols, att.rows))
                 .ok_or("no current client")?;
-            let rect = popup_rect(a, cols, rows)?;
+            let places = Places {
+                pane: pane
+                    .and_then(|p| srv.panes.get(&p))
+                    .map(|p| ratatui::layout::Rect::new(p.rect.x, p.rect.y, p.rect.w, p.rect.h)),
+                mouse: ctx.mouse.map(|m| (m.col, m.row)),
+                window: srv.clients[&c].att.as_ref().and_then(|att| {
+                    let current = srv.sessions.get(&att.session)?.current;
+                    let ranges = &att.status_ranges.windows;
+                    ranges.iter().find(|r| r.2 == current).map(|r| r.0)
+                }),
+            };
+            let rect = popup_rect(a, (cols, rows), places, |v| expand_for(srv, ctx, pane, v))?;
             let sid = pane
                 .and_then(|p| srv.panes.get(&p))
                 .and_then(|p| srv.session_of_window(p.window))
@@ -332,7 +343,8 @@ fn run_nested(srv: &mut Server, ctx: &Ctx, line: &str, out: &mut Outcome) -> Res
 }
 
 /// The client an overlay command shows on (`-c`, else the best one) and the
-/// pane its formats and directory come from (`-t`, else the caller's).
+/// pane its formats and directory come from (`-t`, else the caller's, else
+/// that client's current pane).
 fn shown_on(
     srv: &Server,
     ctx: &Ctx,
@@ -351,16 +363,39 @@ fn shown_on(
         .value('t')
         .map(|t| target::pane(srv, ctx, Some(t)).map(|(_, _, p)| p))
         .transpose()?
-        .or(ctx.pane);
+        .or(ctx.pane)
+        // As tmux: else the shown-on client's current pane.
+        .or_else(|| {
+            let session = srv.clients.get(&c)?.att.as_ref()?.session;
+            srv.active_pane_of_session(session)
+        });
     Ok((c, pane))
 }
 
+/// Where a popup may be put besides numbers, as tmux's position letters
+/// name them.
+#[derive(Debug, Clone, Copy, Default)]
+struct Places {
+    /// The target pane, in client cells (`P`).
+    pane: Option<ratatui::layout::Rect>,
+    /// The mouse, for a popup a mouse bind opened (`M`).
+    mouse: Option<(u16, u16)>,
+    /// Where the current window's name starts on the status line (`W`).
+    window: Option<u16>,
+}
+
 /// A popup's box in a `cols` x `rows` client: `-w` / `-h` in cells or
-/// percent (half the client by default), at `-x` / `-y` or centred (`C`).
+/// percent (half the client by default), at `-x` / `-y`. Those take a number
+/// (the box's left or top), formats expanded first, or tmux's letters: `C`
+/// centre; for `-x` `R` the right edge, `P` the pane's left, `M` the mouse,
+/// `W` the window's name on the status line; for `-y` `P` the pane's bottom,
+/// `M` the mouse, `S` just above the status line (these place the box's
+/// bottom, as tmux's do).
 fn popup_rect(
     a: &tmxr_command::Args,
-    cols: u16,
-    rows: u16,
+    (cols, rows): (u16, u16),
+    places: Places,
+    expand: impl Fn(&str) -> String,
 ) -> Result<ratatui::layout::Rect, String> {
     let size = |flag: char, total: u16| -> Result<u16, String> {
         let n = match a.value(flag) {
@@ -375,19 +410,39 @@ fn popup_rect(
         };
         Ok(n.clamp(1, total.max(1)))
     };
-    let at = |flag: char, len: u16, total: u16| -> Result<u16, String> {
-        match a.value(flag) {
-            None | Some("C") => Ok(total.saturating_sub(len) / 2),
-            Some(v) => v
-                .parse::<u16>()
-                .map(|n| n.min(total.saturating_sub(len)))
-                .map_err(|_| format!("-{flag} {v}: tmxr takes a number or C")),
-        }
-    };
     let (w, h) = (size('w', cols)?, size('h', rows)?);
+    let missing = |flag: char, v: &str| format!("-{flag} {v}: nothing to place it by here");
+    let x = match a.value('x').map(&expand).as_deref() {
+        None | Some("C") => cols.saturating_sub(w) / 2,
+        Some("R") => cols.saturating_sub(w),
+        Some("P") => places.pane.map(|r| r.x).ok_or_else(|| missing('x', "P"))?,
+        Some("M") => places.mouse.map(|m| m.0).ok_or_else(|| missing('x', "M"))?,
+        Some("W") => places.window.ok_or_else(|| missing('x', "W"))?,
+        Some(v) => v
+            .parse::<u16>()
+            .map_err(|_| format!("-x {v}: a number, C, R, P, M or W"))?,
+    };
+    let status_top = rows.saturating_sub(crate::server::STATUS_ROWS);
+    // The letters give the box's bottom row.
+    let bottom = |row: u16| row.saturating_sub(h);
+    let y = match a.value('y').map(&expand).as_deref() {
+        None | Some("C") => rows.saturating_sub(h) / 2,
+        Some("P") => places
+            .pane
+            .map(|r| bottom(r.y + r.height))
+            .ok_or_else(|| missing('y', "P"))?,
+        Some("M") => places
+            .mouse
+            .map(|m| bottom(m.1))
+            .ok_or_else(|| missing('y', "M"))?,
+        Some("S") => bottom(status_top),
+        Some(v) => v
+            .parse::<u16>()
+            .map_err(|_| format!("-y {v}: a number, C, P, M or S"))?,
+    };
     Ok(ratatui::layout::Rect::new(
-        at('x', w, cols)?,
-        at('y', h, rows)?,
+        x.min(cols.saturating_sub(w)),
+        y.min(rows.saturating_sub(h)),
         w,
         h,
     ))

@@ -3678,3 +3678,63 @@ fn menu_and_popup_take_tmux_style_flags() {
             .success()
     );
 }
+
+#[test]
+fn display_popup_takes_tmux_position_letters() {
+    let t = Tmxr::new("popplace");
+    let s = t.attach(&["new", "-s", "pl"]);
+    s.wait_for("status line", |text| text.contains("pl"));
+    let hold = if cfg!(windows) {
+        "echo PLACED& ping -n 30 127.0.0.1 >NUL"
+    } else {
+        "echo PLACED; sleep 30"
+    };
+    // A row's cell symbols, blanks as spaces, indexed by column.
+    let row = |s: &Screen, row: u16| -> Vec<String> {
+        s.row_cells(row)
+            .into_iter()
+            .map(|(c, _, _)| if c.is_empty() { " ".into() } else { c })
+            .collect()
+    };
+    // R: the right edge; S: the bottom just above the status line.
+    t.run(&[
+        "display-popup",
+        "-x",
+        "R",
+        "-y",
+        "S",
+        "-w",
+        "20",
+        "-h",
+        "5",
+        hold,
+    ]);
+    s.wait_for("the popup", |text| text.contains("PLACED"));
+    let status = ROWS - 1;
+    let bottom = row(&s, status - 1);
+    assert_eq!(bottom[usize::from(COLS - 1)], "┘", "{bottom:?}");
+    assert_eq!(bottom[usize::from(COLS - 20)], "└", "{bottom:?}");
+    t.run(&["display-popup", "-C"]);
+    s.wait_for("closed", |text| !text.contains("PLACED"));
+    // A number, after its formats are expanded.
+    t.run(&[
+        "display-popup",
+        "-x",
+        "#{pane_index}",
+        "-y",
+        "3",
+        "-w",
+        "20",
+        "-h",
+        "5",
+        hold,
+    ]);
+    s.wait_for("the popup", |text| text.contains("PLACED"));
+    assert_eq!(row(&s, 3)[0], "┌", "{:?}", row(&s, 3));
+    t.run(&["display-popup", "-C"]);
+    assert!(
+        !t.output(&["display-popup", "-x", "Q", "echo"])
+            .status
+            .success()
+    );
+}

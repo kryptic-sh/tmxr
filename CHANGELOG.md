@@ -37,6 +37,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `-S` (its border), `-H` (a menu's selected item) and `-b` (border lines:
   single, rounded, double, heavy or none). They were accepted and ignored.
 
+- `display-popup -x` / `-y` take tmux's position letters (`R` the right edge,
+  `S` above the status line, `P` by the pane, `M` at the mouse, `W` under the
+  window's name) and expand formats, and a popup or menu with no `-t` takes its
+  formats from the client's current pane.
+
 ### Changed
 
 - A `-S` socket's directory is no longer required to be private to its owner, as
