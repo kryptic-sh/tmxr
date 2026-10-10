@@ -174,10 +174,13 @@ table. What has been verified, and how:
   first, as do the other tests that type into a new pane; 10 full runs without
   retries afterwards had no failure, against 2 failures in the 16 runs before.
   If it fails again, the stall is not the whole story.
-- **hjkl `$TMXR` fall-through** is in hjkl `main` (`074ef614`, CI green on
-  2026-10-09) but not in an hjkl release yet: `dispatch_tmux_navigate` runs
-  `tmxr select-pane` when `$TMXR` is set. Not tested end to end with a real hjkl
-  in a tmxr pane.
+- **hjkl `$TMXR` fall-through** is in hjkl `main` (`074ef614`) but not in an
+  hjkl release yet: `dispatch_tmux_navigate` runs `tmxr select-pane` when
+  `$TMXR` is set. Checked end to end on Windows on 2026-10-10 with that hjkl
+  built from `main` in the left pane of a two-pane tmxr window: `C-l` at its
+  edge moved tmxr's focus to the right pane; the same with `$TMXR` cleared left
+  it where it was, with hjkl running (its status line on the screen). Not
+  repeated on Linux or macOS.
 - **nvim navigation** is the separate
   [tmxr-navigator.nvim](https://github.com/kryptic-sh/tmxr-navigator.nvim)
   plugin (CI green on Linux, macOS and Windows, nvim stable and nightly).
