@@ -23,6 +23,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   rather than for a fixed time. A shell that sends OSC 133 prompt marks needs no
   keys at all: the copy starts where its prompt said the input does.
 
+- `lock-after-time`: lock a client after that many idle seconds (0, the default,
+  never does).
+
 ### Changed
 
 - A `-S` socket's directory is no longer required to be private to its owner, as

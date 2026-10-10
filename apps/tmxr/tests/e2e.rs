@@ -3499,3 +3499,27 @@ fn resurrect_keeps_a_manual_window_size() {
     ]);
     assert_eq!(size.trim(), "41x11");
 }
+
+#[test]
+fn lock_after_time_locks_an_idle_client() {
+    let t = Tmxr::new("lockidle");
+    let s = t.attach(&["new", "-s", "li"]);
+    s.wait_for("status line", |text| text.contains("li"));
+    let lock = if cfg!(windows) {
+        "echo IDLE-LOCKED& set /p x="
+    } else {
+        "echo IDLE-LOCKED; read x"
+    };
+    t.run(&["set-option", "-g", "lock-command", lock]);
+    t.run(&["set-option", "-g", "lock-after-time", "1"]);
+    // Nothing typed: locked by itself.
+    s.wait_for("the idle lock", |text| text.contains("IDLE-LOCKED"));
+    s.send(b"unlock\r");
+    s.wait_for("the client back", |text| {
+        text.contains("li") && !text.contains("IDLE-LOCKED")
+    });
+    // Unlocking counts as activity: not locked again at once.
+    std::thread::sleep(Duration::from_millis(500));
+    assert!(!s.text().contains("IDLE-LOCKED"), "locked again at once");
+    t.run(&["set-option", "-g", "lock-after-time", "0"]);
+}

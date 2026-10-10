@@ -174,6 +174,7 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
         },
         "copy-command" => need()?.clone_into(&mut c.copy_command),
         "lock-command" => need()?.clone_into(&mut c.lock_command),
+        "lock-after-time" => c.lock_after_time = num(need()?)?,
         "socket-access" => {
             return Err(
                 "socket-access is read when the server starts: set it in the config file".into(),
@@ -241,6 +242,7 @@ pub fn option_lines(srv: &Server) -> Vec<String> {
             if c.monitor_activity { "on" } else { "off" }
         ),
         format!("monitor-silence {}", c.monitor_silence),
+        format!("lock-after-time {}", c.lock_after_time),
         format!(
             "lock-command {}",
             join_args(std::slice::from_ref(&c.lock_command))

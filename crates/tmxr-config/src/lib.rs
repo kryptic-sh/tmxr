@@ -59,6 +59,8 @@ pub struct Config {
     /// Shell command a locked client runs in its terminal; the client is
     /// unlocked when it exits.
     pub lock_command: String,
+    /// Seconds a client may sit idle before it is locked; 0 never.
+    pub lock_after_time: u64,
     /// `owner` or `users`: who may open the server's endpoint, read when
     /// the server starts (`server-access` admits users by name).
     pub socket_access: String,

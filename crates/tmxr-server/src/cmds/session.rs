@@ -129,7 +129,7 @@ pub(super) fn run(
                 }
                 _ => clients_of(srv, |_| true),
             };
-            lock(srv, &clients)?;
+            srv.lock_clients(&clients)?;
         }
         "suspend-client" => {
             let c = match a.value('t') {
@@ -269,30 +269,6 @@ fn clients_of(srv: &Server, on: impl Fn(SessionId) -> bool) -> Vec<ClientId> {
         .filter(|c| c.att.as_ref().is_some_and(|a| on(a.session)))
         .map(|c| c.id)
         .collect()
-}
-
-/// Hand each client's terminal to `lock-command` until it exits; a client
-/// already locked is left as it is.
-fn lock(srv: &mut Server, clients: &[ClientId]) -> Result<(), String> {
-    if srv.cfg.lock_command.is_empty() {
-        return Err("lock-command is empty".into());
-    }
-    let command = srv.cfg.lock_command.clone();
-    for &c in clients {
-        let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) else {
-            continue;
-        };
-        if !att.locked {
-            att.locked = true;
-            srv.send(
-                c,
-                ServerMsg::Lock {
-                    command: command.clone(),
-                },
-            );
-        }
-    }
-    Ok(())
 }
 
 fn target_client(srv: &Server, spec: &str) -> Result<ClientId, String> {

@@ -444,6 +444,8 @@ impl Server {
                     a.mouse = false;
                     a.dirty = true;
                     a.locked = false;
+                    // Unlocking is activity: lock-after-time starts again.
+                    a.last_input = Instant::now();
                 }
                 if let ClientMsg::LockFailed(why) = msg {
                     self.show_message(id, why);
@@ -678,6 +680,7 @@ impl Server {
     fn tick(&mut self) {
         crate::mouse::fire_double_clicks(self);
         self.advance_copy_line();
+        self.lock_idle_clients();
         let now = Instant::now();
         for c in self.clients.values_mut() {
             if let Some(a) = c.att.as_mut() {

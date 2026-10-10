@@ -141,6 +141,53 @@ impl Server {
         }
     }
 
+    /// Hand each client's terminal to `lock-command` until it exits; a
+    /// client already locked is left as it is.
+    pub fn lock_clients(&mut self, clients: &[ClientId]) -> Result<(), String> {
+        if self.cfg.lock_command.is_empty() {
+            return Err("lock-command is empty".into());
+        }
+        let command = self.cfg.lock_command.clone();
+        for &c in clients {
+            let Some(att) = self.clients.get_mut(&c).and_then(|c| c.att.as_mut()) else {
+                continue;
+            };
+            if !att.locked {
+                att.locked = true;
+                self.send(
+                    c,
+                    ServerMsg::Lock {
+                        command: command.clone(),
+                    },
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// `lock-after-time`: lock each client idle that long.
+    pub fn lock_idle_clients(&mut self) {
+        let secs = self.cfg.lock_after_time;
+        if secs == 0 || self.cfg.lock_command.is_empty() {
+            return;
+        }
+        let idle: Vec<ClientId> = self
+            .clients
+            .values()
+            .filter(|c| {
+                c.att.as_ref().is_some_and(|a| {
+                    !a.locked && a.last_input.elapsed() >= std::time::Duration::from_secs(secs)
+                })
+            })
+            .map(|c| c.id)
+            .collect();
+        if !idle.is_empty()
+            && let Err(e) = self.lock_clients(&idle)
+        {
+            self.log_message(format!("lock-after-time: {e}"));
+        }
+    }
+
     pub fn touch_session(&mut self, session: SessionId) {
         if let Some(s) = self.sessions.get_mut(&session) {
             s.last_used = Instant::now();
