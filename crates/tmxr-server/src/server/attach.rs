@@ -45,7 +45,7 @@ impl Server {
             drag: None,
             press: None,
             click: None,
-            status_ranges: Vec::new(),
+            status_ranges: crate::render::StatusRanges::default(),
             mouse: false,
         });
         self.restored_pending = false;

@@ -235,11 +235,9 @@ fn locate(
     };
     let sess = srv.sessions.get(&session)?;
     if row >= att.rows.saturating_sub(STATUS_ROWS) {
-        t.window = att
-            .status_ranges
-            .iter()
-            .find(|(a, b, _)| col >= *a && col < *b)
-            .and_then(|(_, _, idx)| Some((*idx, *sess.windows.get(idx)?)));
+        let (location, idx) = att.status_ranges.at(col);
+        t.location = location;
+        t.window = idx.and_then(|i| Some((i, *sess.windows.get(&i)?)));
         return Some(t);
     }
     let wid = sess.current_window()?;

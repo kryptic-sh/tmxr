@@ -94,8 +94,7 @@ what was not.
   `DoubleClick1…` in place of a second `MouseDown1…` (tmux sends both, the
   `DoubleClick` after a timer). The default double- and triple-click binds copy
   at once; tmux's show the selection for 0.3 s first (`run -d0.3`, which tmxr's
-  `run-shell` lacks). `MouseDown1StatusLeft` / `StatusRight` / `StatusDefault`
-  are not recognised either: the whole status line is `Status`.
+  `run-shell` lacks).
 - **No 256-colour fallback, by design for now**: colours are always 24-bit RGB,
   which is what the tmux config asks for (`terminal-overrides ",*:RGB"` forces
   RGB on every terminal). Only for a user whose terminal lacks true colour (e.g.

@@ -833,6 +833,34 @@ fn default_mouse_binds_focus_scroll_and_select_windows() {
         .expect("first window in the status line");
     s.click(0, u16::try_from(col).unwrap(), ROWS - 1);
     format_is("#{window_index}", "0", "the clicked window current");
+    // The status line's parts have keys of their own.
+    t.run(&["set-option", "-g", "status-left", "LEFTPART "]);
+    t.run(&["set-option", "-g", "status-right", " RIGHTPART"]);
+    t.run(&[
+        "bind-key",
+        "-n",
+        "MouseDown1StatusLeft",
+        "set-option -g @hit left",
+    ]);
+    t.run(&[
+        "bind-key",
+        "-n",
+        "MouseDown1StatusRight",
+        "set-option -g @hit right",
+    ]);
+    t.run(&[
+        "bind-key",
+        "-n",
+        "MouseDown1StatusDefault",
+        "set-option -g @hit gap",
+    ]);
+    s.wait_for("the new status line", |text| text.contains("RIGHTPART"));
+    s.click(0, 1, ROWS - 1);
+    format_is("#{@hit}", "left", "a click on status-left");
+    s.click(0, COLS - 2, ROWS - 1);
+    format_is("#{@hit}", "right", "a click on status-right");
+    s.click(0, COLS / 2, ROWS - 1);
+    format_is("#{@hit}", "gap", "a click between");
 }
 
 #[test]

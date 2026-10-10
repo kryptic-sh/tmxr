@@ -17,7 +17,44 @@ use crate::vars::Vars;
 
 /// `(first column, end column, window index)` of each window in the status
 /// line, for mouse clicks.
-pub type StatusRanges = Vec<(u16, u16, u32)>;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StatusRanges {
+    /// Each window's cells in the window list: start, end, window index.
+    pub windows: Vec<(u16, u16, u32)>,
+    /// Where `status-left` ends.
+    pub left_end: u16,
+    /// Where `status-right` starts.
+    pub right_start: u16,
+}
+
+impl Default for StatusRanges {
+    /// Nothing drawn (a message or prompt in the status line): every cell is
+    /// outside the left, right and window parts.
+    fn default() -> Self {
+        Self {
+            windows: Vec::new(),
+            left_end: 0,
+            right_start: u16::MAX,
+        }
+    }
+}
+
+impl StatusRanges {
+    /// What a click at `col` of the status line is on, and the window index
+    /// when it is a window.
+    pub fn at(&self, col: u16) -> (tmxr_command::MouseLocation, Option<u32>) {
+        use tmxr_command::MouseLocation as L;
+        if let Some((_, _, idx)) = self.windows.iter().find(|(a, b, _)| col >= *a && col < *b) {
+            (L::Status, Some(*idx))
+        } else if col < self.left_end {
+            (L::StatusLeft, None)
+        } else if col >= self.right_start {
+            (L::StatusRight, None)
+        } else {
+            (L::StatusDefault, None)
+        }
+    }
+}
 
 fn colour(c: Colour) -> Color {
     match c {
@@ -84,7 +121,7 @@ fn runs_width(text: &str) -> u16 {
 
 /// Draw the client's frame. Returns the status-line window ranges.
 pub fn draw(srv: &Server, id: ClientId, term: &mut Terminal<AnsiBackend>) -> StatusRanges {
-    let mut ranges = StatusRanges::new();
+    let mut ranges = StatusRanges::default();
     let Some(att) = srv.clients.get(&id).and_then(|c| c.att.as_ref()) else {
         return ranges;
     };
@@ -334,7 +371,7 @@ fn draw_screen(screen: &vt100::Screen, buf: &mut Buffer, area: Rect) -> Option<P
 }
 
 fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u16) -> StatusRanges {
-    let mut ranges = StatusRanges::new();
+    let mut ranges = StatusRanges::default();
     let Some(att) = srv.clients.get(&id).and_then(|c| c.att.as_ref()) else {
         return ranges;
     };
@@ -391,6 +428,8 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
         base,
         &left,
     );
+    ranges.left_end = x;
+    ranges.right_start = cols - right_w;
     for (idx, wid) in &session.windows {
         let Some(win) = srv.windows.get(wid) else {
             continue;
@@ -410,7 +449,7 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
         let text = format::expand(fmt, &wvars);
         let start = x;
         x = draw_runs(buf, x, y, limit, base, &text);
-        ranges.push((start, x, *idx));
+        ranges.windows.push((start, x, *idx));
         if x >= limit {
             break;
         }
@@ -709,5 +748,28 @@ fn draw_clock(buf: &mut Buffer, area: Rect, colour: Style) {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tmxr_command::MouseLocation as L;
+
+    #[test]
+    fn status_clicks_land_on_left_windows_gap_and_right() {
+        let r = StatusRanges {
+            windows: vec![(5, 10, 0), (10, 14, 1)],
+            left_end: 5,
+            right_start: 30,
+        };
+        assert_eq!(r.at(0), (L::StatusLeft, None));
+        assert_eq!(r.at(4), (L::StatusLeft, None));
+        assert_eq!(r.at(5), (L::Status, Some(0)));
+        assert_eq!(r.at(13), (L::Status, Some(1)));
+        assert_eq!(r.at(14), (L::StatusDefault, None));
+        assert_eq!(r.at(30), (L::StatusRight, None));
+        // A message over the status line: nothing to click on.
+        assert_eq!(StatusRanges::default().at(3), (L::StatusDefault, None));
     }
 }

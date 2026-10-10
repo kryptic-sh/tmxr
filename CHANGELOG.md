@@ -58,6 +58,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`~`), globally with `-g` or per window. `M-n` / `M-p` (`next-window -a` /
   `previous-window -a`) now stop at these as well as bells;
   `#{window_activity_flag}` and `#{window_silence_flag}` are new.
+- Mouse keys for the status line's parts, as in tmux: `…StatusLeft` and
+  `…StatusRight` for `status-left` and `status-right`, `…StatusDefault` for the
+  rest outside the window list (`MouseDown3StatusLeft`, `WheelUpStatusDefault`,
+  …). `…Status` is now only a click on a window in the list.
 
 ### Changed
 

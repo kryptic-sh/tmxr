@@ -33,7 +33,14 @@ pub enum MouseAction {
 pub enum MouseLocation {
     Pane,
     Border,
+    /// A window in the status line's window list.
     Status,
+    /// The status line's `status-left` part.
+    StatusLeft,
+    /// The status line's `status-right` part.
+    StatusRight,
+    /// The status line outside both and the window list.
+    StatusDefault,
 }
 
 /// A mouse key, such as `MouseDown1Pane` or `M-WheelUpPane`.
@@ -64,6 +71,9 @@ const LOCATIONS: &[(&str, MouseLocation)] = &[
     ("Pane", MouseLocation::Pane),
     ("Border", MouseLocation::Border),
     ("Status", MouseLocation::Status),
+    ("StatusLeft", MouseLocation::StatusLeft),
+    ("StatusRight", MouseLocation::StatusRight),
+    ("StatusDefault", MouseLocation::StatusDefault),
 ];
 
 impl FromStr for MouseKey {
@@ -178,6 +188,9 @@ mod tests {
             "TripleClick3Pane",
             "WheelUpPane",
             "WheelDownStatus",
+            "MouseDown3StatusLeft",
+            "MouseUp1StatusRight",
+            "WheelUpStatusDefault",
             "M-MouseDown1Pane",
             "C-S-WheelUpPane",
         ] {
