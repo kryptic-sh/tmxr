@@ -12,7 +12,9 @@ use std::path::Path;
 use serde::Deserialize;
 
 pub use hjkl_config::{ConfigError, ConfigSource};
-pub use window::{BoxLines, ModeKeys, OptionValue, WindowOptions, WindowSize};
+pub use window::{
+    BoxLines, ModeKeys, OptionValue, OwnOptions, PANE_OPTIONS, WindowOptions, WindowSize,
+};
 
 mod window;
 

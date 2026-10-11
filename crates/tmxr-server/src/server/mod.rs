@@ -2,6 +2,7 @@
 
 mod attach;
 mod input;
+mod options;
 mod panes;
 mod shell;
 pub mod signals;
@@ -750,7 +751,7 @@ impl Server {
             .windows
             .values()
             .filter(|w| {
-                let secs = w.monitor_silence.unwrap_or(self.cfg.window.monitor_silence);
+                let secs = self.window_options(w.id).monitor_silence;
                 secs > 0
                     && !w.silence_raised
                     && now.duration_since(w.last_output) >= Duration::from_secs(secs)

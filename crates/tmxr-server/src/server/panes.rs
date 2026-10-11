@@ -53,6 +53,7 @@ impl Server {
                 output: started.output,
                 pipe: None,
                 hooks: crate::hooks::HookTable::new(),
+                options: tmxr_config::OwnOptions::default(),
             },
         );
         Ok(())
@@ -362,10 +363,7 @@ impl Server {
                 if bell {
                     crate::alerts::raise(self, wid, crate::alerts::Alert::Bell);
                 }
-                let watched = self.windows.get(&wid).is_some_and(|w| {
-                    w.monitor_activity
-                        .unwrap_or(self.cfg.window.monitor_activity)
-                });
+                let watched = self.window_options(wid).monitor_activity;
                 let mut activity = false;
                 if let Some(w) = self.windows.get_mut(&wid) {
                     w.last_output = std::time::Instant::now();
@@ -382,7 +380,7 @@ impl Server {
                     self.forward_osc52(&data);
                 }
                 // tmux drops passthrough unless it is allowed.
-                if self.cfg.window.allow_passthrough {
+                if self.pane_options(pid).allow_passthrough {
                     for (data, cursor) in passthrough {
                         self.forward_passthrough(pid, &data, cursor);
                     }
@@ -396,7 +394,7 @@ impl Server {
                     ..crate::cmds::Ctx::default()
                 };
                 self.queue_hook("pane-exited", ctx, crate::hooks::HookScope::default());
-                if self.cfg.window.remain_on_exit
+                if self.pane_options(pid).remain_on_exit
                     && let Some(p) = self.panes.get_mut(&pid)
                 {
                     p.dead = Some(code);

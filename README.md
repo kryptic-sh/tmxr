@@ -89,6 +89,11 @@ x = false                                                  # remove a default
 
 `prefix R` (or `tmxr source-file`) reloads it.
 
+The file sets the global values. As in tmux, a window can then hold its own
+window options (`tmxr set -w -t :2 pane-scrollbars on`, or a window option set
+without `-g`) and a pane its own pane options (`set -p remain-on-exit on`); the
+rest are server-wide.
+
 ## Windows: the current directory
 
 New panes and windows open in the current pane's directory (`prefix "` `%` `'`

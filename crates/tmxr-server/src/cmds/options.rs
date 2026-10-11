@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use tmxr_command::Parsed;
 use tmxr_config::{AlertAction, Visual, WindowOptions};
 
-use super::{Ctx, Outcome, Res, attached_client, join_args, on_off};
+use super::{Ctx, Outcome, Res, attached_client, join_args, on_off, scoped};
 use crate::server::Server;
 use crate::target;
 
@@ -18,14 +18,23 @@ pub(super) fn run(
     let a = &p.args;
     let pos = a.positional();
     match p.name() {
-        "set-option" | "set-window-option" => set_option(srv, ctx, p, out)?,
-        // Window options live with the rest in one table.
+        "set-option" | "set-window-option" => set_option(srv, ctx, p)?,
         "show-options" | "show-window-options" => {
+            let window_cmd = p.name() == "show-window-options";
+            let name = pos.first().map(String::as_str);
+            let scoped = match name {
+                Some(n) => scoped::handles(n),
+                None => window_cmd || a.has('w') || a.has('p'),
+            };
+            if scoped {
+                return scoped::show(srv, ctx, a, window_cmd, name, out).map(|()| true);
+            }
+            // The other options are server-wide: one table, as tmux's
+            // global session and server options.
+            let mut found = false;
             for l in option_lines(srv) {
-                if pos
-                    .first()
-                    .is_none_or(|n| l.split(' ').next() == Some(n.as_str()))
-                {
+                if name.is_none_or(|n| l.split(' ').next() == Some(n)) {
+                    found = true;
                     let l = if a.has('v') {
                         l.split_once(' ')
                             .map_or_else(|| l.clone(), |(_, v)| v.to_owned())
@@ -35,6 +44,9 @@ pub(super) fn run(
                     out.stdout.push_str(&l);
                     out.stdout.push('\n');
                 }
+            }
+            if let Some(n) = name.filter(|_| !found) {
+                return Err(format!("invalid option: {n}"));
             }
         }
         "source-file" => {
@@ -52,7 +64,7 @@ pub(super) fn run(
     Ok(true)
 }
 
-fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res {
+fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed) -> Res {
     let a = &p.args;
     let pos = a.positional();
     let name = pos[0].as_str();
@@ -65,82 +77,8 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
     let value = expanded
         .as_deref()
         .or_else(|| pos.get(1).map(String::as_str));
-    let _ = out;
-    if name == "monitor-activity" || name == "monitor-silence" {
-        // -g sets the global value; without it, the target window's own.
-        let window = if a.has('g') {
-            None
-        } else {
-            Some(target::window(srv, ctx, a.value('t'))?.2)
-        };
-        let local = window.and_then(|w| srv.windows.get(&w));
-        if name == "monitor-activity" {
-            let current = local
-                .and_then(|w| w.monitor_activity)
-                .unwrap_or(srv.cfg.window.monitor_activity);
-            let on = on_off(value, current)?;
-            match window.and_then(|w| srv.windows.get_mut(&w)) {
-                Some(w) => w.monitor_activity = Some(on),
-                None => srv.cfg.window.monitor_activity = on,
-            }
-        } else {
-            let v = value.ok_or("monitor-silence: needs a value")?;
-            let secs = v
-                .parse::<u64>()
-                .map_err(|_| format!("monitor-silence: bad number {v}"))?;
-            match window.and_then(|w| srv.windows.get_mut(&w)) {
-                Some(w) => w.monitor_silence = Some(secs),
-                None => srv.cfg.window.monitor_silence = secs,
-            }
-        }
-        srv.mark_all_dirty();
-        return Ok(());
-    }
-    if name == "window-size" {
-        // Only per window, to undo `resize-window`: tmxr's sizing is always
-        // tmux's `latest`.
-        let (sid, _, wid) = target::window(srv, ctx, a.value('t'))?;
-        let w = srv.windows.get_mut(&wid).ok_or("no window")?;
-        match value {
-            Some("latest") => w.manual_size = false,
-            Some("manual") => w.manual_size = true,
-            v => {
-                return Err(format!(
-                    "window-size: {}: tmxr has latest and manual",
-                    v.unwrap_or("no value")
-                ));
-            }
-        }
-        srv.size_session(sid);
-        return Ok(());
-    }
-    if name == "synchronize-panes" || name == "automatic-rename" {
-        let (_, _, wid) = target::window(srv, ctx, a.value('t'))?;
-        let w = srv.windows.get_mut(&wid).ok_or("no window")?;
-        match name {
-            "synchronize-panes" => w.synchronize = on_off(value, w.synchronize)?,
-            _ => w.auto_name = on_off(value, w.auto_name)?,
-        }
-        srv.mark_window_dirty(wid);
-        return Ok(());
-    }
-    if name.starts_with('@') {
-        if a.has('u') {
-            srv.cfg.options.remove(name);
-        } else {
-            let v = value.ok_or("option needs a value")?;
-            let v = if a.has('a') {
-                format!(
-                    "{}{v}",
-                    srv.cfg.options.get(name).cloned().unwrap_or_default()
-                )
-            } else {
-                v.to_owned()
-            };
-            srv.cfg.options.insert(name.to_owned(), v);
-        }
-        srv.mark_all_dirty();
-        return Ok(());
+    if scoped::handles(name) {
+        return scoped::set(srv, ctx, a, p.name() == "set-window-option", name, value);
     }
     let need = || value.ok_or_else(|| format!("{name}: needs a value"));
     let num = |v: &str| {
@@ -204,30 +142,16 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
                 _ => c.visual_silence = visual,
             }
         }
-        "allow-passthrough" => {
-            let on = on_off(value, c.window.allow_passthrough)?;
-            if on && !tmxr_term::emulator::passthrough_supported() {
-                return Err(crate::server::PASSTHROUGH_UNSUPPORTED.into());
-            }
-            c.window.allow_passthrough = on;
-        }
         "status-left" => need()?.clone_into(&mut c.status.left),
         "status-right" => need()?.clone_into(&mut c.status.right),
         "status-left-length" => c.status.left_length = length(need()?)?,
         "status-right-length" => c.status.right_length = length(need()?)?,
         "status-style" => need()?.clone_into(&mut c.status.style),
         "message-style" => need()?.clone_into(&mut c.status.message_style),
-        n if WindowOptions::NAMES.contains(&n) => c.window.set(n, value, a.has('a'))?,
         _ => return Err(format!("invalid option: {name}")),
     }
     if name == "rgb-colour" {
         srv.apply_rgb_colour();
-    }
-    if name.starts_with("pane-scrollbars") {
-        let windows: Vec<_> = srv.windows.keys().copied().collect();
-        for w in windows {
-            srv.relayout(w);
-        }
     }
     srv.mark_all_dirty();
     Ok(())

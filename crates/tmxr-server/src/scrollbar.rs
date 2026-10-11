@@ -43,7 +43,8 @@ pub fn size(style: &str) -> (u16, u16) {
 /// uses the alternate screen.
 pub fn bar(srv: &Server, pane: PaneId) -> Option<Bar> {
     let p = srv.panes.get(&pane)?;
-    let show = match srv.cfg.window.pane_scrollbars {
+    let options = srv.pane_options(pane);
+    let show = match options.pane_scrollbars {
         Scrollbars::Off => false,
         Scrollbars::Modal => p.copy.is_some(),
         Scrollbars::On => true,
@@ -51,9 +52,9 @@ pub fn bar(srv: &Server, pane: PaneId) -> Option<Bar> {
     if !show || p.emu.screen().alternate_screen() {
         return None;
     }
-    let (width, pad) = size(&srv.cfg.window.pane_scrollbars_style);
+    let (width, pad) = size(&options.pane_scrollbars_style);
     Some(Bar {
-        left: srv.cfg.window.pane_scrollbars_position == ScrollbarPosition::Left,
+        left: options.pane_scrollbars_position == ScrollbarPosition::Left,
         width,
         pad,
     })

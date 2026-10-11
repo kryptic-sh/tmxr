@@ -9,6 +9,7 @@ mod hook;
 mod options;
 mod pane;
 mod prompt;
+mod scoped;
 mod session;
 mod wait;
 mod window;

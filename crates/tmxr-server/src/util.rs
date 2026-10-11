@@ -191,7 +191,7 @@ pub fn refresh_commands(srv: &mut Server) {
     let renames: Vec<(u32, String)> = srv
         .windows
         .values()
-        .filter(|w| w.auto_name)
+        .filter(|w| srv.window_options(w.id).automatic_rename)
         .filter_map(|w| srv.commands.get(&w.active).map(|c| (w.id, c.clone())))
         .collect();
     for (wid, name) in renames {

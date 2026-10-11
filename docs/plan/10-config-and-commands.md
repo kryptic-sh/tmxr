@@ -60,6 +60,20 @@ are allowed (formats reference them via `#{@name}` / `#{E:@name}`).
 `source-file` (and `prefix R`) re-reads the file and applies it to the running
 server.
 
+### Option scopes
+
+The file holds the global values. tmux's window options
+(`tmxr_config::WindowOptions`, read under tmux's names through one table) can
+also be set per window and per pane, as tmux 3.6's `options_scope_from_name`
+picks: a window option without `-g` is the target window's own, `-p` a pane's
+own for the options tmux lets a pane hold (`PANE_OPTIONS`), and `-u` / `-U`
+remove them. A window's or pane's own values (`OwnOptions`) are kept typed and
+laid over what it inherits when read (`Server::window_options`,
+`Server::pane_options`): pane, window, global. `show-options -w` / `-p` list own
+values, `-A` adds the inherited ones marked `*`. User options (`@name`) are held
+at each scope too and found pane, window, then global in formats. Session
+options stay server-wide (see the backlog).
+
 ## Command language (`tmxr-command`)
 
 A tmux-compatible parser shared by config binds, the command prompt

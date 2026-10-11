@@ -1,9 +1,21 @@
 //! tmux's window options: one typed table, read by `set-option` and printed
 //! by `show-options` under tmux's names.
 
+use std::borrow::Cow;
+use std::collections::BTreeMap;
+
 use serde::Deserialize;
 
 use crate::{ScrollbarPosition, Scrollbars};
+
+/// The window options a pane may also set for itself (`set -p`), as tmux's
+/// option table scopes them.
+pub const PANE_OPTIONS: &[&str] = &[
+    "allow-passthrough",
+    "pane-scrollbars-style",
+    "remain-on-exit",
+    "synchronize-panes",
+];
 
 /// A window option's value: how `set-option` reads it and `show-options`
 /// prints it.
@@ -242,6 +254,80 @@ macro_rules! window_options {
                 Ok(())
             }
         }
+
+        /// The options one window or pane sets itself (`set -w`, `set -p`),
+        /// over what it inherits, and its own `@name` user options.
+        #[derive(Debug, Clone, Default, PartialEq, Eq)]
+        pub struct OwnOptions {
+            $(pub $field: Option<$ty>,)*
+            user: BTreeMap<String, String>,
+        }
+
+        impl OwnOptions {
+            /// Set `name` here from `set-option`'s `value`. A flag toggles and
+            /// `-a` (`append`) appends from `inherited`, the value without
+            /// this one, as tmux's; a user option appends to its own value
+            /// only.
+            pub fn set(
+                &mut self,
+                name: &str,
+                value: Option<&str>,
+                append: bool,
+                inherited: &WindowOptions,
+            ) -> Result<(), String> {
+                if name.starts_with('@') {
+                    let value = value.ok_or("empty value")?;
+                    let own = self.user.entry(name.to_owned()).or_default();
+                    if !append {
+                        own.clear();
+                    }
+                    own.push_str(value);
+                    return Ok(());
+                }
+                match name {
+                    $($name => {
+                        let current = self.$field.as_ref().unwrap_or(&inherited.$field);
+                        self.$field = Some(parse(name, value, append, current)?);
+                    })*
+                    _ => return Err(format!("invalid option: {name}")),
+                }
+                Ok(())
+            }
+
+            /// Forget `name` here (`set -u`), so the inherited value shows.
+            pub fn unset(&mut self, name: &str) {
+                match name {
+                    $($name => self.$field = None,)*
+                    _ => {
+                        self.user.remove(name);
+                    }
+                }
+            }
+
+            /// `name`'s own value as `show-options` prints it; `None` when
+            /// it is inherited.
+            pub fn show(&self, name: &str) -> Option<String> {
+                match name {
+                    $($name => self.$field.as_ref().map(OptionValue::show),)*
+                    _ => self.user.get(name).cloned(),
+                }
+            }
+
+            /// The user options set here, by name.
+            pub fn user(&self) -> impl Iterator<Item = (&str, &str)> {
+                self.user.iter().map(|(k, v)| (k.as_str(), v.as_str()))
+            }
+
+            /// `base` with the options set here over it; borrowed still when
+            /// none are.
+            pub fn over<'a>(&self, base: Cow<'a, WindowOptions>) -> Cow<'a, WindowOptions> {
+                let mut base = base;
+                $(if let Some(v) = &self.$field {
+                    base.to_mut().$field = v.clone();
+                })*
+                base
+            }
+        }
     };
 }
 
@@ -338,6 +424,59 @@ mod tests {
             "invalid option: status-left"
         );
         assert_eq!(o, before);
+    }
+
+    #[test]
+    fn own_options_override_what_is_inherited_until_unset() {
+        let global = crate::defaults().window;
+        let mut own = OwnOptions::default();
+        assert!(matches!(own.over(Cow::Borrowed(&global)), Cow::Borrowed(_)));
+        own.set("mode-keys", Some("emacs"), false, &global).unwrap();
+        // A flag toggles, and -a appends to, the inherited value.
+        own.set("remain-on-exit", None, false, &global).unwrap();
+        own.set("main-pane-width", Some("0"), true, &global)
+            .unwrap();
+        let o = own.over(Cow::Borrowed(&global));
+        assert_eq!(o.mode_keys, ModeKeys::Emacs);
+        assert_eq!(o.remain_on_exit, !global.remain_on_exit);
+        assert_eq!(o.main_pane_width, format!("{}0", global.main_pane_width));
+        assert_eq!(o.menu_style, global.menu_style);
+        assert_eq!(own.show("mode-keys").as_deref(), Some("emacs"));
+        assert_eq!(own.show("menu-style"), None);
+        own.unset("mode-keys");
+        assert_eq!(own.over(Cow::Borrowed(&global)).mode_keys, global.mode_keys);
+        assert_eq!(own.show("mode-keys"), None);
+        // A bad value changes nothing.
+        let before = own.clone();
+        assert!(
+            own.set("pane-scrollbars", Some("x"), false, &global)
+                .is_err()
+        );
+        assert_eq!(own, before);
+    }
+
+    #[test]
+    fn own_user_options_append_to_their_own_value() {
+        let global = crate::defaults().window;
+        let mut own = OwnOptions::default();
+        own.set("@x", Some("a"), true, &global).unwrap();
+        own.set("@x", Some("b"), true, &global).unwrap();
+        assert_eq!(own.show("@x").as_deref(), Some("ab"));
+        own.set("@x", Some("c"), false, &global).unwrap();
+        assert_eq!(own.user().collect::<Vec<_>>(), [("@x", "c")]);
+        assert_eq!(
+            own.set("@y", None, false, &global).unwrap_err(),
+            "empty value"
+        );
+        own.unset("@x");
+        assert_eq!(own.show("@x"), None);
+    }
+
+    #[test]
+    fn pane_options_are_window_options() {
+        for n in PANE_OPTIONS {
+            assert!(WindowOptions::NAMES.contains(n), "{n}");
+        }
     }
 
     #[test]

@@ -100,8 +100,10 @@ fn flag(b: bool) -> String {
 impl Context for Vars<'_> {
     fn get(&self, name: &str) -> Option<String> {
         let srv = self.srv;
-        if let Some(v) = srv.cfg.options.get(name) {
-            return Some(v.clone());
+        if name.starts_with('@')
+            && let Some(v) = srv.user_option(self.pane, self.window, name)
+        {
+            return Some(v);
         }
         let session = self.session.and_then(|s| srv.sessions.get(&s));
         let window = self.window.and_then(|w| srv.windows.get(&w));
@@ -164,7 +166,7 @@ impl Context for Vars<'_> {
                     srv.window_is_marked(w.id),
                 )
             }
-            "pane_synchronized" => flag(window?.synchronize),
+            "pane_synchronized" => flag(srv.pane_options(pane?.id).synchronize_panes),
             "pane_dead" => flag(pane?.dead.is_some()),
             "pane_dead_status" => pane?.dead.flatten()?.to_string(),
             "pane_marked" => flag(srv.marked_pane() == Some(pane?.id)),
@@ -173,7 +175,7 @@ impl Context for Vars<'_> {
             "pane_index" => {
                 let w = window?;
                 let i = w.panes().iter().position(|p| Some(*p) == self.pane)?;
-                (i as u32 + srv.cfg.window.pane_base_index).to_string()
+                (i as u32 + srv.window_options(w.id).pane_base_index).to_string()
             }
             "pane_active" => flag(window?.active == pane?.id),
             "pane_title" => pane?

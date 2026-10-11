@@ -67,9 +67,26 @@ table. What has been verified, and how:
   counts directly (`5j`). The pane menu's hyperlink items never show, as tmxr
   keeps no OSC 8 links.
 - **Scrollbars** follow tmux 3.6 (`layout_fix_panes`, the slider formula,
-  `window_copy_scroll1`), checked against tmux's pane sizes. Difference: the
-  three options are server-wide (tmux also sets them per window, and the style
-  per pane).
+  `window_copy_scroll1`), checked against tmux's pane sizes.
+- **Option scopes** follow tmux 3.6 for window options: global, per window and
+  per pane (`cmds::scoped`, checked against a running tmux by
+  `corpus/options.toml`). Still different:
+  - **Session options are server-wide**: `status-*`, `prefix`, `mouse`,
+    `base-index` and the rest have no per-session values, so `set status-left x`
+    without `-g` changes every session. Adding them would mean a session tier
+    like `OwnOptions` and moving their readers (the status line, key handling)
+    to a per-session lookup.
+  - **User options set without `-w` or `-p` are global**, where tmux keeps them
+    per session. Formats find them the same way, but tmux's `show -wA @x` does
+    not see one (a window inherits from the global window options only), and
+    tmxr's does.
+  - **`show-options` quotes values with single quotes** (`@x 'a b'`), tmux with
+    double (`@x "a b"`). Both read back the same.
+  - **`set-option -q` is not supported**, and `-o` only for window and user
+    options.
+  - **Synchronized input goes to every synchronized pane**: tmux's
+    `window_pane_copy_key` also skips panes in a mode, panes whose program has
+    exited and panes hidden by zoom. Read in tmux's source, not compared.
 - **A pane made taller again gets blank rows at the bottom**: tmux 3.6
   (`screen_resize_y`) first takes back the rows a shrink pushed into the history
   (`hscrolled`), so a split then closed restores the screen; tmxr's
@@ -111,16 +128,14 @@ table. What has been verified, and how:
   `cmd_display_menu_get_pos` and checked against a running tmux
   (`popups_and_menus_are_placed_where_tmux_places_them`). Boxes are drawn as
   tmux 3.6's `screen_write_box` in each of its `-b` line types (checked against
-  a running tmux, 2026-10-11). The `menu-*` and `popup-*` options are
-  server-wide, as tmxr's other window options. (tmux 3.6 defines no `menu_*`
-  format variables; an earlier entry here said it did.) `-k`, `-N` and a
-  `display-popup` on an open popup follow tmux 3.6 (`popup_key_cb`,
-  `popup_modify`). Closing a running popup kills its command (`Popup`'s `Drop`,
-  as `kill-pane` does). On Windows closing the ConPTY ends the program anyway,
-  so removing the kill leaves the e2e test green there; on Linux and macOS it is
-  what ends it: without it `display_popup_runs_a_command_over_the_panes` failed
-  on both ("the popup's command outlived it"; CI run 38060138527, a throwaway
-  branch, 2026-10-10).
+  a running tmux, 2026-10-11). (tmux 3.6 defines no `menu_*` format variables;
+  an earlier entry here said it did.) `-k`, `-N` and a `display-popup` on an
+  open popup follow tmux 3.6 (`popup_key_cb`, `popup_modify`). Closing a running
+  popup kills its command (`Popup`'s `Drop`, as `kill-pane` does). On Windows
+  closing the ConPTY ends the program anyway, so removing the kill leaves the
+  e2e test green there; on Linux and macOS it is what ends it: without it
+  `display_popup_runs_a_command_over_the_panes` failed on both ("the popup's
+  command outlived it"; CI run 38060138527, a throwaway branch, 2026-10-10).
 - **tmux command shorthand** (requested 2026-10-09: `tmux a` for
   `attach-session` and the like). The lookup works as tmux's does
   (`tmxr_command::table::lookup`): exact name or alias first, then an

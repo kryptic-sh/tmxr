@@ -298,7 +298,7 @@ pub(super) fn run(
                         };
                         format!(
                             "{prefix}{}: [{}x{}] %{}{}",
-                            i as u32 + srv.cfg.window.pane_base_index,
+                            i as u32 + srv.window_options(wid).pane_base_index,
                             pane.rect.w,
                             pane.rect.h,
                             p,
@@ -313,11 +313,12 @@ pub(super) fn run(
         }
         "display-panes" => {
             let (_, _, wid) = target::window(srv, ctx, None)?;
+            let base = srv.window_options(wid).pane_base_index;
             let labels: Vec<(u32, PaneId)> = srv.windows[&wid]
                 .panes()
                 .into_iter()
                 .enumerate()
-                .map(|(i, p)| (i as u32 + srv.cfg.window.pane_base_index, p))
+                .map(|(i, p)| (i as u32 + base, p))
                 .collect();
             match attached_client(srv, ctx) {
                 // On a client: numbers over the panes; a number selects.
@@ -393,11 +394,7 @@ pub(super) fn run(
                     Ok(k) if !a.has('l') && word.chars().count() > 1 => {
                         srv.send_key_to_pane(pid, &KeyEvent::new(k.code, k.mods));
                     }
-                    _ => {
-                        if let Some(p) = srv.panes.get_mut(&pid) {
-                            let _ = p.pty.write(word.as_bytes());
-                        }
-                    }
+                    _ => srv.type_to_pane(pid, word),
                 }
             }
         }

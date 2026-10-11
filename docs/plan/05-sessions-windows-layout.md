@@ -72,17 +72,20 @@ cropped. `aggressive-resize on` (tmux-sensible) is the behaviour.
 `resize-window` gives a window a manual size (tmux's `window-size manual`) that
 clients no longer change; `set-window-option window-size latest` hands it back
 to them. Around a window smaller than the client the screen is filled with `·`,
-as tmux does. `window-size` takes only `latest` and `manual`, per window.
+as tmux does. `window-size` takes only `latest` and `manual`.
 
 ## Synchronize panes
 
-`set-window-option synchronize-panes` (bound to `prefix x`) toggles a window
-flag; while set, input to the active pane is also written to every other pane in
-the window (each encoded for that pane's own modes). The status line shows it
-(see the theme doc).
+`set-window-option synchronize-panes` (bound to `prefix x`) toggles the window's
+option; while a pane has it on, what is typed there (keys, `send-keys` text,
+pastes) is also written to the window's other panes that have it on (each
+encoded for that pane's own modes), as tmux's `window_pane_copy_key`. A pane
+leaves with `set -p synchronize-panes off`. The status line shows it (see the
+theme doc).
 
 ## Automatic window names
 
 `automatic-rename on`: the window name tracks the active pane's foreground
 command (`#{pane_current_command}`), refreshed on the status interval, until the
-user renames the window.
+window is renamed: `rename-window` (and `new-window -n`) set the window's own
+`automatic-rename off`, as tmux's.

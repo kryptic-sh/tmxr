@@ -1,0 +1,77 @@
+# Option scopes: global window options, a window's own (-w) and a pane's own
+# (-p). Expected values are tmux 3.6's. The errors (an unset user option, -o
+# on a set one, an unknown name) are checked by tmxr's e2e tests: the oracle
+# reads a failed command as an error.
+
+[[cases]]
+name = "a_window_option_without_g_is_the_windows_own"
+steps = [{ run = "new-window -d -t o:1" }, { run = "set -t o:1 mode-keys emacs" }]
+checks = [
+  { command = "show -wv -t o:1 mode-keys", expect = "emacs" },
+  { command = "show -gv mode-keys", expect = "vi" },
+  { command = "show -v mode-keys", expect = "" },
+  { command = "show -w -t o:0 mode-keys", expect = "" },
+  { command = "show -wA -t o:0 mode-keys", expect = "mode-keys* vi" },
+  { command = "show -w -t o:1", expect = "mode-keys emacs" },
+  { command = "showw -t o:1", expect = "mode-keys emacs" },
+]
+
+[[cases]]
+name = "a_pane_holds_its_own_pane_options"
+steps = [{ run = "split-window -d -t o:0" }, { run = "set -p -t o:0.1 remain-on-exit on" }]
+checks = [
+  { command = "show -pv -t o:0.1 remain-on-exit", expect = "on" },
+  { command = "show -pv -t o:0.0 remain-on-exit", expect = "" },
+  { command = "show -p -t o:0.1", expect = "remain-on-exit on" },
+  { command = "show -pA -t o:0.0 remain-on-exit", expect = "remain-on-exit* off" },
+]
+
+[[cases]]
+name = "p_on_a_window_only_option_sets_the_window"
+steps = [{ run = "split-window -d -t o:0" }, { run = "set -p -t o:0.1 pane-base-index 1" }]
+checks = [
+  { command = "show -wv -t o:0 pane-base-index", expect = "1" },
+  { command = "show -p -t o:0.1", expect = "" },
+]
+
+[[cases]]
+name = "set_w_u_takes_the_panes_values_too"
+steps = [
+  { run = "split-window -d -t o:0" },
+  { run = "set -p -t o:0.1 remain-on-exit on" },
+  { run = "set -wU -t o:0 remain-on-exit" },
+]
+checks = [{ command = "show -pv -t o:0.1 remain-on-exit", expect = "" }]
+
+[[cases]]
+name = "user_options_are_found_pane_window_then_global"
+steps = [
+  { run = "new-window -d -t o:1" },
+  { run = "split-window -d -t o:1" },
+  { run = "set @x global" },
+  { run = "set -w -t o:1 @x window" },
+  { run = "set -p -t o:1.1 @x pane" },
+]
+checks = [
+  { command = "display -p -t o:1.0 '#{@x}'", expect = "window" },
+  { command = "display -p -t o:1.1 '#{@x}'", expect = "pane" },
+  { command = "display -p -t o:0.0 '#{@x}'", expect = "global" },
+  { command = "show -w -t o:1", expect = "@x window" },
+]
+
+[[cases]]
+name = "set_g_u_gives_back_the_default"
+steps = [{ run = "set -g main-pane-width 10" }, { run = "set -gu main-pane-width" }]
+checks = [{ command = "show -gv main-pane-width", expect = "80" }]
+
+[[cases]]
+name = "a_windows_options_apply_to_it_alone"
+steps = [
+  { run = "new-window -d -t o:1" },
+  { run = "split-window -d -t o:1" },
+  { run = "set -w -t o:1 pane-base-index 1" },
+]
+checks = [
+  { command = "list-panes -t o:1 -F '#{pane_index}'", expect = "1\n2" },
+  { command = "list-panes -t o:0 -F '#{pane_index}'", expect = "0" },
+]

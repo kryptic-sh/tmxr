@@ -74,6 +74,11 @@ fn keys_match_tmux() {
     assert_passes("keys.toml");
 }
 
+#[test]
+fn option_scopes_match_tmux() {
+    assert_passes("options.toml");
+}
+
 /// Differences kept on purpose or not fixed yet: reported, never failing.
 #[test]
 fn known_divergences_report() {

@@ -100,26 +100,24 @@ impl Server {
         self.next_window += 1;
         let pid = self.next_pane;
         let (cols, rows) = size;
-        let auto_name = name.is_none();
+        // A window named when made keeps its name, as tmux's.
+        let mut options = tmxr_config::OwnOptions::default();
+        options.automatic_rename = name.is_some().then_some(false);
         self.windows.insert(
             wid,
             Window {
                 id: wid,
                 name: name.unwrap_or_default(),
-                auto_name,
+                options,
                 layout: LayoutTree::Leaf(pid as usize),
                 order: Vec::new(),
                 active: pid,
                 last_pane: None,
                 zoomed: false,
-                synchronize: false,
                 bell: false,
                 cols,
                 rows,
                 preset: 0,
-                manual_size: false,
-                monitor_activity: None,
-                monitor_silence: None,
                 activity: false,
                 silence: false,
                 last_output: Instant::now(),
@@ -131,8 +129,8 @@ impl Server {
             self.windows.remove(&wid);
             return Err(e);
         }
-        if let Some(win) = self.windows.get_mut(&wid)
-            && win.auto_name
+        if self.window_options(wid).automatic_rename
+            && let Some(win) = self.windows.get_mut(&wid)
         {
             win.name = crate::util::program_name(&argv, self.cfg.default_shell.as_deref());
         }
@@ -357,20 +355,16 @@ impl Server {
             Window {
                 id: wid,
                 name,
-                auto_name: true,
+                options: tmxr_config::OwnOptions::default(),
                 layout: LayoutTree::Leaf(pane as usize),
                 order: Vec::new(),
                 active: pane,
                 last_pane: None,
                 zoomed: false,
-                synchronize: false,
                 bell: false,
                 cols,
                 rows,
                 preset: 0,
-                manual_size: false,
-                monitor_activity: None,
-                monitor_silence: None,
                 activity: false,
                 silence: false,
                 last_output: Instant::now(),

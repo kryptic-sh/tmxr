@@ -8,6 +8,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Window and pane options, as tmux's**: a window can hold its own window
+  options (`set-option -w`, or a window option set without `-g`) and a pane its
+  own pane options (`set-option -p`: `allow-passthrough`,
+  `pane-scrollbars-style`, `remain-on-exit` and `synchronize-panes`), over the
+  global ones. `-u` gives one back to what it inherits (and with `-g` resets the
+  global one to its default), `-U` clears a window's panes' too, and `-o`
+  refuses one already set. `show-options -w` / `-p` (and `show-window-options`)
+  list a window's or pane's own values; `-A` adds the inherited ones, marked
+  `*`. User options (`@name`) can be set on a window or pane too, and formats
+  find them pane, window, then global.
+- **`automatic-rename`, `synchronize-panes` and `window-size` are options** with
+  global values (and config keys), as tmux's: `rename-window` and
+  `new-window -n` set a window's own `automatic-rename off`, and `resize-window`
+  its own `window-size manual`.
 - **`display-popup -k`, `-N`, and `display-popup` on an open popup**, as tmux's:
   `-k` lets any key close a popup whose command has exited, and a second
   `display-popup` changes the open popup (title, styles, border and, with `-N`,
@@ -46,6 +60,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Window options without `-g` are the target window's, as tmux's**:
+  `set mode-keys emacs` now changes the current window only (it changed every
+  window), and `show-options` without `-g` shows that window's own value, empty
+  when it has none. Use `-g` for the global value. `show-options` with an
+  unknown name fails (`invalid option: …`), as tmux's.
+- **`synchronize-panes` is per pane, as tmux's**: typing in a pane reaches the
+  window's other panes whose option is on, so `set -p synchronize-panes off`
+  leaves one out.
 - **Window options are one typed table**, as tmux's: `set-option -a` appends to
   the string ones (styles, formats, sizes), a bad value's error names the option
   (`remain-on-exit: bad value: x`), and a config file whose `mode-keys`,
@@ -71,6 +93,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`send-keys` text reaches synchronized panes**: only key names (`Enter`) did,
+  so the other panes got a bare Enter; tmux sends both.
 - **A pane made shorter keeps its cursor's row**, as tmux's: rows below the
   cursor go first, then rows off the top into the history. The bottom rows were
   cut, so splitting a full pane lost the prompt line and left the cursor on old

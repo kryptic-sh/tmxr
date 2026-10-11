@@ -546,10 +546,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "set-option",
         Some("set"),
-        "aFgost:uw",
+        "aFgopst:uUw",
         1,
         2,
-        "[-aFgosuw] [-t target] option [value]"
+        "[-aFgopsuUw] [-t target-pane] option [value]"
     ),
     cmd!(
         "set-window-option",
@@ -580,10 +580,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "show-options",
         Some("show"),
-        "gst:vw",
+        "Agpst:vw",
         0,
         1,
-        "[-gsvw] [-t target] [option]"
+        "[-Agpsvw] [-t target-pane] [option]"
     ),
     cmd!(
         "show-prompt-history",

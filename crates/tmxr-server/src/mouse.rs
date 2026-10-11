@@ -238,10 +238,9 @@ fn dispatch(srv: &mut Server, id: ClientId, action: MouseAction, target: MouseTa
         .and_then(|p| srv.panes.get(&p))
         .is_some_and(|p| p.copy.is_some());
     let on_pane = target.location == MouseLocation::Pane;
-    let table = if on_pane && in_copy {
-        srv.copy_table()
-    } else {
-        "root"
+    let table = match target.pane {
+        Some(p) if on_pane && in_copy => srv.copy_table(p),
+        _ => "root",
     };
     let key = MouseKey {
         action,

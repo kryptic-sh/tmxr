@@ -228,7 +228,8 @@ pub(super) fn run(
                 None => {}
             }
             let win = srv.windows.get_mut(&wid).ok_or("no window")?;
-            win.manual_size = true;
+            // As tmux's: the window is sized by hand from now on.
+            win.options.window_size = Some(tmxr_config::WindowSize::Manual);
             win.cols = cols.clamp(1, WINDOW_MAXIMUM);
             win.rows = rows.clamp(1, WINDOW_MAXIMUM);
             srv.relayout(wid);
@@ -237,7 +238,7 @@ pub(super) fn run(
             let (_, _, wid) = target::window(srv, ctx, a.value('t'))?;
             if let Some(w) = srv.windows.get_mut(&wid) {
                 w.name.clone_from(&pos[0]);
-                w.auto_name = false;
+                w.options.automatic_rename = Some(false);
             }
             srv.mark_window_dirty(wid);
         }
@@ -291,13 +292,14 @@ pub(super) fn run(
             srv.relayout(wid);
         }
         "next-layout" | "previous-layout" | "select-layout" => {
-            let sizes = crate::layout::MainPane {
-                height: srv.cfg.window.main_pane_height.clone(),
-                width: srv.cfg.window.main_pane_width.clone(),
-                other_height: srv.cfg.window.other_pane_height.clone(),
-                other_width: srv.cfg.window.other_pane_width.clone(),
-            };
             let (_, _, wid) = target::window(srv, ctx, a.value('t'))?;
+            let options = srv.window_options(wid);
+            let sizes = crate::layout::MainPane {
+                height: options.main_pane_height.clone(),
+                width: options.main_pane_width.clone(),
+                other_height: options.other_pane_height.clone(),
+                other_width: options.other_pane_width.clone(),
+            };
             let win = srv.windows.get_mut(&wid).ok_or("no window")?;
             let name = if p.name() == "next-layout" || a.has('n') {
                 win.preset = (win.preset + 1) % crate::layout::PRESETS.len();

@@ -2436,7 +2436,7 @@ fn tmux_commands_move_pane_previous_layout_show_window_options_start_server() {
     t.run(&["prevl", "-t", "m:0"]);
     assert_eq!(geometry(&t), before);
 
-    let showw = t.run(&["showw"]);
+    let showw = t.run(&["showw", "-g"]);
     assert!(showw.contains("mode-keys"), "{showw}");
 }
 
@@ -3151,7 +3151,7 @@ fn customize_mode_edits_an_option_through_the_prompt() {
     // Replace "vi" with "emacs" and run it.
     s.send(b"\x7f\x7femacs\r");
     t.wait_run(
-        &["show-options", "-v", "mode-keys"],
+        &["show-options", "-gv", "mode-keys"],
         "the edited option",
         |o| o.trim() == "emacs",
     );
@@ -3197,7 +3197,7 @@ fn monitor_activity_and_silence_flag_windows_out_of_sight() {
 
     t.run(&["set-window-option", "-g", "monitor-activity", "on"]);
     assert_eq!(
-        t.run(&["show-options", "-v", "monitor-activity"]).trim(),
+        t.run(&["show-options", "-gv", "monitor-activity"]).trim(),
         "on"
     );
     t.run(&["send-keys", "-t", "al:1", "echo busy-one", "Enter"]);
@@ -3239,6 +3239,102 @@ fn monitor_activity_and_silence_flag_windows_out_of_sight() {
         |o| o.contains('~'),
     );
     assert!(!flags(&t, "0").contains('~'), "only the window that asked");
+}
+
+#[test]
+fn window_and_pane_options_override_the_global_ones() {
+    let t = Tmxr::new("scopes");
+    t.run(&["new-session", "-d", "-s", "sc"]);
+    t.run(&["new-window", "-d", "-t", "sc:1"]);
+    t.run(&["split-window", "-d", "-t", "sc:1"]);
+    t.run(&["split-window", "-d", "-t", "sc:1"]);
+    let show = |args: &[&str]| t.run(&[&["show-options"], args].concat()).trim().to_owned();
+    let err = |args: &[&str]| {
+        let out = t.output(args);
+        assert!(!out.status.success(), "{args:?} succeeded");
+        String::from_utf8_lossy(&out.stderr).trim().to_owned()
+    };
+
+    // A window option without -g is the target window's own, as tmux's.
+    t.run(&["set-option", "-t", "sc:1", "mode-keys", "emacs"]);
+    assert_eq!(show(&["-wv", "-t", "sc:1", "mode-keys"]), "emacs");
+    assert_eq!(show(&["-gv", "mode-keys"]), "vi");
+    // Another window has none of its own: -A shows what it inherits.
+    assert_eq!(show(&["-w", "-t", "sc:0", "mode-keys"]), "");
+    assert_eq!(show(&["-wA", "-t", "sc:0", "mode-keys"]), "mode-keys* vi");
+    assert_eq!(show(&["-w", "-t", "sc:1"]), "mode-keys emacs");
+    // And it takes effect there only.
+    t.run(&["set-window-option", "-t", "sc:1", "pane-base-index", "1"]);
+    let index = |target: &str| {
+        t.run(&["display-message", "-p", "-t", target, "#{pane_index}"])
+            .trim()
+            .to_owned()
+    };
+    assert_eq!(index("sc:1.1"), "1");
+    assert_eq!(index("sc:0.0"), "0");
+
+    // A pane's own, for the options a pane may hold.
+    t.run(&["set-option", "-p", "-t", "sc:1.1", "remain-on-exit", "on"]);
+    assert_eq!(show(&["-pv", "-t", "sc:1.1", "remain-on-exit"]), "on");
+    assert_eq!(show(&["-pv", "-t", "sc:1.2", "remain-on-exit"]), "");
+    assert_eq!(show(&["-p", "-t", "sc:1.1"]), "remain-on-exit on");
+    // -U takes the window's panes' own values too.
+    t.run(&["set-option", "-wU", "-t", "sc:1", "remain-on-exit"]);
+    assert_eq!(show(&["-pv", "-t", "sc:1.1", "remain-on-exit"]), "");
+    // -u gives a window's option back to the global one, and a global one
+    // goes back to its default.
+    t.run(&["set-option", "-wu", "-t", "sc:1", "mode-keys"]);
+    assert_eq!(show(&["-wv", "-t", "sc:1", "mode-keys"]), "");
+    t.run(&["set-option", "-g", "main-pane-width", "10"]);
+    t.run(&["set-option", "-gu", "main-pane-width"]);
+    assert_eq!(show(&["-gv", "main-pane-width"]), "80");
+
+    // User options: the pane's, else its window's, else the global one.
+    t.run(&["set-option", "@x", "global"]);
+    t.run(&["set-option", "-w", "-t", "sc:1", "@x", "window"]);
+    t.run(&["set-option", "-p", "-t", "sc:1.2", "@x", "pane"]);
+    let x = |target: &str| {
+        t.run(&["display-message", "-p", "-t", target, "#{@x}"])
+            .trim()
+            .to_owned()
+    };
+    assert_eq!(x("sc:1.1"), "window");
+    assert_eq!(x("sc:1.2"), "pane");
+    assert_eq!(x("sc:0.0"), "global");
+    // Shown quoted, to be read back.
+    t.run(&["set-option", "-w", "-t", "sc:0", "@q", "a b"]);
+    assert_eq!(show(&["-w", "-t", "sc:0", "@q"]), "@q 'a b'");
+    assert_eq!(
+        err(&["show-options", "-w", "-t", "sc:0", "@x"]),
+        "invalid option: @x"
+    );
+    assert_eq!(
+        err(&["set-option", "-o", "-w", "-t", "sc:1", "@x", "again"]),
+        "already set: @x"
+    );
+    assert_eq!(err(&["show-options", "nosuch"]), "invalid option: nosuch");
+
+    // synchronize-panes: what is typed in a synchronized pane goes to its
+    // siblings that synchronize too.
+    for p in ["sc:1.1", "sc:1.2", "sc:1.3"] {
+        t.wait_prompt(p);
+    }
+    t.run(&["set-option", "-t", "sc:1", "synchronize-panes", "on"]);
+    t.run(&[
+        "set-option",
+        "-p",
+        "-t",
+        "sc:1.3",
+        "synchronize-panes",
+        "off",
+    ]);
+    t.run(&["send-keys", "-t", "sc:1.1", "echo sync-mark", "Enter"]);
+    t.wait_run(&["capture-pane", "-p", "-t", "sc:1.2"], "the copy", |o| {
+        o.lines().filter(|l| l.contains("sync-mark")).count() == 2
+    });
+    std::thread::sleep(Duration::from_millis(500));
+    let left_out = t.run(&["capture-pane", "-p", "-t", "sc:1.3"]);
+    assert!(!left_out.contains("sync-"), "{left_out}");
 }
 
 #[test]

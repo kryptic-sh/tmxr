@@ -57,7 +57,7 @@ pub(super) fn run(
             menu.look = crate::overlay::BoxLook::from_args(
                 a,
                 "menu-border-lines",
-                srv.cfg.window.menu_border_lines,
+                srv.client_window_options(c).menu_border_lines,
             )?;
             (menu.pane, menu.mouse) = (pane, ctx.mouse);
             // tmux's: a menu the mouse opened (or -M) takes the mouse and
@@ -100,7 +100,7 @@ pub(super) fn run(
             let look = crate::overlay::BoxLook::from_args(
                 a,
                 "popup-border-lines",
-                srv.cfg.window.popup_border_lines,
+                srv.client_window_options(c).popup_border_lines,
             )?;
             let border = !a.has('B') && look.lines.is_some();
             let close_on_exit = a.count('E').min(2);

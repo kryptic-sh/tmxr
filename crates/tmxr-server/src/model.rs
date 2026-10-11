@@ -43,6 +43,8 @@ pub struct Pane {
     pub pipe: Option<crate::pipe::PanePipe>,
     /// `set-hook -p`: hooks for events in this pane.
     pub hooks: crate::hooks::HookTable,
+    /// `set-option -p`: options set on this pane, over its window's.
+    pub options: tmxr_config::OwnOptions,
 }
 
 /// An environment as tmux keeps one: variables set, and names removed from
@@ -83,8 +85,6 @@ impl FromIterator<(String, String)> for Environment {
 pub struct Window {
     pub id: WindowId,
     pub name: String,
-    /// Follow the active pane's command until the user renames the window.
-    pub auto_name: bool,
     pub layout: LayoutTree,
     /// tmux's pane list, which numbers the panes, where it differs from the
     /// layout's order (a mirrored layout puts the first pane last); empty
@@ -93,20 +93,16 @@ pub struct Window {
     pub active: PaneId,
     pub last_pane: Option<PaneId>,
     pub zoomed: bool,
-    pub synchronize: bool,
     pub bell: bool,
     /// Size of the area the panes share (the client minus the status line).
     pub cols: u16,
     pub rows: u16,
     /// Position in `layout::PRESETS` for `next-layout`.
     pub preset: usize,
-    /// Set by `resize-window` (tmux's `window-size manual`): clients no
-    /// longer size the window until `window-size latest`.
-    pub manual_size: bool,
-    /// `monitor-activity` / `monitor-silence` set on this window, in place
-    /// of the global options.
-    pub monitor_activity: Option<bool>,
-    pub monitor_silence: Option<u64>,
+    /// `set-option -w`: options set on this window, over the global ones
+    /// (`resize-window` sets `window-size manual` here, and `rename-window`
+    /// `automatic-rename off`, as tmux's).
+    pub options: tmxr_config::OwnOptions,
     /// It printed while not current (`monitor-activity`).
     pub activity: bool,
     /// It was quiet for `monitor-silence` seconds.

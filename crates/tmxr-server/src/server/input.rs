@@ -71,18 +71,18 @@ impl Server {
         list.drain(..excess);
     }
 
-    /// The key table for a pane in copy mode.
-    pub fn copy_table(&self) -> &'static str {
-        if self.emacs_keys() {
+    /// The key table for `pane` in copy mode.
+    pub fn copy_table(&self, pane: PaneId) -> &'static str {
+        if self.emacs_keys(pane) {
             "copy-mode"
         } else {
             "copy-mode-vi"
         }
     }
 
-    /// `mode-keys emacs`.
-    fn emacs_keys(&self) -> bool {
-        self.cfg.window.mode_keys == tmxr_config::ModeKeys::Emacs
+    /// `mode-keys emacs` for `pane`.
+    fn emacs_keys(&self, pane: PaneId) -> bool {
+        self.pane_options(pane).mode_keys == tmxr_config::ModeKeys::Emacs
     }
 
     pub fn active_pane_of_session(&self, session: SessionId) -> Option<PaneId> {
@@ -227,7 +227,7 @@ impl Server {
             // A count digit or the character a jump waits for goes to copy
             // mode itself, ahead of its key table.
             let pane = active.expect("copy mode is in the active pane");
-            let emacs = self.emacs_keys();
+            let emacs = self.emacs_keys(pane);
             if let Some(p) = self.panes.get_mut(&pane)
                 && p.copy.as_mut().is_some_and(|cm| cm.take_key(&ev, emacs))
             {
@@ -235,7 +235,7 @@ impl Server {
                 self.mark_window_dirty(window);
                 return;
             }
-            if let Some(b) = self.keys.get(self.copy_table(), &key.into()).cloned() {
+            if let Some(b) = self.keys.get(self.copy_table(pane), &key.into()).cloned() {
                 self.run_bind(id, &b.cmd, Some(ev));
             }
             return;
@@ -310,6 +310,16 @@ impl Server {
         }
     }
 
+    /// Type `text` into a pane as it is (`send-keys` words that name no
+    /// key), and into its siblings with synchronize-panes, as tmux's.
+    pub fn type_to_pane(&mut self, pane: PaneId, text: &str) {
+        for t in self.input_targets(pane) {
+            if let Some(p) = self.panes.get_mut(&t) {
+                let _ = p.pty.write(text.as_bytes());
+            }
+        }
+    }
+
     pub fn paste_to_active(&mut self, session: SessionId, text: &str) {
         if let Some(p) = self.active_pane_of_session(session) {
             self.paste_to_pane(p, text);
@@ -325,13 +335,19 @@ impl Server {
         }
     }
 
-    /// The pane itself, plus its siblings when the window synchronizes input.
+    /// The pane itself, plus, when it synchronizes input, its siblings that
+    /// do too (tmux's `window_pane_copy_key`).
     fn input_targets(&self, pane: PaneId) -> Vec<PaneId> {
         let Some(wid) = self.panes.get(&pane).map(|p| p.window) else {
             return Vec::new();
         };
+        let synchronized = |p: PaneId| self.pane_options(p).synchronize_panes;
         match self.windows.get(&wid) {
-            Some(w) if w.synchronize => w.panes(),
+            Some(w) if synchronized(pane) => w
+                .panes()
+                .into_iter()
+                .filter(|&p| p == pane || synchronized(p))
+                .collect(),
             _ => vec![pane],
         }
     }

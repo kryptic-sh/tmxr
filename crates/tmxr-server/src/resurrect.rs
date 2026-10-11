@@ -263,11 +263,12 @@ pub fn capture(srv: &Server) -> Save {
                 .iter()
                 .filter_map(|(idx, wid)| {
                     let w = srv.windows.get(wid)?;
+                    let options = srv.window_options(*wid);
                     if let Some(link) = first_seen.get(wid) {
                         return Some(SavedWindow {
                             index: *idx,
                             name: w.name.clone(),
-                            auto_name: w.auto_name,
+                            auto_name: options.automatic_rename,
                             zoomed: false,
                             synchronize: false,
                             active: 0,
@@ -289,9 +290,9 @@ pub fn capture(srv: &Server) -> Save {
                     Some(SavedWindow {
                         index: *idx,
                         name: w.name.clone(),
-                        auto_name: w.auto_name,
+                        auto_name: options.automatic_rename,
                         zoomed: w.zoomed,
-                        synchronize: w.synchronize,
+                        synchronize: options.synchronize_panes,
                         active: panes.iter().position(|p| *p == w.active).unwrap_or(0),
                         last: w.last_pane.and_then(|l| panes.iter().position(|p| *p == l)),
                         layout: save_layout(&w.layout, &panes),
@@ -314,7 +315,8 @@ pub fn capture(srv: &Server) -> Save {
                             })
                             .collect(),
                         link: None,
-                        manual_size: w.manual_size.then_some((w.cols, w.rows)),
+                        manual_size: (options.window_size == tmxr_config::WindowSize::Manual)
+                            .then_some((w.cols, w.rows)),
                     })
                 })
                 .collect(),
@@ -597,10 +599,15 @@ fn restore_session(
             win.active = panes.get(w.active).copied().unwrap_or(win.active);
             win.last_pane = w.last.and_then(|l| panes.get(l).copied());
             win.zoomed = w.zoomed && panes.len() > 1;
-            win.synchronize = w.synchronize;
-            win.auto_name = w.auto_name;
+            // Kept as the window's own where they differ from the global
+            // options.
+            let global = &srv.cfg.window;
+            win.options.synchronize_panes =
+                (w.synchronize != global.synchronize_panes).then_some(w.synchronize);
+            win.options.automatic_rename =
+                (w.auto_name != global.automatic_rename).then_some(w.auto_name);
             if let Some((cols, rows)) = w.manual_size {
-                win.manual_size = true;
+                win.options.window_size = Some(tmxr_config::WindowSize::Manual);
                 win.cols = cols;
                 win.rows = rows;
             }

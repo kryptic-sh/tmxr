@@ -96,4 +96,5 @@ prompt snippet, which emits OSC 9;9 (checked through ConPTY on Windows 11 build
   render, not per drag event.
 - With `remain-on-exit on` an exited pane stays, dead: its last row reads "Pane
   is dead (status N)" and `#{pane_dead}` is 1, until `respawn-pane` restarts it
-  or `kill-pane` closes it. tmxr's option is global; tmux's is per window.
+  or `kill-pane` closes it. As tmux's, it is set globally, per window or per
+  pane.
