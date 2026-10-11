@@ -54,7 +54,7 @@ pub(super) fn run(
             let start = a.value('C').and_then(|n| n.parse().ok()).unwrap_or(0);
             let mut menu =
                 crate::menu::Menu::parse(title, pos, start, &|w| expand_for(srv, ctx, pane, w))?;
-            menu.look = crate::overlay::BoxLook::from_args(a)?;
+            menu.look = crate::overlay::BoxLook::from_args(a, "menu-border-lines")?;
             (menu.pane, menu.mouse) = (pane, ctx.mouse);
             // tmux's: a menu the mouse opened (or -M) takes the mouse and
             // starts with nothing highlighted; -O keeps it open.
@@ -93,7 +93,7 @@ pub(super) fn run(
                 .value('T')
                 .map(|t| expand_for(srv, ctx, pane, t))
                 .unwrap_or_default();
-            let look = crate::overlay::BoxLook::from_args(a)?;
+            let look = crate::overlay::BoxLook::from_args(a, "popup-border-lines")?;
             let border = !a.has('B') && look.lines.is_some();
             let close_on_exit = a.count('E').min(2);
             let closing = a.has('N') || a.has('E') || a.has('k');

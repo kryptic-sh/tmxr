@@ -184,3 +184,90 @@ checks = [
   { screen_contains = "POPRUN", expect = true },
   { screen_find = "┌", expect = "none" },
 ]
+
+[[cases]]
+name = "menu_lines_simple"
+attach = true
+unix_only = true
+steps = [
+  { spawn = "display-menu -b simple -T Title -x 1 -y 6 one a '' '' two b ''" },
+  { wait_text = "two" },
+]
+checks = [
+  { screen_contains = "+-Title---+", expect = true },
+  { screen_find = "+-Title---+" },
+  { screen_find = "| one (a) |" },
+  { screen_find = "+---------+" },
+]
+
+[[cases]]
+name = "menu_lines_single_separator"
+attach = true
+unix_only = true
+steps = [
+  { spawn = "display-menu -T Title -x 1 -y 6 one a '' '' two b ''" },
+  { wait_text = "two" },
+]
+checks = [
+  { screen_contains = "├─────────┤", expect = true },
+  { screen_find = "┌─Title───┐" },
+  { screen_find = "├─────────┤" },
+]
+
+[[cases]]
+name = "menu_lines_padded"
+attach = true
+unix_only = true
+steps = [
+  { spawn = "display-menu -b padded -T Title -x 1 -y 6 one a '' '' two b ''" },
+  { wait_text = "two" },
+]
+checks = [
+  { screen_contains = "one (a)", expect = true },
+  { screen_find = "Title" },
+  { screen_find = "one (a)" },
+  { screen_find = "two (b)" },
+]
+
+[[cases]]
+name = "menu_lines_none_keep_the_border_cells"
+attach = true
+unix_only = true
+steps = [
+  { spawn = "display-menu -b none -T Title -x 1 -y 6 one a '' '' two b ''" },
+  { wait_text = "two" },
+]
+checks = [
+  { screen_contains = "one (a)", expect = true },
+  { screen_find = "Title" },
+  { screen_find = "one (a)" },
+]
+
+[[cases]]
+name = "popup_lines_simple"
+attach = true
+unix_only = true
+steps = [
+  { spawn = "display-popup -b simple -T Pop -x 1 -y 6 -w 12 -h 5 'echo BOXED; sleep 30'" },
+  { wait_text = "BOXED" },
+]
+checks = [
+  { screen_contains = "+-Pop------+", expect = true },
+  { screen_find = "+-Pop------+" },
+  { screen_find = "|BOXED" },
+]
+
+[[cases]]
+name = "popup_lines_padded"
+attach = true
+unix_only = true
+steps = [
+  { spawn = "display-popup -b padded -T Pop -x 1 -y 6 -w 12 -h 5 'echo BOXED; sleep 30'" },
+  { wait_text = "BOXED" },
+]
+checks = [
+  { screen_contains = "Pop", expect = true },
+  { screen_find = "Pop" },
+  { screen_find = "BOXED" },
+]
+

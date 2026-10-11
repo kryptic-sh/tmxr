@@ -9,7 +9,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::widgets::{Block, Borders, Clear, Widget};
 use tmxr_command::Key;
 
-use crate::overlay::OverlayAction;
+use crate::overlay::{Lines, OverlayAction};
 
 /// One menu line: a command with a name and maybe a key, or a separator.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -281,29 +281,10 @@ impl Menu {
         let area = self.rect(cols, rows);
         Clear.render(area, buf);
         buf.set_style(area, base);
-        let block = match self.look.lines {
-            Some(lines) => Block::default()
-                .borders(Borders::ALL)
-                .border_type(lines)
-                .border_style(border),
-            None => Block::default(),
-        };
-        let inner = block.inner(area);
-        block.render(area, buf);
-        // The title on the top border, its `#[…]` styles applied, and
-        // centred for tmux's `#[align=centre]` (its default menus use it).
-        if self.look.lines.is_some() && !self.title.is_empty() && area.width > 2 {
-            let text = format!(" {} ", self.title);
-            let width = crate::render::runs_width(&text);
-            let centre = self.title.contains("align=centre") || self.title.contains("align=center");
-            let right = area.x + area.width - 1;
-            let x = if centre {
-                area.x + area.width.saturating_sub(width) / 2
-            } else {
-                area.x + 1
-            };
-            crate::render::draw_runs(buf, x.max(area.x + 1), area.y, right, base, &text);
-        }
+        // Without lines tmux still keeps the border's cells, and the title.
+        let lines = self.look.lines.unwrap_or(Lines::Padded);
+        crate::render::draw_box(buf, area, lines, border, &self.title);
+        let inner = Block::default().borders(Borders::ALL).inner(area);
         for (row, item) in self
             .items
             .iter()
@@ -312,8 +293,9 @@ impl Menu {
         {
             let y = inner.y + u16::try_from(row).unwrap_or(u16::MAX);
             if let MenuItem::Separator = item {
-                let line = "─".repeat(usize::from(inner.width));
-                buf.set_stringn(inner.x, y, &line, usize::from(inner.width), border);
+                let [left, fill, right] = lines.separator();
+                let line = format!("{left}{}{right}", fill.repeat(usize::from(inner.width)));
+                buf.set_stringn(area.x, y, &line, usize::from(area.width), border);
                 continue;
             }
             let (name, key) = Self::label(item);
@@ -379,6 +361,62 @@ mod tests {
         assert!(!m.selectable(2), "a - name is disabled");
         assert!(Menu::parse("t".into(), &args(&["Only", "o"]), 0, &|w| w.to_owned()).is_err());
         assert!(Menu::parse("t".into(), &args(&["-Off", "", "ls"]), 0, &|w| w.to_owned()).is_err());
+    }
+
+    #[test]
+    fn boxes_are_drawn_with_tmuxs_lines() {
+        // As tmux 3.6 drew `display-menu -b … -T Title one a "" two b ""`.
+        let mut m = Menu::parse(
+            "Title".into(),
+            &args(&["one", "a", "", "", "two", "b", ""]),
+            0,
+            &|w| w.to_owned(),
+        )
+        .unwrap();
+        m.at = Some((0, 0));
+        let mut drawn = |lines: Option<Lines>| -> Vec<String> {
+            m.look.lines = lines;
+            let (w, h) = m.size();
+            let mut buf = Buffer::empty(Rect::new(0, 0, w, h));
+            m.draw(
+                &mut buf,
+                w,
+                h,
+                (Style::default(), Style::default(), Style::default()),
+            );
+            (0..h)
+                .map(|y| (0..w).map(|x| buf[(x, y)].symbol()).collect())
+                .collect()
+        };
+        assert_eq!(
+            drawn(Some(Lines::Single)),
+            [
+                "┌─Title───┐",
+                "│ one (a) │",
+                "├─────────┤",
+                "│ two (b) │",
+                "└─────────┘"
+            ]
+        );
+        assert_eq!(
+            drawn(Some(Lines::Simple)),
+            [
+                "+-Title---+",
+                "| one (a) |",
+                "+---------+",
+                "| two (b) |",
+                "+---------+"
+            ]
+        );
+        let blank = [
+            "  Title    ",
+            "  one (a)  ",
+            "           ",
+            "  two (b)  ",
+            "           ",
+        ];
+        assert_eq!(drawn(Some(Lines::Padded)), blank);
+        assert_eq!(drawn(None), blank, "-b none keeps the border's cells");
     }
 
     #[test]

@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hjkl_picker::{Picker, PickerAction, PickerEvent, PickerLogic};
+use ratatui::symbols::border;
 
 use crate::cmds::join_args;
 use crate::model::{ClientId, PaneId, SessionId};
@@ -22,25 +23,23 @@ pub struct BoxLook {
     pub style: Option<String>,
     pub border_style: Option<String>,
     pub selected_style: Option<String>,
-    /// The border's lines; `None` draws no border (`-b none`).
-    pub lines: Option<ratatui::widgets::BorderType>,
+    /// The border's lines; `None` is `-b none`.
+    pub lines: Option<Lines>,
 }
 
 impl BoxLook {
-    /// From a command's flags; `-b` takes tmux's line names tmxr can draw.
-    pub fn from_args(a: &tmxr_command::Args) -> Result<Self, String> {
-        use ratatui::widgets::BorderType;
+    /// From a command's flags; `-b` takes tmux's line names, its errors
+    /// naming `option` as tmux's do (`menu-border-lines`, …).
+    pub fn from_args(a: &tmxr_command::Args, option: &str) -> Result<Self, String> {
         let lines = match a.value('b') {
-            None | Some("single") => Some(BorderType::Plain),
-            Some("rounded") => Some(BorderType::Rounded),
-            Some("double") => Some(BorderType::Double),
-            Some("heavy") => Some(BorderType::Thick),
+            None | Some("single") => Some(Lines::Single),
+            Some("rounded") => Some(Lines::Rounded),
+            Some("double") => Some(Lines::Double),
+            Some("heavy") => Some(Lines::Heavy),
+            Some("simple") => Some(Lines::Simple),
+            Some("padded") => Some(Lines::Padded),
             Some("none") => None,
-            Some(other) => {
-                return Err(format!(
-                    "-b {other}: tmxr draws single, rounded, double, heavy or none"
-                ));
-            }
+            Some(other) => return Err(format!("{option} unknown value: {other}")),
         };
         let spec = |f| a.value(f).map(str::to_owned);
         Ok(Self {
@@ -49,6 +48,55 @@ impl BoxLook {
             selected_style: spec('H'),
             lines,
         })
+    }
+}
+
+/// tmux's box lines: the characters a menu or popup border is drawn with.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Lines {
+    #[default]
+    Single,
+    Rounded,
+    Double,
+    Heavy,
+    /// ASCII: `+`, `|` and `-`.
+    Simple,
+    /// Blank cells, the box keeping its size.
+    Padded,
+}
+
+impl Lines {
+    /// The border, as tmux 3.6 draws it.
+    pub fn border(self) -> border::Set<'static> {
+        match self {
+            Self::Single => border::PLAIN,
+            Self::Rounded => border::ROUNDED,
+            Self::Double => border::DOUBLE,
+            Self::Heavy => border::THICK,
+            Self::Simple => border::Set {
+                top_left: "+",
+                top_right: "+",
+                bottom_left: "+",
+                bottom_right: "+",
+                vertical_left: "|",
+                vertical_right: "|",
+                horizontal_top: "-",
+                horizontal_bottom: "-",
+            },
+            Self::Padded => border::EMPTY,
+        }
+    }
+
+    /// A menu separator across the box: its left end, fill and right end,
+    /// as tmux 3.6 draws them.
+    pub fn separator(self) -> [&'static str; 3] {
+        match self {
+            Self::Single | Self::Rounded => ["├", "─", "┤"],
+            Self::Double => ["╠", "═", "╣"],
+            Self::Heavy => ["┣", "━", "┫"],
+            Self::Simple => ["+", "-", "+"],
+            Self::Padded => [" ", " ", " "],
+        }
     }
 }
 

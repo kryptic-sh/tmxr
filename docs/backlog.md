@@ -101,9 +101,13 @@ table. What has been verified, and how:
 - **`display-popup` / `display-menu` gaps.** Placement (`-x` / `-y`, letters,
   numbers and the `popup_*` variables) is transcribed from tmux 3.6's
   `cmd_display_menu_get_pos` and checked against a running tmux
-  (`popups_and_menus_are_placed_where_tmux_places_them`); tmux's `menu_*`
-  variables are not defined. `-b` draws single, rounded, double, heavy or no
-  lines (tmux's `simple` and `padded` are errors); `-k`, `-N` and a
+  (`popups_and_menus_are_placed_where_tmux_places_them`). Boxes are drawn as
+  tmux 3.6's `screen_write_box` in each of its `-b` line types (checked against
+  a running tmux, 2026-10-11). Missing: tmux's `menu-style`,
+  `menu-selected-style`, `menu-border-style`, `menu-border-lines`,
+  `popup-style`, `popup-border-style` and `popup-border-lines` options, so a
+  box's look comes from its flags alone. (tmux 3.6 defines no `menu_*` format
+  variables; an earlier entry here said it did.) `-k`, `-N` and a
   `display-popup` on an open popup follow tmux 3.6 (`popup_key_cb`,
   `popup_modify`). Closing a running popup kills its command (`Popup`'s `Drop`,
   as `kill-pane` does). On Windows closing the ConPTY ends the program anyway,

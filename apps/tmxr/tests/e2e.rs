@@ -3970,10 +3970,18 @@ fn menu_and_popup_take_tmux_style_flags() {
         s.text()
     );
     t.run(&["display-popup", "-C"]);
+    // -b simple: tmux's ASCII lines, the title on the top one.
+    t.run(&["display-popup", "-b", "simple", "-T", "Pop", hold]);
+    s.wait_for("the simple popup", |text| {
+        text.contains("IN-THE-BOX") && text.contains("+-Pop---")
+    });
+    t.run(&["display-popup", "-C"]);
+    let bad = t.output(&["display-popup", "-b", "bogus", "echo"]);
+    assert!(!bad.status.success());
+    let err = String::from_utf8_lossy(&bad.stderr);
     assert!(
-        !t.output(&["display-popup", "-b", "simple", "echo"])
-            .status
-            .success()
+        err.contains("popup-border-lines unknown value: bogus"),
+        "{err}"
     );
 }
 

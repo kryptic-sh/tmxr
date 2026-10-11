@@ -118,6 +118,35 @@ pub(crate) fn draw_runs(
     x
 }
 
+/// A menu's or popup's box over `area`, as tmux 3.6's `screen_write_box`:
+/// the border drawn with `lines` in `style`, and `title` on the top border
+/// from its third cell in the same style (its `#[…]` styles applied),
+/// centred there for `#[align=centre]`.
+pub(crate) fn draw_box(
+    buf: &mut Buffer,
+    area: Rect,
+    lines: crate::overlay::Lines,
+    style: Style,
+    title: &str,
+) {
+    Block::default()
+        .borders(Borders::ALL)
+        .border_set(lines.border())
+        .border_style(style)
+        .render(area, buf);
+    if title.is_empty() || area.width < 5 {
+        return;
+    }
+    let (left, right) = (area.x + 2, area.x + area.width - 2);
+    let centre = title.contains("align=centre") || title.contains("align=center");
+    let x = if centre {
+        left + (right - left).saturating_sub(runs_width(title)) / 2
+    } else {
+        left
+    };
+    draw_runs(buf, x, area.y, right, style, title);
+}
+
 /// Display width of expanded, styled text.
 pub(crate) fn runs_width(text: &str) -> u16 {
     format::styled(text)
@@ -621,14 +650,9 @@ fn draw_overlay(
             Clear.render(area, buf);
             buf.set_style(area, look(&p.look.style, Style::default()));
             if p.border {
-                let mut block = Block::default()
-                    .borders(Borders::ALL)
-                    .border_type(p.look.lines.unwrap_or_default())
-                    .border_style(look(&p.look.border_style, border));
-                if !p.title.is_empty() {
-                    block = block.title(p.title.as_str());
-                }
-                block.render(area, buf);
+                let lines = p.look.lines.unwrap_or_default();
+                let style = look(&p.look.border_style, border);
+                draw_box(buf, area, lines, style, &p.title);
             }
             let inner = p.inner().intersection(area);
             let cursor = draw_screen(p.emu.screen(), buf, inner);

@@ -13,6 +13,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `display-popup` changes the open popup (title, styles, border and, with `-N`,
   `-E` or `-k`, how it closes) instead of replacing it.
 - **`paste-buffer -r` and `-s separator`**, as tmux's.
+- **`display-menu -b` and `display-popup -b` take `simple` and `padded`**, as
+  tmux's: ASCII lines, or blank ones that keep the box's size.
 - **Menus take the mouse, as tmux 3.6's**: one the mouse opened (or
   `display-menu -M`) highlights the item under the pointer and runs the one the
   button is released on, closing on a release elsewhere; with `-O` a click runs
@@ -39,6 +41,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Menus and popups are boxed as tmux's**: the title sits on the top border
+  from its third cell, in the border's style and without padding; a menu's
+  separators join its border (`├───┤`); and a menu with `-b none` keeps its
+  border's cells and title. An unknown `-b` fails as tmux's does
+  (`menu-border-lines unknown value: …`).
 - **Popups close on tmux's keys**: a popup whose command has exited closes on
   Escape or C-c (any key with `-k`), not on any key; and a running popup without
   `-E` closes on Escape or C-c, as tmux's does.
