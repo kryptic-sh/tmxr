@@ -171,3 +171,35 @@ steps = [
 ]
 # tmux 3.6 sends these for two quick clicks (checked with a pty client).
 checks = [{ format = "#{@seen}", expect = "DUSU2" }]
+
+[[cases]]
+name = "a_slider_drag_ends_on_the_slider"
+attach = true
+program = "seq 1 200; exec sleep 1000"
+steps = [
+  { wait_text = "200" },
+  { run = "set -g pane-scrollbars on" },
+  { run = "bind -n MouseDragEnd1ScrollbarSlider set -g @seen slider" },
+  { sleep = 0.5 },
+  { mouse = { action = "drag", at = [99, 28], to = [99, 5] } },
+  { sleep = 0.5 },
+]
+checks = [
+  { format = "#{@seen}", expect = "slider" },
+  { format = "#{pane_in_mode}", expect = "1" },
+  { format = "#{scroll_position}" },
+]
+
+[[cases]]
+name = "a_border_drag_ends_where_it_is_let_go"
+attach = true
+unix_only = true
+steps = [
+  { run = "split-window -h -t o" },
+  { run = "bind -n MouseDragEnd1Border set -g @seen border" },
+  { run = "bind -n MouseDragEnd1Pane set -g @seen pane" },
+  { sleep = 0.5 },
+  { mouse = { action = "drag", at = [50, 5], to = [40, 5] } },
+  { sleep = 0.5 },
+]
+checks = [{ format = "#{@seen}" }]

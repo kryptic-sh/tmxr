@@ -34,7 +34,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `pane-scrollbars-style` (with `width=` and `pad=`). A pane gives its bar the
   columns it takes, hides it on the alternate screen, and its slider shows where
   the view is; clicking above or below the slider pages through the history and
-  dragging it scrolls (`copy-mode -S`), bound as tmux binds them.
+  dragging it scrolls (`copy-mode -S`), bound as tmux binds them. Letting go of
+  the slider sends `MouseDragEnd1ScrollbarSlider`.
 
 ### Changed
 
@@ -53,6 +54,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A border drag ends with a `MouseDragEnd` key**, as tmux's: where the button
+  is let go (`MouseDragEnd1Border`, `MouseDragEnd1Pane`, …), so it can be bound;
+  the release was dropped.
 - **Alt+Escape reaches panes and binds on Linux and macOS**: the client read it
   as a plain Escape (crossterm 0.29's input parser), so `M-Escape` binds never
   matched and programs got one ESC. tmxr builds against a patched crossterm

@@ -4699,12 +4699,25 @@ fn a_scrollbar_draws_and_scrolls_with_the_mouse() {
         |o| o.trim() == "1",
     );
     // The slider dragged to the top: the start of the history.
+    t.run(&[
+        "bind-key",
+        "-n",
+        "MouseDragEnd1ScrollbarSlider",
+        "set-option",
+        "-g",
+        "@seen",
+        "slider",
+    ]);
     let top = slider_rows(&s)[0];
     s.mouse(0, bar, top, false);
     s.mouse(32, bar, 0, false);
     s.mouse(0, bar, 0, true);
     s.wait_for("the top of the history", |text| {
         text.lines().any(|l| l.trim_end() == "filler1")
+    });
+    // Letting go ends the drag with tmux's key, on the slider.
+    t.wait_run(&["show-options", "-gv", "@seen"], "the drag's end", |o| {
+        o.trim() == "slider"
     });
 }
 

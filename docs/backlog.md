@@ -67,9 +67,9 @@ table. What has been verified, and how:
   counts directly (`5j`). The pane menu's hyperlink items never show, as tmxr
   keeps no OSC 8 links.
 - **Scrollbars** follow tmux 3.6 (`layout_fix_panes`, the slider formula,
-  `window_copy_scroll1`), checked against tmux's pane sizes. Differences: the
+  `window_copy_scroll1`), checked against tmux's pane sizes. Difference: the
   three options are server-wide (tmux also sets them per window, and the style
-  per pane); and `MouseDragEnd1ScrollbarSlider` is never sent.
+  per pane).
 - **Windows: an Enter sent before the shell's first read can stall**
   (2026-10-10). Probing with the real binary, `new-window -d` then at once
   `send-keys 'echo markN' Enter`, about 1 in 100 cmd panes showed the text but

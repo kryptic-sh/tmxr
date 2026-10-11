@@ -381,36 +381,54 @@ fn follow_drag(srv: &mut Server, id: ClientId, m: MouseEvent) -> bool {
             set_press(srv, id, None);
             // The copy table's MouseDragEnd1Pane decides what the selection
             // is for (tmux-yank: copy it and leave copy mode).
-            let session = srv
-                .clients
-                .get(&id)
-                .and_then(|c| c.att.as_ref())
-                .map(|a| a.session);
-            let window = srv.panes.get(&pane).map(|p| p.window);
-            if let (Some(session), Some(window)) = (session, window) {
-                let index = srv.sessions.get(&session).and_then(|s| s.index_of(window));
-                let target = MouseTarget {
-                    event: m,
-                    location: MouseLocation::Pane,
-                    col,
-                    row,
-                    session,
-                    window: index.map(|i| (i, window)),
-                    pane: Some(pane),
-                    border: None,
-                    grab: 0,
-                };
+            if let Some(target) = target_on(srv, id, m, pane, MouseLocation::Pane, (col, row)) {
                 dispatch(srv, id, MouseAction::DragEnd(1), target);
             }
         }
-        (_, MouseEventKind::Up(_)) => {
+        (drag, MouseEventKind::Up(b)) => {
             set_drag(srv, id, None);
             set_press(srv, id, None);
+            // tmux ends every drag with a MouseDragEnd key where the button
+            // was let go, except a slider's, which stays on the slider.
+            let target = match drag {
+                Drag::Slider { pane, .. } => {
+                    target_on(srv, id, m, pane, MouseLocation::ScrollbarSlider, (col, row))
+                }
+                _ => locate(srv, id, m, (m.column, m.row)),
+            };
+            if let Some(target) = target {
+                dispatch(srv, id, MouseAction::DragEnd(button(b)), target);
+            }
         }
         // Another button or the wheel during a drag: handled as usual.
         _ => return false,
     }
     true
+}
+
+/// A mouse key's target on `pane` at window cell `at`, as `location`.
+fn target_on(
+    srv: &Server,
+    id: ClientId,
+    event: MouseEvent,
+    pane: PaneId,
+    location: MouseLocation,
+    (col, row): (u16, u16),
+) -> Option<MouseTarget> {
+    let session = srv.clients.get(&id)?.att.as_ref()?.session;
+    let window = srv.panes.get(&pane)?.window;
+    let index = srv.sessions.get(&session).and_then(|s| s.index_of(window));
+    Some(MouseTarget {
+        event,
+        location,
+        col,
+        row,
+        session,
+        window: index.map(|i| (i, window)),
+        pane: Some(pane),
+        border: None,
+        grab: 0,
+    })
 }
 
 /// `send-keys -M`: pass the bind's mouse event to the program in the pane
