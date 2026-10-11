@@ -49,17 +49,18 @@ table. What has been verified, and how:
   fixed. Menus take the mouse as tmux's (`Menu::mouse`, from `menu_key_cb`),
   checked by the oracle's menu cases. Still missing: nothing has been tried by
   hand in a real terminal.
-- **Alt+Escape reaches a pane as Escape on Unix** (found by the oracle,
-  2026-10-11; `known_divergences.toml`,
-  `an_escape_and_a_click_in_one_read_are_typed`). The client reads its terminal
-  through crossterm 0.29, whose parser (`event/sys/unix/parse.rs`,
-  `parse_event`) turns `ESC ESC` into a plain `Esc` with no Alt, so an
-  `M-Escape` bind never matches and the program gets one ESC; tmux passes
-  `ESC ESC`. Not fixable inside tmxr without touching the dependency, so the
-  owner's call: (a) fix it upstream in crossterm and take the release, (b) patch
-  a fork (`[patch.crates-io]`), or (c) parse the client's input in tmxr instead
-  of crossterm (most work, most control). Windows reads console key events, not
-  bytes, and was not checked.
+- **crossterm is patched for Alt+Escape** until a release carries the fix:
+  crossterm 0.29's Unix parser read `ESC ESC` as a plain Escape, so Alt+Escape
+  lost its Alt. The fix is upstream as crossterm-rs/crossterm#1143 (branch
+  `fix-alt-escape` of kryptic-sh/crossterm); tmxr builds against a backport to
+  0.29.0 (branch `alt-escape-0.29`, pinned by `rev` in the root `Cargo.toml`'s
+  `[patch.crates-io]`, and allowed in `deny.toml`). Once a crossterm release has
+  it, upgrade and drop both. A `[patch]` applies only to builds from this
+  workspace: the release binaries and packages have the fix, but
+  `cargo install tmxr` from crates.io builds against crates.io's crossterm
+  without it. Still different from tmux: an Escape and a mouse event in one read
+  (`known_divergences.toml`), as crossterm drops the rest of a read once it has
+  an event.
 - **tmux default binds**: all of tmux 3.6's 267 are bound (compared with its
   `list-keys`, 2026-10-11) except the 18 digit binds (`1`-`9` in vi, `M-1`-`M-9`
   in emacs) that open a "(repeat)" prompt, declined: tmxr's copy mode takes

@@ -35,3 +35,8 @@ tmxr-client = { path = "crates/tmxr-client", version = "0.4.0" }
 lto = "thin"
 codegen-units = 1
 strip = true
+
+# crossterm 0.29.0 with Alt+Esc parsed on Unix (crossterm-rs/crossterm#1143);
+# drop once a crossterm release carries it.
+[patch.crates-io]
+crossterm = { git = "https://github.com/kryptic-sh/crossterm", rev = "05e475cc7b0180382508334265408c3d3bce17d8" }

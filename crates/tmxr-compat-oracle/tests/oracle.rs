@@ -69,6 +69,11 @@ fn pasting_matches_tmux() {
     assert_passes("paste.toml");
 }
 
+#[test]
+fn keys_match_tmux() {
+    assert_passes("keys.toml");
+}
+
 /// Differences kept on purpose or not fixed yet: reported, never failing.
 #[test]
 fn known_divergences_report() {

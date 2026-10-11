@@ -1,0 +1,11 @@
+# What a pane's program gets for keys from the client's terminal, as `cat -v`
+# shows it on a raw terminal.
+
+[[cases]]
+name = "alt_escape_reaches_the_program"
+# A terminal sends Alt+Escape as ESC ESC; tmux passes both on.
+attach = true
+unix_only = true
+program = "stty raw -echo; exec cat -v"
+steps = [{ sleep = 0.5 }, { keys = "\u001bx\u001b\u001b" }, { sleep = 0.5 }]
+checks = [{ screen_contains = "^[x^[^[", expect = true }]

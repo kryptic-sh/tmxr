@@ -53,6 +53,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Alt+Escape reaches panes and binds on Linux and macOS**: the client read it
+  as a plain Escape (crossterm 0.29's input parser), so `M-Escape` binds never
+  matched and programs got one ESC. tmxr builds against a patched crossterm
+  until the fix (crossterm-rs/crossterm#1143) is released. Found by the oracle.
 - **Panes keep their numbers in mirrored layouts**, as tmux's: the main pane
   stays pane 0 though laid out last, and `split-window`, `rotate-window` and
   `swap-pane` then follow tmux's pane list; resurrect restores them so. Found by
