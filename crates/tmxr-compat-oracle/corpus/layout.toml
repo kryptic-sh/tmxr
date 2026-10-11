@@ -126,3 +126,13 @@ steps = [
 checks = [
   { command = "list-panes -t o -F '#{pane_index}#{pane_id}@#{pane_top}+#{pane_height}'", expect = "0%3@6+24\n1%0@0+2\n2%2@3+2\n3%1@0+5" },
 ]
+
+[[cases]]
+name = "a_shrunk_pane_keeps_its_cursor_row"
+unix_only = true
+program = "seq 1 40; exec sleep 1000"
+steps = [{ sleep = 0.5 }, { run = "split-window -v -t o" }, { sleep = 0.3 }]
+checks = [
+  { command = "display -p -t o.0 '#{history_size} #{cursor_y} #{pane_height}'", expect = "26 14 15" },
+  { command = "capture-pane -p -t o.0" },
+]

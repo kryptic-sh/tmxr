@@ -264,8 +264,24 @@ impl Emulator {
         self.parser.screen_mut()
     }
 
+    /// Resize the screen. Fewer rows go as tmux 3.6's `screen_resize_y`
+    /// takes them: the rows below the cursor first, then rows off the top,
+    /// into the history on the main screen. (vt100 alone cuts rows off the
+    /// bottom, the cursor's among them.) More rows come in blank at the
+    /// bottom; tmux would first take back the rows a shrink pushed into the
+    /// history, which vt100 cannot.
     pub fn resize(&mut self, rows: u16, cols: u16) {
-        self.parser.screen_mut().set_size(rows.max(1), cols.max(1));
+        let rows = rows.max(1);
+        let (old_rows, _) = self.parser.screen().size();
+        let (cursor_row, _) = self.parser.screen().cursor_position();
+        let below = old_rows.saturating_sub(cursor_row + 1);
+        let off_top = old_rows.saturating_sub(rows).saturating_sub(below);
+        if off_top > 0 {
+            // Scroll them up (SU), the cursor with them (CUU).
+            let scroll = format!("\x1b[{off_top}S\x1b[{off_top}A");
+            self.parser.process(scroll.as_bytes());
+        }
+        self.parser.screen_mut().set_size(rows, cols.max(1));
         self.count_history();
     }
 
@@ -385,6 +401,25 @@ mod tests {
         assert_eq!(e.process(b"\x1b[c"), b"\x1b[?62;22c");
         assert_eq!(e.process(b"\x1b[5n"), b"\x1b[0n");
         assert!(e.process(b"plain text").is_empty());
+    }
+
+    #[test]
+    fn shrinking_keeps_the_cursor_row_as_tmux_does() {
+        let row = |e: &Emulator, r: u16| e.screen().contents_between(r, 0, r, 20);
+        // The cursor on the last row: the top row goes into the history.
+        let mut e = Emulator::new(4, 20, 100);
+        e.process(b"one\r\ntwo\r\nthree\r\n$ ");
+        e.resize(3, 20);
+        assert_eq!(e.history_size(), 1);
+        assert_eq!((row(&e, 0), row(&e, 2)), ("two".into(), "$ ".into()));
+        assert_eq!(e.screen().cursor_position(), (2, 2));
+        // Blank rows under the cursor go first, the history untouched.
+        let mut e = Emulator::new(4, 20, 100);
+        e.process(b"one\r\n$ ");
+        e.resize(2, 20);
+        assert_eq!(e.history_size(), 0);
+        assert_eq!((row(&e, 0), row(&e, 1)), ("one".into(), "$ ".into()));
+        assert_eq!(e.screen().cursor_position(), (1, 2));
     }
 
     #[test]

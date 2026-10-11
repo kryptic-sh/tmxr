@@ -66,6 +66,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A pane made shorter keeps its cursor's row**, as tmux's: rows below the
+  cursor go first, then rows off the top into the history. The bottom rows were
+  cut, so splitting a full pane lost the prompt line and left the cursor on old
+  output. Found by the oracle.
 - **A border drag ends with a `MouseDragEnd` key**, as tmux's: where the button
   is let go (`MouseDragEnd1Border`, `MouseDragEnd1Pane`, …), so it can be bound;
   the release was dropped.

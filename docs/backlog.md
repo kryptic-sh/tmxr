@@ -70,6 +70,14 @@ table. What has been verified, and how:
   `window_copy_scroll1`), checked against tmux's pane sizes. Difference: the
   three options are server-wide (tmux also sets them per window, and the style
   per pane).
+- **A pane made taller again gets blank rows at the bottom**: tmux 3.6
+  (`screen_resize_y`) first takes back the rows a shrink pushed into the history
+  (`hscrolled`), so a split then closed restores the screen; tmxr's
+  `Emulator::resize` cannot, as vt100 has no way to move history rows back onto
+  the screen. Shrinking does follow tmux (it scrolls the rows off with CSI S,
+  which also means a program's own scroll region, if set, scrolls instead of the
+  whole screen). Fixing growth needs a vt100 change (a fork, as with crossterm)
+  or tmxr's own grid.
 - **Windows: an Enter sent before the shell's first read can stall**
   (2026-10-10). Probing with the real binary, `new-window -d` then at once
   `send-keys 'echo markN' Enter`, about 1 in 100 cmd panes showed the text but
