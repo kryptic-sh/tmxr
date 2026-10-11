@@ -46,6 +46,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Window options are one typed table**, as tmux's: `set-option -a` appends to
+  the string ones (styles, formats, sizes), a bad value's error names the option
+  (`remain-on-exit: bad value: x`), and a config file whose `mode-keys`,
+  `menu-border-lines` or `popup-border-lines` is not one of tmux's names fails
+  to load, as other bad values do.
 - **Menus and popups are boxed as tmux's**: the title sits on the top border
   from its third cell, in the border's style and without padding; a menu's
   separators join its border (`├───┤`); and a menu with `-b none` keeps its

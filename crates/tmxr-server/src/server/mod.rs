@@ -213,7 +213,7 @@ impl Server {
                 crossterm::event::KeyModifiers::CONTROL,
             )
         });
-        if cfg.allow_passthrough && !tmxr_term::emulator::passthrough_supported() {
+        if cfg.window.allow_passthrough && !tmxr_term::emulator::passthrough_supported() {
             key_errors.push(PASSTHROUGH_UNSUPPORTED.to_owned());
         }
         let navigator = match navigator_regex(&cfg.navigator.pattern) {
@@ -750,7 +750,7 @@ impl Server {
             .windows
             .values()
             .filter(|w| {
-                let secs = w.monitor_silence.unwrap_or(self.cfg.monitor_silence);
+                let secs = w.monitor_silence.unwrap_or(self.cfg.window.monitor_silence);
                 secs > 0
                     && !w.silence_raised
                     && now.duration_since(w.last_output) >= Duration::from_secs(secs)

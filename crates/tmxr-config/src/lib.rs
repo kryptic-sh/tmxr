@@ -12,19 +12,20 @@ use std::path::Path;
 use serde::Deserialize;
 
 pub use hjkl_config::{ConfigError, ConfigSource};
+pub use window::{BoxLines, ModeKeys, OptionValue, WindowOptions, WindowSize};
+
+mod window;
 
 /// The embedded defaults.
 pub const DEFAULTS: &str = include_str!("../defaults.toml");
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+#[serde(from = "File")]
 pub struct Config {
     pub prefix: String,
     pub mouse: bool,
     pub base_index: u32,
-    pub pane_base_index: u32,
     pub renumber_windows: bool,
-    pub mode_keys: String,
     pub history_limit: usize,
     /// Entries kept per prompt type for Up/Down recall (tmux's default 100).
     pub prompt_history_limit: usize,
@@ -35,25 +36,12 @@ pub struct Config {
     pub status_interval: u64,
     pub repeat_time: u64,
     pub default_terminal: String,
-    #[serde(default)]
     pub default_shell: Option<String>,
     pub extended_keys: String,
     pub set_clipboard: String,
     /// `on`, `off` or `auto`: whether clients get 24-bit colour, or RGB
     /// mapped to the 256 colours.
     pub rgb_colour: String,
-    /// Forward programs' `ESC P tmux; … ESC \` passthrough to the outer
-    /// terminal (inline images and the like), as tmux's `allow-passthrough`.
-    pub allow_passthrough: bool,
-    /// Keep a pane whose program exited, shown as dead, until it is
-    /// respawned or killed (tmux's `remain-on-exit`).
-    pub remain_on_exit: bool,
-    /// Flag a window that prints while not current (tmux's
-    /// `monitor-activity`), for every window without its own setting.
-    pub monitor_activity: bool,
-    /// Flag a window quiet for this many seconds; 0 is off (tmux's
-    /// `monitor-silence`), for every window without its own setting.
-    pub monitor_silence: u64,
     /// Which windows' bells, activity and silence act on the clients (tmux's
     /// `bell-action`, `activity-action`, `silence-action`).
     pub bell_action: AlertAction,
@@ -64,17 +52,6 @@ pub struct Config {
     pub visual_bell: Visual,
     pub visual_activity: Visual,
     pub visual_silence: Visual,
-    /// tmux's pane scrollbars: `off`, `on`, or `modal` (in copy mode only),
-    /// on the `right` or `left`, drawn in `pane-scrollbars-style` (which also
-    /// takes `width=N` and `pad=N`).
-    pub pane_scrollbars: Scrollbars,
-    pub pane_scrollbars_position: ScrollbarPosition,
-    pub pane_scrollbars_style: String,
-    /// tmux's main-horizontal / main-vertical sizes: cells or `N%`.
-    pub main_pane_height: String,
-    pub main_pane_width: String,
-    pub other_pane_height: String,
-    pub other_pane_width: String,
     /// Shell command `copy-pipe` sends the copied text to when it names none.
     pub copy_command: String,
     /// Shell command a locked client runs in its terminal; the client is
@@ -93,6 +70,146 @@ pub struct Config {
     pub options: BTreeMap<String, String>,
     /// key table → key name → bind.
     pub keys: BTreeMap<String, BTreeMap<String, BindEntry>>,
+    /// The global window options. The file keeps them with the rest (and
+    /// some under `[status]`); here they are one table, as tmux's.
+    pub window: WindowOptions,
+}
+
+/// The configuration file's layout, made into a [`Config`].
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+struct File {
+    prefix: String,
+    mouse: bool,
+    base_index: u32,
+    pane_base_index: u32,
+    renumber_windows: bool,
+    mode_keys: ModeKeys,
+    history_limit: usize,
+    prompt_history_limit: usize,
+    escape_time: u64,
+    display_time: u64,
+    display_panes_time: u64,
+    status_interval: u64,
+    repeat_time: u64,
+    default_terminal: String,
+    #[serde(default)]
+    default_shell: Option<String>,
+    extended_keys: String,
+    set_clipboard: String,
+    rgb_colour: String,
+    allow_passthrough: bool,
+    remain_on_exit: bool,
+    synchronize_panes: bool,
+    automatic_rename: bool,
+    window_size: WindowSize,
+    monitor_activity: bool,
+    monitor_silence: u64,
+    bell_action: AlertAction,
+    activity_action: AlertAction,
+    silence_action: AlertAction,
+    visual_bell: Visual,
+    visual_activity: Visual,
+    visual_silence: Visual,
+    pane_scrollbars: Scrollbars,
+    pane_scrollbars_position: ScrollbarPosition,
+    pane_scrollbars_style: String,
+    main_pane_height: String,
+    main_pane_width: String,
+    other_pane_height: String,
+    other_pane_width: String,
+    copy_command: String,
+    lock_command: String,
+    lock_after_time: u64,
+    socket_access: String,
+    update_environment: Vec<String>,
+    navigator: Navigator,
+    status: StatusFile,
+    resurrect: Resurrect,
+    options: BTreeMap<String, String>,
+    keys: BTreeMap<String, BTreeMap<String, BindEntry>>,
+}
+
+impl From<File> for Config {
+    fn from(f: File) -> Self {
+        let s = f.status;
+        Self {
+            window: WindowOptions {
+                allow_passthrough: f.allow_passthrough,
+                automatic_rename: f.automatic_rename,
+                clock_mode_colour: s.clock_mode_colour,
+                copy_mode_current_match_style: s.copy_mode_current_match_style,
+                copy_mode_match_style: s.copy_mode_match_style,
+                main_pane_height: f.main_pane_height,
+                main_pane_width: f.main_pane_width,
+                menu_border_lines: s.menu_border_lines,
+                menu_border_style: s.menu_border_style,
+                menu_selected_style: s.menu_selected_style,
+                menu_style: s.menu_style,
+                mode_keys: f.mode_keys,
+                mode_style: s.mode_style,
+                monitor_activity: f.monitor_activity,
+                monitor_silence: f.monitor_silence,
+                other_pane_height: f.other_pane_height,
+                other_pane_width: f.other_pane_width,
+                pane_active_border_style: s.pane_active_border_style,
+                pane_base_index: f.pane_base_index,
+                pane_border_style: s.pane_border_style,
+                pane_scrollbars: f.pane_scrollbars,
+                pane_scrollbars_position: f.pane_scrollbars_position,
+                pane_scrollbars_style: f.pane_scrollbars_style,
+                popup_border_lines: s.popup_border_lines,
+                popup_border_style: s.popup_border_style,
+                popup_style: s.popup_style,
+                remain_on_exit: f.remain_on_exit,
+                synchronize_panes: f.synchronize_panes,
+                window_size: f.window_size,
+                window_status_current_format: s.window_current_format,
+                window_status_format: s.window_format,
+            },
+            status: Status {
+                style: s.style,
+                left: s.left,
+                right: s.right,
+                left_length: s.left_length,
+                right_length: s.right_length,
+                message_style: s.message_style,
+                display_panes_colour: s.display_panes_colour,
+                display_panes_active_colour: s.display_panes_active_colour,
+            },
+            prefix: f.prefix,
+            mouse: f.mouse,
+            base_index: f.base_index,
+            renumber_windows: f.renumber_windows,
+            history_limit: f.history_limit,
+            prompt_history_limit: f.prompt_history_limit,
+            escape_time: f.escape_time,
+            display_time: f.display_time,
+            display_panes_time: f.display_panes_time,
+            status_interval: f.status_interval,
+            repeat_time: f.repeat_time,
+            default_terminal: f.default_terminal,
+            default_shell: f.default_shell,
+            extended_keys: f.extended_keys,
+            set_clipboard: f.set_clipboard,
+            rgb_colour: f.rgb_colour,
+            bell_action: f.bell_action,
+            activity_action: f.activity_action,
+            silence_action: f.silence_action,
+            visual_bell: f.visual_bell,
+            visual_activity: f.visual_activity,
+            visual_silence: f.visual_silence,
+            copy_command: f.copy_command,
+            lock_command: f.lock_command,
+            lock_after_time: f.lock_after_time,
+            socket_access: f.socket_access,
+            update_environment: f.update_environment,
+            navigator: f.navigator,
+            resurrect: f.resurrect,
+            options: f.options,
+            keys: f.keys,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -102,8 +219,9 @@ pub struct Navigator {
     pub disable_when_zoomed: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+/// The status line's options (the window options under the file's `[status]`
+/// are in [`WindowOptions`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Status {
     pub style: String,
     pub left: String,
@@ -113,32 +231,38 @@ pub struct Status {
     /// Most cells `right` may take (tmux's `status-right-length`); a longer
     /// right side is cut at its end so the window list keeps its room.
     pub right_length: u16,
-    pub window_format: String,
-    pub window_current_format: String,
-    pub pane_border_style: String,
-    pub pane_active_border_style: String,
     pub message_style: String,
-    pub mode_style: String,
-    /// Copy mode search matches, and the one under the cursor.
-    pub copy_mode_match_style: String,
-    pub copy_mode_current_match_style: String,
-    /// The colour of clock mode's digits.
-    pub clock_mode_colour: String,
     /// `display-panes` number colour for the other panes, and the active one.
     pub display_panes_colour: String,
     pub display_panes_active_colour: String,
-    /// Menus' and popups' looks (tmux's `menu-style`, `menu-selected-style`,
-    /// `menu-border-style`, `popup-style` and `popup-border-style`), for a
-    /// box whose command gives none.
-    pub menu_style: String,
-    pub menu_selected_style: String,
-    pub menu_border_style: String,
-    pub popup_style: String,
-    pub popup_border_style: String,
-    /// Their border lines: tmux's `single`, `rounded`, `double`, `heavy`,
-    /// `simple`, `padded` or `none`.
-    pub menu_border_lines: String,
-    pub popup_border_lines: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+struct StatusFile {
+    style: String,
+    left: String,
+    right: String,
+    left_length: u16,
+    right_length: u16,
+    window_format: String,
+    window_current_format: String,
+    pane_border_style: String,
+    pane_active_border_style: String,
+    message_style: String,
+    mode_style: String,
+    copy_mode_match_style: String,
+    copy_mode_current_match_style: String,
+    clock_mode_colour: String,
+    display_panes_colour: String,
+    display_panes_active_colour: String,
+    menu_style: String,
+    menu_selected_style: String,
+    menu_border_style: String,
+    popup_style: String,
+    popup_border_style: String,
+    menu_border_lines: BoxLines,
+    popup_border_lines: BoxLines,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -490,11 +614,11 @@ mod tests {
         let cfg = defaults();
         assert_eq!(cfg.prefix, "C-b");
         assert!(cfg.mouse);
-        assert_eq!((cfg.base_index, cfg.pane_base_index), (0, 0));
+        assert_eq!((cfg.base_index, cfg.window.pane_base_index), (0, 0));
         assert!(cfg.renumber_windows);
-        assert_eq!(cfg.mode_keys, "vi");
+        assert_eq!(cfg.window.mode_keys, ModeKeys::Vi);
         assert_eq!(cfg.extended_keys, "always");
-        assert!(cfg.allow_passthrough);
+        assert!(cfg.window.allow_passthrough);
         assert_eq!(cfg.status.left, "");
         assert!(
             cfg.update_environment

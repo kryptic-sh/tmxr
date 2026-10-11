@@ -263,7 +263,7 @@ impl Server {
     /// shows one can change with copy mode and the alternate screen, and
     /// its width with it, as tmux's `layout_fix_panes` calls do.
     pub fn refit_scrollbar(&mut self, pane: crate::model::PaneId) {
-        if self.cfg.pane_scrollbars != tmxr_config::Scrollbars::Off
+        if self.cfg.window.pane_scrollbars != tmxr_config::Scrollbars::Off
             && let Some(w) = self.panes.get(&pane).map(|p| p.window)
         {
             self.relayout(w);

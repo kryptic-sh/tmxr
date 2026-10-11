@@ -338,7 +338,7 @@ pub fn pane(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, Wind
         idx => {
             let i: u32 = idx.parse().map_err(|_| format!("can't find pane: {idx}"))?;
             let i = i
-                .checked_sub(srv.cfg.pane_base_index)
+                .checked_sub(srv.cfg.window.pane_base_index)
                 .ok_or_else(|| format!("can't find pane: {idx}"))?;
             *panes
                 .get(i as usize)

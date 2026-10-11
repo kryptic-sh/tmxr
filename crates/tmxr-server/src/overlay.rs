@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hjkl_picker::{Picker, PickerAction, PickerEvent, PickerLogic};
 use ratatui::symbols::border;
+use tmxr_config::BoxLines;
 
 use crate::cmds::join_args;
 use crate::model::{ClientId, PaneId, SessionId};
@@ -32,15 +33,23 @@ impl BoxLook {
     /// From a command's flags; without `-b`, the lines `option` holds
     /// (`menu-border-lines`, …), whose name an unknown `-b` errors with, as
     /// tmux's.
-    pub fn from_args(a: &tmxr_command::Args, option: &str, default: &str) -> Result<Self, String> {
-        let name = a.value('b').unwrap_or(default);
-        let lines = Lines::parse(name).ok_or_else(|| format!("{option} unknown value: {name}"))?;
+    pub fn from_args(
+        a: &tmxr_command::Args,
+        option: &str,
+        default: BoxLines,
+    ) -> Result<Self, String> {
+        let lines = match a.value('b') {
+            Some(name) => {
+                BoxLines::parse(name).ok_or_else(|| format!("{option} unknown value: {name}"))?
+            }
+            None => default,
+        };
         let spec = |f| a.value(f).map(str::to_owned);
         Ok(Self {
             style: spec('s'),
             border_style: spec('S'),
             selected_style: spec('H'),
-            lines,
+            lines: Lines::of(lines),
         })
     }
 }
@@ -60,20 +69,17 @@ pub enum Lines {
 }
 
 impl Lines {
-    pub const NAMES: &str = "single, rounded, double, heavy, simple, padded or none";
-
-    /// A tmux line name; `Some(None)` for `none`.
-    pub fn parse(name: &str) -> Option<Option<Self>> {
-        Some(Some(match name {
-            "single" => Self::Single,
-            "rounded" => Self::Rounded,
-            "double" => Self::Double,
-            "heavy" => Self::Heavy,
-            "simple" => Self::Simple,
-            "padded" => Self::Padded,
-            "none" => return Some(None),
-            _ => return None,
-        }))
+    /// The lines an option or `-b` names; `None` for `none`.
+    pub const fn of(lines: BoxLines) -> Option<Self> {
+        Some(match lines {
+            BoxLines::Single => Self::Single,
+            BoxLines::Rounded => Self::Rounded,
+            BoxLines::Double => Self::Double,
+            BoxLines::Heavy => Self::Heavy,
+            BoxLines::Simple => Self::Simple,
+            BoxLines::Padded => Self::Padded,
+            BoxLines::None => return None,
+        })
     }
 
     /// The border, as tmux 3.6 draws it.

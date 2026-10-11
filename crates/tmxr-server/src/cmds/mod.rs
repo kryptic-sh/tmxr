@@ -275,12 +275,7 @@ fn dir_flag(a: &Args) -> Option<Dir> {
 }
 
 fn on_off(value: Option<&str>, current: bool) -> Result<bool, String> {
-    match value {
-        None | Some("toggle") => Ok(!current),
-        Some("on" | "1" | "yes" | "true") => Ok(true),
-        Some("off" | "0" | "no" | "false") => Ok(false),
-        Some(v) => Err(format!("bad value: {v}")),
-    }
+    <bool as tmxr_config::OptionValue>::parse(value, &current)
 }
 
 /// Quote words so they survive another trip through the tokenizer.

@@ -3169,7 +3169,7 @@ fn customize_mode_edits_an_option_through_the_prompt() {
     // prefix C opens it, as tmux's.
     s.send(PREFIX);
     s.send(b"C");
-    s.wait_for("customize mode", |text| text.contains("option mode-keys"));
+    s.wait_for("customize mode", |text| text.contains("option prefix C-b"));
 }
 
 #[test]

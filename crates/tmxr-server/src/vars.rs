@@ -173,7 +173,7 @@ impl Context for Vars<'_> {
             "pane_index" => {
                 let w = window?;
                 let i = w.panes().iter().position(|p| Some(*p) == self.pane)?;
-                (i as u32 + srv.cfg.pane_base_index).to_string()
+                (i as u32 + srv.cfg.window.pane_base_index).to_string()
             }
             "pane_active" => flag(window?.active == pane?.id),
             "pane_title" => pane?

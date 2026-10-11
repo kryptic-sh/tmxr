@@ -292,10 +292,10 @@ pub(super) fn run(
         }
         "next-layout" | "previous-layout" | "select-layout" => {
             let sizes = crate::layout::MainPane {
-                height: srv.cfg.main_pane_height.clone(),
-                width: srv.cfg.main_pane_width.clone(),
-                other_height: srv.cfg.other_pane_height.clone(),
-                other_width: srv.cfg.other_pane_width.clone(),
+                height: srv.cfg.window.main_pane_height.clone(),
+                width: srv.cfg.window.main_pane_width.clone(),
+                other_height: srv.cfg.window.other_pane_height.clone(),
+                other_width: srv.cfg.window.other_pane_width.clone(),
             };
             let (_, _, wid) = target::window(srv, ctx, a.value('t'))?;
             let win = srv.windows.get_mut(&wid).ok_or("no window")?;

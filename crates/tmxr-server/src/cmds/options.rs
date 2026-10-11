@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use tmxr_command::Parsed;
-use tmxr_config::{AlertAction, ScrollbarPosition, Scrollbars, Visual};
+use tmxr_config::{AlertAction, Visual, WindowOptions};
 
 use super::{Ctx, Outcome, Res, attached_client, join_args, on_off};
 use crate::server::Server;
@@ -77,11 +77,11 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
         if name == "monitor-activity" {
             let current = local
                 .and_then(|w| w.monitor_activity)
-                .unwrap_or(srv.cfg.monitor_activity);
+                .unwrap_or(srv.cfg.window.monitor_activity);
             let on = on_off(value, current)?;
             match window.and_then(|w| srv.windows.get_mut(&w)) {
                 Some(w) => w.monitor_activity = Some(on),
-                None => srv.cfg.monitor_activity = on,
+                None => srv.cfg.window.monitor_activity = on,
             }
         } else {
             let v = value.ok_or("monitor-silence: needs a value")?;
@@ -90,7 +90,7 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
                 .map_err(|_| format!("monitor-silence: bad number {v}"))?;
             match window.and_then(|w| srv.windows.get_mut(&w)) {
                 Some(w) => w.monitor_silence = Some(secs),
-                None => srv.cfg.monitor_silence = secs,
+                None => srv.cfg.window.monitor_silence = secs,
             }
         }
         srv.mark_all_dirty();
@@ -162,17 +162,12 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
         "mouse" => c.mouse = on_off(value, c.mouse)?,
         "renumber-windows" => c.renumber_windows = on_off(value, c.renumber_windows)?,
         "base-index" => c.base_index = num(need()?)? as u32,
-        "pane-base-index" => c.pane_base_index = num(need()?)? as u32,
         "history-limit" => c.history_limit = num(need()?)? as usize,
         "prompt-history-limit" => c.prompt_history_limit = num(need()?)? as usize,
         "display-time" => c.display_time = num(need()?)?,
         "status-interval" => c.status_interval = num(need()?)?,
         "repeat-time" => c.repeat_time = num(need()?)?,
         "escape-time" => c.escape_time = num(need()?)?,
-        "mode-keys" => match need()? {
-            v @ ("vi" | "emacs") => v.clone_into(&mut c.mode_keys),
-            v => return Err(format!("mode-keys: unknown value: {v} (vi or emacs)")),
-        },
         "default-terminal" => need()?.clone_into(&mut c.default_terminal),
         "default-shell" => c.default_shell = Some(need()?.to_owned()),
         "extended-keys" => need()?.clone_into(&mut c.extended_keys),
@@ -209,64 +204,20 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
                 _ => c.visual_silence = visual,
             }
         }
-        "pane-scrollbars" => {
-            let v = need()?;
-            c.pane_scrollbars = Scrollbars::parse(v)
-                .ok_or_else(|| format!("{name}: unknown value: {v} ({})", Scrollbars::NAMES))?;
-        }
-        "pane-scrollbars-position" => {
-            let v = need()?;
-            c.pane_scrollbars_position = ScrollbarPosition::parse(v).ok_or_else(|| {
-                format!("{name}: unknown value: {v} ({})", ScrollbarPosition::NAMES)
-            })?;
-        }
-        "pane-scrollbars-style" => need()?.clone_into(&mut c.pane_scrollbars_style),
-        "main-pane-height" => need()?.clone_into(&mut c.main_pane_height),
-        "main-pane-width" => need()?.clone_into(&mut c.main_pane_width),
-        "other-pane-height" => need()?.clone_into(&mut c.other_pane_height),
-        "other-pane-width" => need()?.clone_into(&mut c.other_pane_width),
-        "remain-on-exit" => c.remain_on_exit = on_off(value, c.remain_on_exit)?,
         "allow-passthrough" => {
-            let on = on_off(value, c.allow_passthrough)?;
+            let on = on_off(value, c.window.allow_passthrough)?;
             if on && !tmxr_term::emulator::passthrough_supported() {
                 return Err(crate::server::PASSTHROUGH_UNSUPPORTED.into());
             }
-            c.allow_passthrough = on;
+            c.window.allow_passthrough = on;
         }
         "status-left" => need()?.clone_into(&mut c.status.left),
         "status-right" => need()?.clone_into(&mut c.status.right),
         "status-left-length" => c.status.left_length = length(need()?)?,
         "status-right-length" => c.status.right_length = length(need()?)?,
         "status-style" => need()?.clone_into(&mut c.status.style),
-        "window-status-format" => need()?.clone_into(&mut c.status.window_format),
-        "window-status-current-format" => need()?.clone_into(&mut c.status.window_current_format),
-        "pane-border-style" => need()?.clone_into(&mut c.status.pane_border_style),
-        "pane-active-border-style" => need()?.clone_into(&mut c.status.pane_active_border_style),
         "message-style" => need()?.clone_into(&mut c.status.message_style),
-        "mode-style" => need()?.clone_into(&mut c.status.mode_style),
-        "clock-mode-colour" => need()?.clone_into(&mut c.status.clock_mode_colour),
-        "copy-mode-match-style" => need()?.clone_into(&mut c.status.copy_mode_match_style),
-        "copy-mode-current-match-style" => {
-            need()?.clone_into(&mut c.status.copy_mode_current_match_style);
-        }
-        "menu-style" => need()?.clone_into(&mut c.status.menu_style),
-        "menu-selected-style" => need()?.clone_into(&mut c.status.menu_selected_style),
-        "menu-border-style" => need()?.clone_into(&mut c.status.menu_border_style),
-        "popup-style" => need()?.clone_into(&mut c.status.popup_style),
-        "popup-border-style" => need()?.clone_into(&mut c.status.popup_border_style),
-        "menu-border-lines" | "popup-border-lines" => {
-            let v = need()?;
-            if crate::overlay::Lines::parse(v).is_none() {
-                return Err(format!(
-                    "{name}: unknown value: {v} ({})",
-                    crate::overlay::Lines::NAMES
-                ));
-            }
-            match name {
-                "menu-border-lines" => v.clone_into(&mut c.status.menu_border_lines),
-                _ => v.clone_into(&mut c.status.popup_border_lines),
-            }
-        }
+        n if WindowOptions::NAMES.contains(&n) => c.window.set(n, value, a.has('a'))?,
         _ => return Err(format!("invalid option: {name}")),
     }
     if name == "rgb-colour" {
@@ -289,12 +240,10 @@ pub fn option_lines(srv: &Server) -> Vec<String> {
         format!("prefix {}", c.prefix),
         format!("mouse {}", if c.mouse { "on" } else { "off" }),
         format!("base-index {}", c.base_index),
-        format!("pane-base-index {}", c.pane_base_index),
         format!(
             "renumber-windows {}",
             if c.renumber_windows { "on" } else { "off" }
         ),
-        format!("mode-keys {}", c.mode_keys),
         format!("history-limit {}", c.history_limit),
         format!("prompt-history-limit {}", c.prompt_history_limit),
         format!("display-time {}", c.display_time),
@@ -306,45 +255,24 @@ pub fn option_lines(srv: &Server) -> Vec<String> {
         format!("extended-keys {}", c.extended_keys),
         format!("set-clipboard {}", c.set_clipboard),
         format!("rgb-colour {}", c.rgb_colour),
-        format!(
-            "monitor-activity {}",
-            if c.monitor_activity { "on" } else { "off" }
-        ),
-        format!("monitor-silence {}", c.monitor_silence),
         format!("bell-action {}", c.bell_action.as_str()),
         format!("activity-action {}", c.activity_action.as_str()),
         format!("silence-action {}", c.silence_action.as_str()),
         format!("visual-bell {}", c.visual_bell.as_str()),
         format!("visual-activity {}", c.visual_activity.as_str()),
         format!("visual-silence {}", c.visual_silence.as_str()),
-        format!("pane-scrollbars {}", c.pane_scrollbars.as_str()),
-        format!(
-            "pane-scrollbars-position {}",
-            c.pane_scrollbars_position.as_str()
-        ),
-        format!("pane-scrollbars-style {}", c.pane_scrollbars_style),
-        format!("main-pane-height {}", c.main_pane_height),
-        format!("main-pane-width {}", c.main_pane_width),
-        format!("other-pane-height {}", c.other_pane_height),
-        format!("other-pane-width {}", c.other_pane_width),
-        format!("menu-style {}", c.status.menu_style),
-        format!("menu-selected-style {}", c.status.menu_selected_style),
-        format!("menu-border-style {}", c.status.menu_border_style),
-        format!("menu-border-lines {}", c.status.menu_border_lines),
-        format!("popup-style {}", c.status.popup_style),
-        format!("popup-border-style {}", c.status.popup_border_style),
-        format!("popup-border-lines {}", c.status.popup_border_lines),
         format!("lock-after-time {}", c.lock_after_time),
         format!(
             "lock-command {}",
             join_args(std::slice::from_ref(&c.lock_command))
         ),
-        format!(
-            "allow-passthrough {}",
-            if c.allow_passthrough { "on" } else { "off" }
-        ),
     ];
     let mut all: Vec<String> = lines.to_vec();
+    all.extend(
+        WindowOptions::NAMES
+            .iter()
+            .filter_map(|n| Some(format!("{n} {}", c.window.show(n)?))),
+    );
     all.extend(
         c.options
             .iter()

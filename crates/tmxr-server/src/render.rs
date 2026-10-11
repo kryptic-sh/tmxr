@@ -262,18 +262,18 @@ fn draw_window(
     let win = srv.windows.get(&wid)?;
     let rects = win.visible_rects();
     let vars = Vars::for_pane(srv, Some(win.active), Some(client));
-    let border = style_option(&srv.cfg.status.pane_border_style, &vars);
-    let active_border = style_option(&srv.cfg.status.pane_active_border_style, &vars);
+    let border = style_option(&srv.cfg.window.pane_border_style, &vars);
+    let active_border = style_option(&srv.cfg.window.pane_active_border_style, &vars);
     let copy = PaneStyles {
-        selection: style_option(&srv.cfg.status.mode_style, &vars),
-        matched: style_option(&srv.cfg.status.copy_mode_match_style, &vars),
-        current: style_option(&srv.cfg.status.copy_mode_current_match_style, &vars),
-        clock: style_option(&format!("fg={}", srv.cfg.status.clock_mode_colour), &vars),
+        selection: style_option(&srv.cfg.window.mode_style, &vars),
+        matched: style_option(&srv.cfg.window.copy_mode_match_style, &vars),
+        current: style_option(&srv.cfg.window.copy_mode_current_match_style, &vars),
+        clock: style_option(&format!("fg={}", srv.cfg.window.clock_mode_colour), &vars),
     };
     let w = win.cols.min(cols);
     let h = win.rows.min(rows);
 
-    let scrollbar = style_option(&srv.cfg.pane_scrollbars_style, &vars);
+    let scrollbar = style_option(&srv.cfg.window.pane_scrollbars_style, &vars);
     let mut cursor = None;
     for (pid, cell) in &rects {
         // The pane's own cells: its layout cell less any scrollbar.
@@ -556,9 +556,9 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
             client: Some(id),
         };
         let fmt = if *idx == session.current {
-            &srv.cfg.status.window_current_format
+            &srv.cfg.window.window_status_current_format
         } else {
-            &srv.cfg.status.window_format
+            &srv.cfg.window.window_status_format
         };
         let text = format::expand(fmt, &wvars);
         let start = x;
@@ -582,14 +582,14 @@ fn draw_overlay(
 ) -> Option<Position> {
     let att = srv.clients.get(&id)?.att.as_ref()?;
     let vars = Vars::for_pane(srv, None, Some(id));
-    let mode_style = style_option(&srv.cfg.status.mode_style, &vars);
-    let border = style_option(&srv.cfg.status.pane_active_border_style, &vars);
+    let mode_style = style_option(&srv.cfg.window.mode_style, &vars);
+    let border = style_option(&srv.cfg.window.pane_active_border_style, &vars);
     let y = rows.saturating_sub(STATUS_ROWS);
     // A menu's or popup's own style (-s, -S, -H), else the option's.
     let look = |spec: &Option<String>, option: &str| {
         style_option(spec.as_deref().unwrap_or(option), &vars)
     };
-    let opts = &srv.cfg.status;
+    let opts = &srv.cfg.window;
     match att.overlay.as_ref()? {
         Overlay::Prompt(p) => {
             let before: String = p.input[..p.cursor].iter().collect();

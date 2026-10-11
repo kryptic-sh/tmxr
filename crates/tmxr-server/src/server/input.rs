@@ -82,7 +82,7 @@ impl Server {
 
     /// `mode-keys emacs`.
     fn emacs_keys(&self) -> bool {
-        self.cfg.mode_keys == "emacs"
+        self.cfg.window.mode_keys == tmxr_config::ModeKeys::Emacs
     }
 
     pub fn active_pane_of_session(&self, session: SessionId) -> Option<PaneId> {

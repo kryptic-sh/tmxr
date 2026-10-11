@@ -298,7 +298,7 @@ pub(super) fn run(
                         };
                         format!(
                             "{prefix}{}: [{}x{}] %{}{}",
-                            i as u32 + srv.cfg.pane_base_index,
+                            i as u32 + srv.cfg.window.pane_base_index,
                             pane.rect.w,
                             pane.rect.h,
                             p,
@@ -317,7 +317,7 @@ pub(super) fn run(
                 .panes()
                 .into_iter()
                 .enumerate()
-                .map(|(i, p)| (i as u32 + srv.cfg.pane_base_index, p))
+                .map(|(i, p)| (i as u32 + srv.cfg.window.pane_base_index, p))
                 .collect();
             match attached_client(srv, ctx) {
                 // On a client: numbers over the panes; a number selects.
