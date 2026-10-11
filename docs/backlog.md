@@ -103,11 +103,9 @@ table. What has been verified, and how:
   `cmd_display_menu_get_pos` and checked against a running tmux
   (`popups_and_menus_are_placed_where_tmux_places_them`). Boxes are drawn as
   tmux 3.6's `screen_write_box` in each of its `-b` line types (checked against
-  a running tmux, 2026-10-11). Missing: tmux's `menu-style`,
-  `menu-selected-style`, `menu-border-style`, `menu-border-lines`,
-  `popup-style`, `popup-border-style` and `popup-border-lines` options, so a
-  box's look comes from its flags alone. (tmux 3.6 defines no `menu_*` format
-  variables; an earlier entry here said it did.) `-k`, `-N` and a
+  a running tmux, 2026-10-11). The `menu-*` and `popup-*` options are
+  server-wide, as tmxr's other window options. (tmux 3.6 defines no `menu_*`
+  format variables; an earlier entry here said it did.) `-k`, `-N` and a
   `display-popup` on an open popup follow tmux 3.6 (`popup_key_cb`,
   `popup_modify`). Closing a running popup kills its command (`Popup`'s `Drop`,
   as `kill-pane` does). On Windows closing the ConPTY ends the program anyway,

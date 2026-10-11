@@ -13,6 +13,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `display-popup` changes the open popup (title, styles, border and, with `-N`,
   `-E` or `-k`, how it closes) instead of replacing it.
 - **`paste-buffer -r` and `-s separator`**, as tmux's.
+- **`menu-style`, `menu-selected-style`, `menu-border-style`,
+  `menu-border-lines`, `popup-style`, `popup-border-style` and
+  `popup-border-lines`**, as tmux's: a menu's or popup's look when its command
+  gives no `-s`, `-H`, `-S` or `-b`. The defaults keep tmxr's look (borders as
+  the active pane's, the selected item as copy mode's selection).
 - **`display-menu -b` and `display-popup -b` take `simple` and `padded`**, as
   tmux's: ASCII lines, or blank ones that keep the box's size.
 - **Menus take the mouse, as tmux 3.6's**: one the mouse opened (or

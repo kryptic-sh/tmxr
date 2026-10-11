@@ -100,6 +100,15 @@ clock-mode-colour = "#{@thm_blue}"
 # tmux's blue and red, from the palette.
 display-panes-colour = "#{@thm_blue}"
 display-panes-active-colour = "#{@thm_red}"
+# Menus and popups: tmux's default lines, bordered like the active pane, the
+# selected item like copy mode's selection.
+menu-style = "default"
+menu-selected-style = "fg=#{@thm_fg},bg=#{@thm_selection}"
+menu-border-style = "fg=#{@thm_blue}"
+menu-border-lines = "single"
+popup-style = "default"
+popup-border-style = "fg=#{@thm_blue}"
+popup-border-lines = "single"
 
 [resurrect]
 auto-save-minutes = 15

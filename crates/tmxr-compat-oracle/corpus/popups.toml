@@ -271,3 +271,17 @@ checks = [
   { screen_find = "BOXED" },
 ]
 
+
+[[cases]]
+name = "menu_lines_from_the_option"
+attach = true
+unix_only = true
+steps = [
+  { run = "set -g menu-border-lines simple" },
+  { spawn = "display-menu -T Title -x 1 -y 6 one a '' '' two b ''" },
+  { wait_text = "two" },
+]
+checks = [
+  { screen_contains = "+-Title---+", expect = true },
+  { command = "show-options -gv menu-border-lines", expect = "simple" },
+]

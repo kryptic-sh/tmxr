@@ -249,6 +249,24 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res
         "copy-mode-current-match-style" => {
             need()?.clone_into(&mut c.status.copy_mode_current_match_style);
         }
+        "menu-style" => need()?.clone_into(&mut c.status.menu_style),
+        "menu-selected-style" => need()?.clone_into(&mut c.status.menu_selected_style),
+        "menu-border-style" => need()?.clone_into(&mut c.status.menu_border_style),
+        "popup-style" => need()?.clone_into(&mut c.status.popup_style),
+        "popup-border-style" => need()?.clone_into(&mut c.status.popup_border_style),
+        "menu-border-lines" | "popup-border-lines" => {
+            let v = need()?;
+            if crate::overlay::Lines::parse(v).is_none() {
+                return Err(format!(
+                    "{name}: unknown value: {v} ({})",
+                    crate::overlay::Lines::NAMES
+                ));
+            }
+            match name {
+                "menu-border-lines" => v.clone_into(&mut c.status.menu_border_lines),
+                _ => v.clone_into(&mut c.status.popup_border_lines),
+            }
+        }
         _ => return Err(format!("invalid option: {name}")),
     }
     if name == "rgb-colour" {
@@ -309,6 +327,13 @@ pub fn option_lines(srv: &Server) -> Vec<String> {
         format!("main-pane-width {}", c.main_pane_width),
         format!("other-pane-height {}", c.other_pane_height),
         format!("other-pane-width {}", c.other_pane_width),
+        format!("menu-style {}", c.status.menu_style),
+        format!("menu-selected-style {}", c.status.menu_selected_style),
+        format!("menu-border-style {}", c.status.menu_border_style),
+        format!("menu-border-lines {}", c.status.menu_border_lines),
+        format!("popup-style {}", c.status.popup_style),
+        format!("popup-border-style {}", c.status.popup_border_style),
+        format!("popup-border-lines {}", c.status.popup_border_lines),
         format!("lock-after-time {}", c.lock_after_time),
         format!(
             "lock-command {}",

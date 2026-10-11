@@ -3986,6 +3986,60 @@ fn menu_and_popup_take_tmux_style_flags() {
 }
 
 #[test]
+fn menu_and_popup_options_set_their_look() {
+    let t = Tmxr::new("boxopts");
+    let s = t.attach(&["new", "-s", "bo"]);
+    s.wait_for("status line", |text| text.contains("bo"));
+    t.run(&["set-option", "-g", "menu-border-lines", "simple"]);
+    t.run(&["set-option", "-g", "menu-border-style", "fg=green"]);
+    t.run(&["set-option", "-g", "menu-style", "bg=red"]);
+    t.run(&[
+        "display-menu",
+        "-T",
+        "Opts",
+        "Only",
+        "o",
+        "rename-window only",
+    ]);
+    s.wait_for("the simple menu", |text| text.contains("+-Opts"));
+    let corner = (0..ROWS)
+        .flat_map(|r| s.row_cells(r))
+        .find(|(c, _, _)| c == "+")
+        .expect("a corner");
+    assert_eq!(corner.1, "Idx(2)", "menu-border-style: {corner:?}");
+    let item = (0..ROWS)
+        .flat_map(|r| s.row_cells(r))
+        .find(|(c, _, _)| c == "O")
+        .expect("the item");
+    assert_eq!(item.2, "Idx(1)", "menu-style: {item:?}");
+    s.send(b"\x1b");
+    s.wait_for("the menu closed", |text| !text.contains("+-Opts"));
+    // -b still wins over the option.
+    t.run(&["set-option", "-g", "popup-border-lines", "double"]);
+    let hold = if cfg!(windows) {
+        "echo OPTS-BOX& ping -n 30 127.0.0.1 >NUL"
+    } else {
+        "echo OPTS-BOX; sleep 30"
+    };
+    t.run(&["display-popup", hold]);
+    s.wait_for("the double popup", |text| {
+        text.contains("OPTS-BOX") && text.contains('╔')
+    });
+    t.run(&["display-popup", "-C"]);
+    t.run(&["display-popup", "-b", "rounded", hold]);
+    s.wait_for("the rounded popup", |text| {
+        text.contains("OPTS-BOX") && text.contains('╭')
+    });
+    t.run(&["display-popup", "-C"]);
+    assert_eq!(
+        t.run(&["show-options", "-gv", "popup-border-lines"]).trim(),
+        "double"
+    );
+    let bad = t.output(&["set-option", "-g", "menu-border-lines", "bogus"]);
+    assert!(!bad.status.success(), "a bad line type was taken");
+}
+
+#[test]
 fn popups_and_menus_are_placed_where_tmux_places_them() {
     let t = Tmxr::new("popplace");
     let s = t.attach(&["new", "-s", "pl"]);

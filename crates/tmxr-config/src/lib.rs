@@ -127,6 +127,18 @@ pub struct Status {
     /// `display-panes` number colour for the other panes, and the active one.
     pub display_panes_colour: String,
     pub display_panes_active_colour: String,
+    /// Menus' and popups' looks (tmux's `menu-style`, `menu-selected-style`,
+    /// `menu-border-style`, `popup-style` and `popup-border-style`), for a
+    /// box whose command gives none.
+    pub menu_style: String,
+    pub menu_selected_style: String,
+    pub menu_border_style: String,
+    pub popup_style: String,
+    pub popup_border_style: String,
+    /// Their border lines: tmux's `single`, `rounded`, `double`, `heavy`,
+    /// `simple`, `padded` or `none`.
+    pub menu_border_lines: String,
+    pub popup_border_lines: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]

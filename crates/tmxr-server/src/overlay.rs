@@ -17,7 +17,8 @@ use crate::server::Server;
 
 /// How a menu or popup box is drawn, from tmux's `-s` (style), `-S` (border
 /// style), `-H` (a menu's selected item) and `-b` (border lines) flags: style
-/// specs as given, expanded when drawn; `None` keeps tmxr's own.
+/// specs as given, expanded when drawn; `None` takes the `menu-*` or
+/// `popup-*` option's.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BoxLook {
     pub style: Option<String>,
@@ -28,19 +29,12 @@ pub struct BoxLook {
 }
 
 impl BoxLook {
-    /// From a command's flags; `-b` takes tmux's line names, its errors
-    /// naming `option` as tmux's do (`menu-border-lines`, …).
-    pub fn from_args(a: &tmxr_command::Args, option: &str) -> Result<Self, String> {
-        let lines = match a.value('b') {
-            None | Some("single") => Some(Lines::Single),
-            Some("rounded") => Some(Lines::Rounded),
-            Some("double") => Some(Lines::Double),
-            Some("heavy") => Some(Lines::Heavy),
-            Some("simple") => Some(Lines::Simple),
-            Some("padded") => Some(Lines::Padded),
-            Some("none") => None,
-            Some(other) => return Err(format!("{option} unknown value: {other}")),
-        };
+    /// From a command's flags; without `-b`, the lines `option` holds
+    /// (`menu-border-lines`, …), whose name an unknown `-b` errors with, as
+    /// tmux's.
+    pub fn from_args(a: &tmxr_command::Args, option: &str, default: &str) -> Result<Self, String> {
+        let name = a.value('b').unwrap_or(default);
+        let lines = Lines::parse(name).ok_or_else(|| format!("{option} unknown value: {name}"))?;
         let spec = |f| a.value(f).map(str::to_owned);
         Ok(Self {
             style: spec('s'),
@@ -66,6 +60,22 @@ pub enum Lines {
 }
 
 impl Lines {
+    pub const NAMES: &str = "single, rounded, double, heavy, simple, padded or none";
+
+    /// A tmux line name; `Some(None)` for `none`.
+    pub fn parse(name: &str) -> Option<Option<Self>> {
+        Some(Some(match name {
+            "single" => Self::Single,
+            "rounded" => Self::Rounded,
+            "double" => Self::Double,
+            "heavy" => Self::Heavy,
+            "simple" => Self::Simple,
+            "padded" => Self::Padded,
+            "none" => return Some(None),
+            _ => return None,
+        }))
+    }
+
     /// The border, as tmux 3.6 draws it.
     pub fn border(self) -> border::Set<'static> {
         match self {

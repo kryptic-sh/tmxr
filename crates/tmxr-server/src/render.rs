@@ -585,9 +585,11 @@ fn draw_overlay(
     let mode_style = style_option(&srv.cfg.status.mode_style, &vars);
     let border = style_option(&srv.cfg.status.pane_active_border_style, &vars);
     let y = rows.saturating_sub(STATUS_ROWS);
-    // A menu's or popup's own style (-s, -S, -H), else `or`.
-    let look =
-        |spec: &Option<String>, or: Style| spec.as_deref().map_or(or, |s| style_option(s, &vars));
+    // A menu's or popup's own style (-s, -S, -H), else the option's.
+    let look = |spec: &Option<String>, option: &str| {
+        style_option(spec.as_deref().unwrap_or(option), &vars)
+    };
+    let opts = &srv.cfg.status;
     match att.overlay.as_ref()? {
         Overlay::Prompt(p) => {
             let before: String = p.input[..p.cursor].iter().collect();
@@ -638,9 +640,9 @@ fn draw_overlay(
         Overlay::Picker(p) => draw_picker(srv, p, buf, cols, y, border, mode_style),
         Overlay::Menu(m) => {
             let styles = (
-                look(&m.look.style, Style::default()),
-                look(&m.look.border_style, border),
-                look(&m.look.selected_style, mode_style),
+                look(&m.look.style, &opts.menu_style),
+                look(&m.look.border_style, &opts.menu_border_style),
+                look(&m.look.selected_style, &opts.menu_selected_style),
             );
             m.draw(buf, cols, y, styles);
             None
@@ -648,10 +650,10 @@ fn draw_overlay(
         Overlay::Popup(p) => {
             let area = p.rect.intersection(Rect::new(0, 0, cols, rows));
             Clear.render(area, buf);
-            buf.set_style(area, look(&p.look.style, Style::default()));
+            buf.set_style(area, look(&p.look.style, &opts.popup_style));
             if p.border {
                 let lines = p.look.lines.unwrap_or_default();
-                let style = look(&p.look.border_style, border);
+                let style = look(&p.look.border_style, &opts.popup_border_style);
                 draw_box(buf, area, lines, style, &p.title);
             }
             let inner = p.inner().intersection(area);
