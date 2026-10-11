@@ -607,36 +607,49 @@ jobs:
             tmxr-*.rpm.sha256
 
   install-packages:
-    name: Install the ${{ matrix.image }} package
+    name: Install the ${{ matrix.image }} ${{ matrix.arch }} package
     needs: [build]
     if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - image: debian:stable-slim
-            install: |
-              # Slim images keep man pages and docs out; this package's
-              # man page is part of what is checked.
-              rm -f /etc/dpkg/dpkg.cfg.d/docker
-              apt-get update -qq
-              apt-get install -y -qq /dist/tmxr_*_amd64.deb
+            arch: amd64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
           - image: fedora:latest
-            install: |
-              dnf install -y -q --setopt=tsflags= /dist/tmxr-*.x86_64.rpm
+            arch: x86_64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          # The aarch64 packages on an Arm runner, where they run natively.
+          - image: debian:stable-slim
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - image: fedora:latest
+            arch: aarch64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: tmxr-x86_64-unknown-linux-gnu
+          name: tmxr-${{ matrix.target }}
           path: dist
       - name: Install, run a server, check the installed files
-        env:
-          INSTALL: ${{ matrix.install }}
         run: |
           cat > check.sh <<'EOF'
           set -eu
-          sh -c "$INSTALL"
+          if command -v apt-get >/dev/null; then
+            # Slim images keep man pages and docs out; this package's
+            # man page is part of what is checked.
+            rm -f /etc/dpkg/dpkg.cfg.d/docker
+            apt-get update -qq
+            apt-get install -y -qq /dist/tmxr_*.deb
+          else
+            dnf install -y -q --setopt=tsflags= /dist/tmxr-*.rpm
+          fi
           tmxr --version
           tmxr -L pkg new-session -d -s installed
           tmxr -L pkg ls | grep -q '^installed:'
@@ -649,7 +662,7 @@ jobs:
           done
           echo 'installed and ran'
           EOF
-          docker run --rm -e INSTALL -v "$PWD/dist:/dist:ro" \
+          docker run --rm -v "$PWD/dist:/dist:ro" \
             -v "$PWD/check.sh:/check.sh:ro" ${{ matrix.image }} sh /check.sh
 
   publish-github-release:

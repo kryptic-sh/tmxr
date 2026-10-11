@@ -255,6 +255,6 @@ table. What has been verified, and how:
   (run 38057623410) printed the same message but also stalled about 34 s first,
   which this does not explain; untraced, as it predates `set -x`.
 - The `.deb` and `.rpm` are installed and run in clean Debian and Fedora
-  containers by CI's `install-packages` job on every push to `main` (x86_64
-  only; the aarch64 packages are built, not installed). The macOS release
-  binaries and the `.apk` were not run outside CI's smoke step.
+  containers by CI's `install-packages` job on every push to `main`, x86_64 and
+  aarch64 (on an Arm runner). The macOS release binaries and the `.apk` were not
+  run outside CI's smoke step.
