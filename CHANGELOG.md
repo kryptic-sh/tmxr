@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-12
+
 ### Added
 
 - **Window and pane options, as tmux's**: a window can hold its own window
@@ -104,8 +106,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the release was dropped.
 - **Alt+Escape reaches panes and binds on Linux and macOS**: the client read it
   as a plain Escape (crossterm 0.29's input parser), so `M-Escape` binds never
-  matched and programs got one ESC. tmxr builds against a patched crossterm
-  until the fix (crossterm-rs/crossterm#1143) is released. Found by the oracle.
+  matched and programs got one ESC. The release binaries and packages build
+  against a patched crossterm until the fix (crossterm-rs/crossterm#1143) is
+  released; `cargo install tmxr` builds without it. Found by the oracle.
 - **Panes keep their numbers in mirrored layouts**, as tmux's: the main pane
   stays pane 0 though laid out last, and `split-window`, `rotate-window` and
   `swap-pane` then follow tmux's pane list; resurrect restores them so. Found by
@@ -522,7 +525,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   published to GitHub Releases with `.sha256` files, and shell completions and a
   man page from the hidden `tmxr --completions <shell>` and `tmxr --man`.
 
-[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/kryptic-sh/tmxr/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/kryptic-sh/tmxr/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/kryptic-sh/tmxr/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/kryptic-sh/tmxr/compare/v0.2.3...v0.2.4
