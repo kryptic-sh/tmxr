@@ -633,7 +633,6 @@ pub fn restore(srv: &mut Server, size: (u16, u16)) -> Result<Restored, String> {
 pub fn restore_on_start(srv: &mut Server) -> Result<(), String> {
     if let Some(save) = read_last(&dir(&srv.endpoint)?)? {
         let done = apply(srv, &save, (80, 23))?;
-        srv.restored_pending = done.sessions > 0;
         if !done.missing_dirs.is_empty() {
             srv.log_message(format!("resurrect: {}", done.message()));
         }

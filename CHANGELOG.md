@@ -12,6 +12,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   where tmux's turn a dot into `_`. Targets find them: `my.app`, `my.app:1` and
   `my.app:1.0`; a target without `:` that is exactly a session's name is that
   session, any other dotted word still `window.pane`. A `:` is still refused.
+- **A bare `tmxr` opens the session named after the current directory**: `tmxr`
+  in `~/src/my.app` attaches to session `my.app`, or makes it there (tmux makes
+  a numbered session each time). A `:` in the directory's name becomes `_`; `/`
+  and drive roots still get a numbered session.
+- **`new-session -A`**, as tmux's: attach to the session named by `-s` when it
+  exists (even with `-d`), else make it.
+- **`[hooks]` in the config**: tmux's global hooks (`set-hook -g`), each a
+  command or a list run in order, e.g.
+  `session-created = ["new-window -d", "new-window -d"]` for three windows in
+  every new session. An unknown hook name is reported; reloading the config
+  replaces the global hooks.
+
+### Changed
+
+- **The first bare `tmxr` after a restore** attaches to its directory's restored
+  session, or makes that one; it attached to whichever session was restored.
 
 ### Fixed
 

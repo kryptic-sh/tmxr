@@ -21,6 +21,18 @@ pub(super) fn run(
     let pos = a.positional();
     match p.name() {
         "new-session" => {
+            // -A: a session of that name already there is attached instead
+            // (even with -d), as tmux's.
+            if a.has('A')
+                && let Some(name) = a.value('s')
+                && let Some(sid) = srv.sessions.values().find(|s| s.name == name).map(|s| s.id)
+            {
+                match attached_client(srv, ctx) {
+                    Some(c) => srv.switch_client(c, sid),
+                    None => out.attach = Some(sid),
+                }
+                return Ok(true);
+            }
             // -x / -y are the window's size, as tmux's: no status row comes
             // out of them.
             let size = match (a.value('x'), a.value('y')) {

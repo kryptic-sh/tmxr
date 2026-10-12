@@ -57,13 +57,18 @@ listed in [docs/backlog.md](docs/backlog.md).
 ## Using it
 
 ```sh
-tmxr                     # new session (or attach to restored ones)
+tmxr                     # the session named after this directory, made or attached
 tmxr new -s work         # named session
+tmxr new -A -s work      # attach to it if it exists, else make it
 tmxr attach -t work      # attach; `prefix d` detaches
 tmxr ls                  # list sessions
 tmxr -L scratch          # a separate server with its own sessions
 tmxr kill-server
 ```
+
+A bare `tmxr` in `~/src/my.app` opens session `my.app`, attaching to it when it
+is already there, so each project has one session. Session names may hold dots,
+unlike tmux's.
 
 The prefix is `C-b`. Inside a pane, `tmxr <command>` talks to the server that
 pane belongs to (via `$TMXR`), as `tmux` does.
@@ -88,6 +93,14 @@ x = false                                                  # remove a default
 ```
 
 `prefix R` (or `tmxr source-file`) reloads it.
+
+`[hooks]` sets tmux's global hooks, a command or a list of them. For three
+windows in each new session:
+
+```toml
+[hooks]
+session-created = ["new-window -d", "new-window -d"]
+```
 
 The file sets the global values. As in tmux, a window can then hold its own
 window options (`tmxr set -w -t :2 pane-scrollbars on`, or a window option set

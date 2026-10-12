@@ -342,10 +342,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "new-session",
         Some("new"),
-        "dc:e:n:s:x:y:",
+        "Adc:e:n:s:x:y:",
         0,
         ANY,
-        "[-d] [-c start-directory] [-n window-name] [-s session-name] [-x width] [-y height] [command]"
+        "[-Ad] [-c start-directory] [-n window-name] [-s session-name] [-x width] [-y height] [command]"
     ),
     cmd!(
         "new-window",

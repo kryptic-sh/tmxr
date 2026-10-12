@@ -72,6 +72,8 @@ pub struct Config {
     pub options: BTreeMap<String, String>,
     /// key table → key name → bind.
     pub keys: BTreeMap<String, BTreeMap<String, BindEntry>>,
+    /// Global hooks (tmux's `set-hook -g`): hook name → its commands.
+    pub hooks: BTreeMap<String, Vec<String>>,
     /// The global window options. The file keeps them with the rest (and
     /// some under `[status]`); here they are one table, as tmux's.
     pub window: WindowOptions,
@@ -130,6 +132,17 @@ struct File {
     resurrect: Resurrect,
     options: BTreeMap<String, String>,
     keys: BTreeMap<String, BTreeMap<String, BindEntry>>,
+    #[serde(default)]
+    hooks: BTreeMap<String, HookEntry>,
+}
+
+/// A hook in the file: one command, or several run in order (as
+/// `set-hook -a` adds them).
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum HookEntry {
+    One(String),
+    Many(Vec<String>),
 }
 
 impl From<File> for Config {
@@ -210,6 +223,14 @@ impl From<File> for Config {
             resurrect: f.resurrect,
             options: f.options,
             keys: f.keys,
+            hooks: f
+                .hooks
+                .into_iter()
+                .map(|(name, entry)| match entry {
+                    HookEntry::One(cmd) => (name, vec![cmd]),
+                    HookEntry::Many(cmds) => (name, cmds),
+                })
+                .collect(),
         }
     }
 }
@@ -667,6 +688,28 @@ x = false
         assert_eq!(bind(&cfg, "prefix", "|").unwrap().cmd, "split-window -h");
         // Untouched defaults survive the merge.
         assert_eq!(bind(&cfg, "prefix", "h").unwrap().cmd, "select-pane -L");
+    }
+
+    #[test]
+    fn hooks_take_one_command_or_several() {
+        assert!(defaults().hooks.is_empty());
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            r#"
+[hooks]
+session-created = ["new-window -d", "new-window -d"]
+client-attached = "display-message hi"
+"#,
+        )
+        .unwrap();
+        let (cfg, _) = load(Some(&path)).unwrap();
+        assert_eq!(
+            cfg.hooks["session-created"],
+            ["new-window -d", "new-window -d"]
+        );
+        assert_eq!(cfg.hooks["client-attached"], ["display-message hi"]);
     }
 
     #[test]

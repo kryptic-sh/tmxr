@@ -63,9 +63,10 @@ server never touches the main one's:
   hidden window for `WM_ENDSESSION` (logoff, shutdown), which ends it the same
   way and waits up to five seconds for the save.
 - **Auto-restore**: with `resurrect.restore-on-start = true`, a newly started
-  server restores the last save before handling any client. When the restore
-  produced sessions, the first bare `tmxr` attaches instead of creating a new
-  session.
+  server restores the last save before handling any client. A bare `tmxr` then
+  attaches to the restored session named after its directory, as it always does
+  (`new-session -A`); from another directory it makes that directory's session,
+  and the restored ones are in the session picker.
 
 ## Restore rules
 

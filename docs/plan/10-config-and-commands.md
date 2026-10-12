@@ -52,13 +52,20 @@ restore-on-start = true
 
 # Remove a default bind:
 # "x" = false
+
+# Global hooks (set-hook -g): one command or a list, run in order.
+[hooks]
+session-created = ["new-window -d", "new-window -d"]
 ```
 
 Option names are tmux's, so docs and muscle memory carry over. `@user-options`
 are allowed (formats reference them via `#{@name}` / `#{E:@name}`).
 
 `source-file` (and `prefix R`) re-reads the file and applies it to the running
-server.
+server. `[hooks]` names are checked against the hooks tmxr fires
+(`hooks::known`); an unknown one is reported and left out. Its hooks are the
+global table, replaced on reload as the binds are, so a `set-hook -g` made at
+run time lasts until then.
 
 ### Option scopes
 

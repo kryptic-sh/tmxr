@@ -51,7 +51,6 @@ impl Server {
             mouse: false,
             pan: None,
         });
-        self.restored_pending = false;
         self.send(id, ServerMsg::Attached);
         self.touch_session(session);
         self.size_session(session);

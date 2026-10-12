@@ -144,9 +144,6 @@ pub struct Server {
     last_status: Instant,
     /// Per-pane foreground command cache refreshed on the status interval.
     pub commands: HashMap<PaneId, String>,
-    /// Sessions were restored at start-up and no client has attached yet: a
-    /// bare `tmxr` attaches to them instead of creating a new session.
-    pub restored_pending: bool,
     /// The marked pane (`select-pane -m`): the default source of
     /// `join-pane`, `swap-pane` and `swap-window`. Read it through
     /// [`Server::marked_pane`], which forgets a pane that has closed.
@@ -224,6 +221,8 @@ impl Server {
                 None
             }
         };
+        let (hooks, hook_errors) = crate::hooks::from_config(&cfg);
+        key_errors.extend(hook_errors);
         let mut srv = Self {
             endpoint,
             pid: std::process::id(),
@@ -250,7 +249,6 @@ impl Server {
             exiting: false,
             last_status: Instant::now(),
             commands: HashMap::new(),
-            restored_pending: false,
             marked: None,
             global_env: Environment::default(),
             prompt_history: BTreeMap::new(),
@@ -259,7 +257,7 @@ impl Server {
             owner: String::new(),
             acl: crate::access::SharedAcl::default(),
             socket_access: tmxr_proto::socket::Access::Owner,
-            hooks: crate::hooks::HookTable::new(),
+            hooks,
             pending_hooks: Vec::new(),
             in_hook: false,
             last_save: Instant::now(),
@@ -462,10 +460,9 @@ impl Server {
                     self.finish_command(id, Outcome::error("no hello".into()));
                     return;
                 }
-                let argv = if argv.is_empty() && std::mem::take(&mut self.restored_pending) {
-                    vec!["attach-session".to_owned()]
-                } else if argv.is_empty() {
-                    vec!["new-session".to_owned()]
+                let argv = if argv.is_empty() {
+                    let hello = self.clients.get(&id).and_then(|c| c.hello.as_ref());
+                    bare_command(hello.map_or("", |h| h.cwd.as_str()))
                 } else {
                     argv
                 };
@@ -839,6 +836,10 @@ impl Server {
                 None
             }
         };
+        // The config's hooks replace the global ones, as its binds do.
+        let (hooks, hook_errors) = crate::hooks::from_config(&cfg);
+        errors.extend(hook_errors);
+        self.hooks = hooks;
         self.keys = keys;
         self.cfg = cfg;
         self.apply_rgb_colour();
@@ -848,6 +849,22 @@ impl Server {
         } else {
             Err(errors.join("; "))
         }
+    }
+}
+
+/// What a bare `tmxr` runs: the session named after the directory it was
+/// run in, attached if it is there already (`new-session -A -s <name>`), as
+/// the owner's `t` script did with tmux. A `:` in the name, which a session
+/// name cannot hold, becomes `_`; a directory without a name (`/`, `C:\`)
+/// gets tmux's numbered session.
+pub fn bare_command(cwd: &str) -> Vec<String> {
+    let name = std::path::Path::new(cwd)
+        .file_name()
+        .map(|n| n.to_string_lossy().replace(':', "_"))
+        .filter(|n| !n.is_empty());
+    match name {
+        Some(name) => vec!["new-session".into(), "-A".into(), "-s".into(), name],
+        None => vec!["new-session".into()],
     }
 }
 
@@ -861,6 +878,19 @@ pub enum SplitSize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_bare_tmxr_opens_the_session_named_after_its_directory() {
+        let cmd = |cwd: &str| bare_command(cwd).join(" ");
+        assert_eq!(cmd("/home/me/my.app"), "new-session -A -s my.app");
+        assert_eq!(cmd("/home/me/a:b"), "new-session -A -s a_b");
+        assert_eq!(cmd("/"), "new-session");
+        assert_eq!(cmd(""), "new-session");
+        if cfg!(windows) {
+            assert_eq!(cmd(r"C:\Users\me\tmxr"), "new-session -A -s tmxr");
+            assert_eq!(cmd(r"C:\"), "new-session");
+        }
+    }
 
     #[test]
     fn navigator_pattern_matches_whole_names_and_reports_errors() {

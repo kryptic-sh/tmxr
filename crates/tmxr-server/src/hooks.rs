@@ -37,6 +37,21 @@ pub fn known(name: &str) -> bool {
             .is_some_and(|cmd| tmxr_command::lookup(cmd).is_ok_and(|c| c.name == cmd))
 }
 
+/// The global hooks the config's `[hooks]` sets, and an error for each name
+/// tmxr does not fire (that one is left out).
+pub fn from_config(cfg: &tmxr_config::Config) -> (HookTable, Vec<String>) {
+    let mut errors = Vec::new();
+    let mut table = HookTable::new();
+    for (name, commands) in &cfg.hooks {
+        if known(name) {
+            table.insert(name.clone(), commands.clone());
+        } else {
+            errors.push(format!("hooks.{name}: unknown hook"));
+        }
+    }
+    (table, errors)
+}
+
 /// Where an event happened, as far as it is known: whose hooks apply.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct HookScope {
@@ -98,5 +113,29 @@ impl Server {
                 self.in_hook = false;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn config_hooks_are_global_and_unknown_names_are_errors() {
+        let mut cfg = tmxr_config::defaults();
+        cfg.hooks
+            .insert("session-created".into(), vec!["new-window -d".into()]);
+        cfg.hooks.insert(
+            "after-split-window".into(),
+            vec!["select-layout tiled".into()],
+        );
+        cfg.hooks
+            .insert("no-such-hook".into(), vec!["kill-server".into()]);
+        let (table, errors) = from_config(&cfg);
+        assert_eq!(
+            table.keys().map(String::as_str).collect::<Vec<_>>(),
+            ["after-split-window", "session-created"]
+        );
+        assert_eq!(errors, ["hooks.no-such-hook: unknown hook"]);
     }
 }

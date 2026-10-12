@@ -172,6 +172,9 @@ table. What has been verified, and how:
   `navigator_passes_keys_to_hjkl_and_moves_otherwise` checks that focus stays
   put while hjkl is in front, not which bytes reach the program, so C-h / C-j /
   C-k reaching an editor is not checked end to end.
+- **`new-session -A` without tmux's `-D`, `-X`, `-E` and `-f`** (2026-10-12):
+  attaching through `-A` cannot detach the session's other clients or set client
+  flags as tmux's does; `attach-session -d` can. Not asked for.
 - **`display-message -t` with a target that does not resolve** shows pane `%0`
   (`target::pane(...).unwrap_or((0, 0, 0))` in `cmds/prompt.rs`), where tmux
   fails with `can't find pane: …`. Found 2026-10-12 while testing dotted session

@@ -5,7 +5,7 @@
 //! nothing touches a running server or the user's config and saved sessions.
 
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -166,6 +166,11 @@ impl Tmxr {
         self.spawn_env(env!("CARGO_BIN_EXE_tmxr"), &self.args(rest), vars)
     }
 
+    /// [`Tmxr::attach`] run in directory `cwd`.
+    fn attach_in(&self, cwd: &Path, rest: &[&str]) -> Screen {
+        self.spawn_at(cwd, env!("CARGO_BIN_EXE_tmxr"), &self.args(rest), &[])
+    }
+
     /// Start `program` in a pseudo-terminal with the test's environment.
     fn spawn(&self, program: &str, args: &[String]) -> Screen {
         self.spawn_env(program, args, &[])
@@ -173,6 +178,17 @@ impl Tmxr {
 
     /// [`Tmxr::spawn`] with variables set or removed, as [`Tmxr::attach_env`].
     fn spawn_env(&self, program: &str, args: &[String], vars: &[(&str, Option<&str>)]) -> Screen {
+        self.spawn_at(self.dir.path(), program, args, vars)
+    }
+
+    /// [`Tmxr::spawn_env`] in directory `cwd`.
+    fn spawn_at(
+        &self,
+        cwd: &Path,
+        program: &str,
+        args: &[String],
+        vars: &[(&str, Option<&str>)],
+    ) -> Screen {
         let pair = native_pty_system()
             .openpty(PtySize {
                 rows: ROWS,
@@ -192,7 +208,7 @@ impl Tmxr {
                 None => cmd.env_remove(k),
             }
         }
-        cmd.cwd(self.dir.path());
+        cmd.cwd(cwd);
         let child = pair.slave.spawn_command(cmd).unwrap();
         drop(pair.slave);
         let mut reader = pair.master.try_clone_reader().unwrap();
@@ -486,6 +502,101 @@ fn session_names_may_hold_dots() {
     let bad = t.output(&["rename-session", "-t", "v1.2.3", "a:b"]);
     assert!(!bad.status.success());
     assert!(String::from_utf8_lossy(&bad.stderr).contains("bad session name: a:b"));
+}
+
+#[test]
+fn a_bare_tmxr_opens_its_directorys_session() {
+    let t = Tmxr::new("bare");
+    let proj = t.dir.path().join("my.proj");
+    std::fs::create_dir(&proj).unwrap();
+    let mut s = t.attach_in(&proj, &[]);
+    s.wait_for("status line", |text| text.contains("my.proj"));
+    t.wait_prompt("my.proj");
+    s.send(b"echo bare-marker\r");
+    s.wait_for("echoed marker", |text| {
+        text.matches("bare-marker").count() >= 2
+    });
+    let path = t.run(&["display", "-p", "-t", "my.proj", "#{pane_current_path}"]);
+    assert!(path.trim().ends_with("my.proj"), "{path}");
+    s.send(PREFIX);
+    s.send(b"d");
+    s.wait_exit();
+
+    // Again from there: the same session, attached, not a second one.
+    let s = t.attach_in(&proj, &[]);
+    s.wait_for("the session's output", |text| text.contains("bare-marker"));
+    assert_eq!(t.run(&["ls", "-F", "#S"]).trim(), "my.proj");
+    // `new-session -A` attaches to it too; without -A the name is taken.
+    let s_a = t.attach(&["new-session", "-A", "-s", "my.proj"]);
+    s_a.wait_for("the session's output", |text| text.contains("bare-marker"));
+    assert_eq!(t.run(&["ls", "-F", "#S"]).trim(), "my.proj");
+    let again = t.output(&["new-session", "-d", "-s", "my.proj"]);
+    assert!(
+        String::from_utf8_lossy(&again.stderr).contains("duplicate session: my.proj"),
+        "{again:?}"
+    );
+
+    // Another directory gets its own session.
+    let other = t.dir.path().join("other");
+    std::fs::create_dir(&other).unwrap();
+    let s2 = t.attach_in(&other, &[]);
+    s2.wait_for("status line", |text| text.contains("other"));
+    t.wait_run(&["ls", "-F", "#S"], "two sessions", |o| {
+        o.lines().collect::<Vec<_>>() == ["my.proj", "other"]
+    });
+    drop((s, s_a));
+}
+
+/// The owner's `t` script: a session per directory with three windows,
+/// window 0 in front, made by a bare `tmxr` and a `[hooks]` config entry.
+#[test]
+fn a_session_created_hook_from_the_config_adds_windows() {
+    let t = Tmxr::new("hookcfg");
+    let mut config = std::fs::read_to_string(&t.config).unwrap();
+    config.push_str(
+        "[hooks]
+session-created = [\"new-window -d\", \"new-window -d\"]
+",
+    );
+    std::fs::write(&t.config, config).unwrap();
+    let proj = t.dir.path().join("proj");
+    std::fs::create_dir(&proj).unwrap();
+    let mut s = t.attach_in(&proj, &[]);
+    s.wait_for("status line", |text| text.contains("proj"));
+    let windows = |t: &Tmxr| {
+        t.run(&[
+            "list-windows",
+            "-t",
+            "proj",
+            "-F",
+            "#{window_index}#{?window_active,*,}",
+        ])
+    };
+    t.wait_run(
+        &["list-windows", "-t", "proj", "-F", "#{window_index}"],
+        "three windows",
+        |o| o.lines().count() == 3,
+    );
+    assert_eq!(
+        windows(&t).split_whitespace().collect::<Vec<_>>(),
+        ["0*", "1", "2"]
+    );
+    t.wait_prompt("proj:2");
+    let path = t.run(&["display", "-p", "-t", "proj:2", "#{pane_current_path}"]);
+    assert!(path.trim().ends_with("proj"), "{path}");
+    assert_eq!(
+        t.run(&["show-hooks", "-g"]).trim(),
+        "session-created[0] new-window -d
+session-created[1] new-window -d"
+    );
+
+    // Attaching again runs no hook: still three windows.
+    s.send(PREFIX);
+    s.send(b"d");
+    s.wait_exit();
+    let s = t.attach_in(&proj, &[]);
+    s.wait_for("status line", |text| text.contains("proj"));
+    assert_eq!(windows(&t).lines().count(), 3);
 }
 
 #[test]
