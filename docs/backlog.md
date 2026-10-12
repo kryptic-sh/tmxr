@@ -155,6 +155,15 @@ table. What has been verified, and how:
     setting command in the prompt, not tmux's tree with `d` / `u` keys: the
     owner chose hjkl-style pickers, where typing always filters, so letter keys
     cannot be commands. Its `-f` is a text query, not a format filter.
+  - Session names may hold dots (asked for 2026-10-12): tmux 3.6 turns a dot in
+    `new-session -s` / `rename-session` into `_`. A target without `:` that
+    exactly names a dotted session is that session (`target::names_session`); to
+    mean window `a`, pane `b` of the current session while a session is named
+    `a.b`, write `:a.b`.
+- **`display-message -t` with a target that does not resolve** shows pane `%0`
+  (`target::pane(...).unwrap_or((0, 0, 0))` in `cmds/prompt.rs`), where tmux
+  fails with `can't find pane: …`. Found 2026-10-12 while testing dotted session
+  names; not fixed (out of that change's scope).
 - **tmux default binds**: most of tmux's defaults are bound (see above);
   `prefix C-z` (suspend-client) errors on Windows, which has no job control.
   Alerts follow tmux 3.6's, as recorded from a running tmux on 2026-10-10 (WSL

@@ -36,6 +36,12 @@ lives in `tmxr-server::target` with the client's current session/window/pane as
 the default — a command client inherits the pane from `TMXR_PANE`, so
 `tmxr select-pane -L` run inside a pane acts on _that_ pane's window.
 
+Session names may hold dots, which tmux's may not (`new-session -s my.app`; tmux
+turns the dot into `_`). Only `:` is refused, as it ends the session part. So a
+pane's `.` is looked for after the `:` (`my.app:1.0`), and a target without `:`
+that is exactly a session's name (`my.app`, `=my.app`) is that session rather
+than window `my`, pane `app`; any other dotted word is still `window.pane`.
+
 ## Layout
 
 Each window's pane arrangement is an `hjkl_layout::LayoutTree` (binary splits

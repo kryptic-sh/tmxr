@@ -456,6 +456,39 @@ fn command_clients_start_and_stop_a_server() {
 }
 
 #[test]
+fn session_names_may_hold_dots() {
+    let t = Tmxr::new("dots");
+    // Pane %0 is elsewhere: display-message falls back to it on a bad -t.
+    t.run(&["new-session", "-d", "-s", "first", "-n", "elsewhere"]);
+    t.run(&["new-session", "-d", "-s", "my.app", "-n", "zero"]);
+    t.run(&["new-window", "-d", "-t", "my.app", "-n", "one"]);
+    t.run(&["split-window", "-d", "-t", "my.app:1"]);
+    let name = |target: &str| {
+        let out = t.output(&["display", "-p", "-t", target, "#S #W #P"]);
+        assert!(out.status.success(), "{target}: {out:?}");
+        String::from_utf8_lossy(&out.stdout).trim().to_owned()
+    };
+    // Exactly a session's name, without ':', is that session; after the
+    // ':', the window and pane parts are as ever.
+    assert_eq!(name("my.app"), "my.app zero 0");
+    assert_eq!(name("=my.app"), "my.app zero 0");
+    assert_eq!(name("my.app:"), "my.app zero 0");
+    assert_eq!(name("my.app:1"), "my.app one 0");
+    assert_eq!(name("my.app:1.1"), "my.app one 1");
+    assert_eq!(name("my.app:one.1"), "my.app one 1");
+    assert!(t.output(&["has-session", "-t", "my.app"]).status.success());
+    // A dotted word naming no session is still window.pane.
+    // (my.app is the current session, as the newest.)
+    assert_eq!(name("one.1"), "my.app one 1");
+
+    t.run(&["rename-session", "-t", "my.app", "v1.2.3"]);
+    assert!(t.run(&["ls", "-F", "#S"]).lines().any(|l| l == "v1.2.3"));
+    let bad = t.output(&["rename-session", "-t", "v1.2.3", "a:b"]);
+    assert!(!bad.status.success());
+    assert!(String::from_utf8_lossy(&bad.stderr).contains("bad session name: a:b"));
+}
+
+#[test]
 fn session_picker_switches_by_enter_filter_and_jk() {
     let t = Tmxr::new("picker");
     t.run(&["new-session", "-d", "-s", "alpha"]);

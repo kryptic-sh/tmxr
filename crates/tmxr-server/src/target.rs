@@ -1,6 +1,8 @@
 //! Resolving `-t` targets: `session:window.pane`.
 //!
-//! Sessions: `$id`, exact name, unique name prefix. Windows: `@id`, index
+//! Sessions: `$id`, exact name, unique name prefix. A session name may hold
+//! dots (tmux's may not): a target without `:` that is exactly a session's
+//! name means that session, not `window.pane`. Windows: `@id`, index
 //! (`N` or `=N`), `+`/`-` (next/previous, optionally `+N`), `!` / `{last}`,
 //! `^` / `{start}`, `$` / `{end}`, name or name prefix. Panes: `%id`, index,
 //! `+`/`-`, `!` / `{last}`, `{left}`/`{right}`/`{up}`/`{down}`. Any part may be
@@ -62,6 +64,21 @@ pub fn session(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<SessionId> {
         None => current_session(srv, ctx).ok_or_else(|| "no current session".into()),
         Some(s) => find_session(srv, s),
     }
+}
+
+/// A session name `new-session -s` and `rename-session` accept: not empty
+/// and without `:`, which ends a target's session part. Dots are allowed.
+pub fn check_session_name(name: &str) -> Res<()> {
+    if name.is_empty() || name.contains(':') {
+        return Err(format!("bad session name: {name}"));
+    }
+    Ok(())
+}
+
+/// Whether a target without `:` is exactly a session's name (`=` optional).
+fn names_session(srv: &Server, spec: &str) -> bool {
+    let name = spec.strip_prefix('=').unwrap_or(spec);
+    srv.sessions.values().any(|s| s.name == name)
 }
 
 fn find_session(srv: &Server, name: &str) -> Res<SessionId> {
@@ -153,6 +170,14 @@ pub fn window(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, u3
     let sid = match sess {
         Some(s) if !s.is_empty() => find_session(srv, s)?,
         _ => {
+            // A dotted word with no ':' that names a session is that
+            // session, not `window.pane`.
+            if sess.is_none() && rest.contains('.') && names_session(srv, rest) {
+                let s = find_session(srv, rest)?;
+                let sess = &srv.sessions[&s];
+                let wid = sess.current_window().ok_or("session has no windows")?;
+                return Ok((s, sess.current, wid));
+            }
             // A bare word with no ':' may name a session rather than a window.
             if sess.is_none() && !win_spec.is_empty() && !rest.contains('.') {
                 let cur = current_session(srv, ctx);
@@ -284,7 +309,8 @@ pub fn pane(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, Wind
         return Ok((sid, wid, pid));
     }
     // `window.pane`, `session:window.pane`, a bare pane spec, or — like tmux
-    // — a bare window or session name meaning its active pane.
+    // — a bare window or session name meaning its active pane. The pane's
+    // `.` is looked for after the `:`, as the session name may hold dots.
     let pane_token = |p: &str| {
         p.chars().all(|c| c.is_ascii_digit())
             || matches!(
@@ -300,10 +326,17 @@ pub fn pane(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, Wind
                     | "{down}"
             )
     };
-    let (win_part, pane_part) = match spec.rsplit_once('.') {
-        Some((w, p)) => (Some(w), p),
-        None if spec.contains(':') || !pane_token(spec) => (Some(spec), ""),
-        None => (None, spec),
+    let (win_part, pane_part) = match spec.split_once(':') {
+        Some((sess, rest)) => match rest.rsplit_once('.') {
+            Some((w, p)) => (Some(&spec[..sess.len() + 1 + w.len()]), p),
+            None => (Some(spec), ""),
+        },
+        None if names_session(srv, spec) => (Some(spec), ""),
+        None => match spec.rsplit_once('.') {
+            Some((w, p)) => (Some(w), p),
+            None if !pane_token(spec) => (Some(spec), ""),
+            None => (None, spec),
+        },
     };
     let (sid, _, wid) = match win_part {
         Some(w) => window(srv, ctx, Some(w))?,

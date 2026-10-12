@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Session names may hold dots** (`new-session -s my.app`, `rename-session`),
+  where tmux's turn a dot into `_`. Targets find them: `my.app`, `my.app:1` and
+  `my.app:1.0`; a target without `:` that is exactly a session's name is that
+  session, any other dotted word still `window.pane`. A `:` is still refused.
+
 ## [0.5.0] - 2026-10-12
 
 ### Added

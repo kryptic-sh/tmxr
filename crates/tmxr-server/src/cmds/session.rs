@@ -224,9 +224,7 @@ pub(super) fn run(
         "rename-session" => {
             let sid = target::session(srv, ctx, a.value('t'))?;
             let name = &pos[0];
-            if name.is_empty() || name.contains([':', '.']) {
-                return Err(format!("bad session name: {name}"));
-            }
+            target::check_session_name(name)?;
             if srv
                 .sessions
                 .values()

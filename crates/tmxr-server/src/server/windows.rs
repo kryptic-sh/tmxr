@@ -38,10 +38,10 @@ impl Server {
             Some(n) if self.sessions.values().any(|s| s.name == n) => {
                 return Err(format!("duplicate session: {n}"));
             }
-            Some(n) if n.is_empty() || n.contains([':', '.']) => {
-                return Err(format!("bad session name: {n}"));
+            Some(n) => {
+                crate::target::check_session_name(&n)?;
+                n
             }
-            Some(n) => n,
             None => self.next_session_name(),
         };
         let id = self.alloc_session_id();
