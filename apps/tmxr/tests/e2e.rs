@@ -4096,17 +4096,28 @@ fn menu_and_popup_options_set_their_look() {
         "Only",
         "o",
         "rename-window only",
+        "Next",
+        "n",
+        "rename-window next",
     ]);
     s.wait_for("the simple menu", |text| text.contains("+-Opts"));
-    let corner = (0..ROWS)
-        .flat_map(|r| s.row_cells(r))
-        .find(|(c, _, _)| c == "+")
-        .expect("a corner");
+    // The first cell of `text` on the screen, so a capital letter elsewhere
+    // (a prompt, a title) is not taken for the menu's.
+    let cell_of = |text: &str| {
+        let n = text.chars().count();
+        (0..ROWS)
+            .find_map(|r| {
+                s.row_cells(r)
+                    .windows(n)
+                    .find(|w| w.iter().map(|(c, _, _)| c.as_str()).collect::<String>() == text)
+                    .map(|w| w[0].clone())
+            })
+            .unwrap_or_else(|| panic!("{text} on the screen"))
+    };
+    let corner = cell_of("+-Opts");
     assert_eq!(corner.1, "Idx(2)", "menu-border-style: {corner:?}");
-    let item = (0..ROWS)
-        .flat_map(|r| s.row_cells(r))
-        .find(|(c, _, _)| c == "O")
-        .expect("the item");
+    // The first item is selected; the second has menu-style.
+    let item = cell_of("Next");
     assert_eq!(item.2, "Idx(1)", "menu-style: {item:?}");
     s.send(b"\x1b");
     s.wait_for("the menu closed", |text| !text.contains("+-Opts"));
