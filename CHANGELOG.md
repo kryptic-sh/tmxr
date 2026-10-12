@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-12
+
 ### Added
 
 - **Session names may hold dots** (`new-session -s my.app`, `rename-session`),
@@ -555,7 +557,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   published to GitHub Releases with `.sha256` files, and shell completions and a
   man page from the hidden `tmxr --completions <shell>` and `tmxr --man`.
 
-[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/kryptic-sh/tmxr/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/kryptic-sh/tmxr/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/kryptic-sh/tmxr/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/kryptic-sh/tmxr/compare/v0.2.4...v0.3.0
