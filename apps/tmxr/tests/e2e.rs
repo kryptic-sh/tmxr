@@ -797,6 +797,150 @@ fn fixture_program(t: &Tmxr, name: &str) -> Vec<String> {
     }
 }
 
+/// Make session `nav` a 3×3 grid, panes 0 to 8 in rows from the top left,
+/// so each direction from the middle reaches a different pane.
+fn pane_grid(t: &Tmxr) {
+    for _ in 0..8 {
+        t.run(&["split-window", "-t", "nav"]);
+        t.run(&["select-layout", "-t", "nav", "tiled"]);
+    }
+    let mut cells: Vec<(u32, u32, String)> = t
+        .run(&[
+            "list-panes",
+            "-t",
+            "nav",
+            "-F",
+            "#{pane_top} #{pane_left} #{pane_index}",
+        ])
+        .lines()
+        .map(|l| {
+            let f: Vec<&str> = l.split(' ').collect();
+            (
+                f[0].parse().unwrap(),
+                f[1].parse().unwrap(),
+                f[2].to_owned(),
+            )
+        })
+        .collect();
+    cells.sort();
+    let order: Vec<&str> = cells.iter().map(|c| c.2.as_str()).collect();
+    assert_eq!(order, ["0", "1", "2", "3", "4", "5", "6", "7", "8"]);
+}
+
+/// Press `keys` (h, j, k and l, as the terminal sends them) in the grid of
+/// [`pane_grid`]: each direction out of the middle and back, then off each
+/// edge, which wraps to the far side as tmux's does.
+fn round_the_grid(t: &Tmxr, s: &Screen, form: &str, keys: [&[u8]; 4]) {
+    let [h, j, k, l] = keys;
+    t.run(&["select-pane", "-t", "nav:0.4"]);
+    for (key, name, want) in [
+        (l, "l", "5"),
+        (h, "h", "4"),
+        (h, "h", "3"),
+        (l, "l", "4"),
+        (j, "j", "7"),
+        (k, "k", "4"),
+        (k, "k", "1"),
+        (j, "j", "4"),
+        // Off an edge: 3 h wraps to 5, 5 l to 3, 1 k to 7, 7 j to 1.
+        (h, "h", "3"),
+        (h, "h", "5"),
+        (l, "l", "3"),
+        (l, "l", "4"),
+        (k, "k", "1"),
+        (k, "k", "7"),
+        (j, "j", "1"),
+    ] {
+        s.send(key);
+        t.wait_run(
+            &["display-message", "-p", "-t", "nav", "#{pane_index}"],
+            &format!("{form}{name} to pane {want}"),
+            |o| o.trim() == want,
+        );
+    }
+}
+
+/// C-h / C-j / C-k / C-l as a terminal without kitty keys sends them.
+const CTRL_HJKL_BYTES: [&[u8]; 4] = [b"\x08", b"\x0a", b"\x0b", b"\x0c"];
+
+#[test]
+fn ctrl_hjkl_prefix_hjkl_and_arrows_move_between_panes() {
+    let t = Tmxr::new("move");
+    // Keys come as bytes here, not as Windows Terminal's key events.
+    let s = t.attach_env(&["new", "-s", "nav"], &[("WT_SESSION", None)]);
+    s.wait_for("status line", |text| text.contains("nav"));
+    pane_grid(&t);
+    // The root table's C-h/j/k/l (navigate-pane, a shell in front).
+    round_the_grid(&t, &s, "C-", CTRL_HJKL_BYTES);
+    // tmux's kitty keys (`CSI codepoint;5u`); ConPTY does not pass these.
+    if cfg!(unix) {
+        round_the_grid(
+            &t,
+            &s,
+            "kitty C-",
+            [
+                b"\x1b[104;5u",
+                b"\x1b[106;5u",
+                b"\x1b[107;5u",
+                b"\x1b[108;5u",
+            ],
+        );
+    }
+    round_the_grid(&t, &s, "prefix ", [b"\x02h", b"\x02j", b"\x02k", b"\x02l"]);
+    round_the_grid(
+        &t,
+        &s,
+        "prefix arrow ",
+        [b"\x02\x1b[D", b"\x02\x1b[B", b"\x02\x1b[A", b"\x02\x1b[C"],
+    );
+    // copy-mode-vi's C-h/j/k/l leave copy mode for the pane they focus.
+    for (key, name, from, want) in [
+        (CTRL_HJKL_BYTES[0], "h", "4", "3"),
+        (CTRL_HJKL_BYTES[1], "j", "4", "7"),
+        (CTRL_HJKL_BYTES[2], "k", "4", "1"),
+        (CTRL_HJKL_BYTES[3], "l", "4", "5"),
+    ] {
+        t.run(&["select-pane", "-t", &format!("nav:0.{from}")]);
+        t.run(&["copy-mode", "-t", &format!("nav:0.{from}")]);
+        t.wait_run(
+            &["display-message", "-p", "-t", "nav", "#{pane_in_mode}"],
+            "copy mode",
+            |o| o.trim() == "1",
+        );
+        s.send(key);
+        t.wait_run(
+            &["display-message", "-p", "-t", "nav", "#{pane_index}"],
+            &format!("copy mode C-{name} to pane {want}"),
+            |o| o.trim() == want,
+        );
+    }
+}
+
+/// Windows Terminal sends keys as win32-input-mode events, not bytes, and
+/// sets `WT_SESSION`: C-j and C-h come as themselves.
+#[cfg(windows)]
+#[test]
+fn ctrl_hjkl_move_between_panes_in_windows_terminal() {
+    let t = Tmxr::new("move-wt");
+    let s = t.attach_env(&["new", "-s", "nav"], &[("WT_SESSION", Some("e2e"))]);
+    s.wait_for("status line", |text| text.contains("nav"));
+    pane_grid(&t);
+    // `CSI Vk;Sc;Uc;Kd;Cs;Rc _`, down then up, with left Ctrl (8) held.
+    let win32 = |vk: u8, uc: u8| format!("\x1b[{vk};0;{uc};1;8;1_\x1b[{vk};0;{uc};0;8;1_");
+    let keys = [win32(72, 8), win32(74, 10), win32(75, 11), win32(76, 12)];
+    let [h, j, k, l] = keys.each_ref().map(|k| k.as_bytes());
+    round_the_grid(&t, &s, "win32 C-", [h, j, k, l]);
+    // Its Ctrl+Enter and Ctrl+Backspace are keys of their own here.
+    for (key, name, event) in [
+        ("C-Enter", "enter", win32(13, 10)),
+        ("C-BSpace", "bspace", win32(8, 0x7f)),
+    ] {
+        t.run(&["bind", "-n", key, &format!("set -g @hit {name}")]);
+        s.send(event.as_bytes());
+        t.wait_run(&["show", "-gv", "@hit"], key, |o| o.trim() == name);
+    }
+}
+
 #[test]
 fn navigator_passes_keys_to_hjkl_and_moves_otherwise() {
     for (name, passes_through) in [("hjkl", true), ("plainprog", false)] {

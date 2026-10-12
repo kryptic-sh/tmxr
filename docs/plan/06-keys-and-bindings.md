@@ -164,6 +164,13 @@ process name from [04](04-panes-and-terminal.md#process-inspection).
 `@tmux_navigator_disable_when_zoomed` is honoured as
 `navigator-disable-when-zoomed` (default off).
 
+**Keys on Windows.** A terminal that sends keys as bytes (Alacritty, VS Code's
+terminal) goes through the Windows console, which reports C-j (0x0a) as
+Ctrl+Enter and C-h (0x08) as Ctrl+Backspace. The client reads those two chords
+back as C-j and C-h (`terminal::console_key`), unless `WT_SESSION` says the
+terminal is Windows Terminal, whose win32-input-mode sends real key events, so
+its Ctrl+Enter and Ctrl+Backspace stay keys of their own.
+
 **Editor side.** When vim/hjkl is at the edge of its own splits it must hand the
 move back:
 

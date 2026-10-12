@@ -7,8 +7,8 @@ use std::time::Duration;
 
 use crossterm::event::{
     DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
-    EnableFocusChange, EnableMouseCapture, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
-    PushKeyboardEnhancementFlags,
+    EnableFocusChange, EnableMouseCapture, Event, KeyCode, KeyModifiers, KeyboardEnhancementFlags,
+    PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
 };
 use crossterm::execute;
 use crossterm::terminal::{
@@ -128,6 +128,33 @@ impl Input {
     }
 }
 
+/// Whether keys reach this client as the bytes a terminal sends, which the
+/// Windows console turns into key events (ConPTY behind Alacritty, VS Code's
+/// terminal, …), rather than as key events from the terminal itself
+/// (Windows Terminal's win32-input-mode; it sets `WT_SESSION`). Unix reads
+/// the bytes itself.
+fn keys_from_console_bytes() -> bool {
+    cfg!(windows) && std::env::var_os("WT_SESSION").is_none()
+}
+
+/// The key a terminal meant when the console turned its byte into another:
+/// it reports C-j (0x0a) as Ctrl+Enter and C-h (0x08) as Ctrl+Backspace, so
+/// binds for C-j and C-h never matched. Read them as tmux reads those bytes.
+/// A terminal sending bytes cannot send those two chords another way.
+fn console_key(ev: Event) -> Event {
+    match ev {
+        Event::Key(mut k) if k.modifiers.contains(KeyModifiers::CONTROL) => {
+            match k.code {
+                KeyCode::Enter => k.code = KeyCode::Char('j'),
+                KeyCode::Backspace => k.code = KeyCode::Char('h'),
+                _ => {}
+            }
+            Event::Key(k)
+        }
+        ev => ev,
+    }
+}
+
 /// Forward terminal events to the server until either side goes away.
 pub fn spawn_input(send: Arc<Mutex<SendHalf>>) -> Input {
     let input = Input {
@@ -135,6 +162,7 @@ pub fn spawn_input(send: Arc<Mutex<SendHalf>>) -> Input {
         gate: Arc::new(Mutex::new(())),
     };
     let (paused, gate) = (Arc::clone(&input.paused), Arc::clone(&input.gate));
+    let console_bytes = keys_from_console_bytes();
     let _ = std::thread::Builder::new()
         .name("tmxr-input".into())
         .spawn(move || {
@@ -149,9 +177,12 @@ pub fn spawn_input(send: Arc<Mutex<SendHalf>>) -> Input {
                     Ok(false) => continue,
                     Err(_) => break,
                 }
-                let Ok(ev) = crossterm::event::read() else {
+                let Ok(mut ev) = crossterm::event::read() else {
                     break;
                 };
+                if console_bytes {
+                    ev = console_key(ev);
+                }
                 let Ok(mut send) = send.lock() else { break };
                 if write_msg(&mut *send, &ClientMsg::Input(ev)).is_err() {
                     break;
@@ -205,4 +236,41 @@ pub fn suspend() -> io::Result<()> {
     Err(io::Error::other(
         "suspend-client is not supported on Windows",
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::KeyEvent;
+
+    fn key(code: KeyCode, mods: KeyModifiers) -> Event {
+        Event::Key(KeyEvent::new(code, mods))
+    }
+
+    #[test]
+    fn console_bytes_for_c_j_and_c_h_are_read_as_those_keys() {
+        let ctrl = KeyModifiers::CONTROL;
+        let ctrl_alt = KeyModifiers::CONTROL | KeyModifiers::ALT;
+        for (from, to) in [
+            (key(KeyCode::Enter, ctrl), key(KeyCode::Char('j'), ctrl)),
+            (key(KeyCode::Backspace, ctrl), key(KeyCode::Char('h'), ctrl)),
+            (
+                key(KeyCode::Enter, ctrl_alt),
+                key(KeyCode::Char('j'), ctrl_alt),
+            ),
+            // Enter, Backspace and the other chords are left alone.
+            (
+                key(KeyCode::Enter, KeyModifiers::NONE),
+                key(KeyCode::Enter, KeyModifiers::NONE),
+            ),
+            (
+                key(KeyCode::Backspace, KeyModifiers::NONE),
+                key(KeyCode::Backspace, KeyModifiers::NONE),
+            ),
+            (key(KeyCode::Char('k'), ctrl), key(KeyCode::Char('k'), ctrl)),
+            (Event::FocusGained, Event::FocusGained),
+        ] {
+            assert_eq!(console_key(from.clone()), to, "{from:?}");
+        }
+    }
 }

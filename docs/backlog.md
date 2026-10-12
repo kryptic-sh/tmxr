@@ -160,6 +160,18 @@ table. What has been verified, and how:
     exactly names a dotted session is that session (`target::names_session`); to
     mean window `a`, pane `b` of the current session while a session is named
     `a.b`, write `:a.b`.
+- **Ctrl+Enter / Ctrl+Backspace on Windows outside Windows Terminal** become C-j
+  / C-h (`terminal::console_key`, 2026-10-12): the console reports the bytes a
+  terminal sends for C-j and C-h as those chords, so they cannot be told apart.
+  Whether keys come as bytes is guessed from `WT_SESSION`, so a terminal started
+  from a Windows Terminal shell inherits it and keeps C-j / C-h broken. Checked
+  through ConPTY in the e2e tests (raw bytes and win32-input-mode events); not
+  tried by hand in Alacritty or VS Code. Fixing it at the source needs the key
+  event's character, which crossterm drops for Enter and Backspace.
+- **Navigator pass-through is tested with C-l only**:
+  `navigator_passes_keys_to_hjkl_and_moves_otherwise` checks that focus stays
+  put while hjkl is in front, not which bytes reach the program, so C-h / C-j /
+  C-k reaching an editor is not checked end to end.
 - **`display-message -t` with a target that does not resolve** shows pane `%0`
   (`target::pane(...).unwrap_or((0, 0, 0))` in `cmds/prompt.rs`), where tmux
   fails with `can't find pane: …`. Found 2026-10-12 while testing dotted session

@@ -13,6 +13,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `my.app:1.0`; a target without `:` that is exactly a session's name is that
   session, any other dotted word still `window.pane`. A `:` is still refused.
 
+### Fixed
+
+- **C-j and C-h move between panes on Windows in Alacritty, VS Code and other
+  terminals that send keys as bytes**: the Windows console reported them as
+  Ctrl+Enter and Ctrl+Backspace, so their binds never ran (C-k and C-l did).
+  Outside Windows Terminal, those two chords are now read as C-j and C-h.
+
 ## [0.5.0] - 2026-10-12
 
 ### Added
