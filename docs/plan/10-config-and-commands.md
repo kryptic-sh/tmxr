@@ -185,4 +185,10 @@ tmxr [-L label | -S socket] [-f config] [-v] [command [flags] [args]] [\; comman
 - `-V` / `--version` prints `tmxr <version>`.
 - Exit status: the command's status (1 on error, with tmux-style
   `no server running on <socket>` / `can't find session: x` messages on stderr).
+- `--import-tmux-conf FILE` prints a tmux.conf as a config file
+  (`tmxr_config::from_tmux_conf`): global `set` lines become their keys, typed
+  as the defaults type them (`status-left` is `[status] left`), `bind` /
+  `unbind` become `[keys.<table>]` entries, `set-hook -g` becomes `[hooks]`, and
+  every other line (`run-shell`, an option tmxr lacks, a target's own option) is
+  listed as left out, with why, in comments at the top.
 - Hidden: `__server` (internal, the spawned daemon).

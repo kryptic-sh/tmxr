@@ -680,6 +680,36 @@ fn attaching_takes_tmuxs_c_d_e_and_f() {
 }
 
 #[test]
+fn import_tmux_conf_prints_a_config_that_loads() {
+    let t = Tmxr::new("import");
+    let conf = t.dir.path().join("tmux.conf");
+    std::fs::write(
+        &conf,
+        "set -g status-left 'IMPORTED '\nbind -n M-x kill-pane\nrun '~/tpm'\n",
+    )
+    .unwrap();
+    let out = tmxr_term::child::command(env!("CARGO_BIN_EXE_tmxr"))
+        .arg("--import-tmux-conf")
+        .arg(&conf)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let text = String::from_utf8(out.stdout).unwrap();
+    assert!(text.contains("#   run '~/tpm': run-shell is run"), "{text}");
+    // The printed file is a config tmxr runs with.
+    std::fs::write(&t.config, &text).unwrap();
+    t.run(&["new-session", "-d", "-s", "im"]);
+    assert_eq!(
+        t.run(&["show-options", "-gv", "status-left"]),
+        "IMPORTED \n"
+    );
+    assert!(
+        t.run(&["list-keys", "-T", "root", "M-x"])
+            .contains("kill-pane")
+    );
+}
+
+#[test]
 fn update_environment_entries_are_patterns() {
     let t = Tmxr::new("envglob");
     // Top-level keys go before the file's first table.

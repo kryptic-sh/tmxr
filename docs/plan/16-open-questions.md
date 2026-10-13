@@ -13,7 +13,8 @@ Decisions the plan made provisionally, and what the owner decided.
 3. **Theme.** Kept: Tokyo Night colours with the catppuccin status-line layout.
    Role mapping in [07](07-rendering-status-theme.md#ui-roles).
 4. **Config format.** Kept: TOML with tmux command strings for binds, not a
-   `tmux.conf` reader. A `tmxr import-tmux-conf` converter is possible later.
+   `tmux.conf` reader. `tmxr --import-tmux-conf` converts one instead
+   (2026-10-14).
 5. **Pickers** work the way hjkl's do: one mode, typing filters, arrows and
    `C-n`/`C-p` move, `Escape` closes. (The vi-style normal mode with `j`/`k`
    that tmxr had first was dropped.)

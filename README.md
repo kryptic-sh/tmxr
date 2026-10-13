@@ -94,6 +94,11 @@ x = false                                                  # remove a default
 
 `prefix R` (or `tmxr source-file`) reloads it.
 
+Coming from tmux, `tmxr --import-tmux-conf ~/.tmux.conf > config.toml` writes
+your tmux.conf's global options, binds and hooks as a tmxr config, and lists at
+its top the lines it left out (plugins, `run-shell`, options tmxr does not
+have), with why.
+
 `[hooks]` sets tmux's global hooks, a command or a list of them. For three
 windows in each new session:
 

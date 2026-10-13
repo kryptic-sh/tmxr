@@ -21,6 +21,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`set-option -q` and `show-options -q`**: an unknown option (or an unset user
   option) is no error. `set-option -o` works for session options too.
 - **`show-options -s`** lists the server options.
+- **`tmxr --import-tmux-conf FILE`** prints a tmux.conf as a tmxr config file:
+  its global options (typed as tmxr's, `status-left` under `[status]`), binds,
+  unbinds and `set-hook -g` hooks, with the lines it leaves out (plugins,
+  `run-shell`, options tmxr does not have) listed at the top with why.
 - **`update-environment` entries are patterns**, as tmux's: `SSH_*` takes every
   variable it matches (`*`, `?` and `[...]`, as `fnmatch`).
 - **`load-buffer -`** reads the buffer from the command's standard input, as

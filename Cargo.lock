@@ -2288,6 +2288,7 @@ dependencies = [
  "portable-pty",
  "tempfile",
  "tmxr-client",
+ "tmxr-config",
  "tmxr-proto",
  "tmxr-server",
  "tmxr-term",

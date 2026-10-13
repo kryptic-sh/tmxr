@@ -42,6 +42,11 @@ struct Cli {
     #[arg(long, hide = true)]
     man: bool,
 
+    /// Print FILE, a tmux.conf, as a tmxr config file and exit: its global
+    /// options, binds and hooks, with the lines left out listed at the top.
+    #[arg(long, value_name = "FILE")]
+    import_tmux_conf: Option<PathBuf>,
+
     /// Command and its arguments, in tmux's command language.
     #[arg(
         value_name = "COMMAND",
@@ -49,6 +54,28 @@ struct Cli {
         allow_hyphen_values = true
     )]
     command: Vec<String>,
+}
+
+/// `--import-tmux-conf`: the config file on stdout, the lines it leaves out
+/// as comments above it.
+fn import_tmux_conf(path: &std::path::Path) -> ExitCode {
+    let text = match std::fs::read_to_string(path) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("tmxr: {}: {e}", path.display());
+            return ExitCode::FAILURE;
+        }
+    };
+    let imported = tmxr_config::from_tmux_conf(&text, &|k| std::env::var(k).ok());
+    println!("# tmxr config from {}", path.display());
+    if !imported.skipped.is_empty() {
+        println!("#\n# Left out:");
+        for line in &imported.skipped {
+            println!("#   {line}");
+        }
+    }
+    println!("\n{}", imported.toml);
+    ExitCode::SUCCESS
 }
 
 /// Shells `--completions` generates for: clap_complete's own five plus
@@ -98,6 +125,9 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         };
+    }
+    if let Some(path) = &cli.import_tmux_conf {
+        return import_tmux_conf(path);
     }
     let endpoint = match Endpoint::resolve(cli.socket.as_deref(), cli.label.as_deref()) {
         Ok(e) => e,

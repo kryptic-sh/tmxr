@@ -12,10 +12,12 @@ use std::path::Path;
 use serde::Deserialize;
 
 pub use hjkl_config::{ConfigError, ConfigSource};
+pub use import::{Imported, from_tmux_conf};
 pub use session::{OwnSessionOptions, SessionOptions};
 pub use table::OptionValue;
 pub use window::{BoxLines, ModeKeys, OwnOptions, PANE_OPTIONS, WindowOptions, WindowSize};
 
+mod import;
 mod session;
 mod table;
 mod window;

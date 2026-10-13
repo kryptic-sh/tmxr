@@ -55,6 +55,7 @@ clap_complete_nushell = "4.6.2"
 clap_mangen = "0.3.3"
 hjkl-xdg = "0.42.1"
 tmxr-client.workspace = true
+tmxr-config.workspace = true
 tmxr-proto.workspace = true
 tmxr-server.workspace = true
 tracing = "0.1.44"
