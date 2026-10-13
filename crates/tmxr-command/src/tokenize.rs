@@ -118,6 +118,25 @@ pub fn tokenize(
     Ok(commands)
 }
 
+/// Quote words so they survive another trip through the tokenizer.
+pub fn join_args(words: &[String]) -> String {
+    words
+        .iter()
+        .map(|w| {
+            if !w.is_empty()
+                && w.chars()
+                    .all(|c| c.is_alphanumeric() || "-_./:%@#{}=+,^".contains(c))
+                && !w.starts_with('#')
+            {
+                w.clone()
+            } else {
+                format!("'{}'", w.replace('\'', r"'\''"))
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// The commands in a `{ … }` block, its `{` already read, up to the
 /// matching `}`: one per line or `;`, joined by ` ; ` to be parsed again
 /// when they run. Quotes, escapes and nested braces (`#{format}` among them)
@@ -216,6 +235,17 @@ mod tests {
 
     fn t(line: &str) -> Vec<Vec<String>> {
         tokenize(line, &env).unwrap()
+    }
+
+    #[test]
+    fn join_args_survives_a_round_trip() {
+        let words: Vec<String> = ["split-window", "-c", "#{pane_current_path}", "it's", ""]
+            .iter()
+            .map(|s| (*s).to_owned())
+            .collect();
+        let line = join_args(&words);
+        let back = tokenize(&line, &|_| None).unwrap();
+        assert_eq!(back, vec![words]);
     }
 
     fn w(words: &[&str]) -> Vec<String> {

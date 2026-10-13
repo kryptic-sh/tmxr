@@ -16,6 +16,7 @@ mod window;
 
 pub use binds::bind_line;
 pub use options::option_lines;
+pub use tmxr_command::join_args;
 
 use std::path::PathBuf;
 
@@ -298,25 +299,6 @@ fn on_off(value: Option<&str>, current: bool) -> Result<bool, String> {
     <bool as tmxr_config::OptionValue>::parse(value, &current)
 }
 
-/// Quote words so they survive another trip through the tokenizer.
-pub fn join_args(words: &[String]) -> String {
-    words
-        .iter()
-        .map(|w| {
-            if !w.is_empty()
-                && w.chars()
-                    .all(|c| c.is_alphanumeric() || "-_./:%@#{}=+,^".contains(c))
-                && !w.starts_with('#')
-            {
-                w.clone()
-            } else {
-                format!("'{}'", w.replace('\'', r"'\''"))
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
 fn run_one(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res {
     // A read-only client runs only what looks; a hook's commands are the
     // owner's, whoever's event fired it.
@@ -347,20 +329,4 @@ fn run_one(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res {
         }
     }
     Err(format!("{}: not implemented", p.name()))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn join_args_survives_a_round_trip() {
-        let words: Vec<String> = ["split-window", "-c", "#{pane_current_path}", "it's", ""]
-            .iter()
-            .map(|s| (*s).to_owned())
-            .collect();
-        let line = join_args(&words);
-        let back = tmxr_command::tokenize(&line, &|_| None).unwrap();
-        assert_eq!(back, vec![words]);
-    }
 }
