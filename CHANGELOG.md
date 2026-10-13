@@ -21,6 +21,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`set-option -q` and `show-options -q`**: an unknown option (or an unset user
   option) is no error. `set-option -o` works for session options too.
 - **`show-options -s`** lists the server options.
+- **A 16-colour fallback**: `rgb-colour 16` sends only the 16 ANSI colours (RGB
+  and 256-colour styles mapped to the nearest, by tmux's `colour_256to16`
+  table), and `rgb-colour auto` uses it for a client whose `TERM` has no 256
+  colours (`xterm`, `linux`, `screen`), as tmux does.
 - **`attach-session -c`, `-E` and `-f read-only`, and `new-session -D`, `-E` and
   `-f`**, as tmux's: `-c` sets the session's working directory, `-E` leaves its
   environment alone, `-f read-only` attaches read-only (as `-r`; tmux's other

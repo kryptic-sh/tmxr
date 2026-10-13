@@ -8,7 +8,7 @@ use tmxr_proto::ServerMsg;
 use tracing::debug;
 
 use super::{Attached, STATUS_ROWS, Server};
-use crate::backend::AnsiBackend;
+use crate::backend::{AnsiBackend, ColourDepth};
 use crate::model::{ClientId, SessionId, WindowId};
 
 impl Server {
@@ -19,7 +19,7 @@ impl Server {
         let (cols, rows) = (term.cols.max(1), term.rows.max(1));
         let area = Rect::new(0, 0, cols, rows);
         let mut backend = AnsiBackend::new(cols, rows);
-        backend.set_rgb(self.client_rgb(id));
+        backend.set_depth(self.client_depth(id));
         let terminal = Terminal::with_options(
             backend,
             TerminalOptions {
@@ -105,11 +105,14 @@ impl Server {
         self.size_session(session);
     }
 
-    /// Whether client `id` gets 24-bit colour (`rgb-colour`): `auto` trusts
-    /// what its environment advertises.
-    pub fn client_rgb(&self, id: ClientId) -> bool {
+    /// The colours client `id` gets (`rgb-colour`): `auto` trusts what its
+    /// environment advertises, 24-bit colour, else the 256 for a `TERM`
+    /// naming them (or none), else the 16, as tmux reads a terminal with
+    /// fewer from its terminfo.
+    pub fn client_depth(&self, id: ClientId) -> ColourDepth {
         match self.cfg.rgb_colour.as_str() {
-            "off" => false,
+            "off" => ColourDepth::Colours256,
+            "16" => ColourDepth::Colours16,
             "auto" => {
                 let env = self
                     .clients
@@ -118,11 +121,19 @@ impl Server {
                     .map(|h| h.env.as_slice())
                     .unwrap_or_default();
                 let var = |k: &str| env.iter().find(|(n, _)| n == k).map(|(_, v)| v.as_str());
-                var("COLORTERM").is_some_and(|v| v == "truecolor" || v == "24bit")
-                    || var("TERM").is_some_and(|t| t.ends_with("-direct"))
+                let term = var("TERM").filter(|t| !t.is_empty());
+                if var("COLORTERM").is_some_and(|v| v == "truecolor" || v == "24bit")
+                    || term.is_some_and(|t| t.ends_with("-direct"))
                     || var("WT_SESSION").is_some()
+                {
+                    ColourDepth::TrueColour
+                } else if term.is_none_or(|t| t.contains("256col")) {
+                    ColourDepth::Colours256
+                } else {
+                    ColourDepth::Colours16
+                }
             }
-            _ => true,
+            _ => ColourDepth::TrueColour,
         }
     }
 
@@ -130,10 +141,10 @@ impl Server {
     pub fn apply_rgb_colour(&mut self) {
         let ids: Vec<ClientId> = self.clients.keys().copied().collect();
         for id in ids {
-            let rgb = self.client_rgb(id);
+            let depth = self.client_depth(id);
             if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
                 if let Some(t) = a.term.as_mut() {
-                    t.backend_mut().set_rgb(rgb);
+                    t.backend_mut().set_depth(depth);
                 }
                 a.full_redraw = true;
                 a.dirty = true;

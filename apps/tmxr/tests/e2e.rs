@@ -299,6 +299,19 @@ impl Screen {
         w.flush().unwrap();
     }
 
+    /// Wait until `pred` holds for the screen itself, cells and colours.
+    fn wait_for_cells(&self, what: &str, pred: impl Fn(&Self) -> bool) {
+        let deadline = Instant::now() + TIMEOUT;
+        while !pred(self) {
+            assert!(
+                Instant::now() < deadline,
+                "timed out waiting for {what}; status line: {:?}",
+                self.status_cells()
+            );
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
     fn wait_for(&self, what: &str, pred: impl Fn(&str) -> bool) {
         let deadline = Instant::now() + TIMEOUT;
         loop {
@@ -3962,6 +3975,21 @@ fn find_window_matches_names_and_pane_contents() {
     assert!(!t.output(&["find-window", "-r", "("]).status.success());
 }
 
+/// Whether every colour on `s`'s status line is one of the 16 ANSI ones
+/// (or the default), and some cell has one.
+fn status_in_16_colours(s: &Screen) -> bool {
+    let cells = s.status_cells();
+    let in_16 = |c: &str| {
+        c == "Default"
+            || c.strip_prefix("Idx(")
+                .and_then(|n| n.strip_suffix(')'))
+                .and_then(|n| n.parse::<u8>().ok())
+                .is_some_and(|n| n < 16)
+    };
+    cells.iter().all(|(_, fg, bg)| in_16(fg) && in_16(bg))
+        && cells.iter().any(|(_, _, bg)| bg != "Default")
+}
+
 #[test]
 fn rgb_colour_off_sends_the_256_colours() {
     let t = Tmxr::new("rgb");
@@ -3994,6 +4022,9 @@ fn rgb_colour_off_sends_the_256_colours() {
         "{:?}",
         s.status_cells()
     );
+    // 16: the ANSI colours only.
+    t.run(&["set-option", "-g", "rgb-colour", "16"]);
+    s.wait_for_cells("the 16 colours", status_in_16_colours);
     assert!(
         !t.output(&["set-option", "-g", "rgb-colour", "maybe"])
             .status
@@ -4025,6 +4056,16 @@ fn rgb_colour_auto_follows_the_client_environment() {
     let s = t.attach_env(&["attach", "-t", "ra"], &true_colour);
     s.wait_for("status line", |text| text.contains("ra"));
     assert!(rgb_cells(&s) > 0, "{:?}", s.status_cells());
+    drop(s);
+    // A TERM without 256 colours gets the 16, as tmux reads one.
+    let sixteen = [
+        ("COLORTERM", None),
+        ("WT_SESSION", None),
+        ("TERM", Some("xterm")),
+    ];
+    let s = t.attach_env(&["attach", "-t", "ra"], &sixteen);
+    s.wait_for("status line", |text| text.contains("ra"));
+    s.wait_for_cells("the 16 colours", status_in_16_colours);
 }
 
 #[test]

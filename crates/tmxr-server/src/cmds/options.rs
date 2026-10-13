@@ -104,8 +104,12 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed) -> Res {
         "extended-keys" => need()?.clone_into(&mut c.extended_keys),
         "set-clipboard" => need()?.clone_into(&mut c.set_clipboard),
         "rgb-colour" => match need()? {
-            v @ ("on" | "off" | "auto") => v.clone_into(&mut c.rgb_colour),
-            v => return Err(format!("rgb-colour: unknown value: {v} (on, off or auto)")),
+            v @ ("on" | "off" | "16" | "auto") => v.clone_into(&mut c.rgb_colour),
+            v => {
+                return Err(format!(
+                    "rgb-colour: unknown value: {v} (on, off, 16 or auto)"
+                ));
+            }
         },
         "copy-command" => need()?.clone_into(&mut c.copy_command),
         "socket-access" => {

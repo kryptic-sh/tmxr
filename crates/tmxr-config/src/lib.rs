@@ -32,8 +32,8 @@ pub struct Config {
     pub default_terminal: String,
     pub extended_keys: String,
     pub set_clipboard: String,
-    /// `on`, `off` or `auto`: whether clients get 24-bit colour, or RGB
-    /// mapped to the 256 colours.
+    /// `on`, `off`, `16` or `auto`: whether clients get 24-bit colour, or
+    /// colours mapped to the 256 (`off`) or the 16 ANSI ones.
     pub rgb_colour: String,
     /// Shell command `copy-pipe` sends the copied text to when it names none.
     pub copy_command: String,

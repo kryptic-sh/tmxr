@@ -188,12 +188,16 @@ table. What has been verified, and how:
   windows linked into two sessions (tmux flags each session's link; tmxr has one
   flag per window), and an activity alert in the window in sight rings on every
   burst of output, as tmux's did there, which was not looked at more closely.
-- **`rgb-colour auto`** decides from the client's environment only:
-  `COLORTERM=truecolor` / `24bit`, a `TERM` ending in `-direct`, or
-  `WT_SESSION`. Terminals that take 24-bit colour without saying so (some
-  `TERM_PROGRAM`s) get the 256 under `auto`; the default `on` sends 24-bit to
-  every terminal, as the tmux config's `terminal-overrides ",*:RGB"` does. There
-  is no 16-colour fallback.
+- **`rgb-colour auto`** decides from the client's environment only, not from
+  terminfo as tmux does: `COLORTERM=truecolor` / `24bit`, a `TERM` ending in
+  `-direct`, or `WT_SESSION` give 24-bit colour; a `TERM` without `256col` in it
+  gives the 16 (`Server::client_depth`), so `TERM=xterm` gets the 16 as in tmux,
+  even on a terminal that takes more. Terminals that take 24-bit colour without
+  saying so (some `TERM_PROGRAM`s) get the 256 under `auto`; the default `on`
+  sends 24-bit to every terminal, as the tmux config's
+  `terminal-overrides ",*:RGB"` does. The 16 are sent as `90`–`97` for the
+  bright ones; there is no 8-colour mode (bold for bright, as tmux uses on a
+  terminal with 8).
 - **No frame-rate cap**: the server renders after each pass of its loop, and a
   pass stops handling events after `DRAIN_BUDGET` so a flood still repaints.
   Each pane's output waits in a bounded queue (`output::QUEUE_LIMIT`) that

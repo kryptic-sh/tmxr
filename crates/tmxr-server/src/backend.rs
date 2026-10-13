@@ -20,9 +20,20 @@ pub struct AnsiBackend {
     out: String,
     size: Size,
     cursor: Position,
-    /// The terminal takes 24-bit colour; without it, RGB colours are sent
-    /// as their nearest of the 256.
-    rgb: bool,
+    /// The colours the terminal takes; colours beyond them are sent as their
+    /// nearest it has.
+    depth: ColourDepth,
+}
+
+/// How many colours a client's terminal takes (`rgb-colour`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColourDepth {
+    /// 24-bit colour.
+    TrueColour,
+    /// The xterm 256.
+    Colours256,
+    /// The 16 ANSI colours.
+    Colours16,
 }
 
 impl AnsiBackend {
@@ -31,13 +42,13 @@ impl AnsiBackend {
             out: String::new(),
             size: Size::new(cols, rows),
             cursor: Position::new(0, 0),
-            rgb: true,
+            depth: ColourDepth::TrueColour,
         }
     }
 
-    /// Send 24-bit colour, or map it to the 256 (`rgb-colour`).
-    pub fn set_rgb(&mut self, rgb: bool) {
-        self.rgb = rgb;
+    /// The colours to send (`rgb-colour`).
+    pub fn set_depth(&mut self, depth: ColourDepth) {
+        self.depth = depth;
     }
 
     pub fn set_size(&mut self, cols: u16, rows: u16) {
@@ -86,10 +97,57 @@ pub fn nearest_256(r: u8, g: u8, b: u8) -> u8 {
     idx as u8
 }
 
-fn sgr_colour(out: &mut String, c: Color, fg: bool, rgb: bool) {
+/// The ANSI colour (0 to 15) nearest xterm-256 colour `c`: tmux's
+/// `colour_256to16` (colour.c), whose table this is.
+pub fn nearest_16(c: u8) -> u8 {
+    const TABLE: [u8; 256] = [
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 4, 4, 4, 12, 12, 2, 6, 4, 4, 12,
+        12, 2, 2, 6, 4, 12, 12, 2, 2, 2, 6, 12, 12, 10, 10, 10, 10, 14, 12, 10, 10, 10, 10, 10, 14,
+        1, 5, 4, 4, 12, 12, 3, 8, 4, 4, 12, 12, 2, 2, 6, 4, 12, 12, 2, 2, 2, 6, 12, 12, 10, 10, 10,
+        10, 14, 12, 10, 10, 10, 10, 10, 14, 1, 1, 5, 4, 12, 12, 1, 1, 5, 4, 12, 12, 3, 3, 8, 4, 12,
+        12, 2, 2, 2, 6, 12, 12, 10, 10, 10, 10, 14, 12, 10, 10, 10, 10, 10, 14, 1, 1, 1, 5, 12, 12,
+        1, 1, 1, 5, 12, 12, 1, 1, 1, 5, 12, 12, 3, 3, 3, 7, 12, 12, 10, 10, 10, 10, 14, 12, 10, 10,
+        10, 10, 10, 14, 9, 9, 9, 9, 13, 12, 9, 9, 9, 9, 13, 12, 9, 9, 9, 9, 13, 12, 9, 9, 9, 9, 13,
+        12, 11, 11, 11, 11, 7, 12, 10, 10, 10, 10, 10, 14, 9, 9, 9, 9, 9, 13, 9, 9, 9, 9, 9, 13, 9,
+        9, 9, 9, 9, 13, 9, 9, 9, 9, 9, 13, 9, 9, 9, 9, 9, 13, 11, 11, 11, 11, 11, 15, 0, 0, 0, 0,
+        0, 0, 8, 8, 8, 8, 8, 8, 7, 7, 7, 7, 7, 7, 15, 15, 15, 15, 15, 15,
+    ];
+    TABLE[usize::from(c)]
+}
+
+/// ANSI colour `n` (0 to 15) as ratatui names it.
+fn ansi_colour(n: u8) -> Color {
+    const NAMED: [Color; 16] = [
+        Color::Black,
+        Color::Red,
+        Color::Green,
+        Color::Yellow,
+        Color::Blue,
+        Color::Magenta,
+        Color::Cyan,
+        Color::Gray,
+        Color::DarkGray,
+        Color::LightRed,
+        Color::LightGreen,
+        Color::LightYellow,
+        Color::LightBlue,
+        Color::LightMagenta,
+        Color::LightCyan,
+        Color::White,
+    ];
+    NAMED[usize::from(n & 15)]
+}
+
+fn sgr_colour(out: &mut String, c: Color, fg: bool, depth: ColourDepth) {
     let base = if fg { 30 } else { 40 };
     let c = match c {
-        Color::Rgb(r, g, b) if !rgb => Color::Indexed(nearest_256(r, g, b)),
+        Color::Rgb(r, g, b) if depth != ColourDepth::TrueColour => {
+            Color::Indexed(nearest_256(r, g, b))
+        }
+        c => c,
+    };
+    let c = match c {
+        Color::Indexed(i) if depth == ColourDepth::Colours16 => ansi_colour(nearest_16(i)),
         c => c,
     };
     let _ = match c {
@@ -116,7 +174,7 @@ fn sgr_colour(out: &mut String, c: Color, fg: bool, rgb: bool) {
 }
 
 /// A full SGR sequence (starting from a reset) for one cell's style.
-fn sgr(cell: &Cell, rgb: bool) -> String {
+fn sgr(cell: &Cell, depth: ColourDepth) -> String {
     let mut s = String::from("\x1b[0");
     let m = cell.modifier;
     for (flag, code) in [
@@ -134,8 +192,8 @@ fn sgr(cell: &Cell, rgb: bool) -> String {
             let _ = write!(s, ";{code}");
         }
     }
-    sgr_colour(&mut s, cell.fg, true, rgb);
-    sgr_colour(&mut s, cell.bg, false, rgb);
+    sgr_colour(&mut s, cell.fg, true, depth);
+    sgr_colour(&mut s, cell.bg, false, depth);
     s.push('m');
     s
 }
@@ -154,7 +212,7 @@ impl Backend for AnsiBackend {
                 let _ = write!(self.out, "\x1b[{};{}H", y + 1, x + 1);
             }
             last = Some(Position::new(x, y));
-            let want = sgr(cell, self.rgb);
+            let want = sgr(cell, self.depth);
             if style.as_deref() != Some(want.as_str()) {
                 self.out.push_str(&want);
                 style = Some(want);
@@ -292,7 +350,7 @@ mod tests {
             },
         )
         .unwrap();
-        term.backend_mut().set_rgb(false);
+        term.backend_mut().set_depth(ColourDepth::Colours256);
         term.draw(|f| {
             let style = Style::default().fg(Color::Rgb(255, 0, 0));
             f.buffer_mut().set_string(0, 0, "x", style);
@@ -301,5 +359,36 @@ mod tests {
         let out = String::from_utf8(term.backend_mut().take()).unwrap();
         assert!(out.contains(";38;5;196"), "{out:?}");
         assert!(!out.contains(";38;2;"), "{out:?}");
+    }
+
+    #[test]
+    fn sixteen_colours_send_the_nearest_ansi_colour() {
+        // Pure red, blue, green, yellow and white, the darkest and
+        // lightest greys, and the first 16 as themselves.
+        for (c, want) in [(196, 9), (21, 12), (46, 10), (226, 11), (231, 15)] {
+            assert_eq!(nearest_16(c), want, "colour {c}");
+        }
+        assert_eq!((nearest_16(232), nearest_16(255)), (0, 15));
+        assert!((0..16).all(|c| nearest_16(c) == c));
+
+        let area = Rect::new(0, 0, 4, 1);
+        let mut term = Terminal::with_options(
+            AnsiBackend::new(4, 1),
+            TerminalOptions {
+                viewport: Viewport::Fixed(area),
+            },
+        )
+        .unwrap();
+        term.backend_mut().set_depth(ColourDepth::Colours16);
+        term.draw(|f| {
+            let style = Style::default()
+                .fg(Color::Rgb(255, 0, 0))
+                .bg(Color::Indexed(21));
+            f.buffer_mut().set_string(0, 0, "x", style);
+        })
+        .unwrap();
+        let out = String::from_utf8(term.backend_mut().take()).unwrap();
+        assert!(out.contains(";91;104"), "{out:?}");
+        assert!(!out.contains(";38;") && !out.contains(";48;"), "{out:?}");
     }
 }
