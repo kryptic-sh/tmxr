@@ -266,6 +266,15 @@ pub(super) fn run(
             } else {
                 target::session(srv, ctx, a.value('t'))?
             };
+            // The switching client's variables, unless -E, as tmux's.
+            if !a.has('E') {
+                let env = srv.clients[&c]
+                    .hello
+                    .as_ref()
+                    .map(|h| h.env.clone())
+                    .unwrap_or_default();
+                update_env(srv, sid, &env);
+            }
             srv.switch_client(c, sid);
         }
 
@@ -325,17 +334,7 @@ fn attach_to(
         s.cwd = cwd;
     }
     if !a.has('E') {
-        let found = session_env(srv, ctx);
-        let names = srv.cfg.update_environment.clone();
-        if let Some(s) = srv.sessions.get_mut(&sid) {
-            for name in &names {
-                let value = found
-                    .iter()
-                    .find(|(k, _)| k == name)
-                    .map(|(_, v)| v.clone());
-                s.env.set(name, value);
-            }
-        }
+        update_env(srv, sid, &ctx.env);
     }
     if detach_others {
         let others: Vec<ClientId> = srv
@@ -355,6 +354,18 @@ fn attach_to(
         None => out.attach = Some(sid),
     }
     Ok(())
+}
+
+/// Give session `sid` the `update-environment` variables of a client's
+/// environment `env`, marking one it lacks removed: tmux's `environ_update`.
+fn update_env(srv: &mut Server, sid: SessionId, env: &[(String, String)]) {
+    let names = srv.cfg.update_environment.clone();
+    if let Some(s) = srv.sessions.get_mut(&sid) {
+        for name in &names {
+            let value = env.iter().find(|(k, _)| k == name).map(|(_, v)| v.clone());
+            s.env.set(name, value);
+        }
+    }
 }
 
 /// Whether `-f`'s client flags (comma separated) ask for `read-only`, the

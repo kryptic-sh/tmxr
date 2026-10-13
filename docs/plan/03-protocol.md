@@ -104,10 +104,11 @@ Notes:
   with `mouse off` the terminal's own selection works without Shift.
 - `Hello.env` carries the client's whole environment. The server keeps the names
   listed in `update-environment` on the session it creates, and updates them
-  when a client attaches (`attach-session`, `new-session -A`; not with `-E`),
-  marking one the client lacks as removed, so new panes get the attaching
-  client's `DISPLAY`, `WAYLAND_DISPLAY`, `SSH_*`, …, like tmux. It reads
-  `TMXR_PANE` from a command client to resolve its default target.
+  when a client attaches or switches to it (`attach-session`, `new-session -A`,
+  `switch-client`; not with `-E`), marking one the client lacks as removed, so
+  new panes get the attaching client's `DISPLAY`, `WAYLAND_DISPLAY`, `SSH_*`, …,
+  like tmux. It reads `TMXR_PANE` from a command client to resolve its default
+  target.
 
 ## Versioning rule
 

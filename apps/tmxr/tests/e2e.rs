@@ -630,6 +630,53 @@ fn attaching_takes_tmuxs_c_d_e_and_f() {
         String::from_utf8_lossy(&bad.stderr).contains("unsupported client flag: no-output"),
         "{bad:?}"
     );
+
+    // switch-client gives the session it goes to the switching client's
+    // variables too, unless -E.
+    t.run(&["new-session", "-d", "-s", "sw"]);
+    t.run(&["set-environment", "-t", "sw", "SSH_AUTH_SOCK", "old-sock"]);
+    let sw_sock = || {
+        t.run(&["show-environment", "-t", "sw", "SSH_AUTH_SOCK"])
+            .trim()
+            .to_owned()
+    };
+    let d = t.attach_env(
+        &["attach", "-t", "at"],
+        &[("SSH_AUTH_SOCK", Some("third-sock"))],
+    );
+    d.wait_for("status line", |text| text.contains("at"));
+    d.send(PREFIX);
+    d.send(b":");
+    d.wait_for("the prompt", |text| {
+        text.lines().any(|l| l.starts_with(':'))
+    });
+    d.send(b"switch-client -E -t sw\r");
+    t.wait_run(
+        &["list-clients", "-F", "#{client_session}"],
+        "the switch",
+        |o| o.lines().any(|l| l == "sw"),
+    );
+    assert_eq!(sw_sock(), "SSH_AUTH_SOCK=old-sock");
+    d.send(PREFIX);
+    d.send(b":");
+    d.wait_for("the prompt", |text| {
+        text.lines().any(|l| l.starts_with(':'))
+    });
+    d.send(b"switch-client -t at\r");
+    t.wait_run(&["list-clients", "-F", "#{client_session}"], "back", |o| {
+        !o.lines().any(|l| l == "sw")
+    });
+    d.send(PREFIX);
+    d.send(b":");
+    d.wait_for("the prompt", |text| {
+        text.lines().any(|l| l.starts_with(':'))
+    });
+    d.send(b"switch-client -t sw\r");
+    t.wait_run(
+        &["show-environment", "-t", "sw", "SSH_AUTH_SOCK"],
+        "sw takes the client's variable",
+        |o| o.trim() == "SSH_AUTH_SOCK=third-sock",
+    );
 }
 
 #[test]

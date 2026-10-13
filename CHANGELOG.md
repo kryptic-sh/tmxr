@@ -39,9 +39,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Attaching updates the session's environment**, as tmux's: the
   `update-environment` variables of a client that attaches (`attach-session`,
-  `new-session -A`) replace the session's, and one the client does not have is
-  marked removed, so new panes get the attaching terminal's `DISPLAY`,
-  `SSH_AUTH_SOCK` and the rest. `-E` keeps the old values.
+  `new-session -A`) or switches to it (`switch-client`) replace the session's,
+  and one the client does not have is marked removed, so new panes get that
+  terminal's `DISPLAY`, `SSH_AUTH_SOCK` and the rest. `-E` (now also on
+  `switch-client`) keeps the old values.
 - **Breaking: `show-options` without `-g` reads the target session's own
   values**, as tmux's: `show -v status-left` prints nothing unless the session
   sets it (use `-g` for the global value), and `show-options` alone lists only
