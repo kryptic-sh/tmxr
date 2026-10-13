@@ -147,6 +147,40 @@ pub fn encode_key(key: &KeyEvent, modes: InputModes, extended_always: bool) -> V
     }
 }
 
+/// A Windows pane's program reads keys through ConPTY, which takes the bytes
+/// for C-h and C-j (0x08, 0x0A, after an ESC with Alt) as Ctrl+Backspace and
+/// Ctrl+Enter. For those two keys, given the `bytes` [`encode_key`] made,
+/// this is their win32-input-mode form instead (`CSI Vk;Sc;Uc;Kd;Cs;Rc _`, a
+/// press and a release), which ConPTY reads as the exact key; `None` for
+/// every other key, whose bytes ConPTY reads right.
+pub fn conpty_key(key: &KeyEvent, bytes: &[u8]) -> Option<Vec<u8>> {
+    // The modifier state bits of a KEY_EVENT_RECORD.
+    const LEFT_ALT: u8 = 0x02;
+    const LEFT_CTRL: u8 = 0x08;
+    const SHIFT: u8 = 0x10;
+    let KeyCode::Char(c) = key.code else {
+        return None;
+    };
+    let c = c.to_ascii_lowercase();
+    let control = match bytes {
+        [b] | [0x1b, b] if matches!(b, 0x08 | 0x0a) => *b,
+        _ => return None,
+    };
+    if !key.modifiers.contains(KeyModifiers::CONTROL) || !matches!(c, 'h' | 'j') {
+        return None;
+    }
+    let mut state = LEFT_CTRL;
+    if key.modifiers.contains(KeyModifiers::ALT) {
+        state |= LEFT_ALT;
+    }
+    if key.modifiers.contains(KeyModifiers::SHIFT) {
+        state |= SHIFT;
+    }
+    // A letter's virtual-key code is its capital's ASCII code.
+    let vk = c.to_ascii_uppercase() as u8;
+    Some(format!("[{vk};0;{control};1;{state};1_[{vk};0;{control};0;{state};1_").into_bytes())
+}
+
 /// Encode pasted text for a pane, bracketed if the program asked for it.
 /// Bracket markers inside the text are removed so a paste cannot end the
 /// bracket early and have the rest run as typed input.
@@ -238,6 +272,41 @@ pub fn encode_mouse(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn conpty_takes_c_h_and_c_j_as_win32_input() {
+        let ctrl = |c, m| KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL | m);
+        let win32 = |key: KeyEvent| {
+            let bytes = encode_key(&key, InputModes::default(), false);
+            conpty_key(&key, &bytes).map(|b| String::from_utf8(b).unwrap())
+        };
+        assert_eq!(
+            win32(ctrl('j', KeyModifiers::NONE)).as_deref(),
+            Some("[74;0;10;1;8;1_[74;0;10;0;8;1_")
+        );
+        assert_eq!(
+            win32(ctrl('h', KeyModifiers::ALT)).as_deref(),
+            Some("[72;0;8;1;10;1_[72;0;8;0;10;1_")
+        );
+        // ConPTY reads the rest right, Ctrl+Backspace's 0x08 among them.
+        assert_eq!(win32(ctrl('k', KeyModifiers::NONE)), None);
+        assert_eq!(win32(ctrl('l', KeyModifiers::NONE)), None);
+        assert_eq!(
+            win32(KeyEvent::new(KeyCode::Backspace, KeyModifiers::CONTROL)),
+            None
+        );
+        assert_eq!(
+            win32(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE)),
+            None
+        );
+        // A program that asked for extended keys gets those, not this.
+        let kitty = InputModes {
+            kitty_flags: 1,
+            ..InputModes::default()
+        };
+        let key = ctrl('j', KeyModifiers::NONE);
+        assert_eq!(conpty_key(&key, &encode_key(&key, kitty, false)), None);
+    }
 
     const NONE: KeyModifiers = KeyModifiers::NONE;
     const C: KeyModifiers = KeyModifiers::CONTROL;

@@ -173,10 +173,6 @@ table. What has been verified, and how:
   through ConPTY in the e2e tests (raw bytes and win32-input-mode events); not
   tried by hand in Alacritty or VS Code. Fixing it at the source needs the key
   event's character, which crossterm drops for Enter and Backspace.
-- **Navigator pass-through is tested with C-l only**:
-  `navigator_passes_keys_to_hjkl_and_moves_otherwise` checks that focus stays
-  put while hjkl is in front, not which bytes reach the program, so C-h / C-j /
-  C-k reaching an editor is not checked end to end.
 - **`new-session -A` without tmux's `-D`, `-X`, `-E` and `-f`** (2026-10-12):
   attaching through `-A` cannot detach the session's other clients or set client
   flags as tmux's does; `attach-session -d` can. Not asked for.

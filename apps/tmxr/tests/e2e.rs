@@ -915,6 +915,51 @@ fn fixture_program(t: &Tmxr, name: &str) -> Vec<String> {
     }
 }
 
+/// Where [`key_log_fixture`] logs the keys it reads, when a test starts it.
+const KEY_LOG: &str = "TMXR_E2E_KEY_LOG";
+
+/// This test binary, copied as `name` into the test's directory, made to run
+/// [`key_log_fixture`]: a program the navigator sees by that name that
+/// records every key it is given, to the file `KEY_LOG` names in its
+/// environment.
+fn key_log_program(t: &Tmxr, name: &str) -> Vec<String> {
+    let me = std::env::current_exe().unwrap();
+    let path = t
+        .dir
+        .path()
+        .join(name)
+        .with_extension(std::env::consts::EXE_EXTENSION);
+    std::fs::copy(me, &path).unwrap();
+    vec![
+        path.display().to_string(),
+        "key_log_fixture".into(),
+        "--exact".into(),
+        "--ignored".into(),
+        "--nocapture".into(),
+    ]
+}
+
+/// Not a test: the program [`key_log_program`] starts. In raw mode, it logs
+/// `ready`, then each key press it reads as `code modifiers`, one a line.
+#[test]
+#[ignore = "a fixture other tests run in a pane"]
+fn key_log_fixture() {
+    use crossterm::event::{Event, KeyEventKind, read};
+    let Some(log) = std::env::var_os(KEY_LOG) else {
+        return;
+    };
+    let mut log = std::fs::File::create(log).unwrap();
+    crossterm::terminal::enable_raw_mode().unwrap();
+    writeln!(log, "ready").unwrap();
+    loop {
+        if let Event::Key(k) = read().unwrap()
+            && k.kind == KeyEventKind::Press
+        {
+            writeln!(log, "{:?} {:?}", k.code, k.modifiers).unwrap();
+        }
+    }
+}
+
 /// Make session `nav` a 3×3 grid, panes 0 to 8 in rows from the top left,
 /// so each direction from the middle reaches a different pane.
 fn pane_grid(t: &Tmxr) {
@@ -1098,6 +1143,68 @@ fn navigator_passes_keys_to_hjkl_and_moves_otherwise() {
             );
         }
     }
+}
+
+#[test]
+fn the_navigator_hands_c_hjkl_to_the_program_in_front() {
+    let t = Tmxr::new("nav-keys");
+    let log = t.dir.path().join("keys.log");
+    let argv = key_log_program(&t, "hjkl");
+    let env = format!("{KEY_LOG}={}", log.display());
+    let mut new = vec!["new-session", "-d", "-s", "nav", "-e", &env];
+    new.extend(argv.iter().map(String::as_str));
+    t.run(&new);
+    // Panes on every side, so a key the program did not get would move.
+    pane_grid(&t);
+    t.run(&["swap-pane", "-s", "nav.0", "-t", "nav.4"]);
+    t.run(&["select-pane", "-t", "nav.4"]);
+    t.wait_run(
+        &[
+            "display-message",
+            "-p",
+            "-t",
+            "nav",
+            "#{pane_index} #{pane_current_command}",
+        ],
+        "the fixture in front, in the middle",
+        |o| o.trim() == "4 hjkl",
+    );
+    let read_log = || std::fs::read_to_string(&log).unwrap_or_default();
+    let deadline = Instant::now() + TIMEOUT;
+    while !read_log().starts_with("ready") {
+        assert!(Instant::now() < deadline, "the fixture never started");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let s = t.attach_env(&["attach", "-t", "nav"], &[("WT_SESSION", None)]);
+    s.wait_for("status line", |text| text.contains("nav"));
+    for key in CTRL_HJKL_BYTES {
+        s.send(key);
+    }
+    while read_log().lines().count() < 5 {
+        assert!(
+            Instant::now() < deadline,
+            "keys logged:
+{}",
+            read_log()
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let keys: Vec<String> = read_log().lines().skip(1).map(str::to_owned).collect();
+    assert_eq!(
+        keys,
+        [
+            "Char('h') KeyModifiers(CONTROL)",
+            "Char('j') KeyModifiers(CONTROL)",
+            "Char('k') KeyModifiers(CONTROL)",
+            "Char('l') KeyModifiers(CONTROL)",
+        ]
+    );
+    assert_eq!(
+        t.run(&["display-message", "-p", "-t", "nav", "#{pane_index}"])
+            .trim(),
+        "4",
+        "focus moved"
+    );
 }
 
 #[test]

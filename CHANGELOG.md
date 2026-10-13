@@ -38,6 +38,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **C-h and C-j reach the program in a pane on Windows**: hjkl, nvim and other
+  programs in a tmxr pane got C-h as Ctrl+Backspace and C-j as Ctrl+Enter (the
+  pane's ConPTY read their bytes that way), so their own C-h / C-j binds, such
+  as moving between editor windows, did nothing. tmxr now sends those two keys
+  to a Windows pane as win32-input-mode key events.
 - **`synchronize-panes` no longer types into panes that cannot take it**: a
   sibling in copy or clock mode, a dead pane, or one hidden by a zoomed window
   is skipped, as tmux's.

@@ -64,6 +64,7 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 workspace = true
 
 [dev-dependencies]
+crossterm = "0.29.0"
 portable-pty = "0.9.0"
 tempfile = "3.27.0"
 tmxr-term.workspace = true

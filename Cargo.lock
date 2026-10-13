@@ -2282,6 +2282,7 @@ dependencies = [
  "clap_complete",
  "clap_complete_nushell",
  "clap_mangen",
+ "crossterm",
  "hjkl-xdg",
  "libc",
  "portable-pty",

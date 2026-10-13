@@ -171,6 +171,11 @@ back as C-j and C-h (`terminal::console_key`), unless `WT_SESSION` says the
 terminal is Windows Terminal, whose win32-input-mode sends real key events, so
 its Ctrl+Enter and Ctrl+Backspace stay keys of their own.
 
+The same holds the other way: a pane's program reads its keys through a ConPTY,
+so the server sends C-h and C-j to a Windows pane in win32-input-mode
+(`CSI Vk;Sc;Uc;Kd;Cs;Rc _`, `encode::conpty_key`), which ConPTY reads as the
+exact key, and every other key as its usual bytes.
+
 **Editor side.** When vim/hjkl is at the edge of its own splits it must hand the
 move back:
 

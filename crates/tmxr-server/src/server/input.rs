@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use crossterm::event::{Event as TermEvent, KeyEvent, KeyEventKind};
 use ratatui::layout::Rect;
 use tmxr_command::Key;
-use tmxr_term::{encode_key, encode_paste};
+use tmxr_term::{conpty_key, encode_key, encode_paste};
 
 use super::Server;
 use crate::cmds::{Ctx, Outcome};
@@ -303,7 +303,13 @@ impl Server {
         let targets = self.input_targets(pane);
         for t in targets {
             if let Some(p) = self.panes.get_mut(&t) {
-                let bytes = encode_key(ev, p.emu.input_modes(), always);
+                let mut bytes = encode_key(ev, p.emu.input_modes(), always);
+                // Every Windows pane is a ConPTY.
+                if cfg!(windows)
+                    && let Some(win32) = conpty_key(ev, &bytes)
+                {
+                    bytes = win32;
+                }
                 if !bytes.is_empty() {
                     let _ = p.pty.write(&bytes);
                 }
