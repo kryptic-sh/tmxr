@@ -173,9 +173,13 @@ table. What has been verified, and how:
   through ConPTY in the e2e tests (raw bytes and win32-input-mode events); not
   tried by hand in Alacritty or VS Code. Fixing it at the source needs the key
   event's character, which crossterm drops for Enter and Backspace.
-- **`new-session -A` without tmux's `-D`, `-X`, `-E` and `-f`** (2026-10-12):
-  attaching through `-A` cannot detach the session's other clients or set client
-  flags as tmux's does; `attach-session -d` can. Not asked for.
+- **Attaching differs from tmux in what is left** (`cmds::session::attach_to`,
+  2026-10-14): `attach-session -x` / `new-session -X` (detach the others and
+  hang up their parent shells) are not supported, as `detach-client -P` is not;
+  `-f` takes `read-only` only and refuses tmux's other client flags by name;
+  `update-environment` names are matched exactly, not as tmux's `fnmatch`
+  patterns; and `switch-client` does not apply `update-environment`, where
+  tmux's does (unless `-E`).
 - **tmux default binds**: most of tmux's defaults are bound (see above);
   `prefix C-z` (suspend-client) errors on Windows, which has no job control.
   Alerts follow tmux 3.6's, as recorded from a running tmux on 2026-10-10 (WSL

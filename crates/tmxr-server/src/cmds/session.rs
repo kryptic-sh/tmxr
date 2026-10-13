@@ -10,6 +10,7 @@ use crate::model::{ClientId, SessionId};
 use crate::server::Server;
 use crate::target;
 use crate::vars::Vars;
+use tmxr_command::Args;
 
 pub(super) fn run(
     srv: &mut Server,
@@ -22,17 +23,15 @@ pub(super) fn run(
     match p.name() {
         "new-session" => {
             // -A: a session of that name already there is attached instead
-            // (even with -d), as tmux's.
+            // (even with -d), as tmux's, -D as attach-session's -d.
             if a.has('A')
                 && let Some(name) = a.value('s')
                 && let Some(sid) = srv.sessions.values().find(|s| s.name == name).map(|s| s.id)
             {
-                match attached_client(srv, ctx) {
-                    Some(c) => srv.switch_client(c, sid),
-                    None => out.attach = Some(sid),
-                }
+                attach_to(srv, ctx, a, sid, a.has('D'), out)?;
                 return Ok(true);
             }
+            let read_only = client_flags(a)?;
             // -x / -y are the window's size, as tmux's: no status row comes
             // out of them.
             let size = match (a.value('x'), a.value('y')) {
@@ -45,8 +44,13 @@ pub(super) fn run(
             let cwd = cwd_arg(srv, ctx, None, a)
                 .or_else(|| ctx.cwd.clone())
                 .unwrap_or_else(crate::util::home_dir);
-            // -e sets the new session's environment, after the client's.
-            let mut env = session_env(srv, ctx);
+            // -e sets the new session's environment, after the client's
+            // (none of it with -E).
+            let mut env = if a.has('E') {
+                Vec::new()
+            } else {
+                session_env(srv, ctx)
+            };
             env.extend(super::env_flags(a)?);
             let sid = srv.new_session(
                 a.value('s').map(str::to_owned),
@@ -57,6 +61,7 @@ pub(super) fn run(
                 size,
             )?;
             if !a.has('d') {
+                set_read_only(srv, ctx, read_only);
                 match attached_client(srv, ctx) {
                     Some(c) => srv.switch_client(c, sid),
                     None => out.attach = Some(sid),
@@ -68,28 +73,7 @@ pub(super) fn run(
                 return Err("no sessions".into());
             }
             let sid = target::session(srv, ctx, a.value('t'))?;
-            if a.has('d') {
-                let others: Vec<ClientId> = srv
-                    .clients
-                    .values()
-                    .filter(|c| c.att.as_ref().is_some_and(|x| x.session == sid))
-                    .filter(|c| Some(c.id) != ctx.client)
-                    .map(|c| c.id)
-                    .collect();
-                for c in others {
-                    srv.detach(c, "detached");
-                }
-            }
-            // -r: this client may look but not type.
-            if a.has('r')
-                && let Some(c) = ctx.client.and_then(|c| srv.clients.get_mut(&c))
-            {
-                c.attach_read_only = true;
-            }
-            match attached_client(srv, ctx) {
-                Some(c) => srv.switch_client(c, sid),
-                None => out.attach = Some(sid),
-            }
+            attach_to(srv, ctx, a, sid, a.has('d'), out)?;
         }
         "detach-client" => {
             let targets: Vec<ClientId> = if a.has('a') {
@@ -318,4 +302,78 @@ fn target_client(srv: &Server, spec: &str) -> Result<ClientId, String> {
         .ok()
         .filter(|id| srv.clients.get(id).is_some_and(|c| c.att.is_some()))
         .ok_or_else(|| format!("can't find client: {spec}"))
+}
+
+/// Attach the command's client to `sid` (or switch it there), as
+/// `attach-session` and `new-session -A` do: `detach_others` (`-d`, `-D`)
+/// detaches the session's other clients, `-r` or `-f read-only` makes this
+/// one read-only, `-c` sets the session's working directory, and unless `-E`
+/// the session takes the client's `update-environment` variables (one the
+/// client does not have is marked removed), as tmux's `environ_update`.
+fn attach_to(
+    srv: &mut Server,
+    ctx: &Ctx,
+    a: &Args,
+    sid: SessionId,
+    detach_others: bool,
+    out: &mut Outcome,
+) -> Result<(), String> {
+    let read_only = a.has('r') || client_flags(a)?;
+    if let Some(cwd) = cwd_arg(srv, ctx, None, a)
+        && let Some(s) = srv.sessions.get_mut(&sid)
+    {
+        s.cwd = cwd;
+    }
+    if !a.has('E') {
+        let found = session_env(srv, ctx);
+        let names = srv.cfg.update_environment.clone();
+        if let Some(s) = srv.sessions.get_mut(&sid) {
+            for name in &names {
+                let value = found
+                    .iter()
+                    .find(|(k, _)| k == name)
+                    .map(|(_, v)| v.clone());
+                s.env.set(name, value);
+            }
+        }
+    }
+    if detach_others {
+        let others: Vec<ClientId> = srv
+            .clients
+            .values()
+            .filter(|c| c.att.as_ref().is_some_and(|x| x.session == sid))
+            .filter(|c| Some(c.id) != ctx.client)
+            .map(|c| c.id)
+            .collect();
+        for c in others {
+            srv.detach(c, "detached");
+        }
+    }
+    set_read_only(srv, ctx, read_only);
+    match attached_client(srv, ctx) {
+        Some(c) => srv.switch_client(c, sid),
+        None => out.attach = Some(sid),
+    }
+    Ok(())
+}
+
+/// Whether `-f`'s client flags (comma separated) ask for `read-only`, the
+/// one tmxr has; tmux's others are refused by name.
+fn client_flags(a: &Args) -> Result<bool, String> {
+    let mut read_only = false;
+    for flag in a.value('f').into_iter().flat_map(|f| f.split(',')) {
+        match flag.trim() {
+            "" => {}
+            "read-only" => read_only = true,
+            f => return Err(format!("unsupported client flag: {f}")),
+        }
+    }
+    Ok(read_only)
+}
+
+/// Make the command's client read-only: it may look but not type.
+fn set_read_only(srv: &mut Server, ctx: &Ctx, read_only: bool) {
+    if read_only && let Some(c) = ctx.client.and_then(|c| srv.clients.get_mut(&c)) {
+        c.attach_read_only = true;
+    }
 }

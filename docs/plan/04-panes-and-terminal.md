@@ -10,11 +10,12 @@
   session's start directory. `-c '#{pane_current_path}'` is what every split and
   new-window bind in the default config uses, so the current-path lookup below
   is MVP-critical.
-- Environment: the server's global environment, overlaid by the session's
-  (captured from the creating client's `update-environment` variables), plus
-  `TERM=<default-terminal>` (`tmux-256color` in the config; falls back to
-  `xterm-256color` if the terminfo entry is missing — tmux has the same
-  problem), `COLORTERM=truecolor`, `TMXR`, `TMXR_PANE`.
+- Environment: the server's global environment, overlaid by the session's (the
+  `update-environment` variables of the client that created the session, updated
+  by each client that attaches to it), plus `TERM=<default-terminal>`
+  (`tmux-256color` in the config; falls back to `xterm-256color` if the terminfo
+  entry is missing — tmux has the same problem), `COLORTERM=truecolor`, `TMXR`,
+  `TMXR_PANE`.
 
 ## Emulation
 

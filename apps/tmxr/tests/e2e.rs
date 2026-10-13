@@ -557,6 +557,70 @@ fn a_bare_tmxr_opens_its_directorys_session() {
 /// The owner's `t` script: a session per directory with three windows,
 /// window 0 in front, made by a bare `tmxr` and a `[hooks]` config entry.
 #[test]
+fn attaching_takes_tmuxs_c_d_e_and_f() {
+    let t = Tmxr::new("attachflags");
+    let work = t.dir.path().join("work.dir");
+    std::fs::create_dir(&work).unwrap();
+    t.run(&["new-session", "-d", "-s", "at"]);
+    let sock = || {
+        t.run(&["show-environment", "-t", "at", "SSH_AUTH_SOCK"])
+            .trim()
+            .to_owned()
+    };
+
+    // Attaching takes the client's update-environment variables, as tmux's.
+    let mut a = t.attach_env(
+        &["attach", "-t", "at"],
+        &[("SSH_AUTH_SOCK", Some("first-sock"))],
+    );
+    a.wait_for("status line", |text| text.contains("at"));
+    assert_eq!(sock(), "SSH_AUTH_SOCK=first-sock");
+    // -E leaves them; -d detaches the session's other clients; -c moves
+    // the session's directory, where its new windows start.
+    let work_arg = work.display().to_string();
+    let mut b = t.attach_env(
+        &["attach", "-dE", "-c", &work_arg, "-t", "at"],
+        &[("SSH_AUTH_SOCK", Some("second-sock"))],
+    );
+    a.wait_exit();
+    b.wait_for("status line", |text| text.contains("at"));
+    assert_eq!(sock(), "SSH_AUTH_SOCK=first-sock");
+    t.run(&["new-window", "-d", "-t", "at:1"]);
+    t.wait_run(
+        &[
+            "display-message",
+            "-p",
+            "-t",
+            "at:1",
+            "#{pane_current_path}",
+        ],
+        "the session's new directory",
+        |o| o.trim().ends_with("work.dir"),
+    );
+
+    // new -A -D as attach -d, and -f read-only; a client without a
+    // variable marks it removed.
+    let c = t.attach_env(
+        &["new", "-A", "-D", "-s", "at", "-f", "read-only"],
+        &[("SSH_AUTH_SOCK", None)],
+    );
+    b.wait_exit();
+    c.wait_for("status line", |text| text.contains("at"));
+    assert_eq!(sock(), "-SSH_AUTH_SOCK");
+    t.wait_prompt("at:0");
+    c.send(b"echo typed-read-only\r");
+    std::thread::sleep(Duration::from_secs(1));
+    let screen = t.run(&["capture-pane", "-p", "-t", "at:0"]);
+    assert!(!screen.contains("typed-read-only"), "{screen}");
+    // Client flags tmxr does not have are refused by name.
+    let bad = t.output(&["attach", "-f", "no-output", "-t", "at"]);
+    assert!(
+        String::from_utf8_lossy(&bad.stderr).contains("unsupported client flag: no-output"),
+        "{bad:?}"
+    );
+}
+
+#[test]
 fn a_session_created_hook_from_the_config_adds_windows() {
     let t = Tmxr::new("hookcfg");
     let mut config = std::fs::read_to_string(&t.config).unwrap();

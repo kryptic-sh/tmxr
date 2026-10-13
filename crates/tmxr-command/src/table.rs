@@ -37,10 +37,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "attach-session",
         Some("attach"),
-        "drt:",
+        "c:dEf:rt:",
         0,
         0,
-        "[-dr] [-t target-session]"
+        "[-dEr] [-c working-directory] [-f flags] [-t target-session]"
     ),
     cmd!(
         "bind-key",
@@ -342,10 +342,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "new-session",
         Some("new"),
-        "Adc:e:n:s:x:y:",
+        "Ac:dDe:Ef:n:s:x:y:",
         0,
         ANY,
-        "[-Ad] [-c start-directory] [-n window-name] [-s session-name] [-x width] [-y height] [command]"
+        "[-AdDE] [-c start-directory] [-e environment] [-f flags] [-n window-name] [-s session-name] [-x width] [-y height] [command]"
     ),
     cmd!(
         "new-window",

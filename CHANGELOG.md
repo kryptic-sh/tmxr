@@ -21,9 +21,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`set-option -q` and `show-options -q`**: an unknown option (or an unset user
   option) is no error. `set-option -o` works for session options too.
 - **`show-options -s`** lists the server options.
+- **`attach-session -c`, `-E` and `-f read-only`, and `new-session -D`, `-E` and
+  `-f`**, as tmux's: `-c` sets the session's working directory, `-E` leaves its
+  environment alone, `-f read-only` attaches read-only (as `-r`; tmux's other
+  client flags are refused), and `new-session -A -D` detaches the session's
+  other clients as `attach-session -d` does.
 
 ### Changed
 
+- **Attaching updates the session's environment**, as tmux's: the
+  `update-environment` variables of a client that attaches (`attach-session`,
+  `new-session -A`) replace the session's, and one the client does not have is
+  marked removed, so new panes get the attaching terminal's `DISPLAY`,
+  `SSH_AUTH_SOCK` and the rest. `-E` keeps the old values.
 - **Breaking: `show-options` without `-g` reads the target session's own
   values**, as tmux's: `show -v status-left` prints nothing unless the session
   sets it (use `-g` for the global value), and `show-options` alone lists only
