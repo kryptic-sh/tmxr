@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`display-message -t` with a target that names nothing** fails with
+  `can't find …`, as tmux's; it showed pane `%0`'s values instead.
+
 ## [0.6.0] - 2026-10-12
 
 ### Added

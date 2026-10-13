@@ -223,7 +223,12 @@ pub(super) fn run(
             }
         }
         "display-message" => {
-            let (_, _, pid) = target::pane(srv, ctx, a.value('t')).unwrap_or((0, 0, 0));
+            // A -t that names nothing is an error, as tmux's; with no -t and
+            // no pane to be current, the formats expand without one.
+            let (_, _, pid) = match a.value('t') {
+                Some(t) => target::pane(srv, ctx, Some(t))?,
+                None => target::pane(srv, ctx, None).unwrap_or((0, 0, 0)),
+            };
             let fmt = pos.first().map_or(
                 "[#S] #I:#P [#{pane_width}x#{pane_height}] \"#{pane_title}\" #{pane_current_command} #{pane_current_path}",
                 String::as_str,

@@ -175,10 +175,6 @@ table. What has been verified, and how:
 - **`new-session -A` without tmux's `-D`, `-X`, `-E` and `-f`** (2026-10-12):
   attaching through `-A` cannot detach the session's other clients or set client
   flags as tmux's does; `attach-session -d` can. Not asked for.
-- **`display-message -t` with a target that does not resolve** shows pane `%0`
-  (`target::pane(...).unwrap_or((0, 0, 0))` in `cmds/prompt.rs`), where tmux
-  fails with `can't find pane: …`. Found 2026-10-12 while testing dotted session
-  names; not fixed (out of that change's scope).
 - **tmux default binds**: most of tmux's defaults are bound (see above);
   `prefix C-z` (suspend-client) errors on Windows, which has no job control.
   Alerts follow tmux 3.6's, as recorded from a running tmux on 2026-10-10 (WSL

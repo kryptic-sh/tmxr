@@ -474,7 +474,7 @@ fn command_clients_start_and_stop_a_server() {
 #[test]
 fn session_names_may_hold_dots() {
     let t = Tmxr::new("dots");
-    // Pane %0 is elsewhere: display-message falls back to it on a bad -t.
+    // Pane %0 is elsewhere, so a target that went wrong cannot pass for it.
     t.run(&["new-session", "-d", "-s", "first", "-n", "elsewhere"]);
     t.run(&["new-session", "-d", "-s", "my.app", "-n", "zero"]);
     t.run(&["new-window", "-d", "-t", "my.app", "-n", "one"]);
@@ -496,6 +496,13 @@ fn session_names_may_hold_dots() {
     // A dotted word naming no session is still window.pane.
     // (my.app is the current session, as the newest.)
     assert_eq!(name("one.1"), "my.app one 1");
+    // A target naming nothing is an error, not some other pane.
+    let none = t.output(&["display", "-p", "-t", "no.such", "#S"]);
+    assert!(!none.status.success(), "{none:?}");
+    assert!(
+        String::from_utf8_lossy(&none.stderr).contains("can't find"),
+        "{none:?}"
+    );
 
     t.run(&["rename-session", "-t", "my.app", "v1.2.3"]);
     assert!(t.run(&["ls", "-F", "#S"]).lines().any(|l| l == "v1.2.3"));
