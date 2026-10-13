@@ -250,14 +250,33 @@ fn env_flags(a: &Args) -> Result<Vec<(String, String)>, String> {
         .collect()
 }
 
+/// What `update-environment` takes from a client's environment `env`, as
+/// tmux's `environ_update` reads it: each entry is an `fnmatch` pattern and
+/// every variable it matches is taken; an entry that matches none names a
+/// variable the client does not have (`None`).
+fn updated_env(srv: &Server, env: &[(String, String)]) -> Vec<(String, Option<String>)> {
+    let mut out = Vec::new();
+    for pattern in &srv.cfg.update_environment {
+        let re = crate::util::glob_regex(pattern);
+        let before = out.len();
+        out.extend(
+            env.iter()
+                .filter(|(k, _)| re.is_match(k))
+                .map(|(k, v)| (k.clone(), Some(v.clone()))),
+        );
+        if out.len() == before {
+            out.push((pattern.clone(), None));
+        }
+    }
+    out
+}
+
+/// A new session's environment: the variables `update-environment` takes
+/// from the creating client that it has.
 fn session_env(srv: &Server, ctx: &Ctx) -> Vec<(String, String)> {
-    let wanted = &srv.cfg.update_environment;
-    let from = |k: &str| -> Option<String> {
-        ctx.env.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone())
-    };
-    wanted
-        .iter()
-        .filter_map(|k| from(k).map(|v| (k.clone(), v)))
+    updated_env(srv, &ctx.env)
+        .into_iter()
+        .filter_map(|(k, v)| Some((k, v?)))
         .collect()
 }
 

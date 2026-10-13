@@ -359,11 +359,10 @@ fn attach_to(
 /// Give session `sid` the `update-environment` variables of a client's
 /// environment `env`, marking one it lacks removed: tmux's `environ_update`.
 fn update_env(srv: &mut Server, sid: SessionId, env: &[(String, String)]) {
-    let names = srv.cfg.update_environment.clone();
+    let updates = super::updated_env(srv, env);
     if let Some(s) = srv.sessions.get_mut(&sid) {
-        for name in &names {
-            let value = env.iter().find(|(k, _)| k == name).map(|(_, v)| v.clone());
-            s.env.set(name, value);
+        for (name, value) in updates {
+            s.env.set(&name, value);
         }
     }
 }

@@ -177,8 +177,9 @@ table. What has been verified, and how:
   2026-10-14): `attach-session -x` / `new-session -X` (detach the others and
   hang up their parent shells) are not supported, as `detach-client -P` is not;
   `-f` takes `read-only` only and refuses tmux's other client flags by name; and
-  `update-environment` names are matched exactly, not as tmux's `fnmatch`
-  patterns.
+  a new session only takes the `update-environment` variables its client has,
+  where tmux's also marks the missing ones removed (attaching and switching do
+  mark them).
 - **tmux default binds**: most of tmux's defaults are bound (see above);
   `prefix C-z` (suspend-client) errors on Windows, which has no job control.
   Alerts follow tmux 3.6's, as recorded from a running tmux on 2026-10-10 (WSL

@@ -680,6 +680,26 @@ fn attaching_takes_tmuxs_c_d_e_and_f() {
 }
 
 #[test]
+fn update_environment_entries_are_patterns() {
+    let t = Tmxr::new("envglob");
+    // Top-level keys go before the file's first table.
+    let config = std::fs::read_to_string(&t.config).unwrap();
+    let config = format!("update-environment = [\"E2E_GLOB_*\", \"E2E_NONE\"]\n{config}");
+    std::fs::write(&t.config, config).unwrap();
+    t.run(&["new-session", "-d", "-s", "eg"]);
+    let s = t.attach_env(
+        &["attach", "-t", "eg"],
+        &[("E2E_GLOB_ONE", Some("1")), ("E2E_GLOB_TWO", Some("2"))],
+    );
+    s.wait_for("status line", |text| text.contains("eg"));
+    let env = t.run(&["show-environment", "-t", "eg"]);
+    let lines: Vec<&str> = env.lines().map(str::trim).collect();
+    for want in ["E2E_GLOB_ONE=1", "E2E_GLOB_TWO=2", "-E2E_NONE"] {
+        assert!(lines.contains(&want), "{want} missing: {env}");
+    }
+}
+
+#[test]
 fn a_session_created_hook_from_the_config_adds_windows() {
     let t = Tmxr::new("hookcfg");
     let mut config = std::fs::read_to_string(&t.config).unwrap();

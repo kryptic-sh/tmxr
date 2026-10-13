@@ -21,6 +21,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`set-option -q` and `show-options -q`**: an unknown option (or an unset user
   option) is no error. `set-option -o` works for session options too.
 - **`show-options -s`** lists the server options.
+- **`update-environment` entries are patterns**, as tmux's: `SSH_*` takes every
+  variable it matches (`*`, `?` and `[...]`, as `fnmatch`).
 - **`load-buffer -`** reads the buffer from the command's standard input, as
   tmux's (`xclip -o | tmxr loadb -`). The client sends its input to the server,
   so this needs protocol 5: a running server from an older tmxr must be
