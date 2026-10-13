@@ -36,6 +36,21 @@ table. What has been verified, and how:
   `Access is denied. (os error 5)` while the owner's succeeds. Shown to go red
   (2026-10-09) with Everyone added to the DACL.
 
+## Decisions waiting on the owner
+
+- **OSC 8 hyperlinks** (tmux keeps a pane's links: the pane menu's link items,
+  `#{mouse_hyperlink}`). tmxr's screen is the `vt100` crate's, which drops OSC
+  8, so a link never reaches tmxr. Options: fork `vt100` (as crossterm is
+  patched, `[patch.crates-io]` on a kryptic-sh branch) to keep a cell's link; or
+  move to tmxr's own grid, a much larger change. Both are a dependency decision;
+  nothing was started.
+- **A pane made taller again gets blank rows** (see below): the same choice, a
+  `vt100` fork that can move history rows back onto the screen, or tmxr's own
+  grid.
+- **Fuzzing the command parser and the frame codec** (`docs/plan/14`, a weekly
+  cron job): needs `cargo-fuzz` and `libfuzzer-sys`, new dependencies on a
+  nightly toolchain, or `proptest`-style property tests on stable, also new.
+
 ## Known gaps and follow-ups
 
 - **Mouse use as in the owner's tmux config** (asked for 2026-10-11). The tmux
@@ -202,7 +217,11 @@ table. What has been verified, and how:
   blocks the reader when full; before that queue, an unbounded channel let `seq`
   on Linux CI bury a key press under 6–9 s of output (2026-10-09).
   `detach_stays_responsive_under_flood_output` checks every CI platform detaches
-  within 5 s under a flood. Frame rate itself is still not capped or measured.
+  within 5 s under a flood. Frame rate itself is not capped or measured;
+  considered and not done (2026-10-14): tmux has no cap either (it redraws once
+  per pass of its event loop, as tmxr does), and nothing has shown a need. A cap
+  is worth adding only with a measurement showing frames wasted, for example the
+  bytes sent to a client under a flood against what it can show.
 - **Resurrect**: a pane's title is saved and restored, but a restored program
   that titles itself wins, and on Windows ConPTY reports cmd's own title as it
   starts, so there a saved title barely shows. Arguments are restored only for
