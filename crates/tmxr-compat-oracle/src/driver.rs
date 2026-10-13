@@ -125,7 +125,7 @@ impl Server {
 
     fn command(&self, words: &[&str]) -> Command {
         let base = self.base();
-        let mut cmd = Command::new(base.program);
+        let mut cmd = tmxr_term::child::command(base.program);
         cmd.args(base.args).args(words);
         for (k, v) in base.env {
             cmd.env(k, v);

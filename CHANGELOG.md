@@ -52,6 +52,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **No console windows flash up on Windows**: the server, which runs with no
+  console, gave every shell command it started (`run-shell`, `if-shell`,
+  `copy-pipe`, `pipe-pane`, and the binds that use them) a console window of its
+  own. They now run without one.
 - **C-h and C-j reach the program in a pane on Windows**: hjkl, nvim and other
   programs in a tmxr pane got C-h as Ctrl+Backspace and C-j as Ctrl+Enter (the
   pane's ConPTY read their bytes that way), so their own C-h / C-j binds, such

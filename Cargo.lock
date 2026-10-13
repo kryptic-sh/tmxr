@@ -2305,6 +2305,7 @@ dependencies = [
  "libc",
  "tmxr-command",
  "tmxr-proto",
+ "tmxr-term",
  "windows-sys",
 ]
 
@@ -2324,6 +2325,7 @@ dependencies = [
  "portable-pty",
  "serde",
  "tempfile",
+ "tmxr-term",
  "toml",
  "vt100",
 ]

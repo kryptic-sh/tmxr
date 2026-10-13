@@ -38,8 +38,8 @@ pub fn server(endpoint: &Endpoint, config: Option<&Path>) -> io::Result<()> {
 #[cfg(unix)]
 fn spawn_detached(exe: &Path, args: &[OsString]) -> io::Result<()> {
     use std::os::unix::process::CommandExt;
-    use std::process::{Command, Stdio};
-    let mut cmd = Command::new(exe);
+    use std::process::Stdio;
+    let mut cmd = tmxr_term::child::command(exe);
     cmd.args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())

@@ -1,5 +1,7 @@
 //! One tmxr pane's terminal.
 //!
+//! - [`child`]: a `Command` for other child processes that opens no console
+//!   window on Windows.
 //! - [`pty`]: spawn a program on a pseudo-terminal (openpty / ConPTY) and
 //!   stream its output and exit as [`pty::PtyEvent`]s.
 //! - [`emulator`]: the per-pane `vt100` screen plus the side channels vt100
@@ -10,6 +12,7 @@
 //!
 //! See `docs/plan/04-panes-and-terminal.md`.
 
+pub mod child;
 pub mod dcs;
 pub mod emulator;
 pub mod encode;

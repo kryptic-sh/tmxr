@@ -15,6 +15,7 @@ crossterm = "0.29.0"
 interprocess = "2.4.4"
 tmxr-command.workspace = true
 tmxr-proto.workspace = true
+tmxr-term.workspace = true
 
 [lints]
 workspace = true

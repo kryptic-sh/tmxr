@@ -6,7 +6,6 @@
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -72,7 +71,7 @@ impl Tmxr {
 
     /// Run a command client.
     fn output(&self, rest: &[&str]) -> std::process::Output {
-        Command::new(env!("CARGO_BIN_EXE_tmxr"))
+        tmxr_term::child::command(env!("CARGO_BIN_EXE_tmxr"))
             .args(self.args(rest))
             .envs(self.env())
             .output()
@@ -82,7 +81,7 @@ impl Tmxr {
     /// Run a command client against the server at `socket` (`-S`) in place
     /// of the test's label.
     fn output_at(&self, socket: &str, rest: &[&str]) -> std::process::Output {
-        Command::new(env!("CARGO_BIN_EXE_tmxr"))
+        tmxr_term::child::command(env!("CARGO_BIN_EXE_tmxr"))
             .args(["-S", socket, "-f"])
             .arg(&self.config)
             .args(rest)
@@ -260,7 +259,7 @@ fn saved_args(save: &str) -> Vec<String> {
 
 impl Drop for Tmxr {
     fn drop(&mut self) {
-        let _ = Command::new(env!("CARGO_BIN_EXE_tmxr"))
+        let _ = tmxr_term::child::command(env!("CARGO_BIN_EXE_tmxr"))
             .args(self.args(&["kill-server"]))
             .envs(self.env())
             .output();
@@ -791,6 +790,41 @@ fn buffers_save_to_and_load_from_files() {
     std::fs::write(&file, "from a file\n").unwrap();
     t.run(&["load-buffer", "-b", "two", &path]);
     assert_eq!(t.run(&["show-buffer", "-b", "two"]), "from a file\n");
+}
+
+/// Set for the copy of this binary [`console_window_probe`] runs as.
+#[cfg(windows)]
+const CONSOLE_PROBE: &str = "TMXR_E2E_CONSOLE_PROBE";
+
+/// Not a test: run by [`shell_commands_open_no_console_window`] through the
+/// server, it prints whether its console has a window.
+#[cfg(windows)]
+#[test]
+#[ignore = "a probe another test runs"]
+fn console_window_probe() {
+    use windows_sys::Win32::System::Console::GetConsoleWindow;
+    if std::env::var_os(CONSOLE_PROBE).is_none() {
+        return;
+    }
+    // SAFETY: takes no arguments and only reads this process's console.
+    let window = unsafe { GetConsoleWindow() };
+    println!("console-window={}", !window.is_null());
+}
+
+/// The server runs detached, with no console: a shell command it starts
+/// must not be given a console window of its own (one per `run-shell`).
+#[cfg(windows)]
+#[test]
+fn shell_commands_open_no_console_window() {
+    let t = Tmxr::new("nowindow");
+    t.run(&["new-session", "-d", "-s", "nw"]);
+    let me = std::env::current_exe().unwrap();
+    let line = format!(
+        "set {CONSOLE_PROBE}=1&& {} console_window_probe --exact --ignored --nocapture",
+        me.display()
+    );
+    let out = t.run(&["run-shell", &line]);
+    assert!(out.contains("console-window=false"), "{out}");
 }
 
 #[test]
@@ -2369,7 +2403,10 @@ fn sigterm_saves_sessions_before_the_server_exits() {
     let pid = t.run(&["display-message", "-p", "-t", "keepme", "#{pid}"]);
     let pid = pid.trim();
     assert!(pid.parse::<u32>().is_ok(), "{pid:?}");
-    let killed = Command::new("kill").args(["-TERM", pid]).status().unwrap();
+    let killed = tmxr_term::child::command("kill")
+        .args(["-TERM", pid])
+        .status()
+        .unwrap();
     assert!(killed.success());
     t.wait_run(&["ls"], "server gone", str::is_empty);
     let root = t.dir.path().join("data").join("tmxr").join("resurrect");
@@ -2730,7 +2767,7 @@ fn panes_inherit_the_servers_path() {
     )
     .unwrap();
     // The server starts with the extended PATH, as from a shell that set it.
-    let started = Command::new(env!("CARGO_BIN_EXE_tmxr"))
+    let started = tmxr_term::child::command(env!("CARGO_BIN_EXE_tmxr"))
         .args(t.args(&["new-session", "-d", "-s", "pa"]))
         .envs(t.env())
         .env("PATH", &path)
@@ -3109,7 +3146,7 @@ fn wait_for_blocks_until_signalled_or_unlocked() {
     let t = Tmxr::new("waitfor");
     t.run(&["new-session", "-d", "-s", "wf"]);
     let spawn = |args: &[&str]| {
-        Command::new(env!("CARGO_BIN_EXE_tmxr"))
+        tmxr_term::child::command(env!("CARGO_BIN_EXE_tmxr"))
             .args(t.args(args))
             .envs(t.env())
             .stdout(std::process::Stdio::null())

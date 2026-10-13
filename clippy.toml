@@ -1,2 +1,8 @@
 avoid-breaking-exported-api = false
 msrv = "1.95"
+# A console child started by a process with no console of its own gets a
+# window on Windows; `tmxr_term::child::command` decides per process whether
+# to suppress it. See `crates/tmxr-term/src/child.rs`.
+disallowed-methods = [
+    { path = "std::process::Command::new", reason = "use tmxr_term::child::command, which opens no console window on Windows" },
+]

@@ -195,7 +195,7 @@ pub fn load_corpus(path: &Path) -> Result<Corpus, String> {
 /// and another would differ for its own reasons.
 pub fn tmux_program() -> Option<PathBuf> {
     let program = PathBuf::from(std::env::var_os("TMUX_BIN")?);
-    std::process::Command::new(&program)
+    tmxr_term::child::command(&program)
         .arg("-V")
         .output()
         .ok()

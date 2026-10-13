@@ -197,7 +197,7 @@ pub fn spawn_input(send: Arc<Mutex<SendHalf>>) -> Input {
 /// unlock cleanly.
 pub fn run_lock(command: &str) -> Result<(), String> {
     #[cfg(unix)]
-    let status = std::process::Command::new("/bin/sh")
+    let status = tmxr_term::child::command("/bin/sh")
         .arg("-c")
         .arg(command)
         .status();
@@ -205,7 +205,7 @@ pub fn run_lock(command: &str) -> Result<(), String> {
     let status = {
         use std::os::windows::process::CommandExt as _;
         // Raw, as cmd parses its own command line rather than argv.
-        std::process::Command::new("cmd")
+        tmxr_term::child::command("cmd")
             .arg("/C")
             .raw_arg(command)
             .status()

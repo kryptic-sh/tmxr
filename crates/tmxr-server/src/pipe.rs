@@ -3,7 +3,7 @@
 //! pane, as tmux does it (`pipe-pane 'cat >> ~/pane.log'`).
 
 use std::io::{Read as _, Write as _};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
 use std::sync::mpsc::{Sender, SyncSender, sync_channel};
 
 use crate::model::PaneId;
@@ -47,7 +47,7 @@ impl PanePipe {
     ) -> std::io::Result<Self> {
         let argv = crate::util::shell_command(line, default_shell);
         let piped = |on: bool| if on { Stdio::piped() } else { Stdio::null() };
-        let mut child = Command::new(&argv[0])
+        let mut child = tmxr_term::child::command(&argv[0])
             .args(&argv[1..])
             .stdin(piped(dir.output))
             .stdout(piped(dir.input))

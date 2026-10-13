@@ -32,14 +32,14 @@ pub fn shell_succeeds(line: &str, shell: Option<&str>) -> bool {
 /// standard input, off the state thread. A failure goes to the message log.
 pub fn pipe_to_shell(srv: &Server, pane: PaneId, line: String, input: String) {
     use std::io::Write as _;
-    use std::process::{Command, Stdio};
+    use std::process::Stdio;
     let events = srv.events.clone();
     let shell = srv.pane_session_options(Some(pane)).default_shell.clone();
     let _ = std::thread::Builder::new()
         .name("tmxr-copy-pipe".into())
         .spawn(move || {
             let argv = crate::util::shell_command(&line, shell.as_deref());
-            let run = Command::new(&argv[0])
+            let run = tmxr_term::child::command(&argv[0])
                 .args(&argv[1..])
                 .stdin(Stdio::piped())
                 .stdout(Stdio::null())
@@ -68,7 +68,7 @@ fn shell_output(
     shell: Option<&str>,
 ) -> std::io::Result<std::process::Output> {
     let argv = crate::util::shell_command(line, shell);
-    let mut cmd = std::process::Command::new(&argv[0]);
+    let mut cmd = tmxr_term::child::command(&argv[0]);
     cmd.args(&argv[1..]).stdin(std::process::Stdio::null());
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
