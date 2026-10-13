@@ -337,18 +337,27 @@ impl Server {
     }
 
     /// The pane itself, plus, when it synchronizes input, its siblings that
-    /// do too (tmux's `window_pane_copy_key`).
+    /// do too and can take it: not in a mode (copy or clock mode), not dead,
+    /// and not hidden by a zoom (tmux's `window_pane_copy_key`).
     fn input_targets(&self, pane: PaneId) -> Vec<PaneId> {
         let Some(wid) = self.panes.get(&pane).map(|p| p.window) else {
             return Vec::new();
         };
         let synchronized = |p: PaneId| self.pane_options(p).synchronize_panes;
         match self.windows.get(&wid) {
-            Some(w) if synchronized(pane) => w
-                .panes()
-                .into_iter()
-                .filter(|&p| p == pane || synchronized(p))
-                .collect(),
+            Some(w) if synchronized(pane) => {
+                let takes_input = |p: PaneId| {
+                    self.panes
+                        .get(&p)
+                        .is_some_and(|q| q.copy.is_none() && !q.clock && q.dead.is_none())
+                        && (!w.zoomed || p == w.active)
+                        && synchronized(p)
+                };
+                w.panes()
+                    .into_iter()
+                    .filter(|&p| p == pane || takes_input(p))
+                    .collect()
+            }
             _ => vec![pane],
         }
     }

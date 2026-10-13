@@ -38,6 +38,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`synchronize-panes` no longer types into panes that cannot take it**: a
+  sibling in copy or clock mode, a dead pane, or one hidden by a zoomed window
+  is skipped, as tmux's.
 - **`display-message -t` with a target that names nothing** fails with
   `can't find …`, as tmux's; it showed pane `%0`'s values instead.
 

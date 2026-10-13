@@ -88,9 +88,10 @@ table. What has been verified, and how:
   - **`show-options -H`** (hooks in the list) is not supported.
   - **`show-options` quotes values with single quotes** (`@x 'a b'`), tmux with
     double (`@x "a b"`). Both read back the same.
-  - **Synchronized input goes to every synchronized pane**: tmux's
-    `window_pane_copy_key` also skips panes in a mode, panes whose program has
-    exited and panes hidden by zoom. Read in tmux's source, not compared.
+  - **Synchronized input skips panes as tmux's does** (`input_targets`, from
+    `window_pane_copy_key`): in a mode, dead, or hidden by a zoom. The copy mode
+    and zoom cases are tested end to end and were compared with tmux 3.6
+    (2026-10-14); the clock-mode and dead-pane cases are not tested.
 - **A pane made taller again gets blank rows at the bottom**: tmux 3.6
   (`screen_resize_y`) first takes back the rows a shrink pushed into the history
   (`hscrolled`), so a split then closed restores the screen; tmxr's
