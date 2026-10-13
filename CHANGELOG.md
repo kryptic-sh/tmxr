@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-14
+
 ### Added
 
 - **Session options per session, as tmux's**: a session option set without `-g`
@@ -47,6 +49,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Breaking: the client-server protocol is now 5** (for `load-buffer -` and
+  `detach-client -P`): after upgrading, a server still running from 0.6 must be
+  restarted (`tmxr kill-server`); the client says so if it meets one.
 - **Attaching updates the session's environment**, as tmux's: the
   `update-environment` variables of a client that attaches (`attach-session`,
   `new-session -A`) or switches to it (`switch-client`) replace the session's,
@@ -633,7 +638,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   published to GitHub Releases with `.sha256` files, and shell completions and a
   man page from the hidden `tmxr --completions <shell>` and `tmxr --man`.
 
-[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/kryptic-sh/tmxr/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/kryptic-sh/tmxr/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/kryptic-sh/tmxr/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/kryptic-sh/tmxr/compare/v0.3.0...v0.4.0
