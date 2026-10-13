@@ -22,6 +22,13 @@ Checks only, no deploy steps. `.github/workflows/ci.yml`, triggered on
 | `deny`    | ubuntu                   | `cargo deny --all-features check` (licenses, bans, sources, advisories)                                                 |
 | `audit`   | ubuntu                   | `cargo audit`                                                                                                           |
 
+`leak-guard` (ubuntu / macos / windows, after hrdr's) runs the suite again with
+`$HOME` and the XDG roots aimed at an empty sentinel directory, and fails if a
+test wrote to tmxr's places there or to tmxr's directories under the real home
+(Windows finds the home folder through the shell, not `$HOME`). Every e2e test
+still sets `TMXR_TMPDIR` and the XDG roots to its own temp directory; the guard
+is what catches one that does not.
+
 Conventions carried over from hrdr: `RUSTFLAGS=-D warnings`,
 `CARGO_TERM_COLOR=always`, `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24`, concurrency
 group cancelling superseded non-tag runs, `fail-fast: false` matrices,
@@ -68,9 +75,4 @@ Before the first tag:
 
 ## Phase 3 — later
 
-- `leak-guard`: hrdr runs the suite with `$HOME`/XDG pointed at an empty
-  sentinel dir and fails if anything lands there. tmxr tests create sockets,
-  configs and resurrect files, so this guard is worth adopting once the
-  integration tests exist; until then every test sets `TMXR_TMPDIR` and the XDG
-  roots to a temp dir explicitly.
 - Weekly cron extras (fuzzing the command parser and the frame codec).

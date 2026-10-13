@@ -111,6 +111,56 @@ jobs:
           --no-tests=warn
       - run: cargo test --workspace --doc --all-features --locked
 
+  # No test may write the user's real state. The whole suite again, with
+  # $HOME and the XDG roots aimed at an empty sentinel directory: what a test
+  # writes to tmxr's places there (the XDG roots and their home-relative
+  # fallbacks) would have landed in a real home. Windows finds the home
+  # folder through the shell, not $HOME / USERPROFILE, so tmxr's directories
+  # under the real one are checked for new files too. Programs the tests run
+  # keep their own state there (PowerShell's under AppData), as cargo does.
+  leak-guard:
+    name: no test writes real user state ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          toolchain: stable
+          cache: false
+      - run: rustup update --no-self-update stable
+      - uses: Swatinem/rust-cache@v2
+      - shell: bash
+        run: |
+          set -euo pipefail
+          sentinel=$(mktemp -d)
+          marker=$(mktemp)
+          if command -v cygpath >/dev/null; then sentinel=$(cygpath -m "$sentinel"); fi
+          # cargo and rustup find their own homes through $HOME: pin the real ones.
+          export CARGO_HOME=${CARGO_HOME:-$HOME/.cargo} RUSTUP_HOME=${RUSTUP_HOME:-$HOME/.rustup}
+          real_home=$HOME
+          HOME=$sentinel USERPROFILE=$sentinel \
+            XDG_CONFIG_HOME=$sentinel/config XDG_DATA_HOME=$sentinel/data \
+            XDG_STATE_HOME=$sentinel/state XDG_CACHE_HOME=$sentinel/cache \
+            cargo test --workspace --all-features --locked && tests=0 || tests=$?
+          leaked=""
+          for d in config data state cache .config .local .cache; do
+            if [ -e "$sentinel/$d" ]; then leaked+=$(find "$sentinel/$d"); fi
+          done
+          for d in .config/tmxr .local/share/tmxr .local/state/tmxr .cache/tmxr; do
+            if [ -e "$real_home/$d" ]; then leaked+=$(find "$real_home/$d" -newer "$marker"); fi
+          done
+          if [ -n "$leaked" ]; then
+            echo "tests wrote outside their own directories:" >&2
+            echo "$leaked" >&2
+            exit 1
+          fi
+          echo "leak guard: nothing written to the sentinel home or tmxr's real dirs"
+          exit "$tests"
+
   # The Windows suite again, with Microsoft's ConPTY beside tmxr.exe as the
   # release ships it (the job above covers Windows' built-in ConPTY).
   test-conpty:
@@ -678,6 +728,7 @@ jobs:
         smoke,
         test,
         test-conpty,
+        leak-guard,
         pipe-acl,
         socket-acl,
         handoff,
@@ -1026,6 +1077,7 @@ jobs:
         deny,
         test,
         test-conpty,
+        leak-guard,
         pipe-acl,
         socket-acl,
         handoff,
