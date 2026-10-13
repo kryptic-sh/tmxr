@@ -313,6 +313,28 @@ table. What has been verified, and how:
 
 ## Not yet verified
 
+- **`detach_client_p_hangs_up_the_clients_parent` was not shown to fail**: it
+  runs on Linux and macOS only (CI passes it), and with no Unix machine here it
+  was not run against a broken `hang_up_parent`. Its control half (a plain
+  detach lets the shell print `survived`) does show the check can tell the two
+  apart.
+- **Console windows across the org's test suites** (2026-10-14): every Rust
+  repo's `cargo test --workspace` was run on Windows from a shell with a
+  console, with a watcher logging each new console or Windows Terminal window
+  (polled every 100 ms, so a window shorter than that could be missed). Only
+  tmxr's opened any (the server's `run-shell` children, fixed by
+  `tmxr_term::child`); gpur, hjkl, hodl, inbx, infr, krypt, langr, lyr, pikr,
+  sqeel and hrdr opened none, hrdr's `Start-Process -WindowStyle Hidden` tests
+  included. Not checked, as their tests did not run here: buffr (its CEF build
+  script failed), crcbl (the linker ran out of memory, LNK1102), tikr (its tests
+  do not find `tikr_paper` / `tikr_backtest`) and wayr (Wayland only). sqeel's
+  `sqeel-config` has two tests failing on Windows
+  (`connection_filesystem_roundtrip`,
+  `inline_password_roundtrip_percent_decodes`); not looked into. A process run
+  without a console (a GUI, a scheduled task) would give their plain spawns
+  windows; crcbl's `crcbl_spawn::command` and tmxr's `tmxr_term::child::command`
+  are the pattern for that.
+
 - **`socket-acl` flakes**: a traced repeat on macOS (run 38062106864) was a
   `kill-server` that printed "server closed the connection": the server exited
   before its reply was written, and right after a `kill-server` a new client
