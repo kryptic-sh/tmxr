@@ -16,7 +16,6 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, SyncSender, TrySendErr
 use std::time::{Duration, Instant};
 
 use ratatui::Terminal;
-use tmxr_command::Key;
 use tmxr_config::Config;
 use tmxr_proto::socket::Endpoint;
 use tmxr_proto::{ClientMsg, Hello, PROTOCOL_VERSION, ServerMsg};
@@ -125,7 +124,6 @@ pub struct Server {
     pub panes: BTreeMap<PaneId, Pane>,
     pub clients: BTreeMap<ClientId, Client>,
     pub keys: KeyTables,
-    pub prefix: Key,
     pub navigator: Option<regex::Regex>,
     /// Newest first.
     pub buffers: VecDeque<Buffer>,
@@ -205,12 +203,6 @@ impl Server {
         events: Sender<Event>,
     ) -> Self {
         let (keys, mut key_errors) = KeyTables::from_config(&cfg);
-        let prefix = cfg.prefix.parse().unwrap_or_else(|_| {
-            Key::new(
-                crossterm::event::KeyCode::Char('b'),
-                crossterm::event::KeyModifiers::CONTROL,
-            )
-        });
         if cfg.window.allow_passthrough && !tmxr_term::emulator::passthrough_supported() {
             key_errors.push(PASSTHROUGH_UNSUPPORTED.to_owned());
         }
@@ -234,7 +226,6 @@ impl Server {
             panes: BTreeMap::new(),
             clients: BTreeMap::new(),
             keys,
-            prefix,
             navigator,
             buffers: VecDeque::new(),
             messages: VecDeque::new(),
@@ -572,7 +563,8 @@ impl Server {
 
     pub fn show_message(&mut self, id: ClientId, msg: String) {
         self.log_message(msg.clone());
-        let until = Instant::now() + Duration::from_millis(self.cfg.display_time);
+        let time = self.client_session_options(id).display_time;
+        let until = Instant::now() + Duration::from_millis(time);
         if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
             a.message = Some((msg, until));
             a.dirty = true;
@@ -776,9 +768,15 @@ impl Server {
                 }
             }
         }
-        if now.duration_since(self.last_status)
-            >= Duration::from_secs(self.cfg.status_interval.max(1))
-        {
+        // One timer for every session's status line, at the shortest
+        // `status-interval` any of them has.
+        let interval = self
+            .sessions
+            .keys()
+            .map(|&s| self.session_options(s).status_interval)
+            .min()
+            .unwrap_or(self.cfg.session.status_interval);
+        if now.duration_since(self.last_status) >= Duration::from_secs(interval.max(1)) {
             self.last_status = now;
             crate::util::refresh_commands(self);
             self.mark_all_dirty();
@@ -793,13 +791,13 @@ impl Server {
             .map(|c| c.id)
             .collect();
         for id in ids {
+            // The `mouse` option reaches the client's terminal with its next
+            // frame, after attaching or after the option changes.
+            let mouse = self.client_session_options(id).mouse;
             let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
                 continue;
             };
             att.dirty = false;
-            // The `mouse` option reaches the client's terminal with its next
-            // frame, after attaching or after the option changes.
-            let mouse = self.cfg.mouse;
             let tell_mouse = std::mem::replace(&mut att.mouse, mouse) != mouse;
             let full = std::mem::take(&mut att.full_redraw);
             let Some(mut term) = att.term.take() else {
@@ -826,9 +824,6 @@ impl Server {
     pub fn reload_config(&mut self) -> Result<(), String> {
         let (cfg, _) = tmxr_config::load(self.cfg_path.as_deref()).map_err(|e| e.to_string())?;
         let (keys, mut errors) = KeyTables::from_config(&cfg);
-        if let Ok(p) = cfg.prefix.parse() {
-            self.prefix = p;
-        }
         self.navigator = match navigator_regex(&cfg.navigator.pattern) {
             Ok(re) => Some(re),
             Err(e) => {

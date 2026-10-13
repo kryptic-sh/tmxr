@@ -12,9 +12,11 @@ use std::path::Path;
 use serde::Deserialize;
 
 pub use hjkl_config::{ConfigError, ConfigSource};
+pub use session::{OwnSessionOptions, SessionOptions};
 pub use table::OptionValue;
 pub use window::{BoxLines, ModeKeys, OwnOptions, PANE_OPTIONS, WindowOptions, WindowSize};
 
+mod session;
 mod table;
 mod window;
 
@@ -24,49 +26,22 @@ pub const DEFAULTS: &str = include_str!("../defaults.toml");
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(from = "File")]
 pub struct Config {
-    pub prefix: String,
-    pub mouse: bool,
-    pub base_index: u32,
-    pub renumber_windows: bool,
-    pub history_limit: usize,
     /// Entries kept per prompt type for Up/Down recall (tmux's default 100).
     pub prompt_history_limit: usize,
     pub escape_time: u64,
-    pub display_time: u64,
-    /// How long `display-panes` shows pane numbers, in milliseconds.
-    pub display_panes_time: u64,
-    pub status_interval: u64,
-    pub repeat_time: u64,
     pub default_terminal: String,
-    pub default_shell: Option<String>,
     pub extended_keys: String,
     pub set_clipboard: String,
     /// `on`, `off` or `auto`: whether clients get 24-bit colour, or RGB
     /// mapped to the 256 colours.
     pub rgb_colour: String,
-    /// Which windows' bells, activity and silence act on the clients (tmux's
-    /// `bell-action`, `activity-action`, `silence-action`).
-    pub bell_action: AlertAction,
-    pub activity_action: AlertAction,
-    pub silence_action: AlertAction,
-    /// How they act (tmux's `visual-bell`, `visual-activity`,
-    /// `visual-silence`).
-    pub visual_bell: Visual,
-    pub visual_activity: Visual,
-    pub visual_silence: Visual,
     /// Shell command `copy-pipe` sends the copied text to when it names none.
     pub copy_command: String,
-    /// Shell command a locked client runs in its terminal; the client is
-    /// unlocked when it exits.
-    pub lock_command: String,
-    /// Seconds a client may sit idle before it is locked; 0 never.
-    pub lock_after_time: u64,
     /// `owner` or `users`: who may open the server's endpoint, read when
     /// the server starts (`server-access` admits users by name).
     pub socket_access: String,
     pub update_environment: Vec<String>,
     pub navigator: Navigator,
-    pub status: Status,
     pub resurrect: Resurrect,
     /// `@name` user options.
     pub options: BTreeMap<String, String>,
@@ -74,8 +49,10 @@ pub struct Config {
     pub keys: BTreeMap<String, BTreeMap<String, BindEntry>>,
     /// Global hooks (tmux's `set-hook -g`): hook name → its commands.
     pub hooks: BTreeMap<String, Vec<String>>,
-    /// The global window options. The file keeps them with the rest (and
+    /// The global session options. The file keeps them with the rest (and
     /// some under `[status]`); here they are one table, as tmux's.
+    pub session: SessionOptions,
+    /// The global window options, kept in the file as the session ones are.
     pub window: WindowOptions,
 }
 
@@ -182,41 +159,41 @@ impl From<File> for Config {
                 window_status_current_format: s.window_current_format,
                 window_status_format: s.window_format,
             },
-            status: Status {
-                style: s.style,
-                left: s.left,
-                right: s.right,
-                left_length: s.left_length,
-                right_length: s.right_length,
-                message_style: s.message_style,
-                display_panes_colour: s.display_panes_colour,
+            session: SessionOptions {
+                activity_action: f.activity_action,
+                base_index: f.base_index,
+                bell_action: f.bell_action,
+                default_shell: f.default_shell,
                 display_panes_active_colour: s.display_panes_active_colour,
+                display_panes_colour: s.display_panes_colour,
+                display_panes_time: f.display_panes_time,
+                display_time: f.display_time,
+                history_limit: f.history_limit,
+                lock_after_time: f.lock_after_time,
+                lock_command: f.lock_command,
+                message_style: s.message_style,
+                mouse: f.mouse,
+                prefix: f.prefix,
+                renumber_windows: f.renumber_windows,
+                repeat_time: f.repeat_time,
+                silence_action: f.silence_action,
+                status_interval: f.status_interval,
+                status_left: s.left,
+                status_left_length: s.left_length,
+                status_right: s.right,
+                status_right_length: s.right_length,
+                status_style: s.style,
+                visual_activity: f.visual_activity,
+                visual_bell: f.visual_bell,
+                visual_silence: f.visual_silence,
             },
-            prefix: f.prefix,
-            mouse: f.mouse,
-            base_index: f.base_index,
-            renumber_windows: f.renumber_windows,
-            history_limit: f.history_limit,
             prompt_history_limit: f.prompt_history_limit,
             escape_time: f.escape_time,
-            display_time: f.display_time,
-            display_panes_time: f.display_panes_time,
-            status_interval: f.status_interval,
-            repeat_time: f.repeat_time,
             default_terminal: f.default_terminal,
-            default_shell: f.default_shell,
             extended_keys: f.extended_keys,
             set_clipboard: f.set_clipboard,
             rgb_colour: f.rgb_colour,
-            bell_action: f.bell_action,
-            activity_action: f.activity_action,
-            silence_action: f.silence_action,
-            visual_bell: f.visual_bell,
-            visual_activity: f.visual_activity,
-            visual_silence: f.visual_silence,
             copy_command: f.copy_command,
-            lock_command: f.lock_command,
-            lock_after_time: f.lock_after_time,
             socket_access: f.socket_access,
             update_environment: f.update_environment,
             navigator: f.navigator,
@@ -240,24 +217,6 @@ impl From<File> for Config {
 pub struct Navigator {
     pub pattern: String,
     pub disable_when_zoomed: bool,
-}
-
-/// The status line's options (the window options under the file's `[status]`
-/// are in [`WindowOptions`]).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Status {
-    pub style: String,
-    pub left: String,
-    pub right: String,
-    /// Most cells `left` may take (tmux's `status-left-length`).
-    pub left_length: u16,
-    /// Most cells `right` may take (tmux's `status-right-length`); a longer
-    /// right side is cut at its end so the window list keeps its room.
-    pub right_length: u16,
-    pub message_style: String,
-    /// `display-panes` number colour for the other panes, and the active one.
-    pub display_panes_colour: String,
-    pub display_panes_active_colour: String,
 }
 
 #[derive(Deserialize)]
@@ -635,14 +594,14 @@ mod tests {
     #[test]
     fn defaults_match_tmux_conf_options() {
         let cfg = defaults();
-        assert_eq!(cfg.prefix, "C-b");
-        assert!(cfg.mouse);
-        assert_eq!((cfg.base_index, cfg.window.pane_base_index), (0, 0));
-        assert!(cfg.renumber_windows);
+        assert_eq!(cfg.session.prefix, "C-b");
+        assert!(cfg.session.mouse);
+        assert_eq!((cfg.session.base_index, cfg.window.pane_base_index), (0, 0));
+        assert!(cfg.session.renumber_windows);
         assert_eq!(cfg.window.mode_keys, ModeKeys::Vi);
         assert_eq!(cfg.extended_keys, "always");
         assert!(cfg.window.allow_passthrough);
-        assert_eq!(cfg.status.left, "");
+        assert_eq!(cfg.session.status_left, "");
         assert!(
             cfg.update_environment
                 .iter()
@@ -683,7 +642,7 @@ x = false
         .unwrap();
         let (cfg, source) = load(Some(&path)).unwrap();
         assert_eq!(source, ConfigSource::File(path));
-        assert!(!cfg.mouse);
+        assert!(!cfg.session.mouse);
         assert!(bind(&cfg, "prefix", "x").is_none());
         assert_eq!(bind(&cfg, "prefix", "|").unwrap().cmd, "split-window -h");
         // Untouched defaults survive the merge.

@@ -88,7 +88,7 @@ const MODS: KeyModifiers = KeyModifiers::CONTROL
     .union(KeyModifiers::SHIFT);
 
 pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
-    if !srv.cfg.mouse {
+    if !srv.client_session_options(id).mouse {
         return;
     }
     let Some(att) = srv.clients.get(&id).and_then(|c| c.att.as_ref()) else {

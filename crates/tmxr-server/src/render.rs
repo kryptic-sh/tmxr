@@ -500,7 +500,8 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
     };
     let active = srv.active_pane_of_session(session.id);
     let vars = Vars::for_pane(srv, active, Some(id));
-    let base = style_option(&srv.cfg.status.style, &vars);
+    let opts = srv.session_options(session.id);
+    let base = style_option(&opts.status_style, &vars);
     buf.set_style(Rect::new(0, y, cols, 1), base);
     for x in 0..cols {
         if let Some(c) = buf.cell_mut((x, y)) {
@@ -509,7 +510,7 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
     }
 
     // A message or prompt replaces the status line, as in tmux.
-    let message_style = style_option(&srv.cfg.status.message_style, &vars);
+    let message_style = style_option(&opts.message_style, &vars);
     if let Some((msg, _)) = &att.message {
         buf.set_style(Rect::new(0, y, cols, 1), message_style);
         buf.set_stringn(0, y, msg, usize::from(cols), message_style);
@@ -530,20 +531,11 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
         _ => {}
     }
 
-    let right = format::expand(&srv.cfg.status.right, &vars);
-    let right_w = runs_width(&right)
-        .min(srv.cfg.status.right_length)
-        .min(cols);
+    let right = format::expand(&opts.status_right, &vars);
+    let right_w = runs_width(&right).min(opts.status_right_length).min(cols);
     let limit = cols - right_w;
-    let left = format::expand(&srv.cfg.status.left, &vars);
-    let mut x = draw_runs(
-        buf,
-        0,
-        y,
-        limit.min(srv.cfg.status.left_length),
-        base,
-        &left,
-    );
+    let left = format::expand(&opts.status_left, &vars);
+    let mut x = draw_runs(buf, 0, y, limit.min(opts.status_left_length), base, &left);
     ranges.left_end = x;
     ranges.right_start = cols - right_w;
     for (idx, wid) in &session.windows {
@@ -610,8 +602,9 @@ fn draw_overlay(
                 style_option(&format!("fg={colour}"), &vars)
                     .add_modifier(Modifier::REVERSED | Modifier::BOLD)
             };
-            let other = label_style(&srv.cfg.status.display_panes_colour);
-            let active = label_style(&srv.cfg.status.display_panes_active_colour);
+            let opts = srv.session_options(att.session);
+            let other = label_style(&opts.display_panes_colour);
+            let active = label_style(&opts.display_panes_active_colour);
             for (pid, r) in win.visible_rects() {
                 let Some((label, _)) = labels.iter().find(|(_, p)| *p == pid) else {
                     continue;

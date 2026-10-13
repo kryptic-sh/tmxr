@@ -70,7 +70,10 @@ impl Server {
             return;
         }
         let events = self.events.clone();
-        let shell = self.cfg.default_shell.clone();
+        let shell = self
+            .pane_session_options(then.ctx.pane)
+            .default_shell
+            .clone();
         let started = std::thread::Builder::new()
             .name("tmxr-run-shell".into())
             .spawn(move || {

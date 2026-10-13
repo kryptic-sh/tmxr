@@ -69,17 +69,25 @@ run time lasts until then.
 
 ### Option scopes
 
-The file holds the global values. tmux's window options
-(`tmxr_config::WindowOptions`, read under tmux's names through one table) can
-also be set per window and per pane, as tmux 3.6's `options_scope_from_name`
-picks: a window option without `-g` is the target window's own, `-p` a pane's
-own for the options tmux lets a pane hold (`PANE_OPTIONS`), and `-u` / `-U`
-remove them. A window's or pane's own values (`OwnOptions`) are kept typed and
-laid over what it inherits when read (`Server::window_options`,
-`Server::pane_options`): pane, window, global. `show-options -w` / `-p` list own
-values, `-A` adds the inherited ones marked `*`. User options (`@name`) are held
-at each scope too and found pane, window, then global in formats. Session
-options stay server-wide (see the backlog).
+The file holds the global values. tmux's session options
+(`tmxr_config::SessionOptions`) and window options (`WindowOptions`), each read
+under tmux's names through one typed table (`table::options_table!`), can also
+be set per session, per window and per pane, as tmux 3.6's
+`options_scope_from_name` picks: an option's name says which table it is in,
+`-g` picks the global values, and without it a session option is the target
+session's own, a window option the target window's own, and `-p` a pane's own
+for the options tmux lets a pane hold (`PANE_OPTIONS`); `-u` / `-U` remove them.
+Own values (`OwnSessionOptions`, `OwnOptions`) are kept typed and laid over what
+they inherit when read (`Server::session_options`, `Server::window_options`,
+`Server::pane_options`): session, global; pane, window, global. Everything
+reading a session option asks for the session it acts in: a client's for its
+status line, prefix, mouse and messages, a pane's for the shell its commands run
+in, a window's for alerts. `show-options` lists a session's own values (`-w` /
+`-p` a window's or pane's, `-g` the globals, `-s` the server options), and `-A`
+adds the inherited ones marked `*`. User options (`@name`) are held at each
+scope too (a session's without `-w` / `-p`) and are found pane, window, session,
+then global in formats. `-q` makes an unknown option no error, and `-o` refuses
+one set at that scope already (every server option is).
 
 ## Command language (`tmxr-command`)
 

@@ -101,7 +101,7 @@ impl Context for Vars<'_> {
     fn get(&self, name: &str) -> Option<String> {
         let srv = self.srv;
         if name.starts_with('@')
-            && let Some(v) = srv.user_option(self.pane, self.window, name)
+            && let Some(v) = srv.user_option(self.session, self.pane, self.window, name)
         {
             return Some(v);
         }

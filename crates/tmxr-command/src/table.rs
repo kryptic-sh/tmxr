@@ -546,18 +546,18 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "set-option",
         Some("set"),
-        "aFgopst:uUw",
+        "aFgopqst:uUw",
         1,
         2,
-        "[-aFgopsuUw] [-t target-pane] option [value]"
+        "[-aFgopqsuUw] [-t target-pane] option [value]"
     ),
     cmd!(
         "set-window-option",
         Some("setw"),
-        "aFgot:u",
+        "aFgoqt:u",
         1,
         2,
-        "[-aFgou] [-t target-window] option [value]"
+        "[-aFgoqu] [-t target-window] option [value]"
     ),
     cmd!("show-buffer", Some("showb"), "b:", 0, 0, "[-b buffer-name]"),
     cmd!(
@@ -580,10 +580,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "show-options",
         Some("show"),
-        "Agpst:vw",
+        "Agpqst:vw",
         0,
         1,
-        "[-Agpsvw] [-t target-pane] [option]"
+        "[-Agpqsvw] [-t target-pane] [option]"
     ),
     cmd!(
         "show-prompt-history",

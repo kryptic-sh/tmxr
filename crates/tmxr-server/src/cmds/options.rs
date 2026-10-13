@@ -3,9 +3,9 @@
 use std::path::PathBuf;
 
 use tmxr_command::Parsed;
-use tmxr_config::{AlertAction, Visual, WindowOptions};
+use tmxr_config::{SessionOptions, WindowOptions};
 
-use super::{Ctx, Outcome, Res, attached_client, join_args, on_off, scoped};
+use super::{Ctx, Outcome, Res, attached_client, join_args, scoped};
 use crate::server::Server;
 use crate::target;
 
@@ -24,15 +24,14 @@ pub(super) fn run(
             let name = pos.first().map(String::as_str);
             let scoped = match name {
                 Some(n) => scoped::handles(n),
-                None => window_cmd || a.has('w') || a.has('p'),
+                None => !a.has('s'),
             };
             if scoped {
                 return scoped::show(srv, ctx, a, window_cmd, name, out).map(|()| true);
             }
-            // The other options are server-wide: one table, as tmux's
-            // global session and server options.
+            // The rest are server options: one table, as tmux's.
             let mut found = false;
-            for l in option_lines(srv) {
+            for l in server_option_lines(srv) {
                 if name.is_none_or(|n| l.split(' ').next() == Some(n)) {
                     found = true;
                     let l = if a.has('v') {
@@ -45,7 +44,7 @@ pub(super) fn run(
                     out.stdout.push('\n');
                 }
             }
-            if let Some(n) = name.filter(|_| !found) {
+            if let Some(n) = name.filter(|_| !found && !a.has('q')) {
                 return Err(format!("invalid option: {n}"));
             }
         }
@@ -80,34 +79,28 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed) -> Res {
     if scoped::handles(name) {
         return scoped::set(srv, ctx, a, p.name() == "set-window-option", name, value);
     }
+    if !SERVER_OPTIONS.contains(&name) {
+        // -q: an unknown option is no error, as tmux's.
+        return if a.has('q') {
+            Ok(())
+        } else {
+            Err(format!("invalid option: {name}"))
+        };
+    }
+    // A server option always has a value, so -o refuses every one.
+    if a.has('o') {
+        return Err(format!("already set: {name}"));
+    }
     let need = || value.ok_or_else(|| format!("{name}: needs a value"));
     let num = |v: &str| {
         v.parse::<u64>()
             .map_err(|_| format!("{name}: bad number {v}"))
     };
-    let length = |v: &str| {
-        num(v).and_then(|n| u16::try_from(n).map_err(|_| format!("{name}: too large: {v}")))
-    };
     let c = &mut srv.cfg;
     match name {
-        "prefix" => {
-            let v = need()?;
-            srv.prefix = v
-                .parse()
-                .map_err(|e: tmxr_command::keys::UnknownKey| e.to_string())?;
-            v.clone_into(&mut c.prefix);
-        }
-        "mouse" => c.mouse = on_off(value, c.mouse)?,
-        "renumber-windows" => c.renumber_windows = on_off(value, c.renumber_windows)?,
-        "base-index" => c.base_index = num(need()?)? as u32,
-        "history-limit" => c.history_limit = num(need()?)? as usize,
         "prompt-history-limit" => c.prompt_history_limit = num(need()?)? as usize,
-        "display-time" => c.display_time = num(need()?)?,
-        "status-interval" => c.status_interval = num(need()?)?,
-        "repeat-time" => c.repeat_time = num(need()?)?,
         "escape-time" => c.escape_time = num(need()?)?,
         "default-terminal" => need()?.clone_into(&mut c.default_terminal),
-        "default-shell" => c.default_shell = Some(need()?.to_owned()),
         "extended-keys" => need()?.clone_into(&mut c.extended_keys),
         "set-clipboard" => need()?.clone_into(&mut c.set_clipboard),
         "rgb-colour" => match need()? {
@@ -115,39 +108,11 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed) -> Res {
             v => return Err(format!("rgb-colour: unknown value: {v} (on, off or auto)")),
         },
         "copy-command" => need()?.clone_into(&mut c.copy_command),
-        "lock-command" => need()?.clone_into(&mut c.lock_command),
-        "lock-after-time" => c.lock_after_time = num(need()?)?,
         "socket-access" => {
             return Err(
                 "socket-access is read when the server starts: set it in the config file".into(),
             );
         }
-        "bell-action" | "activity-action" | "silence-action" => {
-            let v = need()?;
-            let action = AlertAction::parse(v)
-                .ok_or_else(|| format!("{name}: unknown value: {v} ({})", AlertAction::NAMES))?;
-            match name {
-                "bell-action" => c.bell_action = action,
-                "activity-action" => c.activity_action = action,
-                _ => c.silence_action = action,
-            }
-        }
-        "visual-bell" | "visual-activity" | "visual-silence" => {
-            let v = need()?;
-            let visual = Visual::parse(v)
-                .ok_or_else(|| format!("{name}: unknown value: {v} ({})", Visual::NAMES))?;
-            match name {
-                "visual-bell" => c.visual_bell = visual,
-                "visual-activity" => c.visual_activity = visual,
-                _ => c.visual_silence = visual,
-            }
-        }
-        "status-left" => need()?.clone_into(&mut c.status.left),
-        "status-right" => need()?.clone_into(&mut c.status.right),
-        "status-left-length" => c.status.left_length = length(need()?)?,
-        "status-right-length" => c.status.right_length = length(need()?)?,
-        "status-style" => need()?.clone_into(&mut c.status.style),
-        "message-style" => need()?.clone_into(&mut c.status.message_style),
         _ => return Err(format!("invalid option: {name}")),
     }
     if name == "rgb-colour" {
@@ -157,41 +122,52 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed) -> Res {
     Ok(())
 }
 
-/// Each option as `show-options` prints it: `name value`.
+/// The server options `set-option` takes, as tmux's server table holds
+/// them (and tmxr's `rgb-colour` and `socket-access`).
+const SERVER_OPTIONS: &[&str] = &[
+    "copy-command",
+    "default-terminal",
+    "escape-time",
+    "extended-keys",
+    "prompt-history-limit",
+    "rgb-colour",
+    "set-clipboard",
+    "socket-access",
+];
+
+/// Each server option as `show-options -s` prints it: `name value`.
+fn server_option_lines(srv: &Server) -> Vec<String> {
+    let c = &srv.cfg;
+    let quoted = |v: &str| join_args(&[v.to_owned()]);
+    SERVER_OPTIONS
+        .iter()
+        .map(|&name| {
+            let value = match name {
+                "copy-command" => quoted(&c.copy_command),
+                "default-terminal" => c.default_terminal.clone(),
+                "escape-time" => c.escape_time.to_string(),
+                "extended-keys" => c.extended_keys.clone(),
+                "prompt-history-limit" => c.prompt_history_limit.to_string(),
+                "rgb-colour" => c.rgb_colour.clone(),
+                "set-clipboard" => c.set_clipboard.clone(),
+                _ => c.socket_access.clone(),
+            };
+            format!("{name} {value}")
+        })
+        .collect()
+}
+
+/// Every global option as `show-options` prints it, `name value`: the
+/// server's, the sessions' and the windows', then the user options.
 pub fn option_lines(srv: &Server) -> Vec<String> {
     let c = &srv.cfg;
-    let lines = [
-        format!("prefix {}", c.prefix),
-        format!("mouse {}", if c.mouse { "on" } else { "off" }),
-        format!("base-index {}", c.base_index),
-        format!(
-            "renumber-windows {}",
-            if c.renumber_windows { "on" } else { "off" }
-        ),
-        format!("history-limit {}", c.history_limit),
-        format!("prompt-history-limit {}", c.prompt_history_limit),
-        format!("display-time {}", c.display_time),
-        format!("status-interval {}", c.status_interval),
-        format!("status-left-length {}", c.status.left_length),
-        format!("status-right-length {}", c.status.right_length),
-        format!("repeat-time {}", c.repeat_time),
-        format!("default-terminal {}", c.default_terminal),
-        format!("extended-keys {}", c.extended_keys),
-        format!("set-clipboard {}", c.set_clipboard),
-        format!("rgb-colour {}", c.rgb_colour),
-        format!("bell-action {}", c.bell_action.as_str()),
-        format!("activity-action {}", c.activity_action.as_str()),
-        format!("silence-action {}", c.silence_action.as_str()),
-        format!("visual-bell {}", c.visual_bell.as_str()),
-        format!("visual-activity {}", c.visual_activity.as_str()),
-        format!("visual-silence {}", c.visual_silence.as_str()),
-        format!("lock-after-time {}", c.lock_after_time),
-        format!(
-            "lock-command {}",
-            join_args(std::slice::from_ref(&c.lock_command))
-        ),
-    ];
-    let mut all: Vec<String> = lines.to_vec();
+    let quoted = |v: String| join_args(&[v]);
+    let mut all = server_option_lines(srv);
+    all.extend(
+        SessionOptions::NAMES
+            .iter()
+            .filter_map(|n| Some(format!("{n} {}", quoted(c.session.show(n)?)))),
+    );
     all.extend(
         WindowOptions::NAMES
             .iter()
@@ -200,7 +176,7 @@ pub fn option_lines(srv: &Server) -> Vec<String> {
     all.extend(
         c.options
             .iter()
-            .map(|(k, v)| format!("{k} {}", join_args(std::slice::from_ref(v)))),
+            .map(|(k, v)| format!("{k} {}", quoted(v.clone()))),
     );
     all
 }

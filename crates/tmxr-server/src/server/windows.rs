@@ -51,11 +51,12 @@ impl Server {
                 id,
                 name,
                 windows: BTreeMap::new(),
-                current: self.cfg.base_index,
+                current: self.cfg.session.base_index,
                 last: None,
                 cwd: cwd.clone(),
                 env: env.into_iter().collect(),
                 hooks: crate::hooks::HookTable::new(),
+                options: tmxr_config::OwnSessionOptions::default(),
                 created: SystemTime::now(),
                 last_used: Instant::now(),
             },
@@ -87,13 +88,14 @@ impl Server {
         size: (u16, u16),
         select: bool,
     ) -> Result<WindowId, String> {
+        let base = self.session_options(session).base_index;
         let s = self.sessions.get(&session).ok_or("no such session")?;
         let index = match index {
             Some(i) if s.windows.contains_key(&i) => return Err(format!("index {i} in use")),
             Some(i) => i,
-            None => (self.cfg.base_index..)
+            None => (base..)
                 .find(|i| !s.windows.contains_key(i))
-                .unwrap_or(self.cfg.base_index),
+                .unwrap_or(base),
         };
         let cwd = cwd.unwrap_or_else(|| s.cwd.clone());
         let wid = self.next_window;
@@ -129,10 +131,11 @@ impl Server {
             self.windows.remove(&wid);
             return Err(e);
         }
+        let shell = self.session_options(session).default_shell.clone();
         if self.window_options(wid).automatic_rename
             && let Some(win) = self.windows.get_mut(&wid)
         {
-            win.name = crate::util::program_name(&argv, self.cfg.default_shell.as_deref());
+            win.name = crate::util::program_name(&argv, shell.as_deref());
         }
         let s = self.sessions.get_mut(&session).ok_or("no such session")?;
         s.windows.insert(index, wid);
@@ -258,7 +261,7 @@ impl Server {
             }
             s.last = None;
         }
-        if self.cfg.renumber_windows {
+        if self.session_options(sid).renumber_windows {
             self.renumber_windows(sid);
         }
         self.mark_session_dirty(sid);
@@ -268,7 +271,7 @@ impl Server {
     /// order, keeping its current and last window (`renumber-windows`,
     /// `move-window -r`).
     pub fn renumber_windows(&mut self, sid: SessionId) {
-        let base = self.cfg.base_index;
+        let base = self.session_options(sid).base_index;
         let Some(s) = self.sessions.get_mut(&sid) else {
             return;
         };
@@ -344,10 +347,11 @@ impl Server {
         rows: u16,
         select: bool,
     ) -> Result<WindowId, String> {
+        let base = self.session_options(session).base_index;
         let s = self.sessions.get(&session).ok_or("no such session")?;
-        let index = (self.cfg.base_index..)
+        let index = (base..)
             .find(|i| !s.windows.contains_key(i))
-            .unwrap_or(self.cfg.base_index);
+            .unwrap_or(base);
         let wid = self.next_window;
         self.next_window += 1;
         self.windows.insert(

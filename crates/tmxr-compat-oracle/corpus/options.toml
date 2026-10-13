@@ -1,5 +1,5 @@
-# Option scopes: global window options, a window's own (-w) and a pane's own
-# (-p). Expected values are tmux 3.6's. The errors (an unset user option, -o
+# Option scopes: global session and window options, a session's own, a window's
+# own (-w) and a pane's own (-p). Expected values are tmux 3.6's. The errors (an unset user option, -o
 # on a set one, an unknown name) are checked by tmxr's e2e tests: the oracle
 # reads a failed command as an error.
 
@@ -74,4 +74,46 @@ steps = [
 checks = [
   { command = "list-panes -t o:1 -F '#{pane_index}'", expect = "1\n2" },
   { command = "list-panes -t o:0 -F '#{pane_index}'", expect = "0" },
+]
+
+[[cases]]
+name = "a_session_option_without_g_is_the_sessions_own"
+steps = [{ run = "new-session -d -s p" }, { run = "set -t o status-left AAA" }]
+checks = [
+  { command = "show -v -t o status-left", expect = "AAA" },
+  { command = "show -v -t p status-left", expect = "" },
+  { command = "show -t o", expect = "status-left AAA" },
+  { command = "show -t p", expect = "" },
+  { command = "show -A -t p mouse", expect = "mouse* on" },
+]
+
+[[cases]]
+name = "set_u_gives_a_session_the_global_value_back"
+steps = [
+  { run = "set -t o status-left AAA" },
+  { run = "set -t o -u status-left" },
+]
+checks = [{ command = "show -t o", expect = "" }]
+
+[[cases]]
+name = "user_options_without_w_are_the_sessions"
+steps = [{ run = "new-session -d -s p" }, { run = "set -t o @u sess" }]
+checks = [
+  { command = "display -p -t o '#{@u}'", expect = "sess" },
+  { command = "display -p -t p '#{@u}'", expect = "" },
+  { command = "show -t o @u", expect = "@u sess" },
+  { command = "show -q -t p @u", expect = "" },
+]
+
+[[cases]]
+name = "a_sessions_base_index_numbers_its_new_windows"
+steps = [
+  { run = "new-session -d -s p" },
+  { run = "set -t p base-index 3" },
+  { run = "new-window -d -t p" },
+  { run = "new-window -d -t o" },
+]
+checks = [
+  { command = "list-windows -t p -F '#I'", expect = "0\n3" },
+  { command = "list-windows -t o -F '#I'", expect = "0\n1" },
 ]

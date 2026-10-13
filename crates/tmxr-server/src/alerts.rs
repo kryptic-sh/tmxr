@@ -7,7 +7,7 @@ use tmxr_proto::ServerMsg;
 
 use crate::cmds::Ctx;
 use crate::hooks::HookScope;
-use crate::model::{ClientId, WindowId};
+use crate::model::{ClientId, SessionId, WindowId};
 use crate::server::Server;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,8 +34,9 @@ impl Alert {
         }
     }
 
-    fn options(self, srv: &Server) -> (AlertAction, Visual) {
-        let c = &srv.cfg;
+    /// How it acts in `session`.
+    fn options(self, srv: &Server, session: SessionId) -> (AlertAction, Visual) {
+        let c = srv.session_options(session);
         match self {
             Self::Bell => (c.bell_action, c.visual_bell),
             Self::Activity => (c.activity_action, c.visual_activity),
@@ -49,7 +50,6 @@ impl Alert {
 /// its hook runs and the session's clients get the bell, the message
 /// ("Bell in window 1", "Bell in current window") or both.
 pub fn raise(srv: &mut Server, window: WindowId, alert: Alert) {
-    let (action, visual) = alert.options(srv);
     let clients_of = |srv: &Server, session| -> Vec<ClientId> {
         srv.clients
             .values()
@@ -71,8 +71,9 @@ pub fn raise(srv: &mut Server, window: WindowId, alert: Alert) {
         if current && !clients_of(srv, s.id).is_empty() {
             seen = true;
         }
+        let (action, visual) = alert.options(srv, s.id);
         if action.applies(current) {
-            acting.push((s.id, index, current));
+            acting.push((s.id, index, current, visual));
         }
     }
     if !seen && let Some(w) = srv.windows.get_mut(&window) {
@@ -84,7 +85,7 @@ pub fn raise(srv: &mut Server, window: WindowId, alert: Alert) {
         srv.mark_window_dirty(window);
     }
     let pane = srv.windows.get(&window).map(|w| w.active);
-    for (session, index, current) in acting {
+    for (session, index, current, visual) in acting {
         let scope = HookScope {
             session: Some(session),
             window: Some(window),

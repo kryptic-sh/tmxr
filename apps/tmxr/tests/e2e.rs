@@ -1558,7 +1558,7 @@ fn alerts_follow_the_action_and_visual_options() {
     std::thread::sleep(Duration::from_secs(1));
     assert_eq!((bells(&s), rang(&t)), before, "bell-action other acted");
     assert_eq!(
-        t.run(&["show-options", "-v", "bell-action"]).trim(),
+        t.run(&["show-options", "-gv", "bell-action"]).trim(),
         "other"
     );
     let bad = t.output(&["set-option", "-g", "visual-bell", "loud"]);
@@ -3464,7 +3464,9 @@ fn customize_mode_edits_an_option_through_the_prompt() {
     // prefix C opens it, as tmux's.
     s.send(PREFIX);
     s.send(b"C");
-    s.wait_for("customize mode", |text| text.contains("option prefix C-b"));
+    s.wait_for("customize mode", |text| {
+        text.contains("option escape-time 0")
+    });
 }
 
 #[test]
@@ -3630,6 +3632,102 @@ fn window_and_pane_options_override_the_global_ones() {
     std::thread::sleep(Duration::from_millis(500));
     let left_out = t.run(&["capture-pane", "-p", "-t", "sc:1.3"]);
     assert!(!left_out.contains("sync-"), "{left_out}");
+}
+
+#[test]
+fn session_options_are_each_sessions_own() {
+    let t = Tmxr::new("sessopts");
+    t.run(&["new-session", "-d", "-s", "one"]);
+    let show = |args: &[&str]| t.run(&[&["show-options"], args].concat()).trim().to_owned();
+    let err = |args: &[&str]| {
+        let out = t.output(args);
+        assert!(!out.status.success(), "{args:?} succeeded");
+        String::from_utf8_lossy(&out.stderr).trim().to_owned()
+    };
+
+    // Without -g a session option is the target session's own, as tmux's.
+    t.run(&["set-option", "-t", "one", "status-left", "ONE-LEFT"]);
+    t.run(&["set-option", "-t", "one", "prefix", "C-a"]);
+    t.run(&["set-option", "-t", "one", "@who", "first"]);
+    let a = t.attach(&["new", "-s", "two"]);
+    a.wait_for("status line", |text| text.contains("two"));
+    assert_eq!(show(&["-v", "-t", "one", "status-left"]), "ONE-LEFT");
+    assert_eq!(show(&["-v", "-t", "two", "status-left"]), "");
+    assert_eq!(
+        show(&["-t", "one"]),
+        "@who first
+prefix C-a
+status-left ONE-LEFT"
+    );
+    assert_eq!(show(&["-A", "-t", "two", "prefix"]), "prefix* C-b");
+    assert_eq!(show(&["-gv", "prefix"]), "C-b");
+    let who = |target: &str| {
+        t.run(&["display-message", "-p", "-t", target, "#{@who}"])
+            .trim()
+            .to_owned()
+    };
+    assert_eq!(who("one"), "first");
+    assert_eq!(who("two"), "");
+
+    // Each session's status line, prefix and window numbering are its own.
+    let b = t.attach(&["attach", "-t", "one"]);
+    b.wait_for("one's status line", |text| text.contains("ONE-LEFT"));
+    assert!(!a.text().contains("ONE-LEFT"), "{}", a.text());
+    b.send(b"c");
+    t.wait_run(&["list-windows", "-t", "one", "-F", "#I"], "C-a c", |o| {
+        o.lines().count() == 2
+    });
+    a.send(b"c");
+    a.send(PREFIX);
+    a.send(b"c");
+    t.wait_run(&["list-windows", "-t", "two", "-F", "#I"], "C-b c", |o| {
+        o.lines().count() == 2
+    });
+    t.run(&["set-option", "-t", "two", "base-index", "5"]);
+    t.run(&["new-window", "-d", "-t", "two"]);
+    assert_eq!(
+        t.run(&["list-windows", "-t", "two", "-F", "#I"]).trim(),
+        "0
+1
+5"
+    );
+    assert_eq!(
+        t.run(&["list-windows", "-t", "one", "-F", "#I"]).trim(),
+        "0
+1"
+    );
+
+    // -u gives the session the global value back; -o refuses one it sets.
+    assert_eq!(
+        err(&["set-option", "-o", "-t", "one", "prefix", "C-x"]),
+        "already set: prefix"
+    );
+    t.run(&["set-option", "-o", "-t", "two", "prefix", "C-x"]);
+    t.run(&["set-option", "-u", "-t", "one", "status-left"]);
+    b.wait_for("one's own status-left gone", |text| {
+        !text.contains("ONE-LEFT")
+    });
+    assert_eq!(show(&["-t", "one", "status-left"]), "");
+    // A prefix must be a key; server options are listed with -s.
+    assert!(err(&["set-option", "-g", "prefix", "nokey"]).contains("nokey"));
+    assert!(show(&["-s"]).lines().any(|l| l == "escape-time 0"));
+    assert!(!show(&["-s"]).contains("status-left"));
+    // -q: an unknown option, or an unset user option, is no error.
+    for quiet in [
+        &["set-option", "-q", "no-such-option", "x"][..],
+        &["show-options", "-q", "no-such-option"],
+        &["show-options", "-q", "@unset"],
+    ] {
+        let out = t.output(quiet);
+        assert!(
+            out.status.success() && out.stdout.is_empty(),
+            "{quiet:?}: {out:?}"
+        );
+    }
+    assert_eq!(
+        err(&["set-option", "no-such-option", "x"]),
+        "invalid option: no-such-option"
+    );
 }
 
 #[test]
@@ -5195,10 +5293,10 @@ fn set_option_f_expands_the_value_for_the_current_pane() {
         "@expanded",
         "#{session_name}-#{window_index}",
     ]);
-    assert_eq!(t.run(&["show-options", "-v", "@expanded"]).trim(), "sf-0");
+    assert_eq!(t.run(&["show-options", "-gv", "@expanded"]).trim(), "sf-0");
     // Without -F the value is kept as written.
     t.run(&["set-option", "-g", "@kept", "plain"]);
-    assert_eq!(t.run(&["show-options", "-v", "@kept"]).trim(), "plain");
+    assert_eq!(t.run(&["show-options", "-gv", "@kept"]).trim(), "plain");
 }
 
 #[test]

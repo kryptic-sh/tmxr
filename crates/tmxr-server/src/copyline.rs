@@ -84,7 +84,7 @@ impl Server {
     pub fn copy_command_line(&mut self, pane: PaneId) -> Result<(), String> {
         if let Some(text) = self.panes.get(&pane).and_then(|p| marked_input(&p.emu)) {
             self.copy_line = None;
-            self.copy_text(text);
+            self.copy_text(pane, text);
             return Ok(());
         }
         let program = crate::resurrect::foreground(self, pane).unwrap_or_default();
@@ -139,20 +139,20 @@ impl Server {
                         .screen()
                         .contents_between(start.0, start.1, cursor.0, cursor.1)
                 });
-                self.copy_text(text.unwrap_or_default().trim_end().to_owned());
+                self.copy_text(c.pane, text.unwrap_or_default().trim_end().to_owned());
             }
         }
     }
 
     /// Copy a command line as a copy-mode copy is: to the clipboard, a new
     /// buffer, and `copy-command` when set. Nothing for an empty line.
-    fn copy_text(&mut self, text: String) {
+    fn copy_text(&mut self, pane: PaneId, text: String) {
         if text.is_empty() {
             return;
         }
         let pipe = self.cfg.copy_command.clone();
         if !pipe.is_empty() {
-            crate::server::pipe_to_shell(self, pipe, text.clone());
+            crate::server::pipe_to_shell(self, pane, pipe, text.clone());
         }
         self.set_clipboard(&text);
         self.add_buffer(text, None);

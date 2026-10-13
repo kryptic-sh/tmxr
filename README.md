@@ -102,10 +102,12 @@ windows in each new session:
 session-created = ["new-window -d", "new-window -d"]
 ```
 
-The file sets the global values. As in tmux, a window can then hold its own
-window options (`tmxr set -w -t :2 pane-scrollbars on`, or a window option set
-without `-g`) and a pane its own pane options (`set -p remain-on-exit on`); the
-rest are server-wide.
+The file sets the global values. As in tmux, a session can then hold its own
+session options (`tmxr set -t work status-left "W "`, or any session option set
+without `-g`: its prefix, mouse, status line, base index and the rest), a window
+its own window options (`tmxr set -w -t :2 pane-scrollbars on`) and a pane its
+own pane options (`set -p remain-on-exit on`). `show-options -s` lists the
+server options.
 
 ## Windows: the current directory
 

@@ -8,7 +8,7 @@ impl Server {
     /// Where `wid` goes in `dst`: `index` when it is free (or `wid`'s own),
     /// else the first free index.
     fn place_in(&self, wid: WindowId, dst: SessionId, index: Option<u32>) -> Result<u32, String> {
-        let base = self.cfg.base_index;
+        let base = self.session_options(dst).base_index;
         let s = self.sessions.get(&dst).ok_or("no such session")?;
         Ok(match index {
             Some(i) if s.windows.get(&i).is_some_and(|w| *w != wid) => {

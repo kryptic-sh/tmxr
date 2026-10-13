@@ -68,22 +68,26 @@ table. What has been verified, and how:
   keeps no OSC 8 links.
 - **Scrollbars** follow tmux 3.6 (`layout_fix_panes`, the slider formula,
   `window_copy_scroll1`), checked against tmux's pane sizes.
-- **Option scopes** follow tmux 3.6 for window options: global, per window and
-  per pane (`cmds::scoped`, checked against a running tmux by
+- **Option scopes** follow tmux 3.6: global, per session, per window and per
+  pane (`cmds::scoped`, checked against a running tmux by
   `corpus/options.toml`). Still different:
-  - **Session options are server-wide**: `status-*`, `prefix`, `mouse`,
-    `base-index` and the rest have no per-session values, so `set status-left x`
-    without `-g` changes every session. Adding them would mean a session tier
-    like `OwnOptions` and moving their readers (the status line, key handling)
-    to a per-session lookup.
-  - **User options set without `-w` or `-p` are global**, where tmux keeps them
-    per session. Formats find them the same way, but tmux's `show -wA @x` does
-    not see one (a window inherits from the global window options only), and
-    tmxr's does.
+  - **The global user options are one table**: tmux keeps `set -g @x` (global
+    session options) and `set -wg @x` (global window options) apart, so its
+    `show -g @x` does not see one set with `-wg`, and in formats a global window
+    `@x` is found before a session's own; tmxr has one global table, found last.
+  - **Fewer server options**: `show -s` lists the ones tmxr has
+    (`cmds::options::SERVER_OPTIONS`); `update-environment` stays a config
+    value, not settable by `set-option` and not per session.
+  - **One status-line timer**: the status lines redraw at the shortest
+    `status-interval` any session has, where tmux times each session's.
+  - **A linked window reads the first session holding it** for its session
+    options (`Server::window_session_options`: `default-shell` for its panes,
+    say); alerts do read each session's own `*-action` and `visual-*`.
+  - **Resurrect does not save session options** (tmux-resurrect does not
+    either): a restored session has only the global ones.
+  - **`show-options -H`** (hooks in the list) is not supported.
   - **`show-options` quotes values with single quotes** (`@x 'a b'`), tmux with
     double (`@x "a b"`). Both read back the same.
-  - **`set-option -q` is not supported**, and `-o` only for window and user
-    options.
   - **Synchronized input goes to every synchronized pane**: tmux's
     `window_pane_copy_key` also skips panes in a mode, panes whose program has
     exited and panes hidden by zoom. Read in tmux's source, not compared.
@@ -269,6 +273,12 @@ table. What has been verified, and how:
   first, as do the other tests that type into a new pane; 10 full runs without
   retries afterwards had no failure, against 2 failures in the 16 runs before.
   If it fails again, the stall is not the whole story.
+- **`if_shell_picks_a_command_by_status_or_format` failed once** (2026-10-14, a
+  full local Windows run): the
+  `if-shell 'exit 0' "run-shell 'echo deep'" ; display -p after` step did not
+  give `["deep", "after"]`. Its output was not captured; it passed 5 runs alone
+  and 2 full runs right after. If it recurs, keep the `out` the assertion
+  prints.
 - **Handoffs to tmxr** at a program's edge: hjkl 0.42.2 (its `App::nav_step`,
   unit-tested in hjkl's suite) and nvim with
   [tmxr-navigator.nvim](https://github.com/kryptic-sh/tmxr-navigator.nvim)

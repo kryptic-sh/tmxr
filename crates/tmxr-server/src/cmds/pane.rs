@@ -177,7 +177,7 @@ pub(super) fn run(
             srv.copy_command_line(pid)?;
         }
         "pipe-pane" => {
-            let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
+            let (sid, _, pid) = target::pane(srv, ctx, a.value('t'))?;
             let line = pos
                 .first()
                 .filter(|l| !l.is_empty())
@@ -187,7 +187,7 @@ pub(super) fn run(
                 output: a.has('O') || !a.has('I'),
                 input: a.has('I'),
             };
-            let shell = srv.cfg.default_shell.clone();
+            let shell = srv.session_options(sid).default_shell.clone();
             let (events, id) = (srv.events.clone(), srv.next_pipe);
             srv.next_pipe += 1;
             let p = srv.panes.get_mut(&pid).ok_or("no such pane")?;
@@ -323,7 +323,9 @@ pub(super) fn run(
             match attached_client(srv, ctx) {
                 // On a client: numbers over the panes; a number selects.
                 Some(c) => {
-                    let time = std::time::Duration::from_millis(srv.cfg.display_panes_time);
+                    let time = std::time::Duration::from_millis(
+                        srv.client_session_options(c).display_panes_time,
+                    );
                     if let Some(a) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
                         a.overlay = Some(Overlay::display_panes(labels, time));
                         a.dirty = true;
@@ -399,8 +401,8 @@ pub(super) fn run(
             }
         }
         "send-prefix" => {
-            let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
-            let k = srv.prefix;
+            let (sid, _, pid) = target::pane(srv, ctx, a.value('t'))?;
+            let k = srv.prefix_key(sid);
             srv.send_key_to_pane(pid, &KeyEvent::new(k.code, k.mods));
         }
 

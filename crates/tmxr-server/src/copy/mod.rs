@@ -995,7 +995,7 @@ pub fn command(
                         .unwrap_or_else(|| srv.cfg.copy_command.clone())
                 });
                 if let Some(cmd) = pipe.filter(|c| !c.is_empty()) {
-                    crate::server::pipe_to_shell(srv, cmd, text.clone());
+                    crate::server::pipe_to_shell(srv, pane, cmd, text.clone());
                 }
                 srv.set_clipboard(&text);
                 srv.add_buffer(text, None);

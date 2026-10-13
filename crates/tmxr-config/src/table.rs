@@ -2,7 +2,7 @@
 //! `set-option` and printed by `show-options`, and the macro that makes a
 //! table (the global values) with the overrides one object sets over it.
 
-use crate::{BoxLines, ModeKeys, ScrollbarPosition, Scrollbars, WindowSize};
+use crate::{AlertAction, BoxLines, ModeKeys, ScrollbarPosition, Scrollbars, Visual, WindowSize};
 
 /// An option's value: how `set-option` reads it and `show-options` prints
 /// it.
@@ -32,27 +32,23 @@ impl OptionValue for bool {
     }
 }
 
-impl OptionValue for u32 {
-    fn parse(value: Option<&str>, _: &Self) -> Result<Self, String> {
-        let v = value.ok_or("needs a value")?;
-        v.parse().map_err(|_| format!("bad number {v}"))
-    }
+/// tmux's number options.
+macro_rules! number {
+    ($($ty:ty),*) => {$(
+        impl OptionValue for $ty {
+            fn parse(value: Option<&str>, _: &Self) -> Result<Self, String> {
+                let v = value.ok_or("needs a value")?;
+                v.parse().map_err(|_| format!("bad number {v}"))
+            }
 
-    fn show(&self) -> String {
-        self.to_string()
-    }
+            fn show(&self) -> String {
+                self.to_string()
+            }
+        }
+    )*};
 }
 
-impl OptionValue for u64 {
-    fn parse(value: Option<&str>, _: &Self) -> Result<Self, String> {
-        let v = value.ok_or("needs a value")?;
-        v.parse().map_err(|_| format!("bad number {v}"))
-    }
-
-    fn show(&self) -> String {
-        self.to_string()
-    }
-}
+number!(u16, u32, u64, usize);
 
 impl OptionValue for String {
     const APPENDS: bool = true;
@@ -65,6 +61,20 @@ impl OptionValue for String {
 
     fn show(&self) -> String {
         self.clone()
+    }
+}
+
+/// A string option that may have no value, shown as empty (`default-shell`,
+/// whose absence means the platform's shell).
+impl OptionValue for Option<String> {
+    fn parse(value: Option<&str>, _: &Self) -> Result<Self, String> {
+        value
+            .map(|v| Some(v.to_owned()))
+            .ok_or_else(|| "needs a value".into())
+    }
+
+    fn show(&self) -> String {
+        self.clone().unwrap_or_default()
     }
 }
 
@@ -89,7 +99,9 @@ choice!(
     ScrollbarPosition,
     ModeKeys,
     WindowSize,
-    BoxLines
+    BoxLines,
+    AlertAction,
+    Visual
 );
 
 /// `value` read for option `name`, now `current`: errors name the option, and

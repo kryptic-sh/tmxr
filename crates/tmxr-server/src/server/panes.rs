@@ -36,13 +36,14 @@ impl Server {
         rows: u16,
     ) -> Result<(), String> {
         let started = self.start_pty(pid, session, argv, cwd, env, cols, rows)?;
+        let history_limit = self.session_options(session).history_limit;
         self.panes.insert(
             pid,
             Pane {
                 id: pid,
                 window,
                 pty: started.pty,
-                emu: Emulator::new(rows.max(1), cols.max(1), self.cfg.history_limit),
+                emu: Emulator::new(rows.max(1), cols.max(1), history_limit),
                 rect: hjkl_layout::LayoutRect::new(0, 0, cols, rows),
                 start_cwd: started.cwd,
                 copy: None,
@@ -98,14 +99,15 @@ impl Server {
         ));
         env.push((tmxr_proto::socket::ENV_TMXR_PANE.into(), format!("%{pid}")));
         env.extend(extra_env.iter().cloned());
+        let shell = self
+            .session_options(session)
+            .default_shell
+            .clone()
+            .filter(|s| !s.is_empty());
         let argv = if argv.is_empty() {
-            self.cfg
-                .default_shell
-                .clone()
-                .map(|s| vec![s])
-                .unwrap_or_default()
+            shell.map(|s| vec![s]).unwrap_or_default()
         } else if argv.len() == 1 && argv[0].contains(' ') {
-            crate::util::shell_command(&argv[0], self.cfg.default_shell.as_deref())
+            crate::util::shell_command(&argv[0], shell.as_deref())
         } else {
             argv.to_vec()
         };

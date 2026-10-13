@@ -141,43 +141,43 @@ impl Server {
         }
     }
 
-    /// Hand each client's terminal to `lock-command` until it exits; a
-    /// client already locked is left as it is.
+    /// Hand each client's terminal to its session's `lock-command` until it
+    /// exits; a client already locked is left as it is, and one whose
+    /// `lock-command` is empty is not locked.
     pub fn lock_clients(&mut self, clients: &[ClientId]) -> Result<(), String> {
-        if self.cfg.lock_command.is_empty() {
-            return Err("lock-command is empty".into());
-        }
-        let command = self.cfg.lock_command.clone();
+        let mut unlockable = false;
         for &c in clients {
+            let command = self.client_session_options(c).lock_command.clone();
             let Some(att) = self.clients.get_mut(&c).and_then(|c| c.att.as_mut()) else {
                 continue;
             };
-            if !att.locked {
+            if command.is_empty() {
+                unlockable = true;
+            } else if !att.locked {
                 att.locked = true;
-                self.send(
-                    c,
-                    ServerMsg::Lock {
-                        command: command.clone(),
-                    },
-                );
+                self.send(c, ServerMsg::Lock { command });
             }
+        }
+        if unlockable {
+            return Err("lock-command is empty".into());
         }
         Ok(())
     }
 
-    /// `lock-after-time`: lock each client idle that long.
+    /// `lock-after-time`: lock each client idle as long as its session's
+    /// says (none when that is 0 or its `lock-command` is empty).
     pub fn lock_idle_clients(&mut self) {
-        let secs = self.cfg.lock_after_time;
-        if secs == 0 || self.cfg.lock_command.is_empty() {
-            return;
-        }
         let idle: Vec<ClientId> = self
             .clients
             .values()
             .filter(|c| {
-                c.att.as_ref().is_some_and(|a| {
-                    !a.locked && a.last_input.elapsed() >= std::time::Duration::from_secs(secs)
-                })
+                let opts = self.client_session_options(c.id);
+                let secs = opts.lock_after_time;
+                secs != 0
+                    && !opts.lock_command.is_empty()
+                    && c.att.as_ref().is_some_and(|a| {
+                        !a.locked && a.last_input.elapsed() >= std::time::Duration::from_secs(secs)
+                    })
             })
             .map(|c| c.id)
             .collect();

@@ -190,11 +190,12 @@ impl Server {
             att.dirty = true;
             if let Some(b) = self.keys.get(&table, &key.into()).cloned() {
                 if !repeating || b.repeat {
+                    let repeat_time = self.session_options(session).repeat_time;
                     if b.repeat
                         && let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut())
                     {
                         a.table.clone_from(&table);
-                        a.repeat_until = Some(now + Duration::from_millis(self.cfg.repeat_time));
+                        a.repeat_until = Some(now + Duration::from_millis(repeat_time));
                     }
                     self.run_bind(id, &b.cmd, Some(ev));
                     return;
@@ -204,7 +205,7 @@ impl Server {
             }
             // A non-repeatable key while repeating is handled as a fresh key.
         }
-        if key == self.prefix {
+        if key == self.prefix_key(session) {
             if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
                 a.table = "prefix".into();
                 a.dirty = true;

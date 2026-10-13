@@ -6,6 +6,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Session options per session, as tmux's**: a session option set without `-g`
+  (`set -t work status-left "W "`, `set prefix C-a`) is the target session's
+  own, over the global value, for every session option tmxr has: `prefix`,
+  `mouse`, `base-index`, `renumber-windows`, `history-limit`, the `status-*`
+  options, `message-style`, `display-time`, `display-panes-*`, `repeat-time`,
+  `default-shell`, `lock-command`, `lock-after-time` and the alert options. `-u`
+  gives one back, and `show-options -t session` lists a session's own values
+  (`-A` the inherited ones too, marked `*`). `display-panes-colour`,
+  `display-panes-active-colour` and `display-panes-time` can now be set at run
+  time.
+- **`set-option -q` and `show-options -q`**: an unknown option (or an unset user
+  option) is no error. `set-option -o` works for session options too.
+- **`show-options -s`** lists the server options.
+
+### Changed
+
+- **Breaking: `show-options` without `-g` reads the target session's own
+  values**, as tmux's: `show -v status-left` prints nothing unless the session
+  sets it (use `-g` for the global value), and `show-options` alone lists only
+  what the session sets, where it listed every option.
+- **Breaking: a user option set without `-w` or `-p` is the session's**
+  (`set @x 1`), as tmux's, where it was global: another session no longer sees
+  it. `set -g @x 1` sets a global one.
+- **Breaking (library): `tmxr_config::Config`'s session options are now one
+  table, `Config::session` (`SessionOptions`)**, in place of the `prefix`,
+  `mouse`, `base_index`, `status` and other fields. The config file's keys are
+  unchanged.
+
 ### Fixed
 
 - **`display-message -t` with a target that names nothing** fails with

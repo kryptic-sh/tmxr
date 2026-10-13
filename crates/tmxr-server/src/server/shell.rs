@@ -3,6 +3,7 @@
 use std::path::Path;
 
 use super::{Event, Server};
+use crate::model::PaneId;
 
 /// `run-shell`'s output: what `line` printed (standard output, then error),
 /// or a line saying it failed, as tmux reports a command that printed
@@ -27,13 +28,13 @@ pub fn shell_succeeds(line: &str, shell: Option<&str>) -> bool {
     shell_output(line, None, shell).is_ok_and(|o| o.status.success())
 }
 
-/// `copy-pipe`: run `line` with the shell, `input` on its standard input,
-/// off the state thread. A failure goes to the message log.
-pub fn pipe_to_shell(srv: &Server, line: String, input: String) {
+/// `copy-pipe`: run `line` with `pane`'s session's shell, `input` on its
+/// standard input, off the state thread. A failure goes to the message log.
+pub fn pipe_to_shell(srv: &Server, pane: PaneId, line: String, input: String) {
     use std::io::Write as _;
     use std::process::{Command, Stdio};
     let events = srv.events.clone();
-    let shell = srv.cfg.default_shell.clone();
+    let shell = srv.pane_session_options(Some(pane)).default_shell.clone();
     let _ = std::thread::Builder::new()
         .name("tmxr-copy-pipe".into())
         .spawn(move || {

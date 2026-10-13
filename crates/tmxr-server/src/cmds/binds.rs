@@ -108,7 +108,7 @@ pub(super) fn run(
                 if only_notes {
                     let Some(note) = &b.note else { continue };
                     let prefix = match table.as_str() {
-                        "prefix" => format!("{} ", srv.prefix),
+                        "prefix" => format!("{} ", srv.cfg.session.prefix),
                         "root" => String::new(),
                         t => format!("[{t}] "),
                     };

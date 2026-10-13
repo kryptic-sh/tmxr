@@ -197,6 +197,9 @@ pub struct Session {
     pub env: Environment,
     /// This session's hooks, in place of the global ones of the same name.
     pub hooks: crate::hooks::HookTable,
+    /// `set-option` without `-g`: options set on this session, over the
+    /// global ones.
+    pub options: tmxr_config::OwnSessionOptions,
     pub created: std::time::SystemTime,
     pub last_used: Instant,
 }
