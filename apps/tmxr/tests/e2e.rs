@@ -694,7 +694,7 @@ fn detach_client_p_hangs_up_the_clients_parent() {
     );
     let shell = |t: &Tmxr| t.spawn_at(t.dir.path(), "/bin/sh", &["-c".into(), line.clone()], &[]);
 
-    let mut s = shell(&t);
+    let s = shell(&t);
     s.wait_for("status line", |text| text.contains("hu"));
     t.run(&["detach-client", "-s", "hu"]);
     s.wait_for("the shell after the client", |text| {
