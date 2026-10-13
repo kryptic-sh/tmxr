@@ -68,6 +68,8 @@ pub struct Client {
     pub user_read_only: bool,
     /// It attached with `attach -r`.
     pub attach_read_only: bool,
+    /// The standard input it sent for `load-buffer -`, until that takes it.
+    pub stdin: Option<Vec<u8>>,
 }
 
 impl Client {
@@ -344,6 +346,7 @@ impl Server {
                         user,
                         user_read_only: read_only,
                         attach_read_only: false,
+                        stdin: None,
                     },
                 );
             }
@@ -460,6 +463,11 @@ impl Server {
                 let ctx = self.command_client_ctx(id);
                 let out = crate::cmds::run_argv_list(self, &ctx, &argv);
                 self.conclude_command(id, &ctx, out);
+            }
+            ClientMsg::Stdin(data) => {
+                if let Some(c) = self.clients.get_mut(&id) {
+                    c.stdin = Some(data);
+                }
             }
             ClientMsg::Input(ev) => self.input(id, ev),
             ClientMsg::Detach => self.detach(id, "detached"),

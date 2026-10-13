@@ -9,7 +9,7 @@
 mod spawn;
 mod terminal;
 
-use std::io::{self, IsTerminal, Write};
+use std::io::{self, IsTerminal, Read, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -136,6 +136,13 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
     let (mut recv, mut send) = stream.split();
     let to_io = |e: tmxr_proto::ProtoError| io::Error::other(e.to_string());
     write_msg(&mut send, &ClientMsg::Hello(hello())).map_err(to_io)?;
+    // `load-buffer -` reads this process's standard input: all of it goes
+    // ahead of the command.
+    if tmxr_command::reads_stdin(&args) {
+        let mut data = Vec::new();
+        io::stdin().read_to_end(&mut data)?;
+        write_msg(&mut send, &ClientMsg::Stdin(data)).map_err(to_io)?;
+    }
     write_msg(&mut send, &ClientMsg::Command(args)).map_err(to_io)?;
 
     let mut send = Some(send);

@@ -721,6 +721,17 @@ impl Parsed {
     }
 }
 
+/// Whether a command line (commands split by `;` words) reads the client's
+/// standard input: a `load-buffer -` in it, which the client must send
+/// ahead.
+pub fn reads_stdin(argv: &[String]) -> bool {
+    argv.split(|w| w == ";").any(|cmd| {
+        parse(cmd).is_ok_and(|p| {
+            p.name() == "load-buffer" && p.args.positional().first().is_some_and(|f| f == "-")
+        })
+    })
+}
+
 /// Resolve `argv[0]` and parse the rest against its flag spec.
 pub fn parse(argv: &[String]) -> Result<Parsed, CommandError> {
     let (name, rest) = argv
@@ -770,6 +781,17 @@ mod tests {
             assert!(c.min_args <= c.max_args, "{}", c.name);
             assert!(!c.flags.starts_with(':'), "{}", c.name);
         }
+    }
+
+    #[test]
+    fn load_buffer_dash_reads_stdin() {
+        let words = |s: &str| s.split(' ').map(str::to_owned).collect::<Vec<_>>();
+        assert!(reads_stdin(&words("load-buffer -")));
+        assert!(reads_stdin(&words("loadb -b x -")));
+        assert!(reads_stdin(&words("ls ; loadb -")));
+        assert!(!reads_stdin(&words("load-buffer file")));
+        assert!(!reads_stdin(&words("save-buffer -")));
+        assert!(!reads_stdin(&words("send-keys -")));
     }
 
     #[test]

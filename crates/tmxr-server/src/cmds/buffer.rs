@@ -124,11 +124,16 @@ pub(super) fn run(
             }
         }
         "load-buffer" => {
-            if pos[0] == "-" {
-                return Err("load-buffer: reading standard input is not supported".into());
-            }
-            let path = resolve(ctx, &pos[0]);
-            let bytes = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            // -: the command client's standard input, which it sent ahead.
+            let bytes = if pos[0] == "-" {
+                ctx.client
+                    .and_then(|c| srv.clients.get_mut(&c))
+                    .and_then(|c| c.stdin.take())
+                    .ok_or("load-buffer: no standard input")?
+            } else {
+                let path = resolve(ctx, &pos[0]);
+                std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?
+            };
             let data = String::from_utf8_lossy(&bytes).into_owned();
             if a.has('w') {
                 srv.set_clipboard(&data);

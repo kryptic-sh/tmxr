@@ -146,10 +146,11 @@ word is an index when it is a number, else a session name.
 `-b`: the command client gets its reply at once, and the chosen command runs
 when the shell exits (errors go to the attached client's status line and
 `show-messages`). `-F` decides immediately, so its command runs as part of the
-same command list. `load-buffer -` (standard input) is not supported, since
-command clients do not forward their input; relative `save-buffer` /
-`load-buffer` paths are relative to the command client's directory, or the home
-directory for a key bind.
+same command list. For `load-buffer -` the command client reads its standard
+input to the end and sends it ahead of the command (`ClientMsg::Stdin`), when
+its command line holds one (`tmxr_command::reads_stdin`); relative `save-buffer`
+/ `load-buffer` paths are relative to the command client's directory, or the
+home directory for a key bind.
 
 One deliberate difference from tmux: `set-buffer` format-expands its data, so
 `prefix Y` is `set-buffer -w "#{pane_current_path}"` (tmux-yank's copy of the

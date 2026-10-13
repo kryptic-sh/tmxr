@@ -87,6 +87,11 @@ mod tests {
             ClientMsg::Detach,
             ClientMsg::Resumed,
             ClientMsg::LockFailed("lock: not found".into()),
+            ClientMsg::Stdin(
+                b"piped
+"
+                .to_vec(),
+            ),
         ]
     }
 
@@ -150,7 +155,7 @@ mod tests {
         for m in sample_server() {
             write_msg(&mut buf, &m).unwrap();
         }
-        assert_eq!(PROTOCOL_VERSION, 4, "update the golden digest below too");
+        assert_eq!(PROTOCOL_VERSION, 5, "update the golden digest below too");
         assert_eq!(
             fnv1a(&buf),
             GOLDEN,
@@ -158,7 +163,7 @@ mod tests {
         );
     }
 
-    const GOLDEN: u64 = 9_609_753_476_290_932_931;
+    const GOLDEN: u64 = 403_055_559_659_436_935;
 
     /// FNV-1a 64-bit (http://www.isthe.com/chongo/tech/comp/fnv/), used only to
     /// pin the golden bytes in a readable constant.

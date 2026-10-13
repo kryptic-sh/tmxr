@@ -21,6 +21,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`set-option -q` and `show-options -q`**: an unknown option (or an unset user
   option) is no error. `set-option -o` works for session options too.
 - **`show-options -s`** lists the server options.
+- **`load-buffer -`** reads the buffer from the command's standard input, as
+  tmux's (`xclip -o | tmxr loadb -`). The client sends its input to the server,
+  so this needs protocol 5: a running server from an older tmxr must be
+  restarted (`tmxr kill-server`).
 - **A 16-colour fallback**: `rgb-colour 16` sends only the 16 ANSI colours (RGB
   and 256-colour styles mapped to the nearest, by tmux's `colour_256to16`
   table), and `rgb-colour auto` uses it for a client whose `TERM` has no 256

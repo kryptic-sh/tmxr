@@ -70,6 +70,8 @@ enum ClientMsg {
     Input(crossterm::event::Event), // key, mouse, paste, focus, resize
     Detach,                         // terminal hangup
     Resumed,                        // back from suspend-client: redraw everything
+    LockFailed(String),             // the lock command failed: why
+    Stdin(Vec<u8>),                 // all of stdin, ahead of a `load-buffer -` command
 }
 
 enum ServerMsg {

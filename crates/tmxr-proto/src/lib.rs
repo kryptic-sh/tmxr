@@ -15,7 +15,7 @@ pub use codec::{ProtoError, read_msg, write_msg};
 
 /// Bumped on any change to a type in this module. Client and server refuse to
 /// talk across a mismatch rather than mis-decode each other.
-pub const PROTOCOL_VERSION: u32 = 4;
+pub const PROTOCOL_VERSION: u32 = 5;
 
 /// First message a client sends.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -61,6 +61,9 @@ pub enum ClientMsg {
     /// The lock command could not run or did not exit cleanly: why. The
     /// client has its terminal back, as after [`ClientMsg::Resumed`].
     LockFailed(String),
+    /// All of the client's standard input, sent before a
+    /// [`ClientMsg::Command`] that reads it (`load-buffer -`).
+    Stdin(Vec<u8>),
 }
 
 /// Messages from the server to a client.
