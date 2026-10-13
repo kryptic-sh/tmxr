@@ -133,6 +133,9 @@ jobs:
           cache: false
       - run: rustup update --no-self-update stable
       - uses: Swatinem/rust-cache@v2
+      # nextest, as the test job: it runs the PTY tests one at a time, and
+      # macOS runs out of pseudo-terminals when they all run at once.
+      - uses: taiki-e/install-action@nextest
       - shell: bash
         run: |
           set -euo pipefail
@@ -145,7 +148,8 @@ jobs:
           HOME=$sentinel USERPROFILE=$sentinel \
             XDG_CONFIG_HOME=$sentinel/config XDG_DATA_HOME=$sentinel/data \
             XDG_STATE_HOME=$sentinel/state XDG_CACHE_HOME=$sentinel/cache \
-            cargo test --workspace --all-features --locked && tests=0 || tests=$?
+            cargo nextest run --workspace --all-features --locked --no-fail-fast \
+            && tests=0 || tests=$?
           leaked=""
           for d in config data state cache .config .local .cache; do
             if [ -e "$sentinel/$d" ]; then leaked+=$(find "$sentinel/$d"); fi
