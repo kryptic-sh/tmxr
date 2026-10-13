@@ -198,9 +198,12 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                 }
                 return Ok(status);
             }
-            ServerMsg::Detached { reason } => {
+            ServerMsg::Detached { reason, hangup } => {
                 drop(term.take());
                 println!("[{reason}]");
+                if hangup {
+                    terminal::hang_up_parent()?;
+                }
                 return Ok(0);
             }
             ServerMsg::Suspend => {

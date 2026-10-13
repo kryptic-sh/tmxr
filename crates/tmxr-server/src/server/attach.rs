@@ -63,6 +63,16 @@ impl Server {
     }
 
     pub fn detach(&mut self, id: ClientId, reason: &str) {
+        self.detach_as(id, reason, false);
+    }
+
+    /// Detach client `id` and have it send its parent process SIGHUP, which
+    /// usually closes the terminal it ran in (`detach-client -P`).
+    pub fn detach_and_hang_up(&mut self, id: ClientId) {
+        self.detach_as(id, "detached and SIGHUP", true);
+    }
+
+    fn detach_as(&mut self, id: ClientId, reason: &str, hangup: bool) {
         let Some(c) = self.clients.get_mut(&id) else {
             return;
         };
@@ -74,14 +84,14 @@ impl Server {
             .get(&att.session)
             .map(|s| s.name.clone())
             .unwrap_or_default();
-        let reason = if reason == "detached" {
-            format!("detached (from session {name})")
+        let reason = if reason.starts_with("detached") {
+            format!("{reason} (from session {name})")
         } else {
             reason.to_owned()
         };
         // Leave the alternate screen state as the client found it; the client
         // restores its own terminal modes on receiving this.
-        self.send(id, ServerMsg::Detached { reason });
+        self.send(id, ServerMsg::Detached { reason, hangup });
         self.clients.remove(&id);
         let ctx = Ctx {
             pane: self.active_pane_of_session(att.session),

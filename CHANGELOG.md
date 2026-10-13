@@ -21,6 +21,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`set-option -q` and `show-options -q`**: an unknown option (or an unset user
   option) is no error. `set-option -o` works for session options too.
 - **`show-options -s`** lists the server options.
+- **`detach-client -P`, `attach-session -x` and `new-session -X`**, as tmux's:
+  the detached clients send their parent process (the shell they ran from)
+  SIGHUP, which usually closes their terminal. A Windows client has no SIGHUP,
+  so these are refused for one, detaching nobody.
 - **`tmxr --import-tmux-conf FILE`** prints a tmux.conf as a tmxr config file:
   its global options (typed as tmxr's, `status-left` under `[status]`), binds,
   unbinds and `set-hook -g` hooks, with the lines it leaves out (plugins,

@@ -229,6 +229,26 @@ pub fn suspend() -> io::Result<()> {
     Ok(())
 }
 
+/// Send this process's parent (the shell it ran from) SIGHUP, which usually
+/// closes the terminal too (`detach-client -P`).
+#[cfg(unix)]
+pub fn hang_up_parent() -> io::Result<()> {
+    // SAFETY: `kill` only sends a signal; `getppid` cannot fail.
+    if unsafe { libc::kill(libc::getppid(), libc::SIGHUP) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+/// Windows has no SIGHUP; the server does not ask a client without job
+/// control, so reaching this is a protocol error.
+#[cfg(windows)]
+pub fn hang_up_parent() -> io::Result<()> {
+    Err(io::Error::other(
+        "detach-client -P is not supported on Windows",
+    ))
+}
+
 /// Windows has no job control; the server does not ask a client that said
 /// so in its hello, so reaching this is a protocol error.
 #[cfg(windows)]

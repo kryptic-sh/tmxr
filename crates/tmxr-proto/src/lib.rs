@@ -85,8 +85,9 @@ pub enum ServerMsg {
         stderr: String,
     },
     /// The attached client is detached; it should restore its terminal, print
-    /// the reason and exit.
-    Detached { reason: String },
+    /// the reason and exit, first sending its parent process SIGHUP when
+    /// `hangup` is set (`detach-client -P`).
+    Detached { reason: String, hangup: bool },
     /// Turn the attached client's mouse capture on or off (the `mouse`
     /// option); with it off, the terminal's own selection works unshifted.
     Mouse(bool),

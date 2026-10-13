@@ -37,10 +37,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "attach-session",
         Some("attach"),
-        "c:dEf:rt:",
+        "c:dEf:rt:x",
         0,
         0,
-        "[-dEr] [-c working-directory] [-f flags] [-t target-session]"
+        "[-dErx] [-c working-directory] [-f flags] [-t target-session]"
     ),
     cmd!(
         "bind-key",
@@ -137,10 +137,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "detach-client",
         Some("detach"),
-        "as:t:",
+        "aPs:t:",
         0,
         0,
-        "[-a] [-s target-session] [-t target-client]"
+        "[-aP] [-s target-session] [-t target-client]"
     ),
     cmd!(
         "display-menu",
@@ -342,10 +342,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "new-session",
         Some("new"),
-        "Ac:dDe:Ef:n:s:x:y:",
+        "Ac:dDe:Ef:n:s:Xx:y:",
         0,
         ANY,
-        "[-AdDE] [-c start-directory] [-e environment] [-f flags] [-n window-name] [-s session-name] [-x width] [-y height] [command]"
+        "[-AdDEX] [-c start-directory] [-e environment] [-f flags] [-n window-name] [-s session-name] [-x width] [-y height] [command]"
     ),
     cmd!(
         "new-window",

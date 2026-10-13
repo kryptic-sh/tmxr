@@ -308,6 +308,7 @@ impl Server {
         for c in self.clients.values() {
             let _ = c.tx.try_send(ServerMsg::Detached {
                 reason: "server exited".into(),
+                hangup: false,
             });
         }
         for p in self.panes.values_mut() {

@@ -679,6 +679,61 @@ fn attaching_takes_tmuxs_c_d_e_and_f() {
     );
 }
 
+/// `detach-client -P` hangs up the client's parent: here a shell that runs
+/// the client and then would print a word. A plain detach lets it.
+#[cfg(unix)]
+#[test]
+fn detach_client_p_hangs_up_the_clients_parent() {
+    let t = Tmxr::new("hangup");
+    t.run(&["new-session", "-d", "-s", "hu"]);
+    let words = t.args(&["attach", "-t", "hu"]);
+    let line = format!(
+        "{} {}; echo survived; sleep 5",
+        env!("CARGO_BIN_EXE_tmxr"),
+        words.join(" ")
+    );
+    let shell = |t: &Tmxr| t.spawn_at(t.dir.path(), "/bin/sh", &["-c".into(), line.clone()], &[]);
+
+    let mut s = shell(&t);
+    s.wait_for("status line", |text| text.contains("hu"));
+    t.run(&["detach-client", "-s", "hu"]);
+    s.wait_for("the shell after the client", |text| {
+        text.contains("survived")
+    });
+    drop(s);
+
+    let mut s = shell(&t);
+    s.wait_for("status line", |text| text.contains("hu"));
+    t.run(&["detach-client", "-P", "-s", "hu"]);
+    s.wait_exit();
+    assert!(!s.text().contains("survived"), "{}", s.text());
+}
+
+/// A Windows client has no parent to send SIGHUP: `-P` is refused and the
+/// client stays.
+#[cfg(windows)]
+#[test]
+fn detach_client_p_is_refused_on_windows() {
+    let t = Tmxr::new("hangup");
+    let s = t.attach(&["new", "-s", "hu"]);
+    s.wait_for("status line", |text| text.contains("hu"));
+    let out = t.output(&["detach-client", "-P", "-s", "hu"]);
+    assert!(!out.status.success(), "{out:?}");
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("SIGHUP"),
+        "{out:?}"
+    );
+    assert_eq!(
+        t.run(&["list-clients", "-F", "#{client_session}"]).trim(),
+        "hu"
+    );
+    let out = t.output(&["attach-session", "-x", "-t", "hu"]);
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("SIGHUP"),
+        "{out:?}"
+    );
+}
+
 #[test]
 fn import_tmux_conf_prints_a_config_that_loads() {
     let t = Tmxr::new("import");

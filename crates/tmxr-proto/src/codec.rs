@@ -111,6 +111,7 @@ mod tests {
             },
             ServerMsg::Detached {
                 reason: "detached".into(),
+                hangup: false,
             },
             ServerMsg::Mouse(true),
             ServerMsg::Suspend,
@@ -163,7 +164,7 @@ mod tests {
         );
     }
 
-    const GOLDEN: u64 = 403_055_559_659_436_935;
+    const GOLDEN: u64 = 9_638_520_815_211_193_956;
 
     /// FNV-1a 64-bit (http://www.isthe.com/chongo/tech/comp/fnv/), used only to
     /// pin the golden bytes in a readable constant.

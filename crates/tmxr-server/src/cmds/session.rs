@@ -28,7 +28,8 @@ pub(super) fn run(
                 && let Some(name) = a.value('s')
                 && let Some(sid) = srv.sessions.values().find(|s| s.name == name).map(|s| s.id)
             {
-                attach_to(srv, ctx, a, sid, a.has('D'), out)?;
+                let others = Others::from_flags(a, 'D', 'X');
+                attach_to(srv, ctx, a, sid, others, out)?;
                 return Ok(true);
             }
             let read_only = client_flags(a)?;
@@ -73,7 +74,7 @@ pub(super) fn run(
                 return Err("no sessions".into());
             }
             let sid = target::session(srv, ctx, a.value('t'))?;
-            attach_to(srv, ctx, a, sid, a.has('d'), out)?;
+            attach_to(srv, ctx, a, sid, Others::from_flags(a, 'd', 'x'), out)?;
         }
         "detach-client" => {
             let targets: Vec<ClientId> = if a.has('a') {
@@ -94,8 +95,13 @@ pub(super) fn run(
             } else {
                 attached_client(srv, ctx).into_iter().collect()
             };
-            for c in targets {
-                srv.detach(c, "detached");
+            // -P: their parent shells get SIGHUP too, as tmux's.
+            if a.has('P') {
+                hang_up(srv, &targets)?;
+            } else {
+                for c in targets {
+                    srv.detach(c, "detached");
+                }
             }
         }
         "has-session" => {
@@ -135,12 +141,7 @@ pub(super) fn run(
                 Some(t) => target_client(srv, t)?,
                 None => attached_client(srv, ctx).ok_or("no current client")?,
             };
-            let job_control = srv.clients[&c]
-                .hello
-                .as_ref()
-                .and_then(|h| h.terminal.as_ref())
-                .is_some_and(|t| t.job_control);
-            if !job_control {
+            if !job_control(srv, c) {
                 return Err("suspend-client: the client has no job control (Windows)".into());
             }
             srv.send(c, ServerMsg::Suspend);
@@ -324,7 +325,7 @@ fn attach_to(
     ctx: &Ctx,
     a: &Args,
     sid: SessionId,
-    detach_others: bool,
+    others: Others,
     out: &mut Outcome,
 ) -> Result<(), String> {
     let read_only = a.has('r') || client_flags(a)?;
@@ -336,22 +337,71 @@ fn attach_to(
     if !a.has('E') {
         update_env(srv, sid, &ctx.env);
     }
-    if detach_others {
-        let others: Vec<ClientId> = srv
+    if others != Others::Keep {
+        let ids: Vec<ClientId> = srv
             .clients
             .values()
             .filter(|c| c.att.as_ref().is_some_and(|x| x.session == sid))
             .filter(|c| Some(c.id) != ctx.client)
             .map(|c| c.id)
             .collect();
-        for c in others {
-            srv.detach(c, "detached");
+        if others == Others::HangUp {
+            hang_up(srv, &ids)?;
+        } else {
+            for c in ids {
+                srv.detach(c, "detached");
+            }
         }
     }
     set_read_only(srv, ctx, read_only);
     match attached_client(srv, ctx) {
         Some(c) => srv.switch_client(c, sid),
         None => out.attach = Some(sid),
+    }
+    Ok(())
+}
+
+/// What attaching does to the session's other clients: nothing, detach
+/// them (`-d`, `-D`), or detach them and hang up their parent shells (`-x`,
+/// `-X`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Others {
+    Keep,
+    Detach,
+    HangUp,
+}
+
+impl Others {
+    /// The choice the command's `detach` and `hang_up` flags make.
+    fn from_flags(a: &Args, detach: char, hang_up: char) -> Self {
+        if a.has(hang_up) {
+            Self::HangUp
+        } else if a.has(detach) {
+            Self::Detach
+        } else {
+            Self::Keep
+        }
+    }
+}
+
+/// Whether client `c` said it has Unix job control (and so a parent it can
+/// signal), in its hello.
+fn job_control(srv: &Server, c: ClientId) -> bool {
+    srv.clients
+        .get(&c)
+        .and_then(|c| c.hello.as_ref())
+        .and_then(|h| h.terminal.as_ref())
+        .is_some_and(|t| t.job_control)
+}
+
+/// Detach `clients` and have each send its parent process SIGHUP; refused,
+/// with none detached, if one cannot (a Windows client has no SIGHUP).
+fn hang_up(srv: &mut Server, clients: &[ClientId]) -> Result<(), String> {
+    if clients.iter().any(|&c| !job_control(srv, c)) {
+        return Err("a Windows client has no parent to send SIGHUP: none detached".into());
+    }
+    for &c in clients {
+        srv.detach_and_hang_up(c);
     }
     Ok(())
 }
