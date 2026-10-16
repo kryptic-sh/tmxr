@@ -102,8 +102,18 @@ table. What has been verified, and how:
     `customize-mode` lists only the session ones (its Enter writes
     `set-option -g`, which would set the other table).
   - **Fewer server options**: `show -s` lists the ones tmxr has
-    (`cmds::options::SERVER_OPTIONS`); `update-environment` stays a config
-    value, not settable by `set-option` and not per session.
+    (`cmds::options::SERVER_OPTIONS`).
+  - **No array options**: `update-environment` stays a config value
+    (`Config::update_environment`), not settable by `set-option` and not per
+    session. In tmux 3.6 (checked 2026-10-16) it is a session option and a
+    sparse array: `set -g update-environment "A B"` replaces it with the
+    space-separated items, `-a` appends items, `update-environment[5]` sets one
+    index leaving gaps, `-u update-environment[1]` removes one, `-u` gives the
+    default back, and `show` lists `update-environment[i] value` (`-v` the
+    values; an empty one prints the bare name). Not done because the option
+    tables (`tmxr_config::table`) have no array type, and tmux has others
+    (`command-alias`, `terminal-features`, `status-format`, `user-keys`): this
+    wants array support in the table, not one special case.
   - **Pane commands refresh on one timer**: each client's status line redraws at
     its session's `status-interval`, as tmux's, but the foreground commands
     behind `#{pane_current_command}` and automatic window names refresh at the
