@@ -166,7 +166,7 @@ pub(super) fn run(
             let alerted = |i: &&u32| {
                 srv.windows
                     .get(&s.windows[*i])
-                    .is_some_and(crate::model::Window::alerted)
+                    .is_some_and(|w| w.alerted(sid))
             };
             let after = s.windows.keys().filter(|i| **i > s.current);
             let before = s.windows.keys().filter(|i| **i < s.current);
@@ -269,6 +269,7 @@ pub(super) fn run(
                             "{prefix}{idx}: {}{} ({} panes) [{}x{}]",
                             w.name,
                             w.flags(
+                                s.id,
                                 *idx == s.current,
                                 Some(*idx) == s.last,
                                 srv.window_is_marked(*wid)

@@ -4,7 +4,7 @@
 //! scripts stay valid. Window *indices* are per session and are what the user
 //! sees in the status line.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -93,7 +93,9 @@ pub struct Window {
     pub active: PaneId,
     pub last_pane: Option<PaneId>,
     pub zoomed: bool,
-    pub bell: bool,
+    /// The sessions whose link to it a bell flags: tmux keeps the alert
+    /// flags per winlink, so each session holding a window has its own.
+    pub bell: BTreeSet<SessionId>,
     /// Size of the area the panes share (the client minus the status line).
     pub cols: u16,
     pub rows: u16,
@@ -103,10 +105,12 @@ pub struct Window {
     /// (`resize-window` sets `window-size manual` here, and `rename-window`
     /// `automatic-rename off`, as tmux's).
     pub options: tmxr_config::OwnOptions,
-    /// It printed while not current (`monitor-activity`).
-    pub activity: bool,
-    /// It was quiet for `monitor-silence` seconds.
-    pub silence: bool,
+    /// The sessions whose link to it printed while out of sight
+    /// (`monitor-activity`).
+    pub activity: BTreeSet<SessionId>,
+    /// The sessions whose link to it was quiet for `monitor-silence`
+    /// seconds.
+    pub silence: BTreeSet<SessionId>,
     /// `monitor-silence` has fired since the window last printed.
     pub silence_raised: bool,
     /// When one of its panes last printed.
@@ -152,12 +156,31 @@ impl Window {
         }
     }
 
-    /// A bell, activity or silence: what `next-window -a` looks for.
-    pub fn alerted(&self) -> bool {
-        self.bell || self.activity || self.silence
+    /// A bell, activity or silence on `session`'s link: what `next-window
+    /// -a` looks for.
+    pub fn alerted(&self, session: SessionId) -> bool {
+        [&self.bell, &self.activity, &self.silence]
+            .iter()
+            .any(|flagged| flagged.contains(&session))
     }
 
-    pub fn flags(&self, current: bool, last: bool, marked: bool) -> String {
+    /// Clear the alerts on every session's link, as tmux's
+    /// `winlink_clear_flags` does once the window is in sight.
+    pub fn clear_alerts(&mut self) {
+        self.bell.clear();
+        self.activity.clear();
+        self.silence.clear();
+    }
+
+    /// Forget `session`'s link, which is gone.
+    pub fn forget_session(&mut self, session: SessionId) {
+        self.bell.remove(&session);
+        self.activity.remove(&session);
+        self.silence.remove(&session);
+    }
+
+    /// The flags `window_flags` shows for `session`'s link.
+    pub fn flags(&self, session: SessionId, current: bool, last: bool, marked: bool) -> String {
         let mut f = String::new();
         if current {
             f.push('*');
@@ -165,13 +188,13 @@ impl Window {
             f.push('-');
         }
         // tmux's order: activity, bell, silence.
-        if self.activity {
+        if self.activity.contains(&session) {
             f.push('#');
         }
-        if self.bell {
+        if self.bell.contains(&session) {
             f.push('!');
         }
-        if self.silence {
+        if self.silence.contains(&session) {
             f.push('~');
         }
         if marked {

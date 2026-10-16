@@ -2,6 +2,8 @@
 //! `*-action` and `visual-*` options say, rings the terminal bell of the
 //! clients on its session or shows them a message (tmux's `alerts.c`).
 
+use std::collections::BTreeSet;
+
 use tmxr_config::{AlertAction, Visual};
 use tmxr_proto::ServerMsg;
 
@@ -45,10 +47,13 @@ impl Alert {
     }
 }
 
-/// Raise `alert` in `window`. The window is flagged unless a client is
-/// looking at it; then, in each session holding it whose action applies,
-/// its hook runs and the session's clients get the bell, the message
-/// ("Bell in window 1", "Bell in current window") or both.
+/// Raise `alert` in `window`, link by link as tmux's `alerts_check_*`: each
+/// session's link is flagged unless it is the session's current window and
+/// a client is attached; then, where the session's action applies, its hook
+/// runs and the session's clients get the bell, the message ("Bell in
+/// window 1", "Bell in current window") or both. A link already flagged
+/// for activity or silence is left alone until it is seen; bells always
+/// ring.
 pub fn raise(srv: &mut Server, window: WindowId, alert: Alert) {
     let clients_of = |srv: &Server, session| -> Vec<ClientId> {
         srv.clients
@@ -57,7 +62,15 @@ pub fn raise(srv: &mut Server, window: WindowId, alert: Alert) {
             .map(|c| c.id)
             .collect()
     };
-    let mut seen = false;
+    let Some(w) = srv.windows.get(&window) else {
+        return;
+    };
+    let already = match alert {
+        Alert::Bell => BTreeSet::new(),
+        Alert::Activity => w.activity.clone(),
+        Alert::Silence => w.silence.clone(),
+    };
+    let mut flag = Vec::new();
     let mut acting = Vec::new();
     for s in srv.sessions.values() {
         let Some(index) = s
@@ -67,20 +80,25 @@ pub fn raise(srv: &mut Server, window: WindowId, alert: Alert) {
         else {
             continue;
         };
+        if already.contains(&s.id) {
+            continue;
+        }
         let current = s.current == index;
-        if current && !clients_of(srv, s.id).is_empty() {
-            seen = true;
+        if !current || clients_of(srv, s.id).is_empty() {
+            flag.push(s.id);
         }
         let (action, visual) = alert.options(srv, s.id);
         if action.applies(current) {
             acting.push((s.id, index, current, visual));
         }
     }
-    if !seen && let Some(w) = srv.windows.get_mut(&window) {
+    if !flag.is_empty()
+        && let Some(w) = srv.windows.get_mut(&window)
+    {
         match alert {
-            Alert::Bell => w.bell = true,
-            Alert::Activity => w.activity = true,
-            Alert::Silence => w.silence = true,
+            Alert::Bell => w.bell.extend(flag),
+            Alert::Activity => w.activity.extend(flag),
+            Alert::Silence => w.silence.extend(flag),
         }
         srv.mark_window_dirty(window);
     }

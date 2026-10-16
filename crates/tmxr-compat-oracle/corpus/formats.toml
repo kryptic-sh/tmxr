@@ -32,3 +32,19 @@ checks = [
 name = "set_option_f_expands_the_value"
 steps = [{ run = "set -gF @x '#{session_name}-#{window_index}'" }]
 checks = [{ format = "#{@x}", expect = "o-0" }]
+
+[[cases]]
+name = "a_bell_flags_each_sessions_link_unless_in_sight"
+attach = true
+program = 'read x; printf "\a"; exec sleep 1000'
+steps = [
+  { run = "new-session -d -s p" },
+  { run = "link-window -d -s o:0 -t p:5" },
+  { run = "send-keys -t o:0 Enter" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "display -p -t o:0 '#{window_bell_flag}'", expect = "0" },
+  { command = "display -p -t p:5 '#{window_bell_flag}'", expect = "1" },
+  { command = "list-windows -t p -F '#I#{window_flags}'", expect = "0*\n5!" },
+]

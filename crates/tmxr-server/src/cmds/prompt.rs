@@ -4,11 +4,12 @@ use std::fmt::Write as _;
 
 use tmxr_command::Parsed;
 
-use super::{Ctx, Outcome, Res, attached_client, expand_for, join_args};
+use super::{Ctx, Outcome, Res, attached_client, expand_for, expand_with, join_args};
 use crate::model::{ClientId, PaneId};
 use crate::overlay::Overlay;
 use crate::server::Server;
 use crate::target;
+use crate::vars::Vars;
 
 pub(super) fn run(
     srv: &mut Server,
@@ -225,15 +226,20 @@ pub(super) fn run(
         "display-message" => {
             // A -t that names nothing is an error, as tmux's; with no -t and
             // no pane to be current, the formats expand without one.
-            let (_, _, pid) = match a.value('t') {
-                Some(t) => target::pane(srv, ctx, Some(t))?,
-                None => target::pane(srv, ctx, None).unwrap_or((0, 0, 0)),
+            let target = match a.value('t') {
+                Some(t) => Some(target::pane(srv, ctx, Some(t))?),
+                None => target::pane(srv, ctx, None).ok(),
             };
             let fmt = pos.first().map_or(
                 "[#S] #I:#P [#{pane_width}x#{pane_height}] \"#{pane_title}\" #{pane_current_command} #{pane_current_path}",
                 String::as_str,
             );
-            let msg = expand_for(srv, ctx, Some(pid), fmt);
+            // The target's session, which a linked window has several of.
+            let mut vars = Vars::for_pane(srv, target.map(|(_, _, p)| p), ctx.client);
+            if let Some((sid, _, _)) = target {
+                vars.session = Some(sid);
+            }
+            let msg = expand_with(srv, ctx, &vars, fmt);
             match attached_client(srv, ctx) {
                 Some(c) if !a.has('p') => srv.show_message(c, msg),
                 _ => {

@@ -207,14 +207,23 @@ fn client_size(srv: &Server, ctx: &Ctx) -> (u16, u16) {
 }
 
 fn expand_for(srv: &Server, ctx: &Ctx, pane: Option<PaneId>, s: &str) -> String {
-    let vars = Vars::for_pane(srv, pane.or(ctx.pane), ctx.client);
+    expand_with(
+        srv,
+        ctx,
+        &Vars::for_pane(srv, pane.or(ctx.pane), ctx.client),
+        s,
+    )
+}
+
+/// `s` expanded with `vars`: [`expand_for`] for variables already chosen.
+fn expand_with(srv: &Server, ctx: &Ctx, vars: &Vars<'_>, s: &str) -> String {
     match &ctx.mouse {
         // A mouse bind's commands also see what was under the mouse.
         Some(mouse) => expand(s, &|name: &str| {
             crate::vars::mouse_var(srv, mouse, name)
-                .or_else(|| tmxr_command::format::Context::get(&vars, name))
+                .or_else(|| tmxr_command::format::Context::get(vars, name))
         }),
-        None => expand(s, &vars),
+        None => expand(s, vars),
     }
 }
 

@@ -152,15 +152,16 @@ impl Context for Vars<'_> {
             "window_width" => window?.cols.to_string(),
             "window_height" => window?.rows.to_string(),
             "window_zoomed_flag" => flag(window?.zoomed),
-            "window_bell_flag" => flag(window?.bell),
-            "window_activity_flag" => flag(window?.activity),
-            "window_silence_flag" => flag(window?.silence),
+            "window_bell_flag" => flag(window?.bell.contains(&session?.id)),
+            "window_activity_flag" => flag(window?.activity.contains(&session?.id)),
+            "window_silence_flag" => flag(window?.silence.contains(&session?.id)),
             "window_active" => flag(session?.current_window() == Some(window?.id)),
             "window_flags" => {
                 let s = session?;
                 let w = window?;
                 let idx = s.index_of(w.id);
                 w.flags(
+                    s.id,
                     idx == Some(s.current),
                     idx.is_some() && idx == s.last,
                     srv.window_is_marked(w.id),

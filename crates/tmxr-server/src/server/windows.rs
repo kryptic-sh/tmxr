@@ -1,7 +1,7 @@
 //! Creating, selecting and closing sessions and windows.
 
 use crate::cmds::Ctx;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::time::{Instant, SystemTime};
 
@@ -116,12 +116,12 @@ impl Server {
                 active: pid,
                 last_pane: None,
                 zoomed: false,
-                bell: false,
+                bell: BTreeSet::new(),
                 cols,
                 rows,
                 preset: 0,
-                activity: false,
-                silence: false,
+                activity: BTreeSet::new(),
+                silence: BTreeSet::new(),
                 last_output: Instant::now(),
                 silence_raised: false,
                 hooks: crate::hooks::HookTable::new(),
@@ -195,9 +195,7 @@ impl Server {
         if let Some(w) = s.windows.get(&index).copied()
             && let Some(win) = self.windows.get_mut(&w)
         {
-            win.bell = false;
-            win.activity = false;
-            win.silence = false;
+            win.clear_alerts();
         }
         self.mark_session_dirty(session);
         Ok(())
@@ -245,6 +243,12 @@ impl Server {
         if let Some(i) = index {
             s.windows.remove(&i);
         }
+        if let Some(w) = self.windows.get_mut(&wid) {
+            w.forget_session(sid);
+        }
+        let Some(s) = self.sessions.get_mut(&sid) else {
+            return;
+        };
         if s.windows.is_empty() {
             self.kill_session(sid);
             return;
@@ -302,6 +306,9 @@ impl Server {
         for w in s.windows.values().copied().collect::<Vec<_>>() {
             // A window linked to another session lives on there.
             if self.session_of_window(w).is_some() {
+                if let Some(win) = self.windows.get_mut(&w) {
+                    win.forget_session(sid);
+                }
                 continue;
             }
             if let Some(win) = self.windows.remove(&w) {
@@ -365,12 +372,12 @@ impl Server {
                 active: pane,
                 last_pane: None,
                 zoomed: false,
-                bell: false,
+                bell: BTreeSet::new(),
                 cols,
                 rows,
                 preset: 0,
-                activity: false,
-                silence: false,
+                activity: BTreeSet::new(),
+                silence: BTreeSet::new(),
                 last_output: Instant::now(),
                 silence_raised: false,
                 hooks: crate::hooks::HookTable::new(),

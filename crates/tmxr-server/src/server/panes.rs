@@ -365,17 +365,12 @@ impl Server {
                 if bell {
                     crate::alerts::raise(self, wid, crate::alerts::Alert::Bell);
                 }
-                let watched = self.window_options(wid).monitor_activity;
-                let mut activity = false;
                 if let Some(w) = self.windows.get_mut(&wid) {
                     w.last_output = std::time::Instant::now();
-                    w.silence = false;
+                    w.silence.clear();
                     w.silence_raised = false;
-                    // As tmux: once flagged, a window's activity is not
-                    // raised again until it is seen.
-                    activity = watched && !w.activity;
                 }
-                if activity {
+                if self.window_options(wid).monitor_activity {
                     crate::alerts::raise(self, wid, crate::alerts::Alert::Activity);
                 }
                 for (_, data) in clips {

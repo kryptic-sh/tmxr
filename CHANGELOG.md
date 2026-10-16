@@ -45,6 +45,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   window inherits the `-wg` one (`show -wA`), and a format finds the pane's, the
   window's, the global window one, the session's, then the global session one.
   They were one table, which `-wg` overwrote.
+- **Alerts flag each session's link to a window**, as tmux's winlinks: a window
+  linked into two sessions and in sight in one gets its bell, activity or
+  silence flag in the other, where no flag showed. `display-message -t` expands
+  in the target's session, so `display -p -t other:5 '#{window_flags}'` shows
+  that session's link.
 
 ## [0.7.0] - 2026-10-14
 

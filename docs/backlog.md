@@ -223,11 +223,11 @@ table. What has been verified, and how:
 - **tmux default binds**: most of tmux's defaults are bound (see above);
   `prefix C-z` (suspend-client) errors on Windows, which has no job control.
   Alerts follow tmux 3.6's, as recorded from a running tmux on 2026-10-10 (WSL
-  Ubuntu, a client on a pty): flags unless a client is looking at the window,
-  `*-action` and `visual-*` as tmux's, the `alert-*` hooks. Not compared:
-  windows linked into two sessions (tmux flags each session's link; tmxr has one
-  flag per window), and an activity alert in the window in sight rings on every
-  burst of output, as tmux's did there, which was not looked at more closely.
+  Ubuntu, a client on a pty): `*-action` and `visual-*` as tmux's, the `alert-*`
+  hooks, and flags per session's link (`alerts::raise`, checked for a bell
+  against tmux by `corpus/formats.toml`). Not looked at more closely: an
+  activity alert in the window in sight rings on every burst of output, as
+  tmux's did there.
 - **`rgb-colour auto`** decides from the client's environment only, not from
   terminfo as tmux does: `COLORTERM=truecolor` / `24bit`, a `TERM` ending in
   `-direct`, or `WT_SESSION` give 24-bit colour; a `TERM` without `256col` in it
