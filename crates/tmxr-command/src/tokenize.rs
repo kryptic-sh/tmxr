@@ -1,9 +1,10 @@
 //! Split a tmux command line into a command list.
 //!
 //! Follows tmux's quoting: words split on whitespace; `'…'` is literal;
-//! `"…"` allows `\"`, `\\`, `\$` escapes and `$VAR` / `${VAR}` expansion;
-//! outside quotes `\x` is a literal `x`, `~` at the start of a word is
-//! `$HOME`, and `$VAR` expands. A `;` ending a word (or standing alone)
+//! outside it, in `"…"` or bare, a backslash escapes as tmux's
+//! (`yylex_token_escape`: `\n`, `\t`, `\e` and the other C escapes, `\s` a
+//! space, `\ooo` octal, `\uXXXX` / `\UXXXXXXXX`, else the character itself)
+//! and `$VAR` / `${VAR}` expands; `~` at the start of a word is `$HOME`. A `;` ending a word (or standing alone)
 //! separates commands; `\;` is a literal `;`. A word starting with `#` (other
 //! than a `#{format}`) starts a comment. `{ … }` is one word holding the
 //! commands inside, joined by ` ; `, as tmux passes a block of commands to
@@ -17,6 +18,8 @@ pub enum TokenizeError {
     UnterminatedBrace,
     #[error("unterminated {{ … }} block")]
     UnterminatedBlock,
+    #[error("{0}")]
+    Escape(&'static str),
 }
 
 /// Parse `line` into commands, each a list of words. `env` resolves
@@ -57,9 +60,7 @@ pub fn tokenize(
             }
             '\\' => {
                 in_word = true;
-                if let Some(n) = chars.next() {
-                    word.push(n);
-                }
+                escape(&mut chars, &mut word)?;
             }
             '\'' => {
                 in_word = true;
@@ -76,14 +77,10 @@ pub fn tokenize(
                 loop {
                     match chars.next() {
                         Some('"') => break,
-                        Some('\\') => match chars.next() {
-                            Some(n @ ('"' | '\\' | '$')) => word.push(n),
-                            Some(n) => {
-                                word.push('\\');
-                                word.push(n);
-                            }
-                            None => return Err(TokenizeError::Unterminated('"')),
-                        },
+                        Some('\\') if chars.peek().is_none() => {
+                            return Err(TokenizeError::Unterminated('"'));
+                        }
+                        Some('\\') => escape(&mut chars, &mut word)?,
                         Some('$') => expand_var(&mut chars, &mut word, env)?,
                         Some(ch) => word.push(ch),
                         None => return Err(TokenizeError::Unterminated('"')),
@@ -186,6 +183,81 @@ fn block(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Result<String,
         .filter(|l| !l.is_empty())
         .collect::<Vec<_>>()
         .join(" ; "))
+}
+
+/// The escape after a backslash, as tmux 3.6's `yylex_token_escape` reads
+/// it. Octal escapes give bytes, so a run of them (`\303\251`) is read
+/// together as UTF-8; bytes that are not valid UTF-8 become U+FFFD, where
+/// tmux keeps them raw.
+fn escape(
+    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+    word: &mut String,
+) -> Result<(), TokenizeError> {
+    let c = chars
+        .next()
+        .ok_or(TokenizeError::Escape("trailing backslash"))?;
+    let c = match c {
+        '0'..='7' => {
+            let mut bytes = vec![octal(c, chars)?];
+            while chars.peek() == Some(&'\\') {
+                let Some(d @ '0'..='7') = chars.clone().nth(1) else {
+                    break;
+                };
+                chars.next();
+                chars.next();
+                bytes.push(octal(d, chars)?);
+            }
+            word.push_str(&String::from_utf8_lossy(&bytes));
+            return Ok(());
+        }
+        'a' => '\x07',
+        'b' => '\x08',
+        'e' => '\x1b',
+        'f' => '\x0c',
+        's' => ' ',
+        'v' => '\x0b',
+        'r' => '\r',
+        'n' => '\n',
+        't' => '\t',
+        'u' => unicode(chars, 4, "invalid \\u argument")?,
+        'U' => unicode(chars, 8, "invalid \\U argument")?,
+        c => c,
+    };
+    word.push(c);
+    Ok(())
+}
+
+/// The byte of an octal escape whose first digit is `first`: three digits,
+/// the first at most 3, as tmux's.
+fn octal(
+    first: char,
+    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+) -> Result<u8, TokenizeError> {
+    let bad = TokenizeError::Escape("invalid octal escape");
+    if first > '3' {
+        return Err(bad);
+    }
+    let mut value = 0;
+    for c in [Some(first), chars.next(), chars.next()] {
+        value = value * 8 + c.and_then(|c| c.to_digit(8)).ok_or_else(|| bad.clone())?;
+    }
+    u8::try_from(value).map_err(|_| bad)
+}
+
+/// The character of a `\u` or `\U` escape: `size` hex digits.
+fn unicode(
+    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+    size: usize,
+    bad: &'static str,
+) -> Result<char, TokenizeError> {
+    let hex: String = chars.take(size).collect();
+    if hex.len() != size || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(TokenizeError::Escape(bad));
+    }
+    u32::from_str_radix(&hex, 16)
+        .ok()
+        .and_then(char::from_u32)
+        .ok_or(TokenizeError::Escape(bad))
 }
 
 fn expand_var(
@@ -294,6 +366,35 @@ mod tests {
             vec![w(&["cd", "/home/u/x", "/home/u", "a~"])]
         );
         assert_eq!(t("echo ${X}y $NOPE."), vec![w(&["echo", "exy", "."])]);
+    }
+
+    #[test]
+    fn backslash_escapes_as_tmux_reads_them() {
+        // What tmux 3.6 stored for each, set from a sourced file.
+        let cases: &[(&str, &str)] = &[
+            (r"a\tb", "a\tb"),
+            (r#""a\tb""#, "a\tb"),
+            (r"a\101b", "aAb"),
+            (r#""a\101b""#, "aAb"),
+            (r"a\eb", "a\x1bb"),
+            (r"a\qb", "aqb"),
+            (r#""a\qb""#, "aqb"),
+            (r"a\\b", r"a\b"),
+            (r#""a\$b""#, "a$b"),
+            (r"aéb", "aéb"),
+            (r"\~", "~"),
+            (r"a\sb", "a b"),
+            (r#""a\nb""#, "a\nb"),
+            (r"'a\tb'", r"a\tb"),
+            (r"a\012b", "a\nb"),
+            (r"\303\251", "é"),
+        ];
+        for (line, word) in cases {
+            assert_eq!(t(line), vec![w(&[word])], "{line}");
+        }
+        for bad in [r"a\0b", r"a\08b", r"a\4", r"\u00g1", r"a\"] {
+            assert!(matches!(tokenize(bad, &env), Err(TokenizeError::Escape(_))));
+        }
     }
 
     #[test]

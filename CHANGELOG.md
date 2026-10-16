@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Backslash escapes are read as tmux reads them** in commands, binds, hooks
+  and imported tmux.conf lines: outside single quotes `\n`, `\t`, `\e`, `\s` and
+  the other C escapes, `\ooo` octal and `\uXXXX` / `\UXXXXXXXX` give the
+  character, and any other `\x` gives `x`, inside double quotes too (`"\q"` was
+  kept as `\q`). A bad octal or `\u` escape, or a trailing backslash, is now an
+  error, as in tmux.
+
 ## [0.7.0] - 2026-10-14
 
 ### Added
