@@ -4069,6 +4069,14 @@ fn window_and_pane_options_override_the_global_ones() {
     t.run(&["send-keys", "-t", "sc:1.2", "-X", "cancel"]);
     std::thread::sleep(Duration::from_millis(500));
     assert_eq!(marks("sc:1.2", "mode-mark"), 0, "copy mode got the input");
+    t.run(&["clock-mode", "-t", "sc:1.2"]);
+    t.run(&["send-keys", "-t", "sc:1.1", "echo clock-mark", "Enter"]);
+    t.wait_run(&["capture-pane", "-p", "-t", "sc:1.1"], "the typing", |o| {
+        o.lines().filter(|l| l.contains("clock-mark")).count() == 2
+    });
+    t.run(&["copy-mode", "-q", "-t", "sc:1.2"]);
+    std::thread::sleep(Duration::from_millis(500));
+    assert_eq!(marks("sc:1.2", "clock-mark"), 0, "clock mode got the input");
     t.run(&["resize-pane", "-Z", "-t", "sc:1.1"]);
     t.run(&["send-keys", "-t", "sc:1.1", "echo zoom-mark", "Enter"]);
     t.wait_run(&["capture-pane", "-p", "-t", "sc:1.1"], "the typing", |o| {

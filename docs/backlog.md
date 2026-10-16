@@ -114,8 +114,10 @@ table. What has been verified, and how:
     bytes.
   - **Synchronized input skips panes as tmux's does** (`input_targets`, from
     `window_pane_copy_key`): in a mode, dead, or hidden by a zoom. The copy mode
-    and zoom cases are tested end to end and were compared with tmux 3.6
-    (2026-10-14); the clock-mode and dead-pane cases are not tested.
+    and zoom cases were compared with tmux 3.6 (2026-10-14); they and the
+    clock-mode case are tested end to end, each shown to fail without its check.
+    The dead-pane case is not tested: a dead pane has no program to read input,
+    so nothing shows whether it was sent.
 - **A pane made taller again gets blank rows at the bottom**: tmux 3.6
   (`screen_resize_y`) first takes back the rows a shrink pushed into the history
   (`hscrolled`), so a split then closed restores the screen; tmxr's
