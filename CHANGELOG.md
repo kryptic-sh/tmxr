@@ -33,6 +33,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   not inherit the server's value. A session made by a key's command (`prefix :`
   then `new-session`) now takes the variables of the client the key came from;
   it took none.
+- **Each client's status line keeps its own session's `status-interval`**, as
+  tmux's: a session set to 60 no longer redraws every second because another is
+  set to 1, and `status-interval 0` stops the timed redraws (it redrew each
+  second). Panes' commands and automatic window names still refresh at the
+  shortest interval, at least each second.
 
 ## [0.7.0] - 2026-10-14
 

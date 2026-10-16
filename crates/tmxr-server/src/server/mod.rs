@@ -104,6 +104,8 @@ pub struct Attached {
     pub status_ranges: crate::render::StatusRanges,
     /// Whether this client was last told to capture the mouse.
     pub mouse: bool,
+    /// When this client's status timer last fired (`status-interval`).
+    pub status_at: Instant,
     /// `refresh-client -L` / `-R` / `-U` / `-D`: the view of a window larger
     /// than the client held at this offset, until `-c` or another window.
     pub pan: Option<(WindowId, u16, u16)>,
@@ -141,6 +143,7 @@ pub struct Server {
     pub next_pipe: u64,
     had_session: bool,
     pub exiting: bool,
+    /// When foreground commands were last refreshed.
     last_status: Instant,
     /// Per-pane foreground command cache refreshed on the status interval.
     pub commands: HashMap<PaneId, String>,
@@ -777,8 +780,27 @@ impl Server {
                 }
             }
         }
-        // One timer for every session's status line, at the shortest
-        // `status-interval` any of them has.
+        // Each client's status line redraws on its own timer, at its
+        // session's `status-interval`, none at 0, as tmux's
+        // `status_timer_callback`.
+        let due: Vec<ClientId> = self
+            .clients
+            .values()
+            .filter_map(|c| {
+                let a = c.att.as_ref()?;
+                let interval = self.session_options(a.session).status_interval;
+                (interval != 0 && now.duration_since(a.status_at) >= Duration::from_secs(interval))
+                    .then_some(c.id)
+            })
+            .collect();
+        for id in due {
+            if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
+                a.status_at = now;
+                a.dirty = true;
+            }
+        }
+        // Foreground commands and automatic window names refresh at the
+        // shortest `status-interval` any session has, at least each second.
         let interval = self
             .sessions
             .keys()
@@ -788,7 +810,6 @@ impl Server {
         if now.duration_since(self.last_status) >= Duration::from_secs(interval.max(1)) {
             self.last_status = now;
             crate::util::refresh_commands(self);
-            self.mark_all_dirty();
         }
     }
 

@@ -95,8 +95,11 @@ table. What has been verified, and how:
   - **Fewer server options**: `show -s` lists the ones tmxr has
     (`cmds::options::SERVER_OPTIONS`); `update-environment` stays a config
     value, not settable by `set-option` and not per session.
-  - **One status-line timer**: the status lines redraw at the shortest
-    `status-interval` any session has, where tmux times each session's.
+  - **Pane commands refresh on one timer**: each client's status line redraws at
+    its session's `status-interval`, as tmux's, but the foreground commands
+    behind `#{pane_current_command}` and automatic window names refresh at the
+    shortest one any session has, at least each second (`Server::tick`); tmux
+    renames on its own timer, not the status line's.
   - **A linked window reads the first session holding it** for its session
     options (`Server::window_session_options`: `default-shell` for its panes,
     say); alerts do read each session's own `*-action` and `visual-*`.

@@ -5814,3 +5814,63 @@ fn select_pane_titles_a_pane_and_resurrect_keeps_it() {
         assert_eq!(title(&t), "my-title-ti");
     }
 }
+
+/// Each client's status line redraws on its own session's `status-interval`,
+/// none at 0, as tmux's: a change only the timer shows (the pane's command,
+/// with no output) reaches the client whose session ticks, not the other.
+#[test]
+fn each_session_redraws_its_status_line_at_its_own_interval() {
+    #[cfg(unix)]
+    let (quiet, program) = ("sleep 30", "sleep");
+    #[cfg(windows)]
+    let (quiet, program) = ("ping -n 30 127.0.0.1 >NUL", "ping");
+    let shows = |text: &str| {
+        text.lines()
+            .rev()
+            .find(|l| !l.trim().is_empty())
+            .is_some_and(|l| l.to_ascii_lowercase().contains(&format!("cmd={program}")))
+    };
+    let t = Tmxr::new("statustimer");
+    let mut screens = Vec::new();
+    for (name, interval) in [("ticks", "1"), ("still", "0")] {
+        t.run(&["new-session", "-d", "-s", name]);
+        t.run(&["set-option", "-t", name, "status-interval", interval]);
+        t.run(&[
+            "set-option",
+            "-t",
+            name,
+            "status-right",
+            "cmd=#{pane_current_command}",
+        ]);
+        t.run(&["set-option", "-w", "-t", name, "automatic-rename", "off"]);
+        t.wait_settled(name);
+        let s = t.attach(&["attach", "-t", name]);
+        s.wait_for("the status line", |text| text.contains("cmd="));
+        screens.push(s);
+    }
+    // The command cache refreshes each second: let it hold the shells, so
+    // the echo of the typing below redraws with the shell's name and only a
+    // later redraw can show the program's.
+    std::thread::sleep(Duration::from_millis(1500));
+    for name in ["ticks", "still"] {
+        t.run(&["send-keys", "-t", name, quiet, "Enter"]);
+    }
+    screens[0].wait_for("the command in the ticking status line", shows);
+    t.wait_run(
+        &[
+            "display-message",
+            "-p",
+            "-t",
+            "still",
+            "#{pane_current_command}",
+        ],
+        "the command seen in the other session",
+        |o| o.trim().eq_ignore_ascii_case(program),
+    );
+    std::thread::sleep(Duration::from_secs(3));
+    let text = screens[1].text();
+    assert!(
+        !shows(&text),
+        "a status-interval 0 status line redrew:\n{text}"
+    );
+}

@@ -50,6 +50,7 @@ impl Server {
             status_ranges: crate::render::StatusRanges::default(),
             mouse: false,
             pan: None,
+            status_at: Instant::now(),
         });
         self.send(id, ServerMsg::Attached);
         self.touch_session(session);
@@ -108,6 +109,8 @@ impl Server {
         if att.session != session {
             att.last_session = Some(att.session);
             att.session = session;
+            // A new session starts the status timer again, as tmux's.
+            att.status_at = Instant::now();
         }
         att.dirty = true;
         att.full_redraw = true;
