@@ -580,10 +580,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "show-options",
         Some("show"),
-        "Agpqst:vw",
+        "AgHpqst:vw",
         0,
         1,
-        "[-Agpqsvw] [-t target-pane] [option]"
+        "[-AgHpqsvw] [-t target-pane] [option]"
     ),
     cmd!(
         "show-prompt-history",

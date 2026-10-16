@@ -100,7 +100,12 @@ table. What has been verified, and how:
     say); alerts do read each session's own `*-action` and `visual-*`.
   - **Resurrect does not save session options** (tmux-resurrect does not
     either): a restored session has only the global ones.
-  - **`show-options -H`** (hooks in the list) is not supported.
+  - **Hooks in `show-options -H` and `show-hooks`** (`scoped::show_hooks`,
+    checked against tmux 3.6 by `corpus/options.toml`): only hooks that are set
+    are listed, where tmux lists every hook it has, the empty ones as a bare
+    name (so `show -gH` and `show -AH` differ from tmux's by those lines). A
+    hook's commands print as they were given (`display hi`), where tmux prints
+    them parsed (`display-message hi`).
   - **`show-options` quoting is tmux's, quirk included** (`escape_arg`, from
     `args_escape`): a value with a `"` and a backslash but none of ` #';${}%` is
     single-quoted with the backslash doubled, which reads back doubled, in tmux

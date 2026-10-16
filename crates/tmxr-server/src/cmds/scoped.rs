@@ -4,12 +4,15 @@
 //! `cmd_show_options` in tmux 3.6).
 
 use std::borrow::Cow;
+use std::collections::BTreeMap;
+use std::fmt::Write as _;
 
 use tmxr_command::Args;
 use tmxr_command::keys::Key;
 use tmxr_config::{PANE_OPTIONS, SessionOptions, WindowOptions};
 
 use super::{Ctx, Outcome, Res};
+use crate::hooks::PANE_HOOKS;
 use crate::model::{PaneId, SessionId, WindowId};
 use crate::server::Server;
 use crate::target;
@@ -309,5 +312,59 @@ pub(super) fn show(
     for n in names {
         print(out, n);
     }
+    if a.has('H') {
+        show_hooks(srv, scope, a, out);
+    }
     Ok(())
+}
+
+/// The hooks set at `scope`, by name. The global table holds every global
+/// hook, so a global scope has those tmux keeps there: the pane hooks for
+/// the window options, the rest for the session options.
+fn hooks_at(srv: &Server, scope: Scope) -> Vec<(&str, &[String])> {
+    let table = match scope {
+        Scope::GlobalSession | Scope::GlobalWindow => Some(&srv.hooks),
+        Scope::Session(s) => srv.sessions.get(&s).map(|s| &s.hooks),
+        Scope::Window(w) => srv.windows.get(&w).map(|w| &w.hooks),
+        Scope::Pane(p) => srv.panes.get(&p).map(|p| &p.hooks),
+    };
+    let keeps = |name: &str| match scope {
+        Scope::GlobalSession => !PANE_HOOKS.contains(&name),
+        Scope::GlobalWindow => PANE_HOOKS.contains(&name),
+        _ => true,
+    };
+    table
+        .into_iter()
+        .flatten()
+        .filter(|(name, _)| keeps(name))
+        .map(|(name, cmds)| (name.as_str(), cmds.as_slice()))
+        .collect()
+}
+
+/// What `-H` adds to a list, as tmux's: each hook set at `scope` as
+/// `name[index] command`, with `-A` the inherited ones too, marked `*`.
+/// Hooks set nowhere are left out, as `show-hooks` leaves them.
+fn show_hooks(srv: &Server, scope: Scope, a: &Args, out: &mut Outcome) {
+    let mut hooks: BTreeMap<&str, (&str, &[String])> = hooks_at(srv, scope)
+        .into_iter()
+        .map(|(name, cmds)| (name, ("", cmds)))
+        .collect();
+    if a.has('A') {
+        let mut up = parent(srv, scope);
+        while let Some(s) = up {
+            for (name, cmds) in hooks_at(srv, s) {
+                hooks.entry(name).or_insert(("*", cmds));
+            }
+            up = parent(srv, s);
+        }
+    }
+    for (name, (mark, cmds)) in hooks {
+        for (i, cmd) in cmds.iter().enumerate() {
+            if a.has('v') {
+                let _ = writeln!(out.stdout, "{cmd}");
+            } else {
+                let _ = writeln!(out.stdout, "{name}[{i}]{mark} {cmd}");
+            }
+        }
+    }
 }

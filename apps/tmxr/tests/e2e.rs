@@ -3498,6 +3498,34 @@ fn hooks_run_after_commands_and_events() {
         shown.contains("after-select-pane[0] set-option -g @who window"),
         "{shown}"
     );
+    // show-options -H adds the hooks to a list, -A the inherited ones marked
+    // `*`; the global hooks split as tmux keeps them, the pane hooks with the
+    // window options.
+    t.run(&["set-hook", "-g", "pane-exited", "display-message gone"]);
+    let pane = t.run(&["show-options", "-pAH", "-t", "hk:7.0"]);
+    assert!(
+        pane.contains("after-select-pane[0] set-option -g @who pane\n")
+            && pane.contains("pane-exited[0]* display-message gone\n")
+            && !pane.contains("@who window"),
+        "{pane}"
+    );
+    assert!(
+        !t.run(&["show-options", "-p", "-t", "hk:7.0"])
+            .contains("after-")
+    );
+    let global = t.run(&["show-options", "-gH"]);
+    assert!(
+        global.contains("after-select-pane[0] set-option -g @who global\n")
+            && !global.contains("pane-exited"),
+        "{global}"
+    );
+    let global_window = t.run(&["show-options", "-wgH"]);
+    assert!(
+        global_window.contains("pane-exited[0] display-message gone\n")
+            && !global_window.contains("after-select-pane"),
+        "{global_window}"
+    );
+    t.run(&["set-hook", "-gu", "pane-exited"]);
     t.run(&["set-hook", "-gu", "after-select-pane"]);
 
     // A hook's own commands fire no hooks: one extra window, not a loop.

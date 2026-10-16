@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`show-options -H`** adds the hooks to a list of options, as tmux's:
+  `name[index] command` for each hook set at that scope, `-A` the inherited ones
+  too, marked `*`. The global hooks show where tmux keeps them: `pane-exited`
+  with `-wg`, the rest with `-g`.
+
 ### Changed
 
 - **Backslash escapes are read as tmux reads them** in commands, binds, hooks

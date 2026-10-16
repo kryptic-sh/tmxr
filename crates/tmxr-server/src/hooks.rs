@@ -29,6 +29,11 @@ pub const EVENTS: &[&str] = &[
     "session-created",
 ];
 
+/// The events above that tmux keeps with the window and pane options
+/// (`OPTIONS_TABLE_PANE_HOOK`); the rest, and every `after-` hook, it keeps
+/// with the session options.
+pub const PANE_HOOKS: &[&str] = &["pane-exited"];
+
 /// Whether `name` is a hook tmxr fires.
 pub fn known(name: &str) -> bool {
     EVENTS.contains(&name)

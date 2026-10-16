@@ -143,3 +143,17 @@ checks = [
   { command = "show -g prefix", expect = "prefix C-a" },
   { command = "show -w -t o:0 window-status-format", expect = 'window-status-format "#I #W"' },
 ]
+
+[[cases]]
+name = "show_options_h_lists_the_hooks_set_there"
+steps = [
+  { run = "set-hook -t o client-attached 'display-message r'" },
+  { run = "set-hook -a -t o client-attached 'display-message s'" },
+  { run = "set-hook -p -t o:0.0 pane-exited 'display-message x'" },
+]
+checks = [
+  { command = "show -H -t o", expect = "client-attached[0] display-message r\nclient-attached[1] display-message s" },
+  { command = "show -vH -t o", expect = "display-message r\ndisplay-message s" },
+  { command = "show -t o", expect = "" },
+  { command = "show -pH -t o:0.0", expect = "pane-exited[0] display-message x" },
+]
