@@ -49,6 +49,14 @@ table. What has been verified, and how:
 - **A pane made taller again gets blank rows** (see below): the same choice, a
   `vt100` fork that can move history rows back onto the screen, or tmxr's own
   grid.
+- **`detach-on-destroy`** (`Server::kill_session`): tmxr always moves a client
+  whose session is destroyed to the most recently used other session, tmux's
+  `detach-on-destroy off`; tmux's default is `on`, which detaches it. Options:
+  add the session option with tmux's values (`on`, `off`, `no-detached`,
+  `previous`, `next`) defaulting to `on` as tmux does (a change for whoever
+  relies on staying attached), or defaulting to `off` as tmxr behaves now
+  (matches tmux only where a config sets it off). Either makes
+  `-f no-detach-on-destroy` possible.
 - **Fuzzing the command parser and the frame codec** (`docs/plan/14`, a weekly
   cron job): needs `cargo-fuzz` and `libfuzzer-sys`, new dependencies on a
   nightly toolchain, or `proptest`-style property tests on stable, also new.
@@ -205,9 +213,13 @@ table. What has been verified, and how:
   through ConPTY in the e2e tests (raw bytes and win32-input-mode events); not
   tried by hand in Alacritty or VS Code. Fixing it at the source needs the key
   event's character, which crossterm drops for Enter and Backspace.
-- **Attaching differs from tmux in what is left** (`cmds::session::attach_to`,
-  2026-10-14): `-f` takes `read-only` only and refuses tmux's other client flags
-  by name.
+- **Client flags** (`cmds::session::client_flags`): `-f` takes `read-only` and
+  `ignore-size`, and refuses tmux's others by name: `no-output`, `pause-after`
+  and `wait-exit` are control-mode flags, and tmxr has no control mode;
+  `active-pane` needs a per-client active pane; `no-detach-on-destroy` needs
+  `detach-on-destroy`, below. `!flag` (turn one off) and `refresh-client -f` are
+  not supported. A client's flags show in no format (`#{client_flags}`,
+  `#{client_readonly}` are missing).
 - **tmux default binds**: most of tmux's defaults are bound (see above);
   `prefix C-z` (suspend-client) errors on Windows, which has no job control.
   Alerts follow tmux 3.6's, as recorded from a running tmux on 2026-10-10 (WSL

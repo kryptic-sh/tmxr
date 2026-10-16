@@ -12,6 +12,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `name[index] command` for each hook set at that scope, `-A` the inherited ones
   too, marked `*`. The global hooks show where tmux keeps them: `pane-exited`
   with `-wg`, the rest with `-g`.
+- **`attach-session -f ignore-size`** (and `new-session -f`), as tmux's: the
+  client's size sizes no window while a client without the flag is attached.
 
 ### Changed
 

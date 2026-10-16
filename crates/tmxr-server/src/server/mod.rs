@@ -68,6 +68,8 @@ pub struct Client {
     pub user_read_only: bool,
     /// It attached with `attach -r`.
     pub attach_read_only: bool,
+    /// It attached with `-f ignore-size`.
+    pub ignore_size: bool,
     /// The standard input it sent for `load-buffer -`, until that takes it.
     pub stdin: Option<Vec<u8>>,
 }
@@ -350,6 +352,7 @@ impl Server {
                         user,
                         user_read_only: read_only,
                         attach_read_only: false,
+                        ignore_size: false,
                         stdin: None,
                     },
                 );

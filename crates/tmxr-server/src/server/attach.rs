@@ -219,11 +219,14 @@ impl Server {
     }
 
     /// Size every window of `session` for the attached client that used it
-    /// most recently (tmux's `window-size latest`).
+    /// most recently (tmux's `window-size latest`). A client attached with
+    /// `-f ignore-size` counts only while every attached client has it, as
+    /// tmux's `ignore_client_size`.
     pub fn size_session(&mut self, session: SessionId) {
-        let size = self
-            .clients
-            .values()
+        let attached = || self.clients.values().filter(|c| c.att.is_some());
+        let all_ignore = attached().all(|c| c.ignore_size);
+        let size = attached()
+            .filter(|c| all_ignore || !c.ignore_size)
             .filter_map(|c| c.att.as_ref())
             .filter(|a| a.session == session)
             .max_by_key(|a| a.last_input)

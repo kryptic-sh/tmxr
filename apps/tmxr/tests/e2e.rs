@@ -5874,3 +5874,51 @@ fn each_session_redraws_its_status_line_at_its_own_interval() {
         "a status-interval 0 status line redrew:\n{text}"
     );
 }
+
+/// `attach -f ignore-size`: the client's size sizes no window while a client
+/// without the flag is attached, as tmux's; alone, it does.
+#[test]
+fn an_ignore_size_client_sizes_windows_only_alone() {
+    let t = Tmxr::new("ignoresize");
+    t.run(&["new-session", "-d", "-s", "is"]);
+    let size = |t: &Tmxr| {
+        t.run(&[
+            "display-message",
+            "-p",
+            "-t",
+            "is",
+            "#{window_width}x#{window_height}",
+        ])
+        .trim()
+        .to_owned()
+    };
+    let full = format!("{COLS}x{}", ROWS - 1);
+    let mut a = t.attach(&["attach", "-t", "is"]);
+    a.wait_for("the status line", |text| text.contains("is"));
+    t.wait_run(&["list-clients"], "the first client", |o| {
+        o.lines().count() == 1
+    });
+    assert_eq!(size(&t), full);
+    let b = t.attach(&["attach", "-f", "ignore-size", "-t", "is"]);
+    b.wait_for("the status line", |text| text.contains("is"));
+    b.resize(20, 70);
+    b.send(b"x");
+    std::thread::sleep(Duration::from_millis(500));
+    assert_eq!(size(&t), full, "the ignore-size client sized the window");
+
+    a.send(PREFIX);
+    a.send(b"d");
+    a.wait_exit();
+    b.resize(21, 71);
+    t.wait_run(
+        &[
+            "display-message",
+            "-p",
+            "-t",
+            "is",
+            "#{window_width}x#{window_height}",
+        ],
+        "the window sized for the client left",
+        |o| o.trim() == "71x20",
+    );
+}

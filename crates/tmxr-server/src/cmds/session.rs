@@ -32,7 +32,7 @@ pub(super) fn run(
                 attach_to(srv, ctx, a, sid, others, out)?;
                 return Ok(true);
             }
-            let read_only = client_flags(a)?;
+            let flags = client_flags(a)?;
             // -x / -y are the window's size, as tmux's: no status row comes
             // out of them.
             let size = match (a.value('x'), a.value('y')) {
@@ -64,7 +64,7 @@ pub(super) fn run(
                 size,
             )?;
             if !a.has('d') {
-                set_read_only(srv, ctx, read_only);
+                set_client_flags(srv, ctx, flags);
                 match attached_client(srv, ctx) {
                     Some(c) => srv.switch_client(c, sid),
                     None => out.attach = Some(sid),
@@ -330,7 +330,8 @@ fn attach_to(
     others: Others,
     out: &mut Outcome,
 ) -> Result<(), String> {
-    let read_only = a.has('r') || client_flags(a)?;
+    let mut flags = client_flags(a)?;
+    flags.read_only |= a.has('r');
     if let Some(cwd) = cwd_arg(srv, ctx, None, a)
         && let Some(s) = srv.sessions.get_mut(&sid)
     {
@@ -355,7 +356,7 @@ fn attach_to(
             }
         }
     }
-    set_read_only(srv, ctx, read_only);
+    set_client_flags(srv, ctx, flags);
     match attached_client(srv, ctx) {
         Some(c) => srv.switch_client(c, sid),
         None => out.attach = Some(sid),
@@ -419,23 +420,33 @@ fn update_env(srv: &mut Server, sid: SessionId, env: &[(String, String)]) {
     }
 }
 
-/// Whether `-f`'s client flags (comma separated) ask for `read-only`, the
-/// one tmxr has; tmux's others are refused by name.
-fn client_flags(a: &Args) -> Result<bool, String> {
-    let mut read_only = false;
+/// The client flags `-f` asks for that tmxr has.
+#[derive(Debug, Clone, Copy, Default)]
+struct ClientFlags {
+    /// `read-only`: it may look but not type.
+    read_only: bool,
+    /// `ignore-size`: its size does not size the windows.
+    ignore_size: bool,
+}
+
+/// `-f`'s client flags, comma separated; tmux's others are refused by name.
+fn client_flags(a: &Args) -> Result<ClientFlags, String> {
+    let mut flags = ClientFlags::default();
     for flag in a.value('f').into_iter().flat_map(|f| f.split(',')) {
         match flag.trim() {
             "" => {}
-            "read-only" => read_only = true,
+            "read-only" => flags.read_only = true,
+            "ignore-size" => flags.ignore_size = true,
             f => return Err(format!("unsupported client flag: {f}")),
         }
     }
-    Ok(read_only)
+    Ok(flags)
 }
 
-/// Make the command's client read-only: it may look but not type.
-fn set_read_only(srv: &mut Server, ctx: &Ctx, read_only: bool) {
-    if read_only && let Some(c) = ctx.client.and_then(|c| srv.clients.get_mut(&c)) {
-        c.attach_read_only = true;
+/// Give the command's client the flags it asked for.
+fn set_client_flags(srv: &mut Server, ctx: &Ctx, flags: ClientFlags) {
+    if let Some(c) = ctx.client.and_then(|c| srv.clients.get_mut(&c)) {
+        c.attach_read_only |= flags.read_only;
+        c.ignore_size |= flags.ignore_size;
     }
 }
