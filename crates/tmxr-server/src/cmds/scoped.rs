@@ -102,9 +102,8 @@ fn effective_window(srv: &Server, scope: Scope) -> Cow<'_, WindowOptions> {
 /// `name`'s value set at `scope` itself; every global option is.
 fn own(srv: &Server, scope: Scope, name: &str) -> Option<String> {
     match scope {
-        Scope::GlobalSession | Scope::GlobalWindow if name.starts_with('@') => {
-            srv.cfg.options.get(name).cloned()
-        }
+        Scope::GlobalSession if name.starts_with('@') => srv.cfg.options.get(name).cloned(),
+        Scope::GlobalWindow if name.starts_with('@') => srv.cfg.window_user.get(name).cloned(),
         Scope::GlobalSession => srv.cfg.session.show(name),
         Scope::GlobalWindow => srv.cfg.window.show(name),
         Scope::Session(s) => srv.sessions.get(&s)?.options.show(name),
@@ -159,8 +158,11 @@ pub(super) fn set(
     let append = a.has('a');
     let user = name.starts_with('@');
     match scope {
-        Scope::GlobalSession | Scope::GlobalWindow if unset && user => {
+        Scope::GlobalSession if unset && user => {
             srv.cfg.options.remove(name);
+        }
+        Scope::GlobalWindow if unset && user => {
+            srv.cfg.window_user.remove(name);
         }
         // As tmux's, a global option goes back to its default.
         Scope::GlobalSession if unset => {
@@ -173,7 +175,12 @@ pub(super) fn set(
         }
         Scope::GlobalSession | Scope::GlobalWindow if user => {
             let value = value.ok_or("empty value")?;
-            let v = srv.cfg.options.entry(name.to_owned()).or_default();
+            let table = if scope == Scope::GlobalSession {
+                &mut srv.cfg.options
+            } else {
+                &mut srv.cfg.window_user
+            };
+            let v = table.entry(name.to_owned()).or_default();
             if !append {
                 v.clear();
             }
@@ -290,7 +297,7 @@ pub(super) fn show(
     }
     let users: Vec<String> = match scope {
         Scope::GlobalSession => srv.cfg.options.keys().cloned().collect(),
-        Scope::GlobalWindow => Vec::new(),
+        Scope::GlobalWindow => srv.cfg.window_user.keys().cloned().collect(),
         Scope::Session(s) => srv.sessions.get(&s).map_or_else(Vec::new, |s| {
             s.options.user().map(|(k, _)| k.to_owned()).collect()
         }),

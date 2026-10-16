@@ -97,8 +97,9 @@ impl Server {
         }
     }
 
-    /// User option `name` as a pane in `session` sees it: the pane's own,
-    /// its window's, the session's, or the global one.
+    /// User option `name` as a pane in `session` sees it, found as tmux's
+    /// `format_find` looks: the pane's own, its window's, the global window
+    /// ones (`set -wg`), the session's, then the global session ones.
     pub fn user_option(
         &self,
         session: Option<SessionId>,
@@ -115,6 +116,7 @@ impl Server {
             .and_then(|s| self.sessions.get(&s));
         pane.and_then(|p| p.options.show(name))
             .or_else(|| window.and_then(|w| w.options.show(name)))
+            .or_else(|| self.cfg.window_user.get(name).cloned())
             .or_else(|| session.and_then(|s| s.options.show(name)))
             .or_else(|| self.cfg.options.get(name).cloned())
     }

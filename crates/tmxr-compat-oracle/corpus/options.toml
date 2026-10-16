@@ -158,3 +158,31 @@ checks = [
   { command = "show -t p", expect = "" },
   { command = "show -pH -t p:0.0", expect = "pane-exited[0] display-message x" },
 ]
+
+[[cases]]
+name = "global_window_user_options_are_apart_and_found_first"
+steps = [
+  { run = "set -g @ux sess" },
+  { run = "set -wg @ux win" },
+  { run = "set -t o @ux own" },
+]
+checks = [
+  { command = "show -g @ux", expect = "@ux sess" },
+  { command = "show -wg @ux", expect = "@ux win" },
+  { command = "show -t o @ux", expect = "@ux own" },
+  { command = "show -wA -t o:0 @ux", expect = "@ux* win" },
+  { command = "display -p -t o '#{@ux}'", expect = "win" },
+]
+
+[[cases]]
+name = "unsetting_a_global_window_user_option_shows_the_session_one"
+steps = [
+  { run = "set -g @uy sess" },
+  { run = "set -wg @uy win" },
+  { run = "set -wgu @uy" },
+]
+checks = [
+  { command = "display -p -t o '#{@uy}'", expect = "sess" },
+  { command = "show -wgq @uy", expect = "" },
+  { command = "show -g @uy", expect = "@uy sess" },
+]

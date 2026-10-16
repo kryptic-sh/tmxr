@@ -88,10 +88,11 @@ table. What has been verified, and how:
 - **Option scopes** follow tmux 3.6: global, per session, per window and per
   pane (`cmds::scoped`, checked against a running tmux by
   `corpus/options.toml`). Still different:
-  - **The global user options are one table**: tmux keeps `set -g @x` (global
-    session options) and `set -wg @x` (global window options) apart, so its
-    `show -g @x` does not see one set with `-wg`, and in formats a global window
-    `@x` is found before a session's own; tmxr has one global table, found last.
+  - **Global window user options exist at run time only**
+    (`Config::window_user`): the config file's `[options]` are the global
+    session ones, so `--import-tmux-conf` puts a `set -wg @x` line there, and
+    `customize-mode` lists only the session ones (its Enter writes
+    `set-option -g`, which would set the other table).
   - **Fewer server options**: `show -s` lists the ones tmxr has
     (`cmds::options::SERVER_OPTIONS`); `update-environment` stays a config
     value, not settable by `set-option` and not per session.

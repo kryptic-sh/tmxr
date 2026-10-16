@@ -45,8 +45,11 @@ pub struct Config {
     pub update_environment: Vec<String>,
     pub navigator: Navigator,
     pub resurrect: Resurrect,
-    /// `@name` user options.
+    /// `@name` user options: tmux's global session ones (`set -g`).
     pub options: BTreeMap<String, String>,
+    /// `@name` user options set with `set -wg`: tmux's global window ones,
+    /// apart from the session ones. Set at run time only.
+    pub window_user: BTreeMap<String, String>,
     /// key table → key name → bind.
     pub keys: BTreeMap<String, BTreeMap<String, BindEntry>>,
     /// Global hooks (tmux's `set-hook -g`): hook name → its commands.
@@ -201,6 +204,7 @@ impl From<File> for Config {
             navigator: f.navigator,
             resurrect: f.resurrect,
             options: f.options,
+            window_user: BTreeMap::new(),
             keys: f.keys,
             hooks: f
                 .hooks

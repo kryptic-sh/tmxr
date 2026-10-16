@@ -38,6 +38,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   set to 1, and `status-interval 0` stops the timed redraws (it redrew each
   second). Panes' commands and automatic window names still refresh at the
   shortest interval, at least each second.
+- **`set -g @x` and `set -wg @x` are two options**, as tmux's global session and
+  global window options: `show -g @x` and `show -wg @x` each show their own, a
+  window inherits the `-wg` one (`show -wA`), and a format finds the pane's, the
+  window's, the global window one, the session's, then the global session one.
+  They were one table, which `-wg` overwrote.
 
 ## [0.7.0] - 2026-10-14
 
