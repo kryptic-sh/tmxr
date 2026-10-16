@@ -27,10 +27,12 @@ table. What has been verified, and how:
   draw as the tests expect. hjkl's own handoff to tmxr was checked too (see
   Cross-repo work). Not looked at in any other terminal, nor with vim in front
   of the navigator.
-- **Not run on Linux/macOS locally**: the `cfg(unix)` arms (socket dir checks,
-  peer uid, `setsid` spawn, `/proc` and `proc_pidinfo` inspection, the client's
-  `/bin/sh` lock command) are compiled and tested by CI only, which runs on
-  every push to `main`.
+- **Not run on macOS locally**: the `cfg(unix)` arms (socket dir checks, peer
+  uid, `setsid` spawn, `/proc` and `proc_pidinfo` inspection, the client's
+  `/bin/sh` lock command) are tested by CI on every push to `main`. Linux ones
+  can be run here too: WSL Ubuntu has cargo and tmux 3.6 (a clone in WSL's own
+  filesystem builds fast); `detach_client_p_hangs_up_the_clients_parent` was
+  shown to fail there with `hang_up_parent` doing nothing (2026-10-16).
 - **The server's pipe refuses other Windows users**: CI's `pipe-acl` job makes a
   second local account, whose `tmxr ls` on the owner's pipe fails with
   `Access is denied. (os error 5)` while the owner's succeeds. Shown to go red
@@ -322,11 +324,6 @@ table. What has been verified, and how:
 
 ## Not yet verified
 
-- **`detach_client_p_hangs_up_the_clients_parent` was not shown to fail**: it
-  runs on Linux and macOS only (CI passes it), and with no Unix machine here it
-  was not run against a broken `hang_up_parent`. Its control half (a plain
-  detach lets the shell print `survived`) does show the check can tell the two
-  apart.
 - **Console windows across the org's test suites** (2026-10-14): every Rust
   repo's `cargo test --workspace` was run on Windows from a shell with a
   console, with a watcher logging each new console or Windows Terminal window
