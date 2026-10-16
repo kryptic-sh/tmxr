@@ -8,7 +8,7 @@ use std::time::{Instant, SystemTime};
 use hjkl_layout::LayoutTree;
 
 use super::Server;
-use crate::model::{ClientId, PaneId, Session, SessionId, Window, WindowId};
+use crate::model::{ClientId, Environment, PaneId, Session, SessionId, Window, WindowId};
 
 impl Server {
     pub fn alloc_session_id(&mut self) -> SessionId {
@@ -29,7 +29,7 @@ impl Server {
         &mut self,
         name: Option<String>,
         cwd: PathBuf,
-        env: Vec<(String, String)>,
+        env: Environment,
         window_name: Option<String>,
         argv: Vec<String>,
         size: (u16, u16),
@@ -54,7 +54,7 @@ impl Server {
                 current: self.cfg.session.base_index,
                 last: None,
                 cwd: cwd.clone(),
-                env: env.into_iter().collect(),
+                env,
                 hooks: crate::hooks::HookTable::new(),
                 options: tmxr_config::OwnSessionOptions::default(),
                 created: SystemTime::now(),

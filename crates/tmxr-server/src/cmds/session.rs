@@ -6,7 +6,7 @@ use tmxr_command::Parsed;
 use tmxr_proto::ServerMsg;
 
 use super::{Ctx, Outcome, attached_client, client_size, cwd_arg, list_item, session_env};
-use crate::model::{ClientId, SessionId};
+use crate::model::{ClientId, Environment, SessionId};
 use crate::server::Server;
 use crate::target;
 use crate::vars::Vars;
@@ -48,11 +48,13 @@ pub(super) fn run(
             // -e sets the new session's environment, after the client's
             // (none of it with -E).
             let mut env = if a.has('E') {
-                Vec::new()
+                Environment::default()
             } else {
                 session_env(srv, ctx)
             };
-            env.extend(super::env_flags(a)?);
+            for (name, value) in super::env_flags(a)? {
+                env.set(&name, Some(value));
+            }
             let sid = srv.new_session(
                 a.value('s').map(str::to_owned),
                 cwd,

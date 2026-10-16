@@ -772,6 +772,16 @@ fn update_environment_entries_are_patterns() {
     let config = format!("update-environment = [\"E2E_GLOB_*\", \"E2E_NONE\"]\n{config}");
     std::fs::write(&t.config, config).unwrap();
     t.run(&["new-session", "-d", "-s", "eg"]);
+    // A new session marks what its client lacks removed, as tmux's; -E
+    // takes nothing.
+    let env = t.run(&["show-environment", "-t", "eg"]);
+    let lines: Vec<&str> = env.lines().map(str::trim).collect();
+    for want in ["-E2E_GLOB_*", "-E2E_NONE"] {
+        assert!(lines.contains(&want), "{want} missing: {env}");
+    }
+    t.run(&["new-session", "-d", "-E", "-s", "bare"]);
+    let bare = t.run(&["show-environment", "-t", "bare"]);
+    assert!(!bare.contains("E2E_"), "{bare}");
     let s = t.attach_env(
         &["attach", "-t", "eg"],
         &[("E2E_GLOB_ONE", Some("1")), ("E2E_GLOB_TWO", Some("2"))],
@@ -782,6 +792,14 @@ fn update_environment_entries_are_patterns() {
     for want in ["E2E_GLOB_ONE=1", "E2E_GLOB_TWO=2", "-E2E_NONE"] {
         assert!(lines.contains(&want), "{want} missing: {env}");
     }
+    // A session made by a key's command takes that client's variables.
+    s.send(PREFIX);
+    s.send(b":new-session -d -s fromkey\r");
+    t.wait_run(
+        &["show-environment", "-t", "fromkey"],
+        "its variables",
+        |o| o.lines().any(|l| l.trim() == "E2E_GLOB_ONE=1"),
+    );
 }
 
 #[test]

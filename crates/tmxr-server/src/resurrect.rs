@@ -524,7 +524,7 @@ fn restore_session(
     let sid = srv.new_session(
         Some(s.name.clone()),
         existing_dir(&s.cwd, missing),
-        Vec::new(),
+        crate::model::Environment::default(),
         (!first.auto_name).then(|| first.name.clone()),
         argv(&first_pane),
         size,

@@ -28,6 +28,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   printed unquoted, so a format with a space or a leading `#` did not read back;
   they are quoted now too. `set-option -a` appends to `default-shell`, a string
   in tmux, and no longer to `prefix` or the `*-colour` options.
+- **A new session marks the `update-environment` variables its client lacks
+  removed**, as tmux's (`show-environment` lists `-DISPLAY`), so its panes do
+  not inherit the server's value. A session made by a key's command (`prefix :`
+  then `new-session`) now takes the variables of the client the key came from;
+  it took none.
 
 ## [0.7.0] - 2026-10-14
 

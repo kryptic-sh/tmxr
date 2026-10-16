@@ -272,13 +272,20 @@ fn updated_env(srv: &Server, env: &[(String, String)]) -> Vec<(String, Option<St
     out
 }
 
-/// A new session's environment: the variables `update-environment` takes
-/// from the creating client that it has.
-fn session_env(srv: &Server, ctx: &Ctx) -> Vec<(String, String)> {
-    updated_env(srv, &ctx.env)
-        .into_iter()
-        .filter_map(|(k, v)| Some((k, v?)))
-        .collect()
+/// A new session's environment from its creating client, as tmux's
+/// `environ_update` makes it: the variables `update-environment` takes, one
+/// the client lacks marked removed. Empty with no client (a command from
+/// the config), as tmux's. The client's own environment, from when it
+/// connected, so a bind's command reads its client's.
+fn session_env(srv: &Server, ctx: &Ctx) -> crate::model::Environment {
+    let mut env = crate::model::Environment::default();
+    let client = ctx.client.and_then(|c| srv.clients.get(&c));
+    if let Some(hello) = client.and_then(|c| c.hello.as_ref()) {
+        for (name, value) in updated_env(srv, &hello.env) {
+            env.set(&name, value);
+        }
+    }
+    env
 }
 
 fn dir_flag(a: &Args) -> Option<Dir> {
