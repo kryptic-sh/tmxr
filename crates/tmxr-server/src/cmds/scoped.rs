@@ -9,7 +9,7 @@ use tmxr_command::Args;
 use tmxr_command::keys::Key;
 use tmxr_config::{PANE_OPTIONS, SessionOptions, WindowOptions};
 
-use super::{Ctx, Outcome, Res, join_args};
+use super::{Ctx, Outcome, Res};
 use crate::model::{PaneId, SessionId, WindowId};
 use crate::server::Server;
 use crate::target;
@@ -27,6 +27,16 @@ enum Scope {
 /// Whether `name` is kept by scope here: a session, window or user option.
 pub(super) fn handles(name: &str) -> bool {
     name.starts_with('@') || is_session_option(name) || WindowOptions::NAMES.contains(&name)
+}
+
+/// `value` as `show-options` prints option `name`'s: quoted as tmux's when
+/// tmux types it a string (as every user option), else as it is.
+pub(super) fn shown(name: &str, value: String) -> String {
+    if name.starts_with('@') || SessionOptions::is_string(name) || WindowOptions::is_string(name) {
+        tmxr_command::escape_arg(&value)
+    } else {
+        value
+    }
 }
 
 fn is_session_option(name: &str) -> bool {
@@ -252,16 +262,14 @@ pub(super) fn show(
     out: &mut Outcome,
 ) -> Res {
     let scope = scope(srv, ctx, a, window_cmd, name)?;
-    // Values quoted to be read back, as the global list's.
-    let quoted = |v: String| join_args(&[v]);
     let print = |out: &mut Outcome, name: &str| {
         let line = match own(srv, scope, name) {
             Some(v) if a.has('v') => v,
-            Some(v) => format!("{name} {}", quoted(v)),
+            Some(v) => format!("{name} {}", shown(name, v)),
             None if !a.has('A') => return false,
             None => match inherited(srv, scope, name) {
                 Some(v) if a.has('v') => v,
-                Some(v) => format!("{name}* {}", quoted(v)),
+                Some(v) => format!("{name}* {}", shown(name, v)),
                 None => return false,
             },
         };

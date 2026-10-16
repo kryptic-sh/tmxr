@@ -3,7 +3,7 @@
 
 use serde::Deserialize;
 
-use crate::table::options_table;
+use crate::table::{Word, options_table};
 use crate::{ScrollbarPosition, Scrollbars};
 
 /// The window options a pane may also set for itself (`set -p`), as tmux's
@@ -127,7 +127,7 @@ options_table! {
     /// Follow the active pane's command until the window is renamed.
     "automatic-rename" => automatic_rename: bool,
     /// The colour of clock mode's digits.
-    "clock-mode-colour" => clock_mode_colour: String,
+    "clock-mode-colour" => clock_mode_colour: Word,
     /// Copy mode search matches under the cursor, and the others.
     "copy-mode-current-match-style" => copy_mode_current_match_style: String,
     "copy-mode-match-style" => copy_mode_match_style: String,

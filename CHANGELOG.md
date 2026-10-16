@@ -14,6 +14,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   character, and any other `\x` gives `x`, inside double quotes too (`"\q"` was
   kept as `\q`). A bad octal or `\u` escape, or a trailing backslash, is now an
   error, as in tmux.
+- **`show-options` quotes values as tmux's** (`args_escape`): `@x "a b"`, not
+  `@x 'a b'`, with tmux's escapes (`\t`, `\033`, `\~`, `\$`), and only for the
+  options tmux types as strings, so a colour shows as `#ff0000` and the prefix
+  as `C-a`. Window options in the global list and in `customize-mode` were
+  printed unquoted, so a format with a space or a leading `#` did not read back;
+  they are quoted now too. `set-option -a` appends to `default-shell`, a string
+  in tmux, and no longer to `prefix` or the `*-colour` options.
 
 ## [0.7.0] - 2026-10-14
 

@@ -101,8 +101,12 @@ table. What has been verified, and how:
   - **Resurrect does not save session options** (tmux-resurrect does not
     either): a restored session has only the global ones.
   - **`show-options -H`** (hooks in the list) is not supported.
-  - **`show-options` quotes values with single quotes** (`@x 'a b'`), tmux with
-    double (`@x "a b"`). Both read back the same.
+  - **`show-options` quoting is tmux's, quirk included** (`escape_arg`, from
+    `args_escape`): a value with a `"` and a backslash but none of ` #';${}%` is
+    single-quoted with the backslash doubled, which reads back doubled, in tmux
+    as in tmxr. Kept to match tmux's output. Octal escapes that are not valid
+    UTF-8 become U+FFFD when read (`tokenize::escape`); tmux keeps the raw
+    bytes.
   - **Synchronized input skips panes as tmux's does** (`input_targets`, from
     `window_pane_copy_key`): in a mode, dead, or hidden by a zoom. The copy mode
     and zoom cases are tested end to end and were compared with tmux 3.6

@@ -315,7 +315,7 @@ mod tests {
              set -ga update-environment 'EXTRA'\n",
         );
         assert!(skipped.is_empty(), "{skipped:?}");
-        assert_eq!(cfg.session.prefix, "C-a");
+        assert_eq!(&*cfg.session.prefix, "C-a");
         assert!(!cfg.session.mouse);
         assert_eq!(cfg.session.history_limit, 10000);
         assert_eq!(cfg.session.status_left, "[#S] x");

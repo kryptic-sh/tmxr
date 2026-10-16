@@ -3990,9 +3990,9 @@ fn window_and_pane_options_override_the_global_ones() {
     assert_eq!(x("sc:1.1"), "window");
     assert_eq!(x("sc:1.2"), "pane");
     assert_eq!(x("sc:0.0"), "global");
-    // Shown quoted, to be read back.
+    // Shown quoted as tmux's, to be read back.
     t.run(&["set-option", "-w", "-t", "sc:0", "@q", "a b"]);
-    assert_eq!(show(&["-w", "-t", "sc:0", "@q"]), "@q 'a b'");
+    assert_eq!(show(&["-w", "-t", "sc:0", "@q"]), r#"@q "a b""#);
     assert_eq!(
         err(&["show-options", "-w", "-t", "sc:0", "@x"]),
         "invalid option: @x"

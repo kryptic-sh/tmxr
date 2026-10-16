@@ -118,3 +118,28 @@ checks = [
   { command = "list-windows -t p -F '#I'", expect = "0\n3" },
   { command = "list-windows -t o -F '#I'", expect = "0\n1" },
 ]
+
+[[cases]]
+name = "show_options_quotes_strings_as_tmux"
+steps = [
+  { run = "set -g @a 'a b'" },
+  { run = "set -g @b \"it's\"" },
+  { run = "set -g @c 'x\"y'" },
+  { run = "set -g @d '~/x'" },
+  { run = "set -g @e ''" },
+  { run = "set -t o status-left '[#S] '" },
+  { run = "set -wg clock-mode-colour '#ff0000'" },
+  { run = "set -g prefix C-a" },
+  { run = "set -w -t o:0 window-status-format '#I #W'" },
+]
+checks = [
+  { command = "show -g @a", expect = '@a "a b"' },
+  { command = "show -g @b", expect = "@b \"it's\"" },
+  { command = "show -g @c", expect = "@c 'x\"y'" },
+  { command = "show -g @d", expect = '@d \~/x' },
+  { command = "show -g @e", expect = "@e ''" },
+  { command = "show -t o status-left", expect = 'status-left "[#S] "' },
+  { command = "show -wg clock-mode-colour", expect = "clock-mode-colour #ff0000" },
+  { command = "show -g prefix", expect = "prefix C-a" },
+  { command = "show -w -t o:0 window-status-format", expect = 'window-status-format "#I #W"' },
+]

@@ -14,7 +14,7 @@ use serde::Deserialize;
 pub use hjkl_config::{ConfigError, ConfigSource};
 pub use import::{Imported, from_tmux_conf};
 pub use session::{OwnSessionOptions, SessionOptions};
-pub use table::OptionValue;
+pub use table::{OptionValue, Word};
 pub use window::{BoxLines, ModeKeys, OwnOptions, PANE_OPTIONS, WindowOptions, WindowSize};
 
 mod import;
@@ -131,7 +131,7 @@ impl From<File> for Config {
             window: WindowOptions {
                 allow_passthrough: f.allow_passthrough,
                 automatic_rename: f.automatic_rename,
-                clock_mode_colour: s.clock_mode_colour,
+                clock_mode_colour: Word(s.clock_mode_colour),
                 copy_mode_current_match_style: s.copy_mode_current_match_style,
                 copy_mode_match_style: s.copy_mode_match_style,
                 main_pane_height: f.main_pane_height,
@@ -166,8 +166,8 @@ impl From<File> for Config {
                 base_index: f.base_index,
                 bell_action: f.bell_action,
                 default_shell: f.default_shell,
-                display_panes_active_colour: s.display_panes_active_colour,
-                display_panes_colour: s.display_panes_colour,
+                display_panes_active_colour: Word(s.display_panes_active_colour),
+                display_panes_colour: Word(s.display_panes_colour),
                 display_panes_time: f.display_panes_time,
                 display_time: f.display_time,
                 history_limit: f.history_limit,
@@ -175,7 +175,7 @@ impl From<File> for Config {
                 lock_command: f.lock_command,
                 message_style: s.message_style,
                 mouse: f.mouse,
-                prefix: f.prefix,
+                prefix: Word(f.prefix),
                 renumber_windows: f.renumber_windows,
                 repeat_time: f.repeat_time,
                 silence_action: f.silence_action,
@@ -596,7 +596,7 @@ mod tests {
     #[test]
     fn defaults_match_tmux_conf_options() {
         let cfg = defaults();
-        assert_eq!(cfg.session.prefix, "C-b");
+        assert_eq!(&*cfg.session.prefix, "C-b");
         assert!(cfg.session.mouse);
         assert_eq!((cfg.session.base_index, cfg.window.pane_base_index), (0, 0));
         assert!(cfg.session.renumber_windows);

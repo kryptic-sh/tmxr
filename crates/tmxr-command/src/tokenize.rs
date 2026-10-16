@@ -134,6 +134,69 @@ pub fn join_args(words: &[String]) -> String {
         .join(" ")
 }
 
+/// `word` quoted as tmux 3.6's `args_escape` quotes a value for
+/// `show-options` (with the escapes of its `utf8_strvis` and `vis`): in
+/// double quotes when it holds any of ` #';${}%`, else in single quotes when
+/// it holds a `"`; a single such character, or a lone `~`, as `\c`; control
+/// characters as C escapes or octal, and a leading `~` escaped. What it
+/// gives reads back through [`tokenize`] as `word`, except where tmux's own
+/// does not either: a backslash inside single quotes stays doubled.
+pub fn escape_arg(word: &str) -> String {
+    const DOUBLE: &str = " #';${}%";
+    const SINGLE: &str = " \"";
+    if word.is_empty() {
+        return "''".into();
+    }
+    let quote = if word.contains(|c| DOUBLE.contains(c)) {
+        Some('"')
+    } else if word.contains(|c| SINGLE.contains(c)) {
+        Some('\'')
+    } else {
+        None
+    };
+    if word.len() == 1 && word != " " && (quote.is_some() || word == "~") {
+        return format!("\\{word}");
+    }
+    let double = quote == Some('"');
+    let mut escaped = String::with_capacity(word.len());
+    let mut chars = word.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '$' if double
+                && chars
+                    .peek()
+                    .is_some_and(|n| n.is_ascii_alphabetic() || matches!(n, '_' | '{')) =>
+            {
+                escaped.push_str("\\$");
+            }
+            '"' if double => escaped.push_str("\\\""),
+            '\\' => escaped.push_str("\\\\"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\x08' => escaped.push_str("\\b"),
+            '\x07' => escaped.push_str("\\a"),
+            '\x0b' => escaped.push_str("\\v"),
+            '\t' => escaped.push_str("\\t"),
+            '\x0c' => escaped.push_str("\\f"),
+            '\0' if chars.peek().is_some_and(|n| n.is_digit(8)) => escaped.push_str("\\000"),
+            '\0' => escaped.push_str("\\0"),
+            c if c == ' ' || c.is_ascii_graphic() || !c.is_ascii() => escaped.push(c),
+            c => {
+                escaped.push('\\');
+                for shift in [6, 3, 0] {
+                    escaped.extend(char::from_digit(u32::from(c) >> shift & 7, 8));
+                }
+            }
+        }
+    }
+    let tilde = if escaped.starts_with('~') { "\\" } else { "" };
+    match quote {
+        Some('\'') => format!("'{escaped}'"),
+        Some(_) => format!("\"{tilde}{escaped}\""),
+        None => format!("{tilde}{escaped}"),
+    }
+}
+
 /// The commands in a `{ … }` block, its `{` already read, up to the
 /// matching `}`: one per line or `;`, joined by ` ; ` to be parsed again
 /// when they run. Quotes, escapes and nested braces (`#{format}` among them)
@@ -366,6 +429,53 @@ mod tests {
             vec![w(&["cd", "/home/u/x", "/home/u", "a~"])]
         );
         assert_eq!(t("echo ${X}y $NOPE."), vec![w(&["echo", "exy", "."])]);
+    }
+
+    #[test]
+    fn escape_arg_quotes_as_tmux_shows_options() {
+        // What tmux 3.6's `show-options` printed for each value.
+        let cases: &[(&str, &str)] = &[
+            ("a b", r#""a b""#),
+            ("x", "x"),
+            ("a\"b", r#"'a"b'"#),
+            ("it's", r#""it's""#),
+            ("#{x}", r##""#{x}""##),
+            ("", "''"),
+            ("~/foo", r"\~/foo"),
+            ("~", r"\~"),
+            ("a~", "a~"),
+            (" ", r#"" ""#),
+            ("\"", r#"\""#),
+            ("'", r"\'"),
+            ("#", r"\#"),
+            ("a;b", r#""a;b""#),
+            ("a$b", r#""a\$b""#),
+            ("tab\tx", r"tab\tx"),
+            ("nl\nx", r"nl\nx"),
+            ("a%b", r#""a%b""#),
+            ("{", r"\{"),
+            ("a{b", r#""a{b""#),
+            (r"a\b", r"a\\b"),
+            ("é ü", r#""é ü""#),
+            ("a b\"c", r#""a b\"c""#),
+            ("a`b", "a`b"),
+            ("a\x01b", r"a\001b"),
+            ("a\x1bb", r"a\033b"),
+            ("a b\tc", r#""a b\tc""#),
+            ("a\x7fb", r"a\177b"),
+            ("~ x", r#""\~ x""#),
+            (" ~", r#"" ~""#),
+            ("a=b,c:d", "a=b,c:d"),
+            ("[#{session_name}] ", r##""[#{session_name}] ""##),
+        ];
+        for (word, shown) in cases {
+            assert_eq!(escape_arg(word), *shown, "{word:?}");
+        }
+        // And each reads back, but for a backslash in single quotes, which
+        // tmux's does not read back either.
+        for (word, shown) in cases {
+            assert_eq!(t(&format!("x {shown}")), vec![w(&["x", word])], "{shown}");
+        }
     }
 
     #[test]

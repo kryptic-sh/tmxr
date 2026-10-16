@@ -2,7 +2,7 @@
 //! session sets for itself over it, read by `set-option` and printed by
 //! `show-options` under tmux's names.
 
-use crate::table::options_table;
+use crate::table::{Word, options_table};
 use crate::{AlertAction, Visual};
 
 options_table! {
@@ -22,8 +22,8 @@ options_table! {
     /// as tmxr-term's `pty::default_shell` picks it.
     "default-shell" => default_shell: Option<String>,
     /// `display-panes` number colour for the active pane, and the others.
-    "display-panes-active-colour" => display_panes_active_colour: String,
-    "display-panes-colour" => display_panes_colour: String,
+    "display-panes-active-colour" => display_panes_active_colour: Word,
+    "display-panes-colour" => display_panes_colour: Word,
     /// How long `display-panes` shows pane numbers, in milliseconds.
     "display-panes-time" => display_panes_time: u64,
     /// How long a status message shows, in milliseconds.
@@ -38,7 +38,7 @@ options_table! {
     "message-style" => message_style: String,
     "mouse" => mouse: bool,
     /// The prefix key, by tmux key name.
-    "prefix" => prefix: String,
+    "prefix" => prefix: Word,
     "renumber-windows" => renumber_windows: bool,
     /// How long a repeatable bind (`bind -r`) takes another key without
     /// the prefix, in milliseconds.

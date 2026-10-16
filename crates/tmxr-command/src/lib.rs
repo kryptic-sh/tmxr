@@ -21,4 +21,4 @@ pub use args::Args;
 pub use bind_key::{BindKey, MouseAction, MouseKey, MouseLocation};
 pub use keys::Key;
 pub use table::{CommandError, CommandSpec, Parsed, lookup, parse, reads_stdin};
-pub use tokenize::{join_args, tokenize};
+pub use tokenize::{escape_arg, join_args, tokenize};

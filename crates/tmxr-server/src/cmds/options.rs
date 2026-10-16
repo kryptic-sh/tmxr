@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use tmxr_command::Parsed;
 use tmxr_config::{SessionOptions, WindowOptions};
 
-use super::{Ctx, Outcome, Res, attached_client, join_args, scoped};
+use super::{Ctx, Outcome, Res, attached_client, scoped};
 use crate::server::Server;
 use crate::target;
 
@@ -139,16 +139,17 @@ const SERVER_OPTIONS: &[&str] = &[
     "socket-access",
 ];
 
-/// Each server option as `show-options -s` prints it: `name value`.
+/// Each server option as `show-options -s` prints it: `name value`, the
+/// ones tmux types as strings quoted as its.
 fn server_option_lines(srv: &Server) -> Vec<String> {
     let c = &srv.cfg;
-    let quoted = |v: &str| join_args(&[v.to_owned()]);
+    let quoted = tmxr_command::escape_arg;
     SERVER_OPTIONS
         .iter()
         .map(|&name| {
             let value = match name {
                 "copy-command" => quoted(&c.copy_command),
-                "default-terminal" => c.default_terminal.clone(),
+                "default-terminal" => quoted(&c.default_terminal),
                 "escape-time" => c.escape_time.to_string(),
                 "extended-keys" => c.extended_keys.clone(),
                 "prompt-history-limit" => c.prompt_history_limit.to_string(),
@@ -165,22 +166,21 @@ fn server_option_lines(srv: &Server) -> Vec<String> {
 /// server's, the sessions' and the windows', then the user options.
 pub fn option_lines(srv: &Server) -> Vec<String> {
     let c = &srv.cfg;
-    let quoted = |v: String| join_args(&[v]);
     let mut all = server_option_lines(srv);
     all.extend(
         SessionOptions::NAMES
             .iter()
-            .filter_map(|n| Some(format!("{n} {}", quoted(c.session.show(n)?)))),
+            .filter_map(|n| Some(format!("{n} {}", scoped::shown(n, c.session.show(n)?)))),
     );
     all.extend(
         WindowOptions::NAMES
             .iter()
-            .filter_map(|n| Some(format!("{n} {}", c.window.show(n)?))),
+            .filter_map(|n| Some(format!("{n} {}", scoped::shown(n, c.window.show(n)?)))),
     );
     all.extend(
         c.options
             .iter()
-            .map(|(k, v)| format!("{k} {}", quoted(v.clone()))),
+            .map(|(k, v)| format!("{k} {}", scoped::shown(k, v.clone()))),
     );
     all
 }

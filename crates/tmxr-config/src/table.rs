@@ -7,8 +7,9 @@ use crate::{AlertAction, BoxLines, ModeKeys, ScrollbarPosition, Scrollbars, Visu
 /// An option's value: how `set-option` reads it and `show-options` prints
 /// it.
 pub trait OptionValue: Clone {
-    /// Whether `set-option -a` appends to it (tmux's string options).
-    const APPENDS: bool = false;
+    /// Whether it is one of tmux's string options: `set-option -a` appends
+    /// to it and `show-options` quotes it.
+    const STRING: bool = false;
 
     /// `value` for an option now `current`; `None` is no value given.
     fn parse(value: Option<&str>, current: &Self) -> Result<Self, String>;
@@ -51,7 +52,7 @@ macro_rules! number {
 number!(u16, u32, u64, usize);
 
 impl OptionValue for String {
-    const APPENDS: bool = true;
+    const STRING: bool = true;
 
     fn parse(value: Option<&str>, _: &Self) -> Result<Self, String> {
         value
@@ -67,6 +68,8 @@ impl OptionValue for String {
 /// A string option that may have no value, shown as empty (`default-shell`,
 /// whose absence means the platform's shell).
 impl OptionValue for Option<String> {
+    const STRING: bool = true;
+
     fn parse(value: Option<&str>, _: &Self) -> Result<Self, String> {
         value
             .map(|v| Some(v.to_owned()))
@@ -75,6 +78,37 @@ impl OptionValue for Option<String> {
 
     fn show(&self) -> String {
         self.clone().unwrap_or_default()
+    }
+}
+
+/// An option tmux types as a colour or a key, kept by its name: unlike a
+/// string, `show-options` does not quote it and `-a` does not append.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Word(pub String);
+
+impl std::ops::Deref for Word {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for Word {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl OptionValue for Word {
+    fn parse(value: Option<&str>, _: &Self) -> Result<Self, String> {
+        value
+            .map(|v| Self(v.to_owned()))
+            .ok_or_else(|| "needs a value".into())
+    }
+
+    fn show(&self) -> String {
+        self.0.clone()
     }
 }
 
@@ -114,7 +148,7 @@ pub fn parse<T: OptionValue>(
 ) -> Result<T, String> {
     let appended;
     let value = match value {
-        Some(v) if append && T::APPENDS => {
+        Some(v) if append && T::STRING => {
             appended = format!("{}{v}", current.show());
             Some(appended.as_str())
         }
@@ -138,6 +172,15 @@ macro_rules! options_table {
         impl $table {
             /// Every option in the table by tmux name, in tmux's order.
             pub const NAMES: &[&str] = &[$($name),*];
+
+            /// Whether `name` is in the table as one of tmux's string
+            /// options, which `show-options` quotes.
+            pub fn is_string(name: &str) -> bool {
+                match name {
+                    $($name => <$ty as $crate::table::OptionValue>::STRING,)*
+                    _ => false,
+                }
+            }
 
             /// `name`'s value as `show-options` prints it; `None` for a name
             /// that is not in the table.
