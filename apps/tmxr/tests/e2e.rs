@@ -1192,29 +1192,6 @@ fn respawn_pane_restarts_the_program_in_place() {
     assert_eq!(t.run(&["list-panes", "-t", "r"]).lines().count(), 2);
 }
 
-/// argv for a long-running program installed under `name` in the test's
-/// directory, so the navigator sees a foreground process with that name.
-fn fixture_program(t: &Tmxr, name: &str) -> Vec<String> {
-    #[cfg(unix)]
-    {
-        let path = t.dir.path().join(name);
-        std::fs::copy("/bin/sleep", &path).unwrap();
-        vec![path.display().to_string(), "60".into()]
-    }
-    #[cfg(windows)]
-    {
-        let root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
-        let path = t.dir.path().join(format!("{name}.exe"));
-        std::fs::copy(format!(r"{root}\System32\PING.EXE"), &path).unwrap();
-        vec![
-            path.display().to_string(),
-            "-n".into(),
-            "60".into(),
-            "127.0.0.1".into(),
-        ]
-    }
-}
-
 /// Where [`key_log_fixture`] logs the keys it reads, when a test starts it.
 const KEY_LOG: &str = "TMXR_E2E_KEY_LOG";
 
@@ -1408,8 +1385,10 @@ fn ctrl_hjkl_move_between_panes_in_windows_terminal() {
 fn navigator_passes_keys_to_hjkl_and_moves_otherwise() {
     for (name, passes_through) in [("hjkl", true), ("plainprog", false)] {
         let t = Tmxr::new(&format!("nav-{name}"));
-        let argv = fixture_program(&t, name);
-        let mut new = vec!["new-session", "-d", "-s", "nav"];
+        let log = t.dir.path().join("keys.log");
+        let argv = key_log_program(&t, name);
+        let env = format!("{KEY_LOG}={}", log.display());
+        let mut new = vec!["new-session", "-d", "-s", "nav", "-e", &env];
         new.extend(argv.iter().map(String::as_str));
         t.run(&new);
         // A shell to the right; focus stays on the fixture on the left.
