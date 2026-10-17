@@ -160,7 +160,7 @@ pub(super) fn run(
         }
         "respawn-window" => {
             // tmux: the window goes back to one pane, its first, respawned.
-            let (_, wid, _) = target::window(srv, ctx, a.value('t'))?;
+            let (_, _, wid) = target::window(srv, ctx, a.value('t'))?;
             let panes = srv.windows.get(&wid).ok_or("no window")?.panes();
             let first = *panes.first().ok_or("window has no panes")?;
             if !a.has('k') && panes.iter().any(|p| srv.panes[p].dead.is_none()) {

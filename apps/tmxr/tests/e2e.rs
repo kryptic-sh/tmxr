@@ -1096,6 +1096,26 @@ fn resurrect_restores_a_multi_pane_layout() {
 }
 
 #[test]
+fn respawn_window_finds_its_window_by_index() {
+    let t = Tmxr::new("respawnw");
+    t.run(&["new-session", "-d", "-s", "rw"]);
+    // Index 7, id 1: they differ, which the lookup once mixed up.
+    t.run(&["new-window", "-d", "-t", "rw:7"]);
+    let id = t
+        .run(&["display-message", "-p", "-t", "rw:7", "#{window_id}"])
+        .trim()
+        .to_owned();
+    let out = t.output(&["respawn-window", "-k", "-t", "rw:7"]);
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(
+        t.run(&["display-message", "-p", "-t", "rw:7", "#{window_id}"])
+            .trim(),
+        id
+    );
+    assert_eq!(t.run(&["list-windows", "-t", "rw"]).lines().count(), 2);
+}
+
+#[test]
 fn default_command_is_what_a_new_pane_runs() {
     let t = Tmxr::new("defcmd");
     t.run(&["new-session", "-d", "-s", "dc"]);

@@ -87,6 +87,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`respawn-window -t` respawns the window named**: it took the window's index
+  for its id, so on a window whose index and id differ it failed with "no
+  window" or respawned another window.
 - **`display-time 0` keeps a message until a key is pressed**, as tmux's; the
   message went at once.
 - **A reply too large to send is an error**: a command whose output was over the
