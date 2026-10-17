@@ -81,8 +81,14 @@ fn names_session(srv: &Server, spec: &str) -> bool {
     srv.sessions.values().any(|s| s.name == name)
 }
 
+/// A session by `$id` or name, as tmux's `cmd_find_get_session`: the exact
+/// name, else the one name it starts, else the one name it matches as an
+/// `fnmatch` pattern. A leading `=` asks for the exact name only.
 fn find_session(srv: &Server, name: &str) -> Res<SessionId> {
-    let name = name.strip_prefix('=').unwrap_or(name);
+    let (name, exact) = match name.strip_prefix('=') {
+        Some(n) => (n, true),
+        None => (name, false),
+    };
     if let Some(id) = name
         .strip_prefix('$')
         .and_then(|n| n.parse::<SessionId>().ok())
@@ -93,16 +99,23 @@ fn find_session(srv: &Server, name: &str) -> Res<SessionId> {
     if let Some(s) = srv.sessions.values().find(|s| s.name == name) {
         return Ok(s.id);
     }
-    let prefixed: Vec<_> = srv
-        .sessions
-        .values()
-        .filter(|s| s.name.starts_with(name))
-        .collect();
-    match prefixed.as_slice() {
-        [one] => Ok(one.id),
-        [] => Err(format!("can't find session: {name}")),
-        _ => Err(format!("ambiguous session: {name}")),
+    let not_found = || format!("can't find session: {name}");
+    if exact {
+        return Err(not_found());
     }
+    let pattern = crate::util::glob_regex(name);
+    for matches in [
+        &(|s: &str| s.starts_with(name)) as &dyn Fn(&str) -> bool,
+        &|s: &str| pattern.is_match(s),
+    ] {
+        let found: Vec<_> = srv.sessions.values().filter(|s| matches(&s.name)).collect();
+        match found.as_slice() {
+            [one] => return Ok(one.id),
+            [] => {}
+            _ => return Err(format!("ambiguous session: {name}")),
+        }
+    }
+    Err(not_found())
 }
 
 /// Split `session:window.pane` into its parts.
@@ -230,43 +243,47 @@ fn window_index(srv: &Server, sid: SessionId, spec: &str) -> Res<u32> {
         let i = (pos as i64 + sign * n).rem_euclid(len);
         Ok(indices[i as usize])
     };
+    // A leading `=` asks for an index or the exact name only, as tmux's
+    // `cmd_find_get_window_with_session`.
+    let (spec, exact) = match spec.strip_prefix('=') {
+        Some(n) => (n, true),
+        None => (spec, false),
+    };
     match spec {
-        "!" | "{last}" => s.last.ok_or_else(|| "no last window".into()),
-        "^" | "{start}" => indices.first().copied().ok_or_else(|| "no windows".into()),
-        "$" | "{end}" => indices.last().copied().ok_or_else(|| "no windows".into()),
-        _ if spec.starts_with('+') => step(1, &spec[1..]),
-        _ if spec.starts_with('-') => step(-1, &spec[1..]),
-        _ => {
-            let exact_index = spec.strip_prefix('=').unwrap_or(spec);
-            if let Ok(i) = exact_index.parse::<u32>() {
-                return if s.windows.contains_key(&i) {
-                    Ok(i)
-                } else {
-                    Err(format!("can't find window: {i}"))
-                };
-            }
-            let named: Vec<u32> = s
-                .windows
-                .iter()
-                .filter(|(_, w)| srv.windows.get(w).is_some_and(|w| w.name == spec))
-                .map(|(i, _)| *i)
-                .collect();
-            if let [one] = named.as_slice() {
-                return Ok(*one);
-            }
-            let prefixed: Vec<u32> = s
-                .windows
-                .iter()
-                .filter(|(_, w)| srv.windows.get(w).is_some_and(|w| w.name.starts_with(spec)))
-                .map(|(i, _)| *i)
-                .collect();
-            match prefixed.as_slice() {
-                [one] => Ok(*one),
-                [] => Err(format!("can't find window: {spec}")),
-                _ => Err(format!("ambiguous window: {spec}")),
-            }
+        _ if exact => {}
+        "!" | "{last}" => return s.last.ok_or_else(|| "no last window".into()),
+        "^" | "{start}" => return indices.first().copied().ok_or_else(|| "no windows".into()),
+        "$" | "{end}" => return indices.last().copied().ok_or_else(|| "no windows".into()),
+        _ if spec.starts_with('+') => return step(1, &spec[1..]),
+        _ if spec.starts_with('-') => return step(-1, &spec[1..]),
+        _ => {}
+    }
+    if let Ok(i) = spec.parse::<u32>() {
+        return if s.windows.contains_key(&i) {
+            Ok(i)
+        } else {
+            Err(format!("can't find window: {i}"))
+        };
+    }
+    let pattern = crate::util::glob_regex(spec);
+    let tests: [&dyn Fn(&str) -> bool; 3] = [&|n| n == spec, &|n| n.starts_with(spec), &|n| {
+        pattern.is_match(n)
+    }];
+    let tests = if exact { &tests[..1] } else { &tests[..] };
+    for matches in tests {
+        let found: Vec<u32> = s
+            .windows
+            .iter()
+            .filter(|(_, w)| srv.windows.get(w).is_some_and(|w| matches(&w.name)))
+            .map(|(i, _)| *i)
+            .collect();
+        match found.as_slice() {
+            [one] => return Ok(*one),
+            [] => {}
+            _ => return Err(format!("ambiguous window: {spec}")),
         }
     }
+    Err(format!("can't find window: {spec}"))
 }
 
 /// Resolve a pane target to `(session, window, pane)`.

@@ -5981,6 +5981,31 @@ fn an_ignore_size_client_sizes_windows_only_alone() {
 }
 
 #[test]
+fn an_equals_sign_asks_for_the_exact_name() {
+    let t = Tmxr::new("exact");
+    t.run(&["new-session", "-d", "-s", "foobar"]);
+    t.run(&["new-window", "-d", "-t", "foobar", "-n", "main"]);
+    let fails = |args: &[&str], why: &str| {
+        let out = t.output(args);
+        assert!(!out.status.success(), "{args:?} succeeded");
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(err.contains(why), "{args:?}: {err}");
+    };
+    // Without `=` a prefix finds the session or window; with it, not.
+    assert!(t.output(&["has-session", "-t", "foo"]).status.success());
+    fails(&["has-session", "-t", "=foo"], "can't find session: foo");
+    assert!(
+        t.output(&["select-window", "-t", "foobar:mai"])
+            .status
+            .success()
+    );
+    fails(
+        &["select-window", "-t", "foobar:=mai"],
+        "can't find window: mai",
+    );
+}
+
+#[test]
 fn the_terminal_title_is_the_programs_else_session_and_window() {
     let t = Tmxr::new("title");
     let s = t.attach(&["new", "-s", "tt", "-n", "main"]);

@@ -375,13 +375,11 @@ table. What has been verified, and how:
 - **From a code review by a sub-agent (2026-10-18).** Found by reading code and
   tmux 3.6's source; nothing was run. Items marked _checked_ were confirmed by
   reading the code again; the rest are as reported.
-  - Targets: `-t =name` still falls back to a prefix match
-    (`target::find_session` strips the `=`, _checked_), so `has-session -t =foo`
-    finds `foobar`; a `%id` is not taken as a window or session target, as
-    tmux's `cmd_find_target` takes it; pane `{left}` / `{right}` / `{up}` /
-    `{down}` mean the neighbour, where tmux's mean the leftmost / rightmost /
-    top / bottom pane and the neighbour is `{left-of}` and the like; pane `+N` /
-    `-N` are not read.
+  - Targets: a `%id` is not taken as a window or session target, as tmux's
+    `cmd_find_target` takes it; pane `{left}` / `{right}` / `{up}` / `{down}`
+    mean the neighbour, where tmux's mean the leftmost / rightmost / top /
+    bottom pane and the neighbour is `{left-of}` and the like; pane `+N` / `-N`
+    are not read.
   - `move-window -a` / `-b` are refused by the table (`"dkrs:t:"`, _checked_)
     though the shared `move-window | link-window` arm in `cmds/window.rs` reads
     `-a`; tmux's `-a` also shifts later windows up rather than taking the next
@@ -457,7 +455,7 @@ table. What has been verified, and how:
     (`new-session -t`); `switch-client -t` / `attach -t` drop the window and
     pane part, and `switch-client -c -r -Z`; targets `~` / `{marked}`, `{top}` /
     `{bottom}` and corners, `{up-of}` and friends, window `{next}` /
-    `{previous}`, fnmatch patterns; smaller flags: `send-keys -R -H -K -c`,
+    `{previous}`; smaller flags: `send-keys -R -H -K -c`,
     `display-panes -d -b -N`, `select-pane -d -e`, `last-pane -d -e -Z`,
     `rotate-window -Z`, `swap-pane -Z`, `kill-session -C`, `set-buffer -n -t`,
     `copy-mode -s`, `detach-client -E`, `run-shell -E`,

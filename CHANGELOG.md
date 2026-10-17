@@ -28,6 +28,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`-t =name` finds only that exact name**, as tmux's: `has-session -t =foo`
+  found a session `foobar` by its prefix, and `-t session:=window` found no
+  window at all. A session or window name may also be an `fnmatch` pattern
+  (`-t 'f*r'`) when no name starts with it, as in tmux.
 - **A title holding `;` reaches the pane**: a program's OSC 0 / 2 title with a
   semicolon in it (`vim; a.rs`) was dropped, leaving the old `#{pane_title}`;
   everything after the first `;` is the title now, as xterm reads it.

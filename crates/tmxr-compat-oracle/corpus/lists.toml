@@ -16,3 +16,19 @@ checks = [
   { command = "list-panes -a -F '#{session_name}:#{window_index}.#{pane_index}' -f '#{pane_active}'", expect = "b:0.0\no:0.1\no:1.0" },
   { command = "list-buffers -F '#{buffer_name} #{buffer_size} #{buffer_sample}'", expect = "one 11 hello world" },
 ]
+
+[[cases]]
+name = "targets_find_names_by_prefix_pattern_or_exactly"
+steps = [
+  { run = "new-session -d -s foobar" },
+  { run = "new-session -d -s qux" },
+  { run = "new-window -d -t foobar -n main" },
+]
+checks = [
+  { command = "list-windows -t foo -F '#S'", expect = "foobar\nfoobar" },
+  { command = "list-windows -t 'f*r' -F '#S'", expect = "foobar\nfoobar" },
+  { command = "list-windows -t '=foobar' -F '#S'", expect = "foobar\nfoobar" },
+  { command = "display -p -t 'foobar:=main' '#W'", expect = "main" },
+  { command = "display -p -t 'foobar:ma*' '#W'", expect = "main" },
+  { command = "display -p -t 'foobar:=1' '#W'", expect = "main" },
+]
