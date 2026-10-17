@@ -124,7 +124,7 @@ pub struct Buffer {
     pub name: String,
     pub data: String,
     /// Named by tmxr (`bufferN`), not by `-b`: only these count against
-    /// [`BUFFER_LIMIT`] and make way for new ones, as tmux's.
+    /// `buffer-limit` and make way for new ones, as tmux's.
     pub automatic: bool,
 }
 
@@ -211,11 +211,6 @@ pub const PASSTHROUGH_UNSUPPORTED: &str = "allow-passthrough: needs the conpty.d
 const DRAIN_BUDGET: Duration = Duration::from_millis(20);
 /// Rows the status line takes.
 pub const STATUS_ROWS: u16 = 1;
-/// Messages kept for `show-messages`.
-const MESSAGE_LOG: usize = 100;
-/// Automatic paste buffers kept (tmux's `buffer-limit`); named ones are
-/// never dropped for it.
-const BUFFER_LIMIT: usize = 50;
 
 impl Server {
     pub fn new(
@@ -596,11 +591,13 @@ impl Server {
 
     // ── Messages, clipboard, buffers ───────────────────────────────────────
 
+    /// Keep `msg` for `show-messages`, the oldest going past
+    /// `message-limit`.
     pub fn log_message(&mut self, msg: String) {
-        if self.messages.len() == MESSAGE_LOG {
+        self.messages.push_back(msg);
+        while self.messages.len() > self.cfg.message_limit {
             self.messages.pop_front();
         }
-        self.messages.push_back(msg);
     }
 
     pub fn show_message(&mut self, id: ClientId, msg: String) {
@@ -621,7 +618,7 @@ impl Server {
 
     /// Add a paste buffer, or with `name` set the one of that name, which
     /// then counts as named, as tmux's `paste_set`. The oldest automatic
-    /// buffer makes way once there are more than [`BUFFER_LIMIT`].
+    /// buffer makes way once there are more than `buffer-limit`.
     pub fn add_buffer(&mut self, data: String, name: Option<String>) {
         if let Some(n) = &name
             && let Some(b) = self.buffers.iter_mut().find(|b| &b.name == n)
@@ -641,7 +638,7 @@ impl Server {
             data,
             automatic,
         });
-        while self.buffers.iter().filter(|b| b.automatic).count() > BUFFER_LIMIT {
+        while self.buffers.iter().filter(|b| b.automatic).count() > self.cfg.buffer_limit {
             if let Some(oldest) = self.buffers.iter().rposition(|b| b.automatic) {
                 self.buffers.remove(oldest);
             }

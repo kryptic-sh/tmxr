@@ -30,6 +30,11 @@ pub const DEFAULTS: &str = include_str!("../defaults.toml");
 pub struct Config {
     /// Entries kept per prompt type for Up/Down recall (tmux's default 100).
     pub prompt_history_limit: usize,
+    /// Automatic paste buffers kept (`buffer-limit`); named ones are never
+    /// dropped for it.
+    pub buffer_limit: usize,
+    /// Messages `show-messages` keeps (`message-limit`).
+    pub message_limit: usize,
     pub escape_time: u64,
     pub default_terminal: String,
     pub extended_keys: String,
@@ -74,6 +79,8 @@ struct File {
     mode_keys: ModeKeys,
     history_limit: usize,
     prompt_history_limit: usize,
+    buffer_limit: usize,
+    message_limit: usize,
     escape_time: u64,
     display_time: u64,
     display_panes_time: u64,
@@ -203,6 +210,8 @@ impl From<File> for Config {
                 visual_silence: f.visual_silence,
             },
             prompt_history_limit: f.prompt_history_limit,
+            buffer_limit: f.buffer_limit,
+            message_limit: f.message_limit,
             escape_time: f.escape_time,
             default_terminal: f.default_terminal,
             extended_keys: f.extended_keys,

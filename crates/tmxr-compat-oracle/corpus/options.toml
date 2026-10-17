@@ -218,3 +218,11 @@ checks = [
   { command = "show -gv update-environment", expect = "" },
   { command = "show -A -t q update-environment", expect = "update-environment" },
 ]
+
+[[cases]]
+name = "buffer_limit_and_message_limit_default_as_tmuxs"
+steps = []
+checks = [
+  { command = "show -s buffer-limit", expect = "buffer-limit 50" },
+  { command = "show -s message-limit", expect = "message-limit 1000" },
+]

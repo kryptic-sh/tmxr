@@ -99,6 +99,12 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed) -> Res {
     let c = &mut srv.cfg;
     match name {
         "prompt-history-limit" => c.prompt_history_limit = num(need()?)? as usize,
+        // As tmux's: at least one buffer, any number of messages.
+        "buffer-limit" => match num(need()?)? {
+            0 => return Err("buffer-limit: value is too small".into()),
+            n => c.buffer_limit = n as usize,
+        },
+        "message-limit" => c.message_limit = num(need()?)? as usize,
         "escape-time" => c.escape_time = num(need()?)?,
         "default-terminal" => need()?.clone_into(&mut c.default_terminal),
         "extended-keys" => need()?.clone_into(&mut c.extended_keys),
@@ -129,10 +135,12 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed) -> Res {
 /// The server options `set-option` takes, as tmux's server table holds
 /// them (and tmxr's `rgb-colour` and `socket-access`).
 const SERVER_OPTIONS: &[&str] = &[
+    "buffer-limit",
     "copy-command",
     "default-terminal",
     "escape-time",
     "extended-keys",
+    "message-limit",
     "prompt-history-limit",
     "rgb-colour",
     "set-clipboard",
@@ -148,10 +156,12 @@ fn server_option_lines(srv: &Server) -> Vec<String> {
         .iter()
         .map(|&name| {
             let value = match name {
+                "buffer-limit" => c.buffer_limit.to_string(),
                 "copy-command" => quoted(&c.copy_command),
                 "default-terminal" => quoted(&c.default_terminal),
                 "escape-time" => c.escape_time.to_string(),
                 "extended-keys" => c.extended_keys.clone(),
+                "message-limit" => c.message_limit.to_string(),
                 "prompt-history-limit" => c.prompt_history_limit.to_string(),
                 "rgb-colour" => c.rgb_colour.clone(),
                 "set-clipboard" => c.set_clipboard.clone(),

@@ -15,6 +15,10 @@ mode-keys = "vi"
 # tmux-sensible values.
 history-limit = 50000
 prompt-history-limit = 100
+# tmux's defaults: automatic paste buffers kept, and messages show-messages
+# keeps.
+buffer-limit = 50
+message-limit = 1000
 escape-time = 0
 display-time = 4000
 display-panes-time = 1000

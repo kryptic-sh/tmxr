@@ -1096,6 +1096,37 @@ fn resurrect_restores_a_multi_pane_layout() {
 }
 
 #[test]
+fn buffer_limit_and_message_limit_are_server_options() {
+    let t = Tmxr::new("limits");
+    let s = t.attach(&["new", "-s", "lm"]);
+    s.wait_for("the status line", |text| text.contains("lm"));
+    t.run(&["set", "-s", "buffer-limit", "3"]);
+    for i in 0..5 {
+        t.run(&["set-buffer", &format!("b{i}")]);
+    }
+    assert_eq!(t.run(&["list-buffers"]).lines().count(), 3);
+    assert_eq!(
+        t.run(&["show", "-s", "buffer-limit"]).trim(),
+        "buffer-limit 3"
+    );
+    assert!(
+        !t.output(&["set", "-s", "buffer-limit", "0"])
+            .status
+            .success()
+    );
+    t.run(&["set", "-s", "message-limit", "2"]);
+    // Shown on the client, a message is kept too.
+    let client = t
+        .run(&["list-clients", "-F", "#{client_name}"])
+        .trim()
+        .to_owned();
+    for m in ["first", "second", "third"] {
+        t.run(&["display-message", "-c", &client, m]);
+    }
+    assert_eq!(t.run(&["show-messages"]), "second\nthird\n");
+}
+
+#[test]
 fn the_buffer_limit_drops_only_automatic_buffers() {
     let t = Tmxr::new("buflimit");
     t.run(&["new-session", "-d", "-s", "bl"]);
