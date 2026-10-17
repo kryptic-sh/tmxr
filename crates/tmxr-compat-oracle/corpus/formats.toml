@@ -48,3 +48,20 @@ checks = [
   { command = "display -p -t p:5 '#{window_bell_flag}'", expect = "1" },
   { command = "list-windows -t p -F '#I#{window_flags}'", expect = "0*\n5!" },
 ]
+
+[[cases]]
+name = "value_modifiers_chain_in_tmuxs_order"
+steps = [{ run = "set -g @p /home/me/src/proj" }, { run = "set -g @e ''" }]
+checks = [
+  { command = "display -p '#{b:@p}'", expect = "proj" },
+  { command = "display -p '#{d:@p}'", expect = "/home/me/src" },
+  { command = "display -p '#{s/o/0/:@p}'", expect = "/h0me/me/src/pr0j" },
+  { command = "display -p '#{l:#{@p}}'", expect = "#{@p}" },
+  { command = "display -p '#{n:@p}'", expect = "17" },
+  { command = "display -p '#{p5:session_name}|'", expect = "o    |" },
+  { command = "display -p '#{p-5:session_name}|'", expect = "    o|" },
+  { command = "display -p '#{=3;b:@p}'", expect = "pro" },
+  { command = "display -p '#{b;s/r/R/:@p}'", expect = "pRoj" },
+  { command = "display -p '#{?@e,1,@p,2,3}'", expect = "2" },
+  { command = "display -p '#{?@e,1,@e,2,3}'", expect = "3" },
+]

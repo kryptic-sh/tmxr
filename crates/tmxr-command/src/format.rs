@@ -146,16 +146,24 @@ fn truthy(s: &str) -> bool {
 fn expand_item(body: &str, ctx: &dyn Context, depth: usize) -> String {
     let ex = |s: &str| expand_depth(s, ctx, depth + 1);
     if let Some(cond) = body.strip_prefix('?') {
+        // `#{?c1,v1,c2,v2,…,else}`: the value of the first true condition,
+        // else the last unpaired part, else nothing, as tmux's.
         let parts = split_top(cond);
-        let test = parts.first().copied().unwrap_or_default();
-        // The condition is a variable name or a nested format.
-        let value = if test.contains("#{") {
-            ex(test)
-        } else {
-            ctx.get(test).unwrap_or_default()
-        };
-        let pick = if truthy(&value) { 1 } else { 2 };
-        return parts.get(pick).map(|p| ex(p)).unwrap_or_default();
+        let mut i = 0;
+        while i + 1 < parts.len() {
+            // A condition is a variable name or a nested format.
+            let test = parts[i];
+            let value = if test.contains("#{") {
+                ex(test)
+            } else {
+                ctx.get(test).unwrap_or_default()
+            };
+            if truthy(&value) {
+                return ex(parts[i + 1]);
+            }
+            i += 2;
+        }
+        return parts.get(i).map(|p| ex(p)).unwrap_or_default();
     }
     for (op, f) in [
         ("==:", (|a: &str, b: &str| a == b) as fn(&str, &str) -> bool),
@@ -198,34 +206,208 @@ fn expand_item(body: &str, ctx: &dyn Context, depth: usize) -> String {
             quote_shell(&text)
         };
     }
-    // `=N:` keeps the first N characters, `=-N:` the last; `=/N/marker:`
-    // also puts `marker` where text was cut off.
-    if let Some((args, inner)) = body.strip_prefix('=').and_then(|rest| {
-        rest.split_once(':')
-            .filter(|(n, _)| n.parse::<i64>().is_ok())
-            .or_else(|| modifier_args(rest).filter(|(a, _)| !a.is_empty()))
-    }) {
-        let mut args = args.split('/');
-        let Ok(n) = args.next().unwrap_or_default().parse::<i64>() else {
-            return String::new();
-        };
-        let marker = args.next().unwrap_or_default();
-        let text = expand_item(inner, ctx, depth + 1);
-        let chars: Vec<char> = text.chars().collect();
-        let keep = n.unsigned_abs() as usize;
-        if chars.len() <= keep {
-            return text;
-        }
-        return if n >= 0 {
-            chars.iter().take(keep).collect::<String>() + marker
-        } else {
-            marker.to_owned() + &chars[chars.len() - keep..].iter().collect::<String>()
-        };
+    if let Some((mods, inner)) = value_modifiers(body) {
+        return apply_modifiers(&mods, inner, ctx, depth);
     }
     if body.contains("#{") {
         return ex(body);
     }
     ctx.get(body).unwrap_or_default()
+}
+
+/// One of tmux's modifiers that change a value, as `format_replace` reads
+/// them: `#{b;s/x/y/;=5:name}`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Mod<'a> {
+    /// `b`: the last part of a path.
+    Basename,
+    /// `d`: all but the last part of a path.
+    Dirname,
+    /// `l`: the text itself, not expanded.
+    Literal,
+    /// `n`: the length in bytes.
+    Length,
+    /// `s/pattern/replacement/flags`: each match of a regular expression
+    /// replaced (`i` ignores case).
+    Sub {
+        pattern: &'a str,
+        replacement: &'a str,
+        flags: &'a str,
+    },
+    /// `=N` keeps the first N characters, `=-N` the last; `=/N/marker`
+    /// also puts `marker` where text was cut off.
+    Limit(i64, &'a str),
+    /// `pN` pads to N characters with spaces after, `p-N` before.
+    Pad(i64),
+}
+
+/// `body` as a list of value modifiers and what follows their `:`; `None`
+/// when it is not one (a plain variable, a condition, a comparison or a
+/// modifier this does not read).
+fn value_modifiers(body: &str) -> Option<(Vec<Mod<'_>>, &str)> {
+    let mut mods = Vec::new();
+    let mut rest = body;
+    loop {
+        let mut chars = rest.chars();
+        let letter = chars.next()?;
+        let after = chars.as_str();
+        // What follows the modifier, up to the `;` or `:` that ends it.
+        let (m, tail) = match letter {
+            'b' | 'd' | 'l' | 'n' => {
+                let m = match letter {
+                    'b' => Mod::Basename,
+                    'd' => Mod::Dirname,
+                    'l' => Mod::Literal,
+                    _ => Mod::Length,
+                };
+                (m, after)
+            }
+            's' => {
+                let sep = after.chars().next().filter(|c| !c.is_alphanumeric())?;
+                let mut parts = after[sep.len_utf8()..].splitn(3, sep);
+                let pattern = parts.next()?;
+                let replacement = parts.next()?;
+                let tail = parts.next()?;
+                let end = tail.find([';', ':'])?;
+                let m = Mod::Sub {
+                    pattern,
+                    replacement,
+                    flags: &tail[..end],
+                };
+                (m, &tail[end..])
+            }
+            'p' | '=' => {
+                let (args, tail) = match after.chars().next() {
+                    Some(c) if c == '-' || c.is_ascii_digit() => {
+                        let end = after.find([';', ':'])?;
+                        (&after[..end], &after[end..])
+                    }
+                    Some(sep) if letter == '=' && !sep.is_alphanumeric() && sep != '=' => {
+                        let inner = &after[sep.len_utf8()..];
+                        let end = inner.find([';', ':'])?;
+                        (inner[..end].trim_end_matches(sep), &inner[end..])
+                    }
+                    _ => return None,
+                };
+                let mut args = args.split(['/', '|']);
+                let n = args.next()?.parse::<i64>().ok()?;
+                let m = if letter == 'p' {
+                    Mod::Pad(n)
+                } else {
+                    Mod::Limit(n, args.next().unwrap_or_default())
+                };
+                (m, tail)
+            }
+            _ => return None,
+        };
+        mods.push(m);
+        if let Some(inner) = tail.strip_prefix(':') {
+            return Some((mods, inner));
+        }
+        rest = tail.strip_prefix(';')?;
+    }
+}
+
+/// The value of `inner` with `mods` applied, in the order tmux's
+/// `format_replace` applies them whatever order they were written in: the
+/// value (a path's parts for a variable read directly, the text itself for
+/// `l`), then substitutions, the length limit, padding, and the length.
+fn apply_modifiers(mods: &[Mod<'_>], inner: &str, ctx: &dyn Context, depth: usize) -> String {
+    let ex = |s: &str| expand_depth(s, ctx, depth + 1);
+    let mut value = if mods.contains(&Mod::Literal) {
+        inner.to_owned()
+    } else if inner.contains("#{") {
+        ex(inner)
+    } else {
+        let found = ctx.get(inner).unwrap_or_default();
+        let path = std::path::Path::new(&found);
+        let part = |p: Option<&std::ffi::OsStr>| p.map(|p| p.to_string_lossy().into_owned());
+        if mods.contains(&Mod::Basename) {
+            part(path.file_name()).unwrap_or(found)
+        } else if mods.contains(&Mod::Dirname) {
+            part(path.parent().map(std::path::Path::as_os_str))
+                .filter(|d| !d.is_empty())
+                .unwrap_or_else(|| ".".to_owned())
+        } else {
+            found
+        }
+    };
+    for m in mods {
+        if let Mod::Sub {
+            pattern,
+            replacement,
+            flags,
+        } = m
+        {
+            value = substitute(&value, &ex(pattern), &ex(replacement), flags);
+        }
+    }
+    for m in mods {
+        if let Mod::Limit(n, marker) = m {
+            value = limit(&value, *n, &ex(marker));
+        }
+    }
+    for m in mods {
+        if let Mod::Pad(n) = m {
+            let missing = usize::try_from(n.unsigned_abs())
+                .unwrap_or(usize::MAX)
+                .saturating_sub(value.chars().count());
+            let spaces = " ".repeat(missing);
+            value = if *n >= 0 {
+                value + &spaces
+            } else {
+                spaces + &value
+            };
+        }
+    }
+    if mods.contains(&Mod::Length) {
+        value = value.len().to_string();
+    }
+    value
+}
+
+/// tmux's `s/pattern/replacement/`: every match of the extended regular
+/// expression replaced, `\1` and the like naming its groups; `i` in `flags`
+/// ignores case. A pattern that does not compile leaves the text alone.
+fn substitute(text: &str, pattern: &str, replacement: &str, flags: &str) -> String {
+    let Ok(re) = regex::RegexBuilder::new(pattern)
+        .case_insensitive(flags.contains('i'))
+        .build()
+    else {
+        return text.to_owned();
+    };
+    // `\N` as the regex crate writes a group, `$` kept as itself.
+    let mut rep = String::new();
+    let mut chars = replacement.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' if chars.peek().is_some_and(char::is_ascii_digit) => {
+                rep.push_str("${");
+                while let Some(d) = chars.next_if(char::is_ascii_digit) {
+                    rep.push(d);
+                }
+                rep.push('}');
+            }
+            '$' => rep.push_str("$$"),
+            c => rep.push(c),
+        }
+    }
+    re.replace_all(text, rep.as_str()).into_owned()
+}
+
+/// `=N`: the first N characters of `text` (the last with N negative), with
+/// `marker` where text was cut off.
+fn limit(text: &str, n: i64, marker: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let keep = usize::try_from(n.unsigned_abs()).unwrap_or(usize::MAX);
+    if chars.len() <= keep {
+        return text.to_owned();
+    }
+    if n >= 0 {
+        chars.iter().take(keep).collect::<String>() + marker
+    } else {
+        marker.to_owned() + &chars[chars.len() - keep..].iter().collect::<String>()
+    }
 }
 
 /// A modifier's `/`-separated arguments and what follows its `:`, for
@@ -452,6 +634,9 @@ mod tests {
                 "@self" => "#{E:@self}",
                 "@sp" => "a b;c#d",
                 "@w" => "hjkl",
+                "@p" => "/home/me/src/proj",
+                "@u" => "héllo wörld",
+                "@e" => "",
                 _ => return None,
             }
             .to_owned(),
@@ -520,6 +705,32 @@ mod tests {
         assert_eq!(x("#{=3:pane_current_path}"), "/ho");
         assert_eq!(x("#{=-3:pane_current_path}"), "src");
         assert_eq!(x("#{E:@self}"), "");
+    }
+
+    /// Each value is what tmux 3.6 printed for the same format (2026-10-18).
+    #[test]
+    fn value_modifiers_chain_in_tmuxs_order() {
+        assert_eq!(x("#{b:@p}"), "proj");
+        assert_eq!(x("#{d:@p}"), "/home/me/src");
+        assert_eq!(x("#{s/o/0/:@p}"), "/h0me/me/src/pr0j");
+        assert_eq!(x("#{s/O/0/i:@p}"), "/h0me/me/src/pr0j");
+        assert_eq!(x(r"#{s/(m)e/\1X/:@p}"), "/homX/mX/src/proj");
+        assert_eq!(x("#{l:#{@p}}"), "#{@p}");
+        assert_eq!(x("#{n:@p}"), "17");
+        assert_eq!(x("#{n:@u}"), "13", "bytes, not characters");
+        assert_eq!(x("#{p10:@e}|"), "          |");
+        assert_eq!(x("#{p5:session_name}|"), "main |");
+        assert_eq!(x("#{p-5:session_name}|"), " main|");
+        assert_eq!(x("#{p2:@p}|"), "/home/me/src/proj|", "padding never cuts");
+        assert_eq!(x("#{b;s/r/R/:@p}"), "pRoj");
+        assert_eq!(x("#{=3;b:@p}"), "pro", "written first, cut last");
+        assert_eq!(x("#{b:@nosuch}|"), "|");
+        assert_eq!(x("#{?@e,1,@p,2,3}"), "2");
+        assert_eq!(x("#{?@e,1,@e,2,3}"), "3");
+        assert_eq!(x("#{?@e,1,@e,2}|"), "|");
+        // Names that only start like a modifier are variables.
+        assert_eq!(x("#{session_name}"), "main");
+        assert_eq!(x("#{pane_current_path}"), "/home/u/src");
     }
 
     #[test]

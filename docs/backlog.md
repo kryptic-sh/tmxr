@@ -434,13 +434,15 @@ table. What has been verified, and how:
 - **tmux 3.6 features tmxr lacks** (the same review; compared against tmux's
   `cmd-*.c`, `options-table.c` and `format.c`, not run):
   - Formats: `#(shell)` and strftime in status formats (tmux's default
-    `status-right` uses both); loops `S:` `W:` `P:` `L:`; modifiers `b:` `d:`
-    `s/x/y/:` `l:` `n:` `w:` `p:` `a:` `c:` `N:` `C:` `R:` `t:` and `e|op|`
-    arithmetic; `#{?a,x,b,y,z}` chains (an unknown modifier expands to nothing);
-    roughly 110 of tmux's format variables (`session_created`, `window_layout`,
-    `pane_start_command`, `client_pid`, `start_time`, ...); styles `align=`
-    `fill=` `list=` `range=` `push-default` / `pop-default`, strikethrough,
-    blink, overline, curly and coloured underlines.
+    `status-right` uses both); loops `S:` `W:` `P:` `L:`; modifiers `w:` (it
+    needs a display-width measure `tmxr-command` does not have, unicode-width
+    being a new dependency), `a:` `c:` `N:` `C:` `R:` `t:` and `e|op|`
+    arithmetic, and `E` / `T` / `q` / `m` chained with others by `;` (an unknown
+    modifier expands to nothing); roughly 110 of tmux's format variables
+    (`session_created`, `window_layout`, `pane_start_command`, `client_pid`,
+    `start_time`, ...); styles `align=` `fill=` `list=` `range=` `push-default`
+    / `pop-default`, strikethrough, blink, overline, curly and coloured
+    underlines.
   - Options: the status line is one row at the bottom (`STATUS_ROWS`): no
     `status off` / `2`–`5`, `status-position`, `status-justify`,
     `status-format`; no `window-status-*-style`, `window-status-separator`,

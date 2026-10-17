@@ -32,6 +32,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   starting with the defaults because of an error in the file was told only in
   `show-messages`; the first client to attach now sees it as a message too, as
   tmux shows its config errors.
+- **More of tmux's format modifiers**: `b:` and `d:` (a path's last part and the
+  rest), `s/pattern/replacement/flags:` (regular expression, `\1` groups, `i`),
+  `l:` (literal), `n:` (length), `pN:` / `p-N:` (padding), chained with `;` and
+  applied in tmux's order (`#{=3;b:path}` cuts the basename), and
+  `#{?c1,v1,c2,v2,else}` with any number of conditions.
 - **`#{client_flags}` and `#{client_readonly}`**: the client's `attached`,
   `focused`, `ignore-size` and `read-only` flags, in tmux's order, and whether
   it is read-only. A client is focused from attaching until its terminal reports
