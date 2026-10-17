@@ -174,6 +174,10 @@ impl Context for Vars<'_> {
             "window_activity_flag" => flag(window?.activity.contains(&session?.id)),
             "window_silence_flag" => flag(window?.silence.contains(&session?.id)),
             "window_active" => flag(session?.current_window() == Some(window?.id)),
+            "window_last_flag" => {
+                let s = session?;
+                flag(s.last.is_some() && s.last == s.index_of(window?.id))
+            }
             "window_flags" => {
                 let s = session?;
                 let w = window?;

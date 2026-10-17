@@ -1984,6 +1984,52 @@ fn mouse_keys_can_be_bound_and_unbound() {
 }
 
 #[test]
+fn window_entries_take_their_styles_and_separators() {
+    let t = Tmxr::new("wstyle");
+    let s = t.attach(&["new", "-s", "ws", "-n", "a"]);
+    s.wait_for("the status line", |text| text.contains("ws"));
+    t.run(&["new-window", "-t", "ws", "-n", "b"]);
+    t.run(&["new-window", "-t", "ws", "-n", "c"]);
+    for (opt, value) in [
+        ("status-left", ""),
+        ("status-right", ""),
+        ("status-style", "bg=black"),
+    ] {
+        t.run(&["set", "-g", opt, value]);
+    }
+    // The separator last: the list's text shows only once every style
+    // before it is in.
+    for (opt, value) in [
+        ("window-status-style", "bg=red"),
+        ("window-status-current-style", "bg=green"),
+        ("window-status-last-style", "bg=blue"),
+        ("window-status-format", "<#I>"),
+        ("window-status-current-format", "<#I>"),
+        ("window-status-separator", "|"),
+    ] {
+        t.run(&["set", "-wg", opt, value]);
+    }
+    s.wait_for("the window list", |text| text.contains("<0>|<1>|<2>"));
+    assert_eq!(
+        t.run(&["list-windows", "-t", "ws", "-F", "#I#{window_last_flag}"]),
+        "00\n11\n20\n"
+    );
+    // Window 2 is current, 1 the last; the separators keep the line's.
+    let row = ROWS - 1;
+    let line = s.text().lines().last().unwrap_or_default().to_owned();
+    let bg = |c: &str| {
+        let col = line.find(c).unwrap() as u16;
+        // vt100's colour by its debug form: the tests do not depend on it.
+        let emu = s.emu.lock().unwrap();
+        format!("{:?}", emu.screen().cell(row, col).unwrap().bgcolor())
+    };
+    assert_eq!(bg("0"), "Idx(1)", "window-status-style");
+    assert_eq!(bg("1"), "Idx(4)", "window-status-last-style");
+    assert_eq!(bg("2"), "Idx(2)", "window-status-current-style");
+    assert_eq!(bg("|"), "Idx(0)", "the status line's own");
+}
+
+#[test]
 fn long_status_right_is_cut_before_the_window_list() {
     // A session name this long makes the right side (session and host
     // modules) wider than status-right-length, like a long hostname does.

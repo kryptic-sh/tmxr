@@ -100,6 +100,16 @@ right-length = 40
 # catppuccin's "basic" window style, with the config's " #W" window text.
 window-format = "#[fg=#{@thm_crust},bg=#{@thm_overlay2}] #I #[fg=#{@thm_fg},bg=#{@thm_surface0}] #W#{?window_flags, #{window_flags},} #[default]"
 window-current-format = "#[fg=#{@thm_crust},bg=#{@thm_mauve}] #I #[fg=#{@thm_fg},bg=#{@thm_surface1}] #W#{?window_flags, #{window_flags},} #[default]"
+# tmux's defaults: the styles under the left and right sides and each window,
+# the current one's and the last one's. The separator between windows is
+# empty, where tmux's is a space, so the list looks as it did before tmxr had
+# the option.
+left-style = "default"
+right-style = "default"
+window-style = "default"
+window-current-style = "default"
+window-last-style = "default"
+window-separator = ""
 pane-border-style = "fg=#{@thm_surface1}"
 pane-active-border-style = "fg=#{@thm_blue}"
 message-style = "fg=#{@thm_fg},bg=#{@thm_surface0}"

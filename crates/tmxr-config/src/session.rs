@@ -53,10 +53,14 @@ options_table! {
     "status-left" => status_left: String,
     /// Most cells `status-left` may take.
     "status-left-length" => status_left_length: u16,
+    /// The style `status-left` is drawn over, on the status line's.
+    "status-left-style" => status_left_style: String,
     "status-right" => status_right: String,
     /// Most cells `status-right` may take; a longer right side is cut at
     /// its end so the window list keeps its room.
     "status-right-length" => status_right_length: u16,
+    /// The style `status-right` is drawn over, on the status line's.
+    "status-right-style" => status_right_style: String,
     "status-style" => status_style: String,
     /// The client environment variables a session takes when it is made or
     /// attached: `fnmatch` patterns, as tmux's.

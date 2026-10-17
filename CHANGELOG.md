@@ -37,6 +37,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `l:` (literal), `n:` (length), `pN:` / `p-N:` (padding), chained with `;` and
   applied in tmux's order (`#{=3;b:path}` cuts the basename), and
   `#{?c1,v1,c2,v2,else}` with any number of conditions.
+- **Window list styles, as tmux's**: `window-status-style`,
+  `window-status-current-style` (the current window's, unless `default`),
+  `window-status-last-style` (added for the last window) and
+  `window-status-separator` (between entries), with `status-left-style` and
+  `status-right-style` under the two sides; `[status]` takes them as
+  `window-style`, `window-current-style`, `window-last-style`,
+  `window-separator`, `left-style` and `right-style`. The separator defaults to
+  empty, where tmux's is a space, so the list looks as before. Also
+  `#{window_last_flag}`.
 - **`#{client_flags}` and `#{client_readonly}`**: the client's `attached`,
   `focused`, `ignore-size` and `read-only` flags, in tmux's order, and whether
   it is read-only. A client is focused from attaching until its terminal reports

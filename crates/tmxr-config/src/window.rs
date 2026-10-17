@@ -167,7 +167,16 @@ options_table! {
     "synchronize-panes" => synchronize_panes: bool,
     "window-size" => window_size: WindowSize,
     "window-status-current-format" => window_status_current_format: String,
+    /// The style the current window's entry is drawn over; `default` takes
+    /// `window-status-style`.
+    "window-status-current-style" => window_status_current_style: String,
     "window-status-format" => window_status_format: String,
+    /// Added to the last window's entry's style, unless `default`.
+    "window-status-last-style" => window_status_last_style: String,
+    /// Drawn between window entries, not after the last.
+    "window-status-separator" => window_status_separator: String,
+    /// The style each window's entry is drawn over, on the status line's.
+    "window-status-style" => window_status_style: String,
 }
 
 #[cfg(test)]

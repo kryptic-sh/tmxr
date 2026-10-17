@@ -535,10 +535,19 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
     let right_w = runs_width(&right).min(opts.status_right_length).min(cols);
     let limit = cols - right_w;
     let left = format::expand(&opts.status_left, &vars);
-    let mut x = draw_runs(buf, 0, y, limit.min(opts.status_left_length), base, &left);
+    let left_base = base.patch(style_option(&opts.status_left_style, &vars));
+    let mut x = draw_runs(
+        buf,
+        0,
+        y,
+        limit.min(opts.status_left_length),
+        left_base,
+        &left,
+    );
     ranges.left_end = x;
     ranges.right_start = cols - right_w;
-    for (idx, wid) in &session.windows {
+    let count = session.windows.len();
+    for (n, (idx, wid)) in session.windows.iter().enumerate() {
         let Some(win) = srv.windows.get(wid) else {
             continue;
         };
@@ -550,20 +559,40 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
             client: Some(id),
         };
         let options = srv.window_options(*wid);
-        let fmt = if *idx == session.current {
+        let current = *idx == session.current;
+        let fmt = if current {
             &options.window_status_current_format
         } else {
             &options.window_status_format
         };
+        // The entry's style, as tmux's default status-format builds it: the
+        // current window's own unless `default`, the last window's added.
+        let set = |spec: &str| (spec != "default").then(|| style_option(spec, &wvars));
+        let mut window_base = base.patch(
+            current
+                .then(|| set(&options.window_status_current_style))
+                .flatten()
+                .unwrap_or_else(|| style_option(&options.window_status_style, &wvars)),
+        );
+        if session.last == Some(*idx)
+            && let Some(last) = set(&options.window_status_last_style)
+        {
+            window_base = window_base.patch(last);
+        }
         let text = format::expand(fmt, &wvars);
         let start = x;
-        x = draw_runs(buf, x, y, limit, base, &text);
+        x = draw_runs(buf, x, y, limit, window_base, &text);
         ranges.windows.push((start, x, *idx));
         if x >= limit {
             break;
         }
+        if n + 1 < count {
+            let sep = format::expand(&options.window_status_separator, &wvars);
+            x = draw_runs(buf, x, y, limit, base, &sep);
+        }
     }
-    draw_runs(buf, cols - right_w, y, cols, base, &right);
+    let right_base = base.patch(style_option(&opts.status_right_style, &vars));
+    draw_runs(buf, cols - right_w, y, cols, right_base, &right);
     ranges
 }
 
