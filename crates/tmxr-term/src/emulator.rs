@@ -5,6 +5,11 @@ use std::path::PathBuf;
 use crate::dcs::DcsSplitter;
 use crate::encode::InputModes;
 
+/// Most kitty keyboard flag sets a pane keeps. The protocol asks a terminal
+/// to cap the stack, dropping the oldest entry on a push to a full one, so a
+/// program cannot grow it without end; the size is the terminal's choice.
+const KITTY_STACK_LIMIT: usize = 16;
+
 /// Side-channel state collected while parsing a pane's output.
 #[derive(Debug, Default)]
 pub struct Hooks {
@@ -78,7 +83,12 @@ impl vt100::Callbacks for Hooks {
             (Some(b'>'), 'm') if p(0) == Some(4) => {
                 self.modify_other_keys = p(1).unwrap_or(0).min(2) as u8;
             }
-            (Some(b'>'), 'u') => self.kitty_flags.push(p(0).unwrap_or(0) as u8),
+            (Some(b'>'), 'u') => {
+                if self.kitty_flags.len() >= KITTY_STACK_LIMIT {
+                    self.kitty_flags.remove(0);
+                }
+                self.kitty_flags.push(p(0).unwrap_or(0) as u8);
+            }
             (Some(b'<'), 'u') => {
                 for _ in 0..p(0).unwrap_or(1).max(1) {
                     self.kitty_flags.pop();
@@ -499,6 +509,18 @@ mod tests {
         assert_eq!(e.process(b"\x1b[?u"), b"\x1b[?1u");
         e.process(b"\x1b[<u");
         assert_eq!(e.input_modes().kitty_flags, 0);
+        // A full stack drops its oldest entry: after 20 pushes, popping the
+        // limit's worth empties it.
+        for flags in 1..=20 {
+            e.process(format!("\x1b[>{flags}u").as_bytes());
+        }
+        e.process(format!("\x1b[<{}u", KITTY_STACK_LIMIT - 1).as_bytes());
+        assert_eq!(
+            usize::from(e.input_modes().kitty_flags),
+            20 - (KITTY_STACK_LIMIT - 1)
+        );
+        e.process(b"\x1b[<u");
+        assert_eq!(e.input_modes().kitty_flags, 0, "the stack holds the limit");
         e.process(b"\x1b[?1h");
         assert!(e.input_modes().app_cursor);
     }

@@ -34,6 +34,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A pane's kitty keyboard flag stack is capped**: a program pushing flags
+  (`CSI > n u`) without end grew the server's memory; a push to a full stack now
+  drops the oldest entry, as the kitty protocol asks.
 - **The paste buffer limit drops only automatic buffers**, as tmux's: a buffer
   named with `-b` was dropped like any other once 50 were kept; now only the
   oldest `bufferN` makes way, and named buffers stay until deleted. A buffer set
