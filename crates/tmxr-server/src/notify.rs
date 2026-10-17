@@ -10,6 +10,9 @@
 //! killed or a key binding moving the current window, an automatic rename.
 //! What the hooks' own commands change is taken in without firing, as tmxr
 //! fires no hook from a hook.
+//!
+//! Pane focus is brought up to date at the same moments
+//! ([`Server::update_pane_focus`]).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -211,6 +214,57 @@ impl Server {
             if old.size != c.size {
                 self.queue_hook("client-resized", ctx, HookScope::default());
             }
+        }
+    }
+
+    /// Bring each pane's focus up to date, as tmux's
+    /// `window_pane_update_focus`: a pane is focused while it is the active
+    /// pane of a window that a focused client shows with no popup or menu
+    /// over it. A pane that gains or loses focus is told so (`CSI I` /
+    /// `CSI O`) when its program asked for focus reports, and fires
+    /// `pane-focus-in` / `pane-focus-out`.
+    pub fn update_pane_focus(&mut self) {
+        let shown: BTreeSet<WindowId> = self
+            .clients
+            .values()
+            .filter_map(|c| c.att.as_ref())
+            .filter(|a| {
+                a.focused
+                    && !matches!(
+                        a.overlay,
+                        Some(crate::overlay::Overlay::Popup(_) | crate::overlay::Overlay::Menu(_))
+                    )
+            })
+            .filter_map(|a| self.sessions.get(&a.session)?.current_window())
+            .collect();
+        let mut changed = Vec::new();
+        for p in self.panes.values_mut() {
+            let focused = p.dead.is_none()
+                && shown.contains(&p.window)
+                && self
+                    .windows
+                    .get(&p.window)
+                    .is_some_and(|w| w.active == p.id);
+            if focused != p.focused {
+                p.focused = focused;
+                if p.emu.focus_reports() {
+                    let report: &[u8] = if focused { b"\x1b[I" } else { b"\x1b[O" };
+                    let _ = p.pty.write(report);
+                }
+                changed.push((p.id, focused));
+            }
+        }
+        for (pane, focused) in changed {
+            let ctx = Ctx {
+                pane: Some(pane),
+                ..Ctx::default()
+            };
+            let hook = if focused {
+                "pane-focus-in"
+            } else {
+                "pane-focus-out"
+            };
+            self.queue_hook(hook, ctx, HookScope::default());
         }
     }
 

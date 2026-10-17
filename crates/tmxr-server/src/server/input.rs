@@ -53,9 +53,20 @@ impl Server {
             }
             TermEvent::Mouse(m) => crate::mouse::handle(self, id, m),
             TermEvent::FocusGained | TermEvent::FocusLost => {
+                let gained = matches!(ev, TermEvent::FocusGained);
                 if let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
-                    att.focused = matches!(ev, TermEvent::FocusGained);
+                    att.focused = gained;
                 }
+                let ctx = crate::cmds::Ctx {
+                    client: Some(id),
+                    ..crate::cmds::Ctx::default()
+                };
+                let hook = if gained {
+                    "client-focus-in"
+                } else {
+                    "client-focus-out"
+                };
+                self.queue_hook(hook, ctx, crate::hooks::HookScope::default());
             }
         }
     }

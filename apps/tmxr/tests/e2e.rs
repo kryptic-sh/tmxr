@@ -1354,6 +1354,8 @@ fn respawn_pane_restarts_the_program_in_place() {
 
 /// Where [`key_log_fixture`] logs the keys it reads, when a test starts it.
 const KEY_LOG: &str = "TMXR_E2E_KEY_LOG";
+/// Set, [`key_log_fixture`] asks for focus reports and logs them too.
+const KEY_LOG_FOCUS: &str = "TMXR_E2E_KEY_LOG_FOCUS";
 
 /// This test binary, copied as `name` into the test's directory, made to run
 /// [`key_log_fixture`]: a program the navigator sees by that name that
@@ -1377,22 +1379,33 @@ fn key_log_program(t: &Tmxr, name: &str) -> Vec<String> {
 }
 
 /// Not a test: the program [`key_log_program`] starts. In raw mode, it logs
-/// `ready`, then each key press it reads as `code modifiers`, one a line.
+/// `ready`, then each key press it reads as `code modifiers`, one a line;
+/// with [`KEY_LOG_FOCUS`] set it asks for focus reports and logs each as
+/// `FocusGained` or `FocusLost`.
 #[test]
 #[ignore = "a fixture other tests run in a pane"]
 fn key_log_fixture() {
-    use crossterm::event::{Event, KeyEventKind, read};
+    use crossterm::event::{EnableFocusChange, Event, KeyEventKind, read};
     let Some(log) = std::env::var_os(KEY_LOG) else {
         return;
     };
     let mut log = std::fs::File::create(log).unwrap();
     crossterm::terminal::enable_raw_mode().unwrap();
+    // On Windows the fixture read a focus event it never asked for (in the
+    // navigator test), so focus is logged only when the test wants it.
+    let focus = std::env::var_os(KEY_LOG_FOCUS).is_some();
+    if focus {
+        crossterm::execute!(std::io::stdout(), EnableFocusChange).unwrap();
+    }
     writeln!(log, "ready").unwrap();
     loop {
-        if let Event::Key(k) = read().unwrap()
-            && k.kind == KeyEventKind::Press
-        {
-            writeln!(log, "{:?} {:?}", k.code, k.modifiers).unwrap();
+        match read().unwrap() {
+            Event::Key(k) if k.kind == KeyEventKind::Press => {
+                writeln!(log, "{:?} {:?}", k.code, k.modifiers).unwrap();
+            }
+            Event::FocusGained if focus => writeln!(log, "FocusGained").unwrap(),
+            Event::FocusLost if focus => writeln!(log, "FocusLost").unwrap(),
+            _ => {}
         }
     }
 }
@@ -1582,6 +1595,45 @@ fn navigator_passes_keys_to_hjkl_and_moves_otherwise() {
             );
         }
     }
+}
+
+#[test]
+fn a_pane_that_asked_is_told_when_it_gains_and_loses_focus() {
+    let t = Tmxr::new("focus");
+    let log = t.dir.path().join("keys.log");
+    let argv = key_log_program(&t, "focuslog");
+    let env = format!("{KEY_LOG}={}", log.display());
+    let focus = format!("{KEY_LOG_FOCUS}=1");
+    let mut new = vec!["new-session", "-d", "-s", "fo", "-e", &env, "-e", &focus];
+    new.extend(argv.iter().map(String::as_str));
+    t.run(&new);
+    for h in ["pane-focus-in", "pane-focus-out"] {
+        t.run(&["set-hook", "-g", h, &format!("set -ga @log '{h} '")]);
+    }
+    let lines = || std::fs::read_to_string(&log).unwrap_or_default();
+    let wait_log = |want: &str, count: usize| {
+        let deadline = Instant::now() + TIMEOUT;
+        while lines().lines().filter(|l| *l == want).count() < count {
+            assert!(Instant::now() < deadline, "no {want} x{count}: {}", lines());
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    };
+    wait_log("ready", 1);
+    // Shown to a client, the active pane gains focus.
+    let s = t.attach(&["attach", "-t", "fo"]);
+    s.wait_for("the status line", |text| text.contains("fo"));
+    wait_log("FocusGained", 1);
+    // Another pane made active takes it; selecting this one gives it back.
+    t.run(&["split-window", "-h", "-t", "fo"]);
+    wait_log("FocusLost", 1);
+    t.run(&["select-pane", "-t", "fo.0"]);
+    wait_log("FocusGained", 2);
+    t.wait_run(&["show", "-gv", "@log"], "the focus hooks", |o| {
+        o.contains("pane-focus-out") && o.contains("pane-focus-in")
+    });
+    // Selecting the shell beside it takes focus away again.
+    t.run(&["select-pane", "-t", "fo.1"]);
+    wait_log("FocusLost", 2);
 }
 
 #[test]

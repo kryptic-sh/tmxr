@@ -49,7 +49,8 @@ impl Server {
             click: None,
             status_ranges: crate::render::StatusRanges::default(),
             mouse: false,
-            focused: false,
+            // As tmux's: focused until its terminal reports otherwise.
+            focused: true,
             title: None,
             pan: None,
             status_at: Instant::now(),

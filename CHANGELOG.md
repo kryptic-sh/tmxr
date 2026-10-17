@@ -30,7 +30,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   kept with the same options (the window and pane ones with `-wg`).
 - **`#{client_flags}` and `#{client_readonly}`**: the client's `attached`,
   `focused`, `ignore-size` and `read-only` flags, in tmux's order, and whether
-  it is read-only.
+  it is read-only. A client is focused from attaching until its terminal reports
+  focus out, as tmux's.
+- **Focus reports reach panes**: a program that asks (mode 1004) gets `CSI I`
+  when its pane becomes the focused one (the active pane of a window a focused
+  client shows) and `CSI O` when it stops, as tmux sends them, so editors see
+  focus come and go. `pane-focus-in`, `pane-focus-out`, `client-focus-in` and
+  `client-focus-out` hooks fire.
 
 ### Changed
 

@@ -25,6 +25,8 @@ pub struct Hooks {
     modify_other_keys: u8,
     /// kitty keyboard flags stack (`CSI > f u` pushes, `CSI < n u` pops).
     kitty_flags: Vec<u8>,
+    /// The program asked for focus reports (`CSI ? 1004 h`).
+    focus_reports: bool,
     /// Where the shell's input starts, from its OSC 133;B prompt mark:
     /// (lines of history then, screen row, column).
     input_mark: Option<(usize, u16, u16)>,
@@ -66,6 +68,10 @@ impl vt100::Callbacks for Hooks {
     ) {
         let p = |i: usize| params.get(i).and_then(|v| v.first()).copied();
         match (i1, c) {
+            // A mode vt100 does not keep: focus reports.
+            (Some(b'?'), 'h' | 'l') if params.iter().any(|v| v.first() == Some(&1004)) => {
+                self.focus_reports = c == 'h';
+            }
             // DA1: identify as a VT220 with ANSI colour, as tmux does.
             (None, 'c') if p(0).unwrap_or(0) == 0 => self.replies.extend(b"\x1b[?62;22c"),
             // DA2: tmux reports terminal type 84.
@@ -300,6 +306,12 @@ impl Emulator {
         self.count_history();
     }
 
+    /// Whether the program asked to be told of focus changes (mode 1004),
+    /// as `CSI I` and `CSI O`.
+    pub fn focus_reports(&self) -> bool {
+        self.parser.callbacks().focus_reports
+    }
+
     pub fn title(&self) -> Option<&str> {
         self.parser.callbacks().title.as_deref()
     }
@@ -523,5 +535,11 @@ mod tests {
         assert_eq!(e.input_modes().kitty_flags, 0, "the stack holds the limit");
         e.process(b"\x1b[?1h");
         assert!(e.input_modes().app_cursor);
+        // Focus reports, in a sequence with a mode vt100 keeps.
+        assert!(!e.focus_reports());
+        e.process(b"\x1b[?25;1004h");
+        assert!(e.focus_reports());
+        e.process(b"\x1b[?1004l");
+        assert!(!e.focus_reports());
     }
 }

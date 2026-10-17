@@ -51,6 +51,7 @@ impl Server {
                 argv: started.argv,
                 dead: None,
                 clock: false,
+                focused: false,
                 output: started.output,
                 pipe: None,
                 hooks: crate::hooks::HookTable::new(),

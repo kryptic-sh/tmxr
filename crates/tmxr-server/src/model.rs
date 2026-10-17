@@ -37,6 +37,9 @@ pub struct Pane {
     pub dead: Option<Option<u32>>,
     /// `clock-mode`: the pane shows a big clock until a key is pressed.
     pub clock: bool,
+    /// Focused: the active pane of a window a focused client shows, as
+    /// tmux's `PANE_FOCUSED` (`notify`).
+    pub focused: bool,
     /// Output the reader thread has queued for this spawn.
     pub output: crate::output::OutputHandle,
     /// `pipe-pane`: the command this pane's output is copied to.

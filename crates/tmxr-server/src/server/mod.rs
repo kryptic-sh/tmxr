@@ -108,8 +108,8 @@ pub struct Attached {
     pub mouse: bool,
     /// When this client's status timer last fired (`status-interval`).
     pub status_at: Instant,
-    /// The terminal last reported focus in, not out (`focused` in
-    /// `#{client_flags}`).
+    /// Focused: from attaching until the terminal reports focus out, then
+    /// as it reports (`focused` in `#{client_flags}`).
     pub focused: bool,
     /// The title last given to the terminal (`set-titles`).
     pub title: Option<String>,
@@ -283,6 +283,7 @@ impl Server {
     /// After an event or a tick: queue the hooks for what changed, run every
     /// queued hook, then take what those hooks changed in without firing.
     fn settle(&mut self) {
+        self.update_pane_focus();
         self.queue_changes();
         self.run_pending_hooks();
         self.watched = crate::notify::Watched::of(self);

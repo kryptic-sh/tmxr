@@ -245,10 +245,20 @@ table. What has been verified, and how:
   `detach-on-destroy`, below. `!flag` and `refresh-client -f` / `-F` work as
   tmux's (`!read-only` leaves a read-only client read-only). `#{client_flags}`
   lists only what tmxr keeps: `attached`, `focused`, `ignore-size` and
-  `read-only`, not tmux's `suspended` or `UTF-8` (tmxr does not track either).
-  `focused` follows the terminal's focus reports, which tmxr always asks for;
-  tmux asks only with `focus-events on`. Not compared with a running tmux: the
-  oracle has no attached client.
+  `read-only`, not tmux's `suspended` or `UTF-8` (tmxr does not track either). A
+  client is `focused` from attaching, as tmux's, until its terminal reports
+  focus out; tmxr always asks the terminal for focus reports, where tmux asks
+  only with `focus-events on` (tmxr has no such option). Not compared with a
+  running tmux: the oracle has no attached client.
+- **Pane focus** (`Server::update_pane_focus`, from tmux's
+  `window_pane_update_focus`): a pane is focused while it is the active pane of
+  a window a focused client shows, and a program that asked (mode 1004) gets
+  `CSI I` / `CSI O` when that changes, with `pane-focus-in` / `-out`. tmux
+  counts only a popup or a menu as covering the pane; tmxr's pickers are
+  overlays too (tmux's are pane modes) but leave the pane focused, as tmux's
+  would. Checked end to end on Windows
+  (`a_pane_that_asked_is_told_when_it_gains_and_loses_focus`); a client's own
+  focus out reaching the pane is not tested.
 - **tmux default binds**: most of tmux's defaults are bound (see above);
   `prefix C-z` (suspend-client) errors on Windows, which has no job control.
   Alerts follow tmux 3.6's, as recorded from a running tmux on 2026-10-10 (WSL
@@ -464,15 +474,13 @@ table. What has been verified, and how:
     `confirm-before -b -c -y`, `list-keys -a -P`, `unbind -q`,
     `join-pane -f -p`, `source-file -n -v -F` and globs; `source-file` of a tmux
     command file (`%if`, `%hidden`).
-  - Hooks and modes: tmux hooks tmxr does not fire: `pane-focus-in` / `-out`,
-    `pane-set-clipboard`, `client-focus-in` / `-out`, `client-active`,
-    `command-error`, `client-light-theme` / `-dark-theme`. Panes that asked for
-    focus reports (mode 1004) get none. Copy mode lacks `next-prompt` /
-    `previous-prompt`, `copy-line`, `copy-pipe-line`, `pipe*`, `*-no-clear`,
-    `rectangle-on` / `-off`, `stop-selection`, `selection-mode`, `scroll-top` /
-    `-bottom`, `search-*-text` and the `-and-cancel` motions; `copy-selection` /
-    `copy-pipe` ignore a buffer name. `ESC k … ESC \` (window rename) looks
-    unhandled (only grepped).
+  - Hooks and modes: tmux hooks tmxr does not fire: `pane-set-clipboard`,
+    `client-active`, `command-error`, `client-light-theme` / `-dark-theme`. Copy
+    mode lacks `next-prompt` / `previous-prompt`, `copy-line`, `copy-pipe-line`,
+    `pipe*`, `*-no-clear`, `rectangle-on` / `-off`, `stop-selection`,
+    `selection-mode`, `scroll-top` / `-bottom`, `search-*-text` and the
+    `-and-cancel` motions; `copy-selection` / `copy-pipe` ignore a buffer name.
+    `ESC k … ESC \` (window rename) looks unhandled (only grepped).
 
 ## Not yet verified
 
