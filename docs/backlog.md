@@ -135,6 +135,20 @@ table. What has been verified, and how:
     as in tmxr. Kept to match tmux's output. Octal escapes that are not valid
     UTF-8 become U+FFFD when read (`tokenize::escape`); tmux keeps the raw
     bytes.
+  - **Notification hooks follow a change, not the call that made it**
+    (`notify::Watched`): after each event (and each tick) the server compares
+    session and window names, each session's current window and windows, each
+    window's active pane, layout and size, each pane's mode and each client's
+    session and size with what it saw last, and queues `session-renamed`,
+    `session-window-changed`, `window-linked` / `-unlinked`, `window-renamed`,
+    `window-pane-changed`, `window-layout-changed`, `window-resized`,
+    `pane-mode-changed`, `client-session-changed` and `client-resized`. So a
+    hook fires once per event however many times the thing changed in it
+    (`select-layout` fires `window-layout-changed` twice in tmux 3.6, once in
+    tmxr), and a change made by a hook's own commands fires nothing. Which
+    action fires which hook was compared with tmux 3.6 on 2026-10-18
+    (`state_changes_fire_tmuxs_notification_hooks`). tmux 3.6 fired no
+    `command-error` for a command line from a client that failed.
   - **Synchronized input skips panes as tmux's does** (`input_targets`, from
     `window_pane_copy_key`): in a mode, dead, or hidden by a zoom. The copy mode
     and zoom cases were compared with tmux 3.6 (2026-10-14); they and the
@@ -449,18 +463,15 @@ table. What has been verified, and how:
     `confirm-before -b -c -y`, `list-keys -a -P`, `unbind -q`,
     `join-pane -f -p`, `source-file -n -v -F` and globs; `source-file` of a tmux
     command file (`%if`, `%hidden`).
-  - Hooks and modes: only `EVENTS` and `after-<command>` fire; missing are
-    `pane-died`, `pane-focus-in` / `-out`, `pane-mode-changed`,
-    `pane-title-changed`, `window-renamed`, `window-resized`,
-    `window-pane-changed`, `window-linked` / `-unlinked`, `session-renamed`,
-    `session-window-changed`, `client-session-changed`, `client-resized`,
-    `command-error`, `client-light-theme` / `-dark-theme`. Panes that asked for
-    focus reports (mode 1004) get none. Copy mode lacks `next-prompt` /
-    `previous-prompt`, `copy-line`, `copy-pipe-line`, `pipe*`, `*-no-clear`,
-    `rectangle-on` / `-off`, `stop-selection`, `selection-mode`, `scroll-top` /
-    `-bottom`, `search-*-text` and the `-and-cancel` motions; `copy-selection` /
-    `copy-pipe` ignore a buffer name. `ESC k … ESC \` (window rename) looks
-    unhandled (only grepped).
+  - Hooks and modes: tmux hooks tmxr does not fire: `pane-focus-in` / `-out`,
+    `pane-title-changed`, `pane-set-clipboard`, `client-focus-in` / `-out`,
+    `client-active`, `command-error`, `client-light-theme` / `-dark-theme`.
+    Panes that asked for focus reports (mode 1004) get none. Copy mode lacks
+    `next-prompt` / `previous-prompt`, `copy-line`, `copy-pipe-line`, `pipe*`,
+    `*-no-clear`, `rectangle-on` / `-off`, `stop-selection`, `selection-mode`,
+    `scroll-top` / `-bottom`, `search-*-text` and the `-and-cancel` motions;
+    `copy-selection` / `copy-pipe` ignore a buffer name. `ESC k … ESC \` (window
+    rename) looks unhandled (only grepped).
 
 ## Not yet verified
 

@@ -21,6 +21,7 @@ pub mod menu;
 pub mod model;
 pub mod mouse;
 pub mod moves;
+pub mod notify;
 pub mod output;
 pub mod overlay;
 pub mod pipe;

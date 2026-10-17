@@ -22,6 +22,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   default, the client's terminal shows the title the active pane's program sets,
   or `session:window` when it sets none. Control characters in a title are
   dropped before it reaches the terminal.
+- **tmux's notification hooks**: `session-renamed`, `session-window-changed`,
+  `window-linked`, `window-unlinked`, `window-renamed` (by hand or automatic),
+  `window-pane-changed`, `window-layout-changed`, `window-resized`,
+  `pane-mode-changed`, `client-session-changed`, `client-resized` and
+  `pane-died`, fired for the same actions as tmux 3.6's and kept with the same
+  options (the window and pane ones with `-wg`).
 - **`#{client_flags}` and `#{client_readonly}`**: the client's `attached`,
   `focused`, `ignore-size` and `read-only` flags, in tmux's order, and whether
   it is read-only.
@@ -34,6 +40,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A pane kept by `remain-on-exit` fires `pane-died`, not `pane-exited`**, as
+  tmux's; `pane-exited` is for a pane that goes away.
 - **`capture-pane` gives one line per row, as tmux's**: a wrapped line came out
   joined and trailing blank rows were dropped; now each row is a line, blank
   ones kept and trailing spaces dropped, and `-J` joins wrapped rows and keeps

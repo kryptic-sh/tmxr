@@ -179,6 +179,8 @@ pub struct Server {
     pub hooks: crate::hooks::HookTable,
     /// Events whose hooks run once the current event is handled.
     pub pending_hooks: Vec<(String, Ctx, crate::hooks::HookScope)>,
+    /// The state the notification hooks last saw (`notify`).
+    pub watched: crate::notify::Watched,
     /// A hook's commands are running: they fire no further hooks.
     pub in_hook: bool,
     last_save: Instant,
@@ -266,6 +268,7 @@ impl Server {
             socket_access: tmxr_proto::socket::Access::Owner,
             hooks,
             pending_hooks: Vec::new(),
+            watched: crate::notify::Watched::default(),
             in_hook: false,
             last_save: Instant::now(),
             last_saved: None,
@@ -275,6 +278,14 @@ impl Server {
             srv.log_message(e);
         }
         srv
+    }
+
+    /// After an event or a tick: queue the hooks for what changed, run every
+    /// queued hook, then take what those hooks changed in without firing.
+    fn settle(&mut self) {
+        self.queue_changes();
+        self.run_pending_hooks();
+        self.watched = crate::notify::Watched::of(self);
     }
 
     /// Process events until the server should exit.
@@ -293,19 +304,20 @@ impl Server {
             match rx.recv_timeout(wait) {
                 Ok(ev) => {
                     self.handle(ev);
-                    self.run_pending_hooks();
+                    self.settle();
                     let until = Instant::now() + DRAIN_BUDGET;
                     while Instant::now() < until
                         && let Ok(ev) = rx.try_recv()
                     {
                         self.handle(ev);
-                        self.run_pending_hooks();
+                        self.settle();
                     }
                 }
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => break,
             }
             self.tick();
+            self.settle();
             self.render_all();
             if signals::exit_requested() {
                 info!("exit requested by the system");

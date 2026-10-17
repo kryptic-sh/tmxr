@@ -398,10 +398,12 @@ impl Server {
                     pane: Some(pid),
                     ..crate::cmds::Ctx::default()
                 };
-                self.queue_hook("pane-exited", ctx, crate::hooks::HookScope::default());
-                if self.pane_options(pid).remain_on_exit
-                    && let Some(p) = self.panes.get_mut(&pid)
-                {
+                // A pane kept dead fires pane-died, one that goes
+                // pane-exited, as tmux's.
+                let remain = self.pane_options(pid).remain_on_exit;
+                let hook = if remain { "pane-died" } else { "pane-exited" };
+                self.queue_hook(hook, ctx, crate::hooks::HookScope::default());
+                if remain && let Some(p) = self.panes.get_mut(&pid) {
                     p.dead = Some(code);
                     let window = p.window;
                     self.commands.remove(&pid);

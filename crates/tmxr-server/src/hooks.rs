@@ -24,15 +24,35 @@ pub const EVENTS: &[&str] = &[
     "alert-silence",
     "client-attached",
     "client-detached",
+    "client-resized",
+    "client-session-changed",
+    "pane-died",
     "pane-exited",
+    "pane-mode-changed",
     "session-closed",
     "session-created",
+    "session-renamed",
+    "session-window-changed",
+    "window-layout-changed",
+    "window-linked",
+    "window-pane-changed",
+    "window-renamed",
+    "window-resized",
+    "window-unlinked",
 ];
 
 /// The events above that tmux keeps with the window and pane options
 /// (`OPTIONS_TABLE_PANE_HOOK`); the rest, and every `after-` hook, it keeps
 /// with the session options.
-pub const PANE_HOOKS: &[&str] = &["pane-exited"];
+pub const PANE_HOOKS: &[&str] = &[
+    "pane-died",
+    "pane-exited",
+    "pane-mode-changed",
+    "window-layout-changed",
+    "window-pane-changed",
+    "window-renamed",
+    "window-resized",
+];
 
 /// Whether `name` is a hook tmxr fires.
 pub fn known(name: &str) -> bool {

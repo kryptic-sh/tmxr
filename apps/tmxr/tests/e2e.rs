@@ -849,6 +849,76 @@ fn a_sessions_own_update_environment_decides_what_attaching_takes() {
 }
 
 #[test]
+fn state_changes_fire_tmuxs_notification_hooks() {
+    let t = Tmxr::new("notify");
+    t.run(&["new-session", "-d", "-s", "o", "-n", "w0"]);
+    let hooks = [
+        "session-renamed",
+        "window-renamed",
+        "session-window-changed",
+        "window-pane-changed",
+        "window-linked",
+        "window-unlinked",
+        "pane-mode-changed",
+        "window-layout-changed",
+        "window-resized",
+        "pane-died",
+    ];
+    for h in hooks {
+        t.run(&["set-hook", "-g", h, &format!("set -ga @log '{h} '")]);
+    }
+    // Each step fires the hook tmux 3.6 fires for it (checked 2026-10-18).
+    let step = |args: &[&str], want: &str| {
+        t.run(&["set", "-g", "@log", ""]);
+        t.run(args);
+        t.wait_run(&["show", "-gv", "@log"], want, |o| {
+            o.split_whitespace().any(|h| h == want)
+        });
+    };
+    step(&["rename-session", "-t", "o", "p"], "session-renamed");
+    step(&["rename-window", "-t", "p:0", "x"], "window-renamed");
+    step(
+        &["new-window", "-d", "-t", "p:1", "-n", "w1"],
+        "window-linked",
+    );
+    step(&["select-window", "-t", "p:1"], "session-window-changed");
+    step(
+        &["split-window", "-d", "-t", "p:1"],
+        "window-layout-changed",
+    );
+    step(&["select-pane", "-t", "p:1.1"], "window-pane-changed");
+    step(&["copy-mode", "-t", "p:1.1"], "pane-mode-changed");
+    step(
+        &["send-keys", "-t", "p:1.1", "-X", "cancel"],
+        "pane-mode-changed",
+    );
+    // tmxr renumbers windows by default, so from here on by name.
+    step(&["kill-window", "-t", "p:0"], "window-unlinked");
+    step(
+        &["resize-window", "-t", "p:w1", "-x", "50"],
+        "window-resized",
+    );
+    // A pane kept by remain-on-exit dies; it does not exit.
+    t.run(&["set", "-g", "remain-on-exit", "on"]);
+    let exit3 = if cfg!(windows) {
+        "cmd /c exit 3"
+    } else {
+        "exit 3"
+    };
+    step(&["respawn-pane", "-k", "-t", "p:w1.0", exit3], "pane-died");
+    // As tmux keeps them: the window and pane hooks with the global window
+    // options, the rest with the global session options.
+    let window = t.run(&["show", "-wgH"]);
+    let session = t.run(&["show", "-gH"]);
+    for h in hooks {
+        let listed = |l: &str| l.starts_with(&format!("{h}["));
+        let in_window = h.starts_with("pane-") || (h.starts_with("window-") && !h.contains("link"));
+        assert_eq!(window.lines().any(listed), in_window, "{h} with -wg");
+        assert_eq!(session.lines().any(listed), !in_window, "{h} with -g");
+    }
+}
+
+#[test]
 fn a_session_created_hook_from_the_config_adds_windows() {
     let t = Tmxr::new("hookcfg");
     let mut config = std::fs::read_to_string(&t.config).unwrap();
