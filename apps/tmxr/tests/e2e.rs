@@ -5967,19 +5967,24 @@ fn refresh_client_sets_and_clears_client_flags() {
     // refresh-client from outside means it.
     let b = t.attach(&["attach", "-t", "cf"]);
     b.wait_for("the status line", |text| text.contains("cf"));
-    b.resize(20, 70);
-    b.send(b"x");
-    t.wait_run(
-        &[
-            "display-message",
-            "-p",
-            "-t",
-            "cf",
-            "#{window_width}x#{window_height}",
-        ],
-        "the window sized for the second client",
-        |o| o.trim() == "70x19",
-    );
+    // On Linux under load a resize just after attaching can go unseen by
+    // the client (docs/backlog.md, "A resize just after attaching"), so
+    // resize again until the server has the size: this test is about the
+    // flags, not that.
+    let deadline = Instant::now() + TIMEOUT;
+    loop {
+        b.resize(21, 71);
+        b.resize(20, 70);
+        b.send(b"x");
+        std::thread::sleep(Duration::from_millis(300));
+        if size(&t) == "70x19" {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the window never took the second client's size"
+        );
+    }
 
     // -f ignore-size gives the window back to the first client at once.
     t.run(&["refresh-client", "-f", "ignore-size"]);

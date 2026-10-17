@@ -352,6 +352,133 @@ table. What has been verified, and how:
   the releases pinned in the job (`HJKL_VERSION`, `NAVIGATOR_VERSION`). The hjkl
   script fails with hjkl 0.42.1, which has no handoff (checked on Windows,
   2026-10-11).
+- **The outer terminal's title** (asked for 2026-10-18): the client's terminal
+  should show the title the program in the active pane sets (OSC 0 / 2, kept as
+  `#{pane_title}`), and when it sets none, the session and window names. tmxr
+  sets no outer title today: tmux's `set-titles` and `set-titles-string`
+  (default `#S:#I:#W - "#T" #{session_alerts}`) do not exist. A program that set
+  no title shows as the host name in `#{pane_title}` (`vars.rs`, as tmux's
+  default), so "set none" is `#{pane_title}` equal to `#{host}` unless the pane
+  keeps whether its title was set. Work: the two options, the client told the
+  expanded string when it changes (an OSC 0 to its terminal), and the terminal's
+  own title saved and given back on detach (`CSI 22;0t` / `CSI 23;0t`).
+- **A resize just after attaching can go unseen on Linux** (2026-10-18). In
+  `refresh_client_sets_and_clears_client_flags`, a client resized as soon as its
+  status line showed kept its old size on the server for the test's 30 s. This
+  happened in CI (run 39064458482, `test ubuntu-latest`, all three tries) and in
+  about half of the runs in WSL Ubuntu when other e2e tests ran alongside; it
+  never happened alone. A log of the client's events showed the `x` typed after
+  the resize but no `Resize` event, so crossterm never saw a SIGWINCH. The cause
+  was not found: crossterm's event source exists by then (`Guard::enter`'s
+  keyboard probe makes it), and the patched crossterm turns SIGWINCH into a
+  resize plainly. The test resizes again until the server has the size. A
+  separate gap, not shown to matter: the hello's size is read at connect, before
+  crossterm watches for resizes, so a resize between connect and attach would
+  also be missed.
+- **From a code review by a sub-agent (2026-10-18).** Found by reading code and
+  tmux 3.6's source; nothing was run. Items marked _checked_ were confirmed by
+  reading the code again; the rest are as reported.
+  - Targets: `-t =name` still falls back to a prefix match
+    (`target::find_session` strips the `=`, _checked_), so `has-session -t =foo`
+    finds `foobar`; a `%id` is not taken as a window or session target, as
+    tmux's `cmd_find_target` takes it; pane `{left}` / `{right}` / `{up}` /
+    `{down}` mean the neighbour, where tmux's mean the leftmost / rightmost /
+    top / bottom pane and the neighbour is `{left-of}` and the like; pane `+N` /
+    `-N` are not read.
+  - `move-window -a` / `-b` are refused by the table (`"dkrs:t:"`, _checked_)
+    though the shared `move-window | link-window` arm in `cmds/window.rs` reads
+    `-a`; tmux's `-a` also shifts later windows up rather than taking the next
+    free index.
+  - `capture-pane -p` returns vt100's `contents()`, which joins wrapped rows and
+    drops trailing blank ones; tmux prints one line per row.
+  - A frame dropped for a slow client (`Server::send`) sets `full_redraw` but
+    not `dirty`, so nothing repaints until the next event or status tick (never
+    with `status-interval 0`).
+  - `Pty::write` blocks the server thread (paste into a program that is not
+    reading could freeze every session); its errors are discarded.
+  - `std::env::vars()` panics on a variable that is not UTF-8: in `cmds/env.rs`
+    (`show-environment -g`) that is the server, in the client's `hello()` the
+    client (_checked_ both calls).
+  - `run-shell`, `if-shell`, `copy-pipe` and `pipe-pane` children get no `TMXR`,
+    so `run-shell 'tmxr …'` on a `-L` / `-S` server talks to the default one;
+    tmux's jobs get `TMUX`.
+  - `format::styled` repeats the text before an unclosed `#[`.
+  - `source-file PATH` sets `cfg_path` and replaces the whole config, losing
+    every run-time `set -g`; a later plain `source-file` reloads `PATH`.
+  - One config error at start throws the whole file away for the defaults; the
+    only sign is a line in `show-messages`.
+  - `add_buffer`'s limit evicts named buffers too; tmux evicts only automatic
+    ones.
+  - The kitty keyboard flag stack (`Hooks::unhandled_csi`) has no cap.
+  - `copy-pipe`'s `pipe_to_shell` writes all of stdin before reading stderr (a
+    deadlock if the command fills stderr first); its spawn error is discarded.
+  - Performance: entering copy mode copies every history row into
+    `copy::snapshot` (a String per cell) on the server thread; Windows takes two
+    process snapshots per pane per second in `util::refresh_commands`;
+    `#{pane_current_path}` inspects the process on each expansion; `#{m:…}`
+    compiles its regex on each expansion. Not measured.
+  - Two fnmatch-to-regex translators (`util::glob_regex`,
+    `tmxr_command::format::glob_regex`) agree today but are kept apart.
+  - Large files: `apps/tmxr/tests/e2e.rs` (one file for every e2e test; its test
+    names already group by command family), `overlay.rs` (box styles, the prompt
+    editor and the picker), `copy/mod.rs` (the snapshot model, motions and
+    search, the copy commands).
+  - A frame over `MAX_FRAME` fails quietly: the server's writer drops the
+    connection.
+- **tmux 3.6 features tmxr lacks** (the same review; compared against tmux's
+  `cmd-*.c`, `options-table.c` and `format.c`, not run):
+  - Formats: `#(shell)` and strftime in status formats (tmux's default
+    `status-right` uses both); loops `S:` `W:` `P:` `L:`; modifiers `b:` `d:`
+    `s/x/y/:` `l:` `n:` `w:` `p:` `a:` `c:` `N:` `C:` `R:` `t:` and `e|op|`
+    arithmetic; `#{?a,x,b,y,z}` chains (an unknown modifier expands to nothing);
+    roughly 110 of tmux's format variables (`session_created`, `window_layout`,
+    `pane_start_command`, `client_pid`, `start_time`, ...); styles `align=`
+    `fill=` `list=` `range=` `push-default` / `pop-default`, strikethrough,
+    blink, overline, curly and coloured underlines.
+  - Options: the status line is one row at the bottom (`STATUS_ROWS`): no
+    `status off` / `2`–`5`, `status-position`, `status-justify`,
+    `status-format`; no `window-status-*-style`, `window-status-separator`,
+    `status-left-style` / `-right-style`, `status-fg` / `-bg`;
+    `pane-border-status` / `-format` / `-lines` / `-indicators`, `window-style`
+    / `window-active-style`; session `prefix2`, `default-command`,
+    `destroy-unattached`, `key-table`, `status-keys`, `word-separators`,
+    `set-titles` / `-string` (see the title entry above), `assume-paste-time`,
+    `default-size`; window `aggressive-resize`, `allow-rename`,
+    `allow-set-title`, `alternate-screen`, `automatic-rename-format`,
+    `monitor-bell`, `wrap-search`, `clock-mode-style`, `cursor-style`,
+    `remain-on-exit-format`, `remain-on-exit failed`, `window-size largest` /
+    `smallest`; server `exit-empty`, `exit-unattached`, `buffer-limit`,
+    `message-limit`, `focus-events`, `history-file`, `editor`, `prefix-timeout`.
+    `escape-time` is kept but never read.
+  - Commands: `capture-pane -S -E -e -J -b -a -C -N -T -q`; `-P` / `-F` on
+    `new-window`, `split-window`, `new-session`, `break-pane`;
+    `new-window -b -k -S`, `split-window -p -I -Z`, `break-pane -n -s -a -b`;
+    layout strings (`#{window_layout}`, `select-layout '<checksum>,…'`, `-o`);
+    `display-message -d -a -v -l -I -N -c -F`; `choose-*` templates and
+    `-F -f -K -O -r -N -y`, tagging and sort keys; `command-prompt` with several
+    `-p` and `%1`…`%9`, `-1 -N -b -F -l`, completion; session groups
+    (`new-session -t`); `switch-client -t` / `attach -t` drop the window and
+    pane part, and `switch-client -c -r -Z`; targets `~` / `{marked}`, `{top}` /
+    `{bottom}` and corners, `{up-of}` and friends, window `{next}` /
+    `{previous}`, fnmatch patterns; smaller flags: `send-keys -R -H -K -c`,
+    `display-panes -d -b -N`, `select-pane -d -e`, `last-pane -d -e -Z`,
+    `rotate-window -Z`, `swap-pane -Z`, `kill-session -C`, `set-buffer -n -t`,
+    `copy-mode -s`, `detach-client -E`, `run-shell -E`,
+    `confirm-before -b -c -y`, `list-keys -a -P`, `unbind -q`,
+    `join-pane -f -p`, `source-file -n -v -F` and globs; `source-file` of a tmux
+    command file (`%if`, `%hidden`).
+  - Hooks and modes: only `EVENTS` and `after-<command>` fire; missing are
+    `pane-died`, `pane-focus-in` / `-out`, `pane-mode-changed`,
+    `pane-title-changed`, `window-renamed`, `window-resized`,
+    `window-pane-changed`, `window-linked` / `-unlinked`, `session-renamed`,
+    `session-window-changed`, `client-session-changed`, `client-resized`,
+    `command-error`, `client-light-theme` / `-dark-theme`. Panes that asked for
+    focus reports (mode 1004) get none. Copy mode lacks `next-prompt` /
+    `previous-prompt`, `copy-line`, `copy-pipe-line`, `pipe*`, `*-no-clear`,
+    `rectangle-on` / `-off`, `stop-selection`, `selection-mode`, `scroll-top` /
+    `-bottom`, `search-*-text` and the `-and-cancel` motions; `copy-selection` /
+    `copy-pipe` ignore a buffer name. `ESC k … ESC \` (window rename) looks
+    unhandled (only grepped).
 
 ## Not yet verified
 
