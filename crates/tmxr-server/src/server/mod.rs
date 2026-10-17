@@ -90,7 +90,8 @@ pub struct Attached {
     pub table: String,
     pub repeat_until: Option<Instant>,
     pub overlay: Option<Overlay>,
-    pub message: Option<(String, Instant)>,
+    /// A status message, and when it goes; `None` lasts until a key.
+    pub message: Option<(String, Option<Instant>)>,
     pub last_session: Option<SessionId>,
     pub dirty: bool,
     /// The last frame was dropped (slow client); repaint everything.
@@ -603,9 +604,15 @@ impl Server {
     }
 
     pub fn show_message(&mut self, id: ClientId, msg: String) {
+        self.show_message_for(id, msg, None);
+    }
+
+    /// Show `msg` on client `id` for `delay` milliseconds, else for the
+    /// session's `display-time`; 0 keeps it until a key, as tmux's.
+    pub fn show_message_for(&mut self, id: ClientId, msg: String, delay: Option<u64>) {
         self.log_message(msg.clone());
-        let time = self.client_session_options(id).display_time;
-        let until = Instant::now() + Duration::from_millis(time);
+        let time = delay.unwrap_or_else(|| self.client_session_options(id).display_time);
+        let until = (time > 0).then(|| Instant::now() + Duration::from_millis(time));
         if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
             a.message = Some((msg, until));
             a.dirty = true;
@@ -762,7 +769,10 @@ impl Server {
         let now = Instant::now();
         for c in self.clients.values_mut() {
             if let Some(a) = c.att.as_mut() {
-                if a.message.as_ref().is_some_and(|(_, t)| *t <= now) {
+                if a.message
+                    .as_ref()
+                    .is_some_and(|(_, t)| t.is_some_and(|t| t <= now))
+                {
                     a.message = None;
                     a.dirty = true;
                 }

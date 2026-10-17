@@ -51,6 +51,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `-q` makes a key that is not bound or not known no error, and `-C` clears a
   session's alert flags instead of killing it. `set-buffer` with no data says
   so, and with empty data sets nothing.
+- **`display-message -d`, `-c`, `-l` and `-F`**, as tmux's: how long the message
+  shows (0 until a key), which client shows it, the text as given without
+  expanding it, and the format given as a flag.
 - **`#{client_flags}` and `#{client_readonly}`**: the client's `attached`,
   `focused`, `ignore-size` and `read-only` flags, in tmux's order, and whether
   it is read-only. A client is focused from attaching until its terminal reports
@@ -75,6 +78,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`display-time 0` keeps a message until a key is pressed**, as tmux's; the
+  message went at once.
 - **A reply too large to send is an error**: a command whose output was over the
   protocol's 16 MiB frame (`show-buffer` of a huge buffer) left its client
   waiting for good, as the server's writer stopped; it now gets an error saying

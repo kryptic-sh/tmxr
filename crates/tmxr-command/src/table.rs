@@ -153,10 +153,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "display-message",
         Some("display"),
-        "pt:",
+        "c:d:F:lpt:",
         0,
         1,
-        "[-p] [-t target-pane] [message]"
+        "[-lp] [-c target-client] [-d delay] [-F format] [-t target-pane] [message]"
     ),
     cmd!("display-panes", Some("displayp"), "", 0, 0, ""),
     cmd!(

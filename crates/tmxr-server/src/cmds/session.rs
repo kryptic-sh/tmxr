@@ -322,7 +322,7 @@ fn clients_of(srv: &Server, on: impl Fn(SessionId) -> bool) -> Vec<ClientId> {
         .collect()
 }
 
-fn target_client(srv: &Server, spec: &str) -> Result<ClientId, String> {
+pub(super) fn target_client(srv: &Server, spec: &str) -> Result<ClientId, String> {
     spec.trim_start_matches('=')
         .parse::<ClientId>()
         .ok()

@@ -463,7 +463,7 @@ table. What has been verified, and how:
     `new-window`, `split-window`, `new-session`, `break-pane`;
     `new-window -k -S`, `split-window -p -I -Z`, `break-pane -n -s -a -b`;
     layout strings (`#{window_layout}`, `select-layout '<checksum>,…'`, `-o`);
-    `display-message -d -a -v -l -I -N -c -F`; `choose-*` templates and
+    `display-message -a -v -I -N -C`; `choose-*` templates and
     `-F -f -K -O -r -N -y`, tagging and sort keys; `command-prompt` with several
     `-p` and `%1`…`%9`, `-1 -N -b -F -l`, completion; session groups
     (`new-session -t`); `switch-client -t` / `attach -t` drop the window and

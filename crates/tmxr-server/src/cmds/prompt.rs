@@ -230,18 +230,37 @@ pub(super) fn run(
                 Some(t) => Some(target::pane(srv, ctx, Some(t))?),
                 None => target::pane(srv, ctx, None).ok(),
             };
-            let fmt = pos.first().map_or(
+            if a.value('F').is_some() && !pos.is_empty() {
+                return Err("only one of -F or argument must be given".into());
+            }
+            let delay = a
+                .value('d')
+                .map(|d| {
+                    d.parse::<u64>()
+                        .map_err(|_| format!("delay {d} is invalid"))
+                })
+                .transpose()?;
+            let fmt = pos.first().map(String::as_str).or_else(|| a.value('F')).unwrap_or(
                 "[#S] #I:#P [#{pane_width}x#{pane_height}] \"#{pane_title}\" #{pane_current_command} #{pane_current_path}",
-                String::as_str,
             );
             // The target's session, which a linked window has several of.
             let mut vars = Vars::for_pane(srv, target.map(|(_, _, p)| p), ctx.client);
             if let Some((sid, _, _)) = target {
                 vars.session = Some(sid);
             }
-            let msg = expand_with(srv, ctx, &vars, fmt);
-            match attached_client(srv, ctx) {
-                Some(c) if !a.has('p') => srv.show_message(c, msg),
+            // -l: the text as given, not expanded.
+            let msg = if a.has('l') {
+                fmt.to_owned()
+            } else {
+                expand_with(srv, ctx, &vars, fmt)
+            };
+            // -c: the client the message shows on, else the command's.
+            let client = match a.value('c') {
+                Some(c) => Some(super::session::target_client(srv, c)?),
+                None => attached_client(srv, ctx),
+            };
+            match client {
+                Some(c) if !a.has('p') => srv.show_message_for(c, msg, delay),
                 _ => {
                     out.stdout.push_str(&msg);
                     out.stdout.push('\n');

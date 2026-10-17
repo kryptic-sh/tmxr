@@ -65,3 +65,11 @@ checks = [
   { command = "display -p '#{?@e,1,@p,2,3}'", expect = "2" },
   { command = "display -p '#{?@e,1,@e,2,3}'", expect = "3" },
 ]
+
+[[cases]]
+name = "display_message_l_is_literal_and_f_is_the_format"
+steps = []
+checks = [
+  { command = "display -p -l '#{session_name}'", expect = "#{session_name}" },
+  { command = "display -p -F '#{session_name}!'", expect = "o!" },
+]

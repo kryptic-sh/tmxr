@@ -3920,6 +3920,41 @@ fn hooks_run_after_commands_and_events() {
 }
 
 #[test]
+fn display_message_d_sets_how_long_and_c_where() {
+    let t = Tmxr::new("dispd");
+    let s = t.attach(&["new", "-s", "dd"]);
+    s.wait_for("the status line", |text| text.contains("dd"));
+    let client = t
+        .run(&["list-clients", "-F", "#{client_name}"])
+        .trim()
+        .to_owned();
+    t.run(&["set", "-g", "display-time", "200"]);
+    // -d 0 keeps the message until a key, past display-time.
+    t.run(&["display-message", "-c", &client, "-d", "0", "stays-put"]);
+    s.wait_for("the message", |text| text.contains("stays-put"));
+    std::thread::sleep(Duration::from_millis(800));
+    assert!(s.text().contains("stays-put"), "{}", s.text());
+    s.send(b"x");
+    s.wait_for("the message gone", |text| !text.contains("stays-put"));
+    // -d N lasts N milliseconds, whatever display-time says.
+    t.run(&["set", "-g", "display-time", "60000"]);
+    t.run(&["display-message", "-c", &client, "-d", "200", "goes-soon"]);
+    s.wait_for("the message", |text| text.contains("goes-soon"));
+    s.wait_for("it goes", |text| !text.contains("goes-soon"));
+    // display-time 0 also lasts until a key, as tmux's.
+    t.run(&["set", "-g", "display-time", "0"]);
+    t.run(&["display-message", "-c", &client, "zero-time"]);
+    s.wait_for("the message", |text| text.contains("zero-time"));
+    std::thread::sleep(Duration::from_millis(500));
+    assert!(s.text().contains("zero-time"), "{}", s.text());
+    assert!(
+        !t.output(&["display-message", "-c", "nosuch", "x"])
+            .status
+            .success()
+    );
+}
+
+#[test]
 fn display_menu_runs_the_item_picked() {
     let t = Tmxr::new("menu");
     let s = t.attach(&["new", "-s", "mn"]);
