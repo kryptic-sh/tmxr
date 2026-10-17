@@ -863,6 +863,7 @@ fn state_changes_fire_tmuxs_notification_hooks() {
         "window-layout-changed",
         "window-resized",
         "pane-died",
+        "pane-title-changed",
     ];
     for h in hooks {
         t.run(&["set-hook", "-g", h, &format!("set -ga @log '{h} '")]);
@@ -906,6 +907,10 @@ fn state_changes_fire_tmuxs_notification_hooks() {
         "exit 3"
     };
     step(&["respawn-pane", "-k", "-t", "p:w1.0", exit3], "pane-died");
+    step(
+        &["select-pane", "-t", "p:w1.1", "-T", "byhand"],
+        "pane-title-changed",
+    );
     // As tmux keeps them: the window and pane hooks with the global window
     // options, the rest with the global session options.
     let window = t.run(&["show", "-wgH"]);

@@ -1,8 +1,8 @@
 //! tmux's notification hooks that follow a change of state: a session or
 //! window renamed, a session's current window or a window's active pane
 //! changed, a window linked into or out of a session, a window's layout or
-//! size changed, a pane entering or leaving a mode, a client switching
-//! session or resizing.
+//! size changed, a pane entering or leaving a mode or getting a new title, a
+//! client switching session or resizing.
 //!
 //! tmux fires these where each change is made. tmxr compares what it saw
 //! after the last event ([`Watched`]) with the state now, once each event is
@@ -25,8 +25,7 @@ use crate::server::Server;
 pub struct Watched {
     sessions: BTreeMap<SessionId, SessionSeen>,
     windows: BTreeMap<WindowId, WindowSeen>,
-    /// Each pane, and whether it is in a mode (copy or clock).
-    panes: BTreeMap<PaneId, bool>,
+    panes: BTreeMap<PaneId, PaneSeen>,
     clients: BTreeMap<ClientId, ClientSeen>,
 }
 
@@ -43,6 +42,13 @@ struct WindowSeen {
     active: PaneId,
     size: (u16, u16),
     layout: Vec<(PaneId, LayoutRect)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PaneSeen {
+    /// In a mode (copy or clock).
+    in_mode: bool,
+    title: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,7 +89,13 @@ impl Watched {
             panes: srv
                 .panes
                 .values()
-                .map(|p| (p.id, p.copy.is_some() || p.clock))
+                .map(|p| {
+                    let seen = PaneSeen {
+                        in_mode: p.copy.is_some() || p.clock,
+                        title: p.emu.title().map(str::to_owned),
+                    };
+                    (p.id, seen)
+                })
                 .collect(),
             clients: srv
                 .clients
@@ -163,13 +175,19 @@ impl Server {
                 fired.push(("window-resized", scope));
             }
         }
-        for (id, in_mode) in &now.panes {
-            if before.panes.get(id).is_some_and(|was| was != in_mode) {
-                let scope = HookScope {
-                    pane: Some(*id),
-                    ..HookScope::default()
-                };
+        for (id, p) in &now.panes {
+            let Some(old) = before.panes.get(id) else {
+                continue;
+            };
+            let scope = HookScope {
+                pane: Some(*id),
+                ..HookScope::default()
+            };
+            if old.in_mode != p.in_mode {
                 fired.push(("pane-mode-changed", scope));
+            }
+            if old.title != p.title {
+                fired.push(("pane-title-changed", scope));
             }
         }
         for (name, scope) in fired {

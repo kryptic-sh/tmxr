@@ -138,15 +138,16 @@ table. What has been verified, and how:
   - **Notification hooks follow a change, not the call that made it**
     (`notify::Watched`): after each event (and each tick) the server compares
     session and window names, each session's current window and windows, each
-    window's active pane, layout and size, each pane's mode and each client's
-    session and size with what it saw last, and queues `session-renamed`,
-    `session-window-changed`, `window-linked` / `-unlinked`, `window-renamed`,
-    `window-pane-changed`, `window-layout-changed`, `window-resized`,
-    `pane-mode-changed`, `client-session-changed` and `client-resized`. So a
-    hook fires once per event however many times the thing changed in it
-    (`select-layout` fires `window-layout-changed` twice in tmux 3.6, once in
-    tmxr), and a change made by a hook's own commands fires nothing. Which
-    action fires which hook was compared with tmux 3.6 on 2026-10-18
+    window's active pane, layout and size, each pane's mode and title and each
+    client's session and size with what it saw last, and queues
+    `session-renamed`, `session-window-changed`, `window-linked` / `-unlinked`,
+    `window-renamed`, `window-pane-changed`, `window-layout-changed`,
+    `window-resized`, `pane-mode-changed`, `pane-title-changed`,
+    `client-session-changed` and `client-resized`. So a hook fires once per
+    event however many times the thing changed in it (`select-layout` fires
+    `window-layout-changed` twice in tmux 3.6, once in tmxr), and a change made
+    by a hook's own commands fires nothing. Which action fires which hook was
+    compared with tmux 3.6 on 2026-10-18
     (`state_changes_fire_tmuxs_notification_hooks`). tmux 3.6 fired no
     `command-error` for a command line from a client that failed.
   - **Synchronized input skips panes as tmux's does** (`input_targets`, from
@@ -464,14 +465,14 @@ table. What has been verified, and how:
     `join-pane -f -p`, `source-file -n -v -F` and globs; `source-file` of a tmux
     command file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `pane-focus-in` / `-out`,
-    `pane-title-changed`, `pane-set-clipboard`, `client-focus-in` / `-out`,
-    `client-active`, `command-error`, `client-light-theme` / `-dark-theme`.
-    Panes that asked for focus reports (mode 1004) get none. Copy mode lacks
-    `next-prompt` / `previous-prompt`, `copy-line`, `copy-pipe-line`, `pipe*`,
-    `*-no-clear`, `rectangle-on` / `-off`, `stop-selection`, `selection-mode`,
-    `scroll-top` / `-bottom`, `search-*-text` and the `-and-cancel` motions;
-    `copy-selection` / `copy-pipe` ignore a buffer name. `ESC k … ESC \` (window
-    rename) looks unhandled (only grepped).
+    `pane-set-clipboard`, `client-focus-in` / `-out`, `client-active`,
+    `command-error`, `client-light-theme` / `-dark-theme`. Panes that asked for
+    focus reports (mode 1004) get none. Copy mode lacks `next-prompt` /
+    `previous-prompt`, `copy-line`, `copy-pipe-line`, `pipe*`, `*-no-clear`,
+    `rectangle-on` / `-off`, `stop-selection`, `selection-mode`, `scroll-top` /
+    `-bottom`, `search-*-text` and the `-and-cancel` motions; `copy-selection` /
+    `copy-pipe` ignore a buffer name. `ESC k … ESC \` (window rename) looks
+    unhandled (only grepped).
 
 ## Not yet verified
 
