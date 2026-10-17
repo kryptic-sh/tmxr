@@ -186,3 +186,35 @@ checks = [
   { command = "show -wgq @uy", expect = "" },
   { command = "show -g @uy", expect = "@uy sess" },
 ]
+
+[[cases]]
+name = "array_options_are_set_and_shown_by_index"
+steps = [
+  { run = "new-session -d -s q" },
+  { run = "set -g update-environment 'A B,C'" },
+  { run = "set -ga update-environment D" },
+  { run = "set -g update-environment[5] 'F G'" },
+  { run = "set -ga update-environment H" },
+  { run = "set -ag update-environment[5] '!'" },
+  { run = "set -gu update-environment[1]" },
+  { run = "set -t q update-environment[2] X" },
+  { run = "set -t q -a update-environment Y" },
+  { run = "set -g status-left-length 7" },
+]
+checks = [
+  { command = "show -g update-environment", expect = "update-environment[0] A\nupdate-environment[2] C\nupdate-environment[3] D\nupdate-environment[4] H\nupdate-environment[5] \"F G!\"" },
+  { command = "show -gv update-environment", expect = "A\nC\nD\nH\nF G!" },
+  { command = "show -g update-environment[4]", expect = "update-environment[4] H" },
+  { command = "show -t q update-environment", expect = "update-environment[0] Y\nupdate-environment[2] X" },
+  { command = "show -A -t q update-environment[1]", expect = "update-environment[1] ''" },
+  { command = "show -g status-left-length[1]", expect = "status-left-length[1] 7" },
+]
+
+[[cases]]
+name = "an_empty_array_option_shows_its_bare_name"
+steps = [{ run = "new-session -d -s q" }, { run = "set -g update-environment ''" }]
+checks = [
+  { command = "show -g update-environment", expect = "update-environment" },
+  { command = "show -gv update-environment", expect = "" },
+  { command = "show -A -t q update-environment", expect = "update-environment" },
+]

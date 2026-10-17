@@ -27,9 +27,27 @@ enum Scope {
     Pane(PaneId),
 }
 
-/// Whether `name` is kept by scope here: a session, window or user option.
+/// Whether `name` is kept by scope here: a session, window or user option,
+/// or an item of an array one (`name[index]`).
 pub(super) fn handles(name: &str) -> bool {
+    let name = split_index(name).map_or(name, |(n, _)| n);
     name.starts_with('@') || is_session_option(name) || WindowOptions::NAMES.contains(&name)
+}
+
+/// An option argument as tmux's `options_parse` reads it: `name`, or
+/// `name[index]` for an item of an array option.
+fn split_index(arg: &str) -> Result<(&str, Option<u32>), String> {
+    match arg.strip_suffix(']').and_then(|s| s.split_once('[')) {
+        Some((name, i)) => i
+            .parse()
+            .map(|i| (name, Some(i)))
+            .map_err(|_| format!("invalid option: {arg}")),
+        None => Ok((arg, None)),
+    }
+}
+
+fn is_array(name: &str) -> bool {
+    SessionOptions::is_array(name) || WindowOptions::is_array(name)
 }
 
 /// `value` as `show-options` prints option `name`'s: quoted as tmux's when
@@ -112,6 +130,18 @@ fn own(srv: &Server, scope: Scope, name: &str) -> Option<String> {
     }
 }
 
+/// Array option `name`'s items set at `scope` itself; `None` when it has
+/// none of its own.
+fn own_items<'a>(srv: &'a Server, scope: Scope, name: &str) -> Option<&'a BTreeMap<u32, String>> {
+    match scope {
+        Scope::GlobalSession => srv.cfg.session.items(name),
+        Scope::GlobalWindow => srv.cfg.window.items(name),
+        Scope::Session(s) => srv.sessions.get(&s)?.options.items(name),
+        Scope::Window(w) => srv.windows.get(&w)?.options.items(name),
+        Scope::Pane(p) => srv.panes.get(&p)?.options.items(name),
+    }
+}
+
 /// The scope `scope` inherits from: a pane's window, a window's or a
 /// session's globals.
 fn parent(srv: &Server, scope: Scope) -> Option<Scope> {
@@ -128,6 +158,16 @@ fn inherited(srv: &Server, scope: Scope, name: &str) -> Option<String> {
     own(srv, scope, name).or_else(|| inherited(srv, parent(srv, scope)?, name))
 }
 
+/// Array option `name`'s items at `scope`, from the nearest scope that has
+/// its own.
+fn inherited_items<'a>(
+    srv: &'a Server,
+    scope: Scope,
+    name: &str,
+) -> Option<&'a BTreeMap<u32, String>> {
+    own_items(srv, scope, name).or_else(|| inherited_items(srv, parent(srv, scope)?, name))
+}
+
 /// `set-option` and `set-window-option` for an option [`handles`] takes.
 pub(super) fn set(
     srv: &mut Server,
@@ -137,8 +177,13 @@ pub(super) fn set(
     name: &str,
     value: Option<&str>,
 ) -> Res {
+    let arg = name;
+    let (name, index) = split_index(arg)?;
     let scope = scope(srv, ctx, a, window_cmd, Some(name))?;
     let unset = a.has('u') || a.has('U');
+    if let Some(index) = index {
+        return set_item(srv, a, scope, (arg, name, index), value, unset);
+    }
     if !unset && a.has('o') && own(srv, scope, name).is_some() {
         return Err(format!("already set: {name}"));
     }
@@ -229,6 +274,62 @@ pub(super) fn set(
     Ok(())
 }
 
+/// `set-option` for item `index` of array option `name` (`arg` as given),
+/// as tmux's: set it (`-a` appends to it) or with `-u` remove it, at
+/// `scope`.
+fn set_item(
+    srv: &mut Server,
+    a: &Args,
+    scope: Scope,
+    (arg, name, index): (&str, &str, u32),
+    value: Option<&str>,
+    unset: bool,
+) -> Res {
+    if name.starts_with('@') || !is_array(name) {
+        return Err(format!("not an array: {arg}"));
+    }
+    if !unset && a.has('o') && own_items(srv, scope, name).is_some_and(|i| i.contains_key(&index)) {
+        return Err(format!("already set: {arg}"));
+    }
+    let append = a.has('a');
+    let value = if unset {
+        None
+    } else {
+        Some(value.ok_or("empty value")?)
+    };
+    match (scope, value) {
+        (Scope::GlobalSession, v) => srv.cfg.session.set_item(name, index, v, append)?,
+        (Scope::GlobalWindow, v) => srv.cfg.window.set_item(name, index, v, append)?,
+        (Scope::Session(s), v) => {
+            let inherited = srv.cfg.session.clone();
+            let own = &mut srv.sessions.get_mut(&s).ok_or("no such session")?.options;
+            match v {
+                Some(v) => own.set_item(name, index, v, append, &inherited)?,
+                None => own.unset_item(name, index)?,
+            }
+        }
+        (Scope::Window(w), v) => {
+            let inherited = srv.cfg.window.clone();
+            let own = &mut srv.windows.get_mut(&w).ok_or("no such window")?.options;
+            match v {
+                Some(v) => own.set_item(name, index, v, append, &inherited)?,
+                None => own.unset_item(name, index)?,
+            }
+        }
+        (Scope::Pane(p), v) => {
+            let window = srv.panes.get(&p).ok_or("no such pane")?.window;
+            let inherited = srv.window_options(window).into_owned();
+            let own = &mut srv.panes.get_mut(&p).ok_or("no such pane")?.options;
+            match v {
+                Some(v) => own.set_item(name, index, v, append, &inherited)?,
+                None => own.unset_item(name, index)?,
+            }
+        }
+    }
+    changed(srv, scope, name);
+    Ok(())
+}
+
 /// Bring the windows `scope` reaches up to date with `name`'s new value.
 fn changed(srv: &mut Server, scope: Scope, name: &str) {
     let windows: Vec<WindowId> = match scope {
@@ -271,15 +372,29 @@ pub(super) fn show(
     name: Option<&str>,
     out: &mut Outcome,
 ) -> Res {
+    let (name, index) = match name {
+        Some(arg) => {
+            let (name, index) = split_index(arg)?;
+            (Some(name), index)
+        }
+        None => (None, None),
+    };
     let scope = scope(srv, ctx, a, window_cmd, name)?;
+    let listing = name.is_none();
     let print = |out: &mut Outcome, name: &str| {
+        if is_array(name) {
+            return show_array(srv, scope, a, (name, index, listing), out);
+        }
+        // An index on an option that is not an array is shown and
+        // ignored, as tmux's.
+        let label = index.map_or_else(|| name.to_owned(), |i| format!("{name}[{i}]"));
         let line = match own(srv, scope, name) {
             Some(v) if a.has('v') => v,
-            Some(v) => format!("{name} {}", shown(name, v)),
+            Some(v) => format!("{label} {}", shown(name, v)),
             None if !a.has('A') => return false,
             None => match inherited(srv, scope, name) {
                 Some(v) if a.has('v') => v,
-                Some(v) => format!("{name}* {}", shown(name, v)),
+                Some(v) => format!("{label}* {}", shown(name, v)),
                 None => return false,
             },
         };
@@ -323,6 +438,54 @@ pub(super) fn show(
         show_hooks(srv, scope, a, out);
     }
     Ok(())
+}
+
+/// `show-options` for array option `name` at `scope`, as tmux's
+/// `cmd_show_options_print`: one `name[index] value` line per item (with
+/// `-A` inherited ones marked `*`), or just item `index`; an empty array is
+/// its bare name, marked `*` only in a `listing` of every option, as tmux's.
+/// Returns whether it has a value there.
+fn show_array(
+    srv: &Server,
+    scope: Scope,
+    a: &Args,
+    (name, index, listing): (&str, Option<u32>, bool),
+    out: &mut Outcome,
+) -> bool {
+    let (items, mark) = match own_items(srv, scope, name) {
+        Some(items) => (items, ""),
+        None if a.has('A') => match inherited_items(srv, scope, name) {
+            Some(items) => (items, "*"),
+            None => return false,
+        },
+        None => return false,
+    };
+    let mut line = |i: u32, value: &str| {
+        let _ = if a.has('v') {
+            writeln!(out.stdout, "{value}")
+        } else {
+            writeln!(
+                out.stdout,
+                "{name}[{i}]{mark} {}",
+                shown(name, value.to_owned())
+            )
+        };
+    };
+    match index {
+        Some(i) => line(i, items.get(&i).map_or("", String::as_str)),
+        None if items.is_empty() => {
+            if !a.has('v') {
+                let mark = if listing { mark } else { "" };
+                let _ = writeln!(out.stdout, "{name}{mark}");
+            }
+        }
+        None => {
+            for (&i, value) in items {
+                line(i, value);
+            }
+        }
+    }
+    true
 }
 
 /// The hooks set at `scope`, by name. The global table holds every global

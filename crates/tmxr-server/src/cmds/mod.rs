@@ -260,13 +260,16 @@ fn env_flags(a: &Args) -> Result<Vec<(String, String)>, String> {
         .collect()
 }
 
-/// What `update-environment` takes from a client's environment `env`, as
-/// tmux's `environ_update` reads it: each entry is an `fnmatch` pattern and
-/// every variable it matches is taken; an entry that matches none names a
-/// variable the client does not have (`None`).
-fn updated_env(srv: &Server, env: &[(String, String)]) -> Vec<(String, Option<String>)> {
+/// What `update-environment` (`patterns`) takes from a client's environment
+/// `env`, as tmux's `environ_update` reads it: each entry is an `fnmatch`
+/// pattern and every variable it matches is taken; an entry that matches
+/// none names a variable the client does not have (`None`).
+fn updated_env(
+    patterns: &tmxr_config::Array,
+    env: &[(String, String)],
+) -> Vec<(String, Option<String>)> {
     let mut out = Vec::new();
-    for pattern in &srv.cfg.update_environment {
+    for pattern in patterns.values() {
         let re = crate::util::glob_regex(pattern);
         let before = out.len();
         out.extend(
@@ -275,14 +278,15 @@ fn updated_env(srv: &Server, env: &[(String, String)]) -> Vec<(String, Option<St
                 .map(|(k, v)| (k.clone(), Some(v.clone()))),
         );
         if out.len() == before {
-            out.push((pattern.clone(), None));
+            out.push((pattern.to_owned(), None));
         }
     }
     out
 }
 
 /// A new session's environment from its creating client, as tmux's
-/// `environ_update` makes it: the variables `update-environment` takes, one
+/// `environ_update` makes it: the variables the global `update-environment`
+/// takes, one
 /// the client lacks marked removed. Empty with no client (a command from
 /// the config), as tmux's. The client's own environment, from when it
 /// connected, so a bind's command reads its client's.
@@ -290,7 +294,7 @@ fn session_env(srv: &Server, ctx: &Ctx) -> crate::model::Environment {
     let mut env = crate::model::Environment::default();
     let client = ctx.client.and_then(|c| srv.clients.get(&c));
     if let Some(hello) = client.and_then(|c| c.hello.as_ref()) {
-        for (name, value) in updated_env(srv, &hello.env) {
+        for (name, value) in updated_env(&srv.cfg.session.update_environment, &hello.env) {
             env.set(&name, value);
         }
     }

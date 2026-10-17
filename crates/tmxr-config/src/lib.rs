@@ -14,7 +14,7 @@ use serde::Deserialize;
 pub use hjkl_config::{ConfigError, ConfigSource};
 pub use import::{Imported, from_tmux_conf};
 pub use session::{OwnSessionOptions, SessionOptions};
-pub use table::{OptionValue, Word};
+pub use table::{Array, OptionValue, Word};
 pub use window::{BoxLines, ModeKeys, OwnOptions, PANE_OPTIONS, WindowOptions, WindowSize};
 
 mod import;
@@ -42,7 +42,6 @@ pub struct Config {
     /// `owner` or `users`: who may open the server's endpoint, read when
     /// the server starts (`server-access` admits users by name).
     pub socket_access: String,
-    pub update_environment: Vec<String>,
     pub navigator: Navigator,
     pub resurrect: Resurrect,
     /// `@name` user options: tmux's global session ones (`set -g`).
@@ -188,6 +187,7 @@ impl From<File> for Config {
                 status_right: s.right,
                 status_right_length: s.right_length,
                 status_style: s.style,
+                update_environment: f.update_environment.into_iter().collect(),
                 visual_activity: f.visual_activity,
                 visual_bell: f.visual_bell,
                 visual_silence: f.visual_silence,
@@ -200,7 +200,6 @@ impl From<File> for Config {
             rgb_colour: f.rgb_colour,
             copy_command: f.copy_command,
             socket_access: f.socket_access,
-            update_environment: f.update_environment,
             navigator: f.navigator,
             resurrect: f.resurrect,
             options: f.options,
@@ -609,8 +608,9 @@ mod tests {
         assert!(cfg.window.allow_passthrough);
         assert_eq!(cfg.session.status_left, "");
         assert!(
-            cfg.update_environment
-                .iter()
+            cfg.session
+                .update_environment
+                .values()
                 .any(|v| v == "WAYLAND_DISPLAY")
         );
         assert!(cfg.navigator.pattern.contains("hjkl"));

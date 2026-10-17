@@ -803,6 +803,42 @@ fn update_environment_entries_are_patterns() {
 }
 
 #[test]
+fn a_sessions_own_update_environment_decides_what_attaching_takes() {
+    let t = Tmxr::new("envown");
+    t.run(&["new-session", "-d", "-E", "-s", "own"]);
+    t.run(&["set", "-g", "update-environment", "E2E_GLOBAL"]);
+    // The session's own array starts empty, as tmux's, so item 1 is all
+    // it has.
+    t.run(&["set", "-t", "own", "update-environment[1]", "E2E_MINE"]);
+    assert_eq!(
+        t.run(&["show", "-t", "own", "update-environment"]).trim(),
+        "update-environment[1] E2E_MINE"
+    );
+    let s = t.attach_env(
+        &["attach", "-t", "own"],
+        &[("E2E_MINE", Some("m")), ("E2E_GLOBAL", Some("g"))],
+    );
+    s.wait_for("status line", |text| text.contains("own"));
+    let env = t.run(&["show-environment", "-t", "own"]);
+    let lines: Vec<&str> = env.lines().map(str::trim).collect();
+    assert!(lines.contains(&"E2E_MINE=m"), "{env}");
+    assert!(!env.contains("E2E_GLOBAL"), "{env}");
+
+    // Errors, as tmux's.
+    let err = |args: &[&str]| {
+        let out = t.output(args);
+        assert!(!out.status.success(), "{args:?}");
+        String::from_utf8_lossy(&out.stderr).trim().to_owned()
+    };
+    assert!(err(&["set", "-g", "status-left[1]", "x"]).contains("not an array: status-left[1]"));
+    assert!(err(&["set", "-g", "@u[1]", "x"]).contains("not an array: @u[1]"));
+    assert!(
+        err(&["set", "-o", "-t", "own", "update-environment[1]", "x"])
+            .contains("already set: update-environment[1]")
+    );
+}
+
+#[test]
 fn a_session_created_hook_from_the_config_adds_windows() {
     let t = Tmxr::new("hookcfg");
     let mut config = std::fs::read_to_string(&t.config).unwrap();

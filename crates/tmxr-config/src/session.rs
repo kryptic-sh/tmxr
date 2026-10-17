@@ -2,7 +2,7 @@
 //! session sets for itself over it, read by `set-option` and printed by
 //! `show-options` under tmux's names.
 
-use crate::table::{Word, options_table};
+use crate::table::{Array, Word, options_table};
 use crate::{AlertAction, Visual};
 
 options_table! {
@@ -54,6 +54,9 @@ options_table! {
     /// its end so the window list keeps its room.
     "status-right-length" => status_right_length: u16,
     "status-style" => status_style: String,
+    /// The client environment variables a session takes when it is made or
+    /// attached: `fnmatch` patterns, as tmux's.
+    "update-environment" => update_environment: Array,
     /// How alerts act: the terminal's bell (`off`), a status message (`on`)
     /// or both.
     "visual-activity" => visual_activity: Visual,

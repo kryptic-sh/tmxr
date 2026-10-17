@@ -416,7 +416,7 @@ fn hang_up(srv: &mut Server, clients: &[ClientId]) -> Result<(), String> {
 /// Give session `sid` the `update-environment` variables of a client's
 /// environment `env`, marking one it lacks removed: tmux's `environ_update`.
 fn update_env(srv: &mut Server, sid: SessionId, env: &[(String, String)]) {
-    let updates = super::updated_env(srv, env);
+    let updates = super::updated_env(&srv.session_options(sid).update_environment, env);
     if let Some(s) = srv.sessions.get_mut(&sid) {
         for (name, value) in updates {
             s.env.set(&name, value);

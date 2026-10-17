@@ -11,6 +11,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`refresh-client -f` / `-F`** sets a client's flags, as tmux's, and `!flag`
   turns one off (`-f '!ignore-size'`) there and in `attach-session -f` /
   `new-session -f`; turning `ignore-size` on or off resizes the windows at once.
+- **`update-environment` is a session option, an array as tmux's**:
+  `set -g update-environment 'A B'` replaces it (words split at spaces and
+  commas), `-a` adds words at the first free indexes, `update-environment[3]`
+  sets one item (`-a` appends to it), `-u update-environment[3]` removes one,
+  and `show` lists `update-environment[i] value` lines (an empty array as its
+  bare name). A session may have its own, which attaching to it reads; a new
+  session reads the global one. It was a config-file value only.
 - **`#{client_flags}` and `#{client_readonly}`**: the client's `attached`,
   `focused`, `ignore-size` and `read-only` flags, in tmux's order, and whether
   it is read-only.

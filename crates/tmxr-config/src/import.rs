@@ -324,8 +324,9 @@ mod tests {
         assert_eq!(cfg.window.pane_active_border_style, "fg=red");
         assert_eq!(cfg.options["@thm_fg"], "#ffffff");
         // -a adds to the default list.
-        assert!(cfg.update_environment.iter().any(|v| v == "DISPLAY"));
-        assert_eq!(cfg.update_environment.last().unwrap(), "EXTRA");
+        let env: Vec<&str> = cfg.session.update_environment.values().collect();
+        assert!(env.contains(&"DISPLAY"), "{env:?}");
+        assert_eq!(env.last(), Some(&"EXTRA"));
     }
 
     #[test]
