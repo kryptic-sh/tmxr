@@ -68,10 +68,23 @@ pub fn pipe_to_shell(srv: &Server, pane: PaneId, line: String, input: String) {
                 .stderr(Stdio::piped())
                 .spawn()
                 .and_then(|mut child| {
-                    if let Some(mut stdin) = child.stdin.take() {
-                        stdin.write_all(input.as_bytes())?;
+                    // The input goes in from its own thread while the error
+                    // output is read, so a command that fills its error
+                    // output before reading cannot wait on us forever; one
+                    // that stops reading early (a broken pipe) chose to.
+                    let feeder = child.stdin.take().map(|mut stdin| {
+                        std::thread::spawn(move || match stdin.write_all(input.as_bytes()) {
+                            Err(e) if e.kind() != std::io::ErrorKind::BrokenPipe => Err(e),
+                            _ => Ok(()),
+                        })
+                    });
+                    let output = child.wait_with_output()?;
+                    if let Some(feeder) = feeder {
+                        feeder
+                            .join()
+                            .map_err(|_| std::io::Error::other("the input thread panicked"))??;
                     }
-                    child.wait_with_output()
+                    Ok(output)
                 });
             let failure = match run {
                 Ok(o) if o.status.success() => return,

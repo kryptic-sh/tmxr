@@ -424,8 +424,6 @@ table. What has been verified, and how:
     every run-time `set -g`; a later plain `source-file` reloads `PATH`.
   - One config error at start throws the whole file away for the defaults; the
     only sign is a line in `show-messages`.
-  - `copy-pipe`'s `pipe_to_shell` writes all of stdin before reading stderr (a
-    deadlock if the command fills stderr first); its spawn error is discarded.
   - Performance: entering copy mode copies every history row into
     `copy::snapshot` (a String per cell) on the server thread; Windows takes two
     process snapshots per pane per second in `util::refresh_commands`;

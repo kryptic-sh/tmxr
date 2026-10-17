@@ -2695,6 +2695,74 @@ fn copy_pipe_sends_the_selection_to_copy_command() {
     assert_eq!(t.run(&["show-buffer"]), "pipeme-77");
 }
 
+/// Unix only: it needs a shell that can write to its error output before
+/// reading. The fix is the same on Windows.
+#[cfg(unix)]
+#[test]
+fn copy_pipe_feeds_commands_that_write_first_or_read_little() {
+    let t = Tmxr::new("pipebig");
+    t.run(&[
+        "new-session",
+        "-d",
+        "-s",
+        "pb",
+        "seq 1 40000; exec sleep 1000",
+    ]);
+    t.wait_run(&["capture-pane", "-p", "-t", "pb"], "the output", |o| {
+        o.lines().any(|l| l == "40000")
+    });
+    let pipe_all = |command: &str| {
+        t.run(&["copy-mode", "-t", "pb"]);
+        for cmd in [
+            "history-top",
+            "begin-selection",
+            "history-bottom",
+            "end-of-line",
+        ] {
+            t.run(&["send-keys", "-t", "pb", "-X", cmd]);
+        }
+        t.run(&[
+            "send-keys",
+            "-t",
+            "pb",
+            "-X",
+            "copy-pipe-and-cancel",
+            command,
+        ]);
+    };
+    let wait_file = |path: &Path, what: &str, ok: &dyn Fn(&str) -> bool| {
+        let deadline = Instant::now() + TIMEOUT;
+        loop {
+            let got = std::fs::read_to_string(path).unwrap_or_default();
+            if ok(&got) {
+                return got;
+            }
+            assert!(Instant::now() < deadline, "{what}: {got:?}");
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    };
+    // A command that fills its error output before reading still gets all
+    // of the selection, far more than a pipe holds.
+    let count = t.dir.path().join("count");
+    pipe_all(&format!(
+        "head -c 100000 /dev/zero >&2; wc -c > '{}'",
+        count.display()
+    ));
+    let got = wait_file(&count, "the byte count", &|s| !s.trim().is_empty());
+    let bytes: usize = got.trim().parse().unwrap();
+    assert!(bytes > 200_000, "{bytes}");
+    // One that reads a byte and is done did not fail.
+    let done = t.dir.path().join("done");
+    pipe_all(&format!(
+        "head -c 1 > /dev/null; echo ok > '{}'",
+        done.display()
+    ));
+    wait_file(&done, "the command ran", &|s| s.trim() == "ok");
+    std::thread::sleep(Duration::from_millis(500));
+    let messages = t.run(&["show-messages"]);
+    assert!(!messages.contains("copy-pipe"), "{messages}");
+}
+
 #[test]
 fn copy_mode_refresh_picks_up_new_output() {
     let t = Tmxr::new("refresh");

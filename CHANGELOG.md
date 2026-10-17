@@ -46,6 +46,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`copy-pipe` with a command that writes before it reads, or reads only part
+  of its input**: the selection was written whole before the command's error
+  output was read, so a command filling that output first never got the rest and
+  never finished; and one that stopped reading early (`head -1`) was logged as a
+  failure. The input now goes in alongside, and a command that stops reading is
+  not a failure.
 - **A pane kept by `remain-on-exit` fires `pane-died`, not `pane-exited`**, as
   tmux's; `pane-exited` is for a pane that goes away.
 - **`capture-pane` gives one line per row, as tmux's**: a wrapped line came out
