@@ -1096,6 +1096,47 @@ fn resurrect_restores_a_multi_pane_layout() {
 }
 
 #[test]
+fn destroy_unattached_and_the_exit_options_follow_tmux() {
+    let t = Tmxr::new("lifecycle");
+    t.run(&["new-session", "-d", "-s", "keep"]);
+    t.run(&["new-session", "-d", "-s", "goes"]);
+    t.run(&["set", "-t", "goes", "destroy-unattached", "on"]);
+    // Made with -d, it stays until a client comes or goes, as tmux's.
+    assert!(t.output(&["has-session", "-t", "goes"]).status.success());
+    let mut s = t.attach(&["attach", "-t", "keep"]);
+    s.wait_for("the status line", |text| text.contains("keep"));
+    t.wait_run(&["list-sessions", "-F", "#S"], "goes gone", |o| {
+        o.trim() == "keep"
+    });
+
+    // exit-empty off: the server outlives its last session.
+    t.run(&["set", "-s", "exit-empty", "off"]);
+    s.send(PREFIX);
+    s.send(b"d");
+    s.wait_exit();
+    t.run(&["kill-session", "-t", "keep"]);
+    std::thread::sleep(Duration::from_millis(300));
+    let ls = t.output(&["list-sessions"]);
+    assert!(ls.status.success(), "the server went: {ls:?}");
+
+    // exit-unattached on: it goes once no client is attached, sessions or
+    // not.
+    t.run(&["set", "-s", "exit-empty", "on"]);
+    t.run(&["new-session", "-d", "-s", "left"]);
+    let mut s = t.attach(&["attach", "-t", "left"]);
+    s.wait_for("the status line", |text| text.contains("left"));
+    t.run(&["set", "-s", "exit-unattached", "on"]);
+    s.send(PREFIX);
+    s.send(b"d");
+    s.wait_exit();
+    let deadline = Instant::now() + TIMEOUT;
+    while t.output(&["has-session", "-t", "left"]).status.success() {
+        assert!(Instant::now() < deadline, "the server stayed");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+#[test]
 fn buffer_limit_and_message_limit_are_server_options() {
     let t = Tmxr::new("limits");
     let s = t.attach(&["new", "-s", "lm"]);

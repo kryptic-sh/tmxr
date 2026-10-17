@@ -450,13 +450,12 @@ table. What has been verified, and how:
     default `reverse` would change tmxr's theme, which shows flags in its window
     format), `status-fg` / `-bg`; `pane-border-status` / `-format` / `-lines` /
     `-indicators`, `window-style` / `window-active-style`; session `prefix2`,
-    `default-command`, `destroy-unattached`, `key-table`, `status-keys`,
-    `word-separators`, `assume-paste-time`, `default-size`; window
-    `aggressive-resize`, `allow-rename`, `allow-set-title`, `alternate-screen`,
+    `default-command`, `key-table`, `status-keys`, `word-separators`,
+    `assume-paste-time`, `default-size`; window `aggressive-resize`,
+    `allow-rename`, `allow-set-title`, `alternate-screen`,
     `automatic-rename-format`, `monitor-bell`, `wrap-search`,
     `clock-mode-style`, `cursor-style`, `remain-on-exit-format`,
     `remain-on-exit failed`, `window-size largest` / `smallest`; server
-    `exit-empty`, `exit-unattached`, `buffer-limit`, `message-limit`,
     `focus-events`, `history-file`, `editor`, `prefix-timeout`. `escape-time` is
     kept but never read.
   - Commands: `capture-pane -S -E -e -b -a -C -N -T -q`; `-P` / `-F` on

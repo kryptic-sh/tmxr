@@ -105,6 +105,8 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed) -> Res {
             n => c.buffer_limit = n as usize,
         },
         "message-limit" => c.message_limit = num(need()?)? as usize,
+        "exit-empty" => c.exit_empty = super::on_off(value, c.exit_empty)?,
+        "exit-unattached" => c.exit_unattached = super::on_off(value, c.exit_unattached)?,
         "escape-time" => c.escape_time = num(need()?)?,
         "default-terminal" => need()?.clone_into(&mut c.default_terminal),
         "extended-keys" => need()?.clone_into(&mut c.extended_keys),
@@ -139,6 +141,8 @@ const SERVER_OPTIONS: &[&str] = &[
     "copy-command",
     "default-terminal",
     "escape-time",
+    "exit-empty",
+    "exit-unattached",
     "extended-keys",
     "message-limit",
     "prompt-history-limit",
@@ -146,6 +150,11 @@ const SERVER_OPTIONS: &[&str] = &[
     "set-clipboard",
     "socket-access",
 ];
+
+/// A flag as `show-options` prints it.
+const fn on_off(b: bool) -> &'static str {
+    if b { "on" } else { "off" }
+}
 
 /// Each server option as `show-options -s` prints it: `name value`, the
 /// ones tmux types as strings quoted as its.
@@ -160,6 +169,8 @@ fn server_option_lines(srv: &Server) -> Vec<String> {
                 "copy-command" => quoted(&c.copy_command),
                 "default-terminal" => quoted(&c.default_terminal),
                 "escape-time" => c.escape_time.to_string(),
+                "exit-empty" => on_off(c.exit_empty).to_owned(),
+                "exit-unattached" => on_off(c.exit_unattached).to_owned(),
                 "extended-keys" => c.extended_keys.clone(),
                 "message-limit" => c.message_limit.to_string(),
                 "prompt-history-limit" => c.prompt_history_limit.to_string(),

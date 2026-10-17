@@ -19,6 +19,11 @@ prompt-history-limit = 100
 # keeps.
 buffer-limit = 50
 message-limit = 1000
+# tmux's defaults: the server exits with its last session, not when the last
+# client leaves, and a session outlives its clients.
+exit-empty = true
+exit-unattached = false
+destroy-unattached = "off"
 escape-time = 0
 display-time = 4000
 display-panes-time = 1000

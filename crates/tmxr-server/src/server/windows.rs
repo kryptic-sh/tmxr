@@ -343,9 +343,47 @@ impl Server {
                 None => self.detach(c, "exited"),
             }
         }
-        if self.sessions.is_empty() && self.had_session {
-            self.begin_exit();
+        // Now rather than at the end of this pass, so the endpoint is gone
+        // before the reply to whatever asked.
+        self.check_exit();
+    }
+
+    /// Destroy every session no client is attached to whose
+    /// `destroy-unattached` asks for it, as tmux's `server_check_unattached`;
+    /// run when a client leaves or changes session, as there.
+    pub fn check_unattached(&mut self) {
+        let doomed: Vec<SessionId> = self
+            .sessions
+            .keys()
+            .copied()
+            .filter(|&s| {
+                !self
+                    .clients
+                    .values()
+                    .any(|c| c.att.as_ref().is_some_and(|a| a.session == s))
+                    && self.session_options(s).destroy_unattached.destroys()
+            })
+            .collect();
+        for s in doomed {
+            self.kill_session(s);
         }
+    }
+
+    /// Exit when nothing holds the server, as tmux's `server_loop`: with
+    /// `exit-empty` on, once no client is attached and (unless
+    /// `exit-unattached`) no session is left. Not before a first session,
+    /// so a server started for a client's command waits for it.
+    pub fn check_exit(&mut self) {
+        if !self.had_session || !self.cfg.exit_empty {
+            return;
+        }
+        if !self.cfg.exit_unattached && !self.sessions.is_empty() {
+            return;
+        }
+        if self.clients.values().any(|c| c.att.is_some()) {
+            return;
+        }
+        self.begin_exit();
     }
 
     /// Give `pane` (already removed from its old window's layout) a window of

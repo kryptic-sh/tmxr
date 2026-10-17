@@ -319,6 +319,7 @@ impl Server {
             }
             self.tick();
             self.settle();
+            self.check_exit();
             self.render_all();
             if signals::exit_requested() {
                 info!("exit requested by the system");
@@ -388,6 +389,7 @@ impl Server {
                     && c.att.is_some()
                 {
                     debug!(client = id, "attached client went away");
+                    self.check_unattached();
                 }
             }
             Event::Msg(id, msg) => self.client_msg(id, msg),

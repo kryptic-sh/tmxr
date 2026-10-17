@@ -54,6 +54,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`display-message -d`, `-c`, `-l` and `-F`**, as tmux's: how long the message
   shows (0 until a key), which client shows it, the text as given without
   expanding it, and the format given as a flag.
+- **`exit-empty`, `exit-unattached` and `destroy-unattached`**, as tmux's: the
+  server can stay with no sessions (`exit-empty off`) or go once no client is
+  attached (`exit-unattached on`), and a session can go once no client is
+  attached to it (`destroy-unattached on`, checked when a client attaches,
+  detaches or switches, as tmux checks; `keep-last` and `keep-group` act as
+  tmux's do for a session in no group).
 - **`#{client_flags}` and `#{client_readonly}`**: the client's `attached`,
   `focused`, `ignore-size` and `read-only` flags, in tmux's order, and whether
   it is read-only. A client is focused from attaching until its terminal reports

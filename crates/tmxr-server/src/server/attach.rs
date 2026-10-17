@@ -69,6 +69,7 @@ impl Server {
         if let Some(e) = self.config_error.take() {
             self.show_message(id, e);
         }
+        self.check_unattached();
     }
 
     pub fn detach(&mut self, id: ClientId, reason: &str) {
@@ -107,6 +108,7 @@ impl Server {
             ..Ctx::default()
         };
         self.queue_hook("client-detached", ctx, crate::hooks::HookScope::default());
+        self.check_unattached();
     }
 
     /// Point an attached client at another session.
@@ -124,6 +126,7 @@ impl Server {
         att.full_redraw = true;
         self.touch_session(session);
         self.size_session(session);
+        self.check_unattached();
     }
 
     /// The colours client `id` gets (`rgb-colour`): `auto` trusts what its

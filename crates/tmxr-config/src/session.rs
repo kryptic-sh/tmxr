@@ -3,7 +3,7 @@
 //! `show-options` under tmux's names.
 
 use crate::table::{Array, Word, options_table};
-use crate::{AlertAction, Visual};
+use crate::{AlertAction, DestroyUnattached, Visual};
 
 options_table! {
     /// The session options every session has unless it sets its own: tmux's
@@ -21,6 +21,8 @@ options_table! {
     /// The shell new panes run; none (or empty) is the platform's default,
     /// as tmxr-term's `pty::default_shell` picks it.
     "default-shell" => default_shell: Option<String>,
+    /// Whether the session goes once no client is attached to it.
+    "destroy-unattached" => destroy_unattached: DestroyUnattached,
     /// `display-panes` number colour for the active pane, and the others.
     "display-panes-active-colour" => display_panes_active_colour: Word,
     "display-panes-colour" => display_panes_colour: Word,

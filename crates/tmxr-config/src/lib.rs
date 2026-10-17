@@ -35,6 +35,12 @@ pub struct Config {
     pub buffer_limit: usize,
     /// Messages `show-messages` keeps (`message-limit`).
     pub message_limit: usize,
+    /// `exit-empty`: the server exits once it has no sessions (and no
+    /// attached clients); off, it stays.
+    pub exit_empty: bool,
+    /// `exit-unattached`: the server exits once no client is attached,
+    /// sessions or not.
+    pub exit_unattached: bool,
     pub escape_time: u64,
     pub default_terminal: String,
     pub extended_keys: String,
@@ -81,6 +87,9 @@ struct File {
     prompt_history_limit: usize,
     buffer_limit: usize,
     message_limit: usize,
+    exit_empty: bool,
+    exit_unattached: bool,
+    destroy_unattached: DestroyUnattached,
     escape_time: u64,
     display_time: u64,
     display_panes_time: u64,
@@ -181,6 +190,7 @@ impl From<File> for Config {
                 base_index: f.base_index,
                 bell_action: f.bell_action,
                 default_shell: f.default_shell,
+                destroy_unattached: f.destroy_unattached,
                 display_panes_active_colour: Word(s.display_panes_active_colour),
                 display_panes_colour: Word(s.display_panes_colour),
                 display_panes_time: f.display_panes_time,
@@ -212,6 +222,8 @@ impl From<File> for Config {
             prompt_history_limit: f.prompt_history_limit,
             buffer_limit: f.buffer_limit,
             message_limit: f.message_limit,
+            exit_empty: f.exit_empty,
+            exit_unattached: f.exit_unattached,
             escape_time: f.escape_time,
             default_terminal: f.default_terminal,
             extended_keys: f.extended_keys,
@@ -287,6 +299,47 @@ pub struct Resurrect {
     /// Programs from `processes` restored with their arguments, not just by
     /// name (tmux-resurrect restores its default list this way).
     pub restore_args: Vec<String>,
+}
+
+/// `destroy-unattached`: whether a session no client is attached to goes,
+/// as tmux's. tmxr has no session groups, so `keep-last` keeps every
+/// session and `keep-group` keeps none, as tmux's do for a session in no
+/// group.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DestroyUnattached {
+    Off,
+    On,
+    KeepLast,
+    KeepGroup,
+}
+
+impl DestroyUnattached {
+    pub const NAMES: &str = "off, on, keep-last or keep-group";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "off" => Some(Self::Off),
+            "on" => Some(Self::On),
+            "keep-last" => Some(Self::KeepLast),
+            "keep-group" => Some(Self::KeepGroup),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::On => "on",
+            Self::KeepLast => "keep-last",
+            Self::KeepGroup => "keep-group",
+        }
+    }
+
+    /// Whether an unattached session goes.
+    pub const fn destroys(self) -> bool {
+        matches!(self, Self::On | Self::KeepGroup)
+    }
 }
 
 /// Which windows' alerts act, relative to their session's current window.
