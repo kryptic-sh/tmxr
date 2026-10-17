@@ -205,16 +205,22 @@ impl Endpoint {
     }
 }
 
-/// Format the `$TMXR` value for a pane.
-pub fn format_tmxr_env(endpoint: &Endpoint, server_pid: u32, session_id: u32) -> String {
-    format!("{},{server_pid},{session_id}", endpoint.path.display())
+/// Format the `$TMXR` value for a pane or a job: `-1` for no session, as
+/// tmux writes `$TMUX`.
+pub fn format_tmxr_env(endpoint: &Endpoint, server_pid: u32, session_id: Option<u32>) -> String {
+    let session = session_id.map_or_else(|| "-1".to_owned(), |s| s.to_string());
+    format!("{},{server_pid},{session}", endpoint.path.display())
 }
 
-/// Parse `$TMXR` into (endpoint path, server pid, session id). The path is
-/// split off from the right, so a path containing commas still parses.
-pub fn parse_tmxr_env(value: &str) -> Option<(PathBuf, u32, u32)> {
+/// Parse `$TMXR` into (endpoint path, server pid, session id; `None` for
+/// `-1`). The path is split off from the right, so a path containing commas
+/// still parses.
+pub fn parse_tmxr_env(value: &str) -> Option<(PathBuf, u32, Option<u32>)> {
     let mut parts = value.rsplitn(3, ',');
-    let session = parts.next()?.parse().ok()?;
+    let session = match parts.next()? {
+        "-1" => None,
+        s => Some(s.parse().ok()?),
+    };
     let pid = parts.next()?.parse().ok()?;
     let path = parts.next().filter(|p| !p.is_empty())?;
     Some((PathBuf::from(path), pid, session))
@@ -306,10 +312,16 @@ mod tests {
         let ep = Endpoint {
             path: PathBuf::from("/tmp/a,b/default"),
         };
-        let v = format_tmxr_env(&ep, 99, 3);
+        let v = format_tmxr_env(&ep, 99, Some(3));
         assert_eq!(
             parse_tmxr_env(&v),
-            Some((PathBuf::from("/tmp/a,b/default"), 99, 3))
+            Some((PathBuf::from("/tmp/a,b/default"), 99, Some(3)))
+        );
+        let v = format_tmxr_env(&ep, 99, None);
+        assert!(v.ends_with(",99,-1"), "{v}");
+        assert_eq!(
+            parse_tmxr_env(&v),
+            Some((PathBuf::from("/tmp/a,b/default"), 99, None))
         );
         assert_eq!(parse_tmxr_env("nonsense"), None);
         assert_eq!(parse_tmxr_env(",1,2"), None);

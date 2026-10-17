@@ -8,7 +8,7 @@ mod shell;
 pub mod signals;
 mod windows;
 
-pub use shell::{pipe_to_shell, shell_succeeds, shell_text};
+pub use shell::{ChildEnv, pipe_to_shell, shell_succeeds, shell_text};
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::path::PathBuf;

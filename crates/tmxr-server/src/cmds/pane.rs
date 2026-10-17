@@ -188,15 +188,21 @@ pub(super) fn run(
                 input: a.has('I'),
             };
             let shell = srv.session_options(sid).default_shell.clone();
+            let env = srv.child_env(Some(sid));
             let (events, id) = (srv.events.clone(), srv.next_pipe);
             srv.next_pipe += 1;
             let p = srv.panes.get_mut(&pid).ok_or("no such pane")?;
             // An open pipe always closes first; -o makes the command a toggle.
             let had = p.pipe.take().is_some();
             if let Some(line) = line.filter(|_| !(a.has('o') && had)) {
-                let pipe =
-                    crate::pipe::PanePipe::open(id, &line, shell.as_deref(), dir, pid, events)
-                        .map_err(|e| format!("pipe-pane: {line}: {e}"))?;
+                let pipe = crate::pipe::PanePipe::open(
+                    id,
+                    (&line, shell.as_deref(), &env),
+                    dir,
+                    pid,
+                    events,
+                )
+                .map_err(|e| format!("pipe-pane: {line}: {e}"))?;
                 p.pipe = Some(pipe);
             }
         }

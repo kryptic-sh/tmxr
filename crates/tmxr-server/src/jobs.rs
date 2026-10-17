@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::cmds::{Ctx, Outcome};
-use crate::model::ClientId;
+use crate::model::{ClientId, SessionId};
 use crate::server::{Event, Server};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,6 +33,9 @@ pub enum Work {
 pub struct Job {
     pub delay: Duration,
     pub work: Work,
+    /// The session whose environment a shell command runs in (`TMXR`
+    /// names it), as tmux runs a job for its target session.
+    pub session: Option<SessionId>,
     /// The commands after the `run-shell` in its list, run once it is done.
     pub rest: Vec<Vec<String>>,
 }
@@ -74,18 +77,19 @@ impl Server {
             .pane_session_options(then.ctx.pane)
             .default_shell
             .clone();
+        let env = self.child_env(job.session);
         let started = std::thread::Builder::new()
             .name("tmxr-run-shell".into())
             .spawn(move || {
                 std::thread::sleep(job.delay);
                 let (output, ok) = match &job.work {
                     Work::Shell { line, cwd } => (
-                        crate::server::shell_text(line, cwd.as_deref(), shell.as_deref()),
+                        crate::server::shell_text(line, cwd.as_deref(), shell.as_deref(), &env),
                         true,
                     ),
                     Work::If { line, .. } => (
                         String::new(),
-                        crate::server::shell_succeeds(line, shell.as_deref()),
+                        crate::server::shell_succeeds(line, shell.as_deref(), &env),
                     ),
                     Work::Command(_) | Work::Wait | Work::Channel(_) => (String::new(), true),
                 };

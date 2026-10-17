@@ -7,7 +7,7 @@ use hjkl_layout::{LayoutTree, SplitDir};
 use tmxr_term::{Emulator, Pty, PtyEvent, SpawnSpec};
 use tracing::debug;
 
-use super::{Event, Server, SplitSize};
+use super::{ChildEnv, Event, Server, SplitSize};
 use crate::model::{Pane, PaneId, SessionId, WindowId};
 
 /// A program [`Server::start_pty`] started.
@@ -60,6 +60,32 @@ impl Server {
         Ok(())
     }
 
+    /// The environment a child of the server starts in for `session`, as
+    /// tmux's `environ_for_session`: the server's own with the global
+    /// changes and the session's over it, `TERM` from `default-terminal`,
+    /// and `TMXR` naming this server and the session.
+    pub fn child_env(&self, session: Option<SessionId>) -> ChildEnv {
+        let layered = session
+            .and_then(|s| self.sessions.get(&s))
+            .map_or_else(|| self.global_env.clone(), |s| s.env.over(&self.global_env));
+        let mut env = ChildEnv::default();
+        for (k, v) in layered.iter() {
+            match v {
+                Some(v) => env.set.push((k.to_owned(), v.to_owned())),
+                None => env.remove.push(k.to_owned()),
+            }
+        }
+        env.set.push((
+            "TERM".into(),
+            crate::util::pane_term(&self.cfg.default_terminal),
+        ));
+        env.set.push((
+            tmxr_proto::socket::ENV_TMXR.into(),
+            tmxr_proto::socket::format_tmxr_env(&self.endpoint, self.pid, session),
+        ));
+        env
+    }
+
     /// Start `argv` (the default shell when empty, a shell command line when
     /// one word with spaces) on a PTY whose events arrive as pane `pid`'s,
     /// in `session`'s environment plus `extra_env`.
@@ -74,29 +100,11 @@ impl Server {
         cols: u16,
         rows: u16,
     ) -> Result<Started, String> {
-        // The server's environment, then the global changes, then the
-        // session's, as tmux layers them.
-        let layered = self
-            .sessions
-            .get(&session)
-            .map_or_else(|| self.global_env.clone(), |s| s.env.over(&self.global_env));
-        let mut env: Vec<(String, String)> = Vec::new();
-        let mut env_remove = Vec::new();
-        for (k, v) in layered.iter() {
-            match v {
-                Some(v) => env.push((k.to_owned(), v.to_owned())),
-                None => env_remove.push(k.to_owned()),
-            }
-        }
-        env.push((
-            "TERM".into(),
-            crate::util::pane_term(&self.cfg.default_terminal),
-        ));
+        let ChildEnv {
+            set: mut env,
+            remove: env_remove,
+        } = self.child_env(Some(session));
         env.push(("COLORTERM".into(), "truecolor".into()));
-        env.push((
-            tmxr_proto::socket::ENV_TMXR.into(),
-            tmxr_proto::socket::format_tmxr_env(&self.endpoint, self.pid, session),
-        ));
         env.push((tmxr_proto::socket::ENV_TMXR_PANE.into(), format!("%{pid}")));
         env.extend(extra_env.iter().cloned());
         let shell = self

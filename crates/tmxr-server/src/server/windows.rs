@@ -150,6 +150,11 @@ impl Server {
     }
 
     /// A session holding `window`: the first of them for a linked window.
+    /// The session `pane`'s window is in, as [`Server::session_of_window`].
+    pub fn session_of_pane(&self, pane: Option<PaneId>) -> Option<SessionId> {
+        self.session_of_window(self.panes.get(&pane?)?.window)
+    }
+
     pub fn session_of_window(&self, window: WindowId) -> Option<SessionId> {
         self.sessions
             .values()

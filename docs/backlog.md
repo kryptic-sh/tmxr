@@ -392,9 +392,6 @@ table. What has been verified, and how:
     with `status-interval 0`).
   - `Pty::write` blocks the server thread (paste into a program that is not
     reading could freeze every session); its errors are discarded.
-  - `run-shell`, `if-shell`, `copy-pipe` and `pipe-pane` children get no `TMXR`,
-    so `run-shell 'tmxr …'` on a `-L` / `-S` server talks to the default one;
-    tmux's jobs get `TMUX`.
   - `format::styled` repeats the text before an unclosed `#[`.
   - `source-file PATH` sets `cfg_path` and replaces the whole config, losing
     every run-time `set -g`; a later plain `source-file` reloads `PATH`.

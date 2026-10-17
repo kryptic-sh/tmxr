@@ -353,6 +353,9 @@ pub(super) fn run(
             let job = Job {
                 delay,
                 work,
+                session: srv
+                    .session_of_pane(pane)
+                    .or_else(|| target::current_session(srv, ctx)),
                 rest: Vec::new(),
             };
             if a.has('b') {
@@ -393,6 +396,7 @@ pub(super) fn run(
                         then,
                         otherwise,
                     },
+                    session: target::current_session(srv, &ctx),
                     rest: Vec::new(),
                 };
                 if a.has('b') {

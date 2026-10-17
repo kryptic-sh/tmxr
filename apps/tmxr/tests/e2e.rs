@@ -4423,6 +4423,42 @@ fn resurrect_matches_command_lines_as_tmux_resurrect() {
 }
 
 #[test]
+fn run_shell_children_get_tmxr_and_the_session_environment() {
+    let t = Tmxr::new("jobenv");
+    t.run(&["new-session", "-d", "-s", "je"]);
+    t.run(&["set-environment", "-t", "je", "E2E_JOB", "fromsession"]);
+    let var = |name: &str| {
+        if cfg!(windows) {
+            format!("echo %{name}%")
+        } else {
+            format!("echo ${name}")
+        }
+    };
+    let show = |f: &str| {
+        t.run(&["display-message", "-p", "-t", "je", f])
+            .trim()
+            .to_owned()
+    };
+    let want = format!(
+        "{},{},{}",
+        show("#{socket_path}"),
+        show("#{pid}"),
+        show("#{session_id}").trim_start_matches('$')
+    );
+    assert_eq!(t.run(&["run-shell", "-t", "je", &var("TMXR")]).trim(), want);
+    assert_eq!(
+        t.run(&["run-shell", "-t", "je", &var("E2E_JOB")]).trim(),
+        "fromsession"
+    );
+    // So a tmxr command a job runs reaches this server, not the default one.
+    let has = format!(
+        "{} has-session -t je && echo found",
+        env!("CARGO_BIN_EXE_tmxr")
+    );
+    assert_eq!(t.run(&["run-shell", "-t", "je", &has]).trim(), "found");
+}
+
+#[test]
 fn run_shell_holds_its_command_list_and_reply() {
     let t = Tmxr::new("runshell");
     t.run(&["new-session", "-d", "-s", "rs"]);

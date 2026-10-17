@@ -34,20 +34,21 @@ pub struct PanePipe {
 }
 
 impl PanePipe {
-    /// Start `line` with the shell (`default-shell`, when set): its input
-    /// fed from the pane with `-O`, its output sent to `pane` as
+    /// Start `line` with the shell (`default-shell`, when set) in `env`:
+    /// its input fed from the pane with `-O`, its output sent to `pane` as
     /// [`Event::PipeInput`] with `-I`.
     pub fn open(
         id: u64,
-        line: &str,
-        default_shell: Option<&str>,
+        (line, default_shell, env): (&str, Option<&str>, &crate::server::ChildEnv),
         dir: Direction,
         pane: PaneId,
         events: Sender<Event>,
     ) -> std::io::Result<Self> {
         let argv = crate::util::shell_command(line, default_shell);
         let piped = |on: bool| if on { Stdio::piped() } else { Stdio::null() };
-        let mut child = tmxr_term::child::command(&argv[0])
+        let mut cmd = tmxr_term::child::command(&argv[0]);
+        env.apply(&mut cmd);
+        let mut child = cmd
             .args(&argv[1..])
             .stdin(piped(dir.output))
             .stdout(piped(dir.input))

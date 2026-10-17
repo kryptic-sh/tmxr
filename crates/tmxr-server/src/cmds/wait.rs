@@ -25,6 +25,7 @@ pub(super) fn run(
     let wait = |w| Job {
         delay: Duration::ZERO,
         work: Work::Channel(w),
+        session: None,
         rest: Vec::new(),
     };
     if a.has('S') {

@@ -26,8 +26,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `focused`, `ignore-size` and `read-only` flags, in tmux's order, and whether
   it is read-only.
 
+### Changed
+
+- **`tmxr_proto::socket::format_tmxr_env` takes the session as an `Option`, and
+  `parse_tmxr_env` returns it as one**: a job run with no session gets
+  `TMXR=path,pid,-1`, as tmux writes `TMUX`.
+
 ### Fixed
 
+- **`run-shell`, `if-shell`, `copy-pipe` and `pipe-pane` commands run in their
+  session's environment, with `TMXR`**, as tmux's jobs do: they had only the
+  server's own environment, so a `tmxr` command in one talked to the default
+  server instead of the one running it, and `set-environment` did not reach
+  them. A `run-shell -t` job takes its target's session.
 - **An environment variable that is not valid Unicode no longer crashes tmxr**:
   the client's hello and `show-environment -g` read the environment with
   `std::env::vars`, which panics on one, ending the client or the whole server;
