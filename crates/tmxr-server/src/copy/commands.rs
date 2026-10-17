@@ -7,6 +7,17 @@ use crate::server::Server;
 
 use super::{CopyMode, SelKind};
 
+/// Give `pane`'s copy mode the options it reads: `word-separators` and
+/// `wrap-search`.
+fn take_options(srv: &mut Server, pane: PaneId) {
+    let separators = srv.pane_session_options(Some(pane)).word_separators.clone();
+    let wrap = srv.pane_options(pane).wrap_search;
+    if let Some(cm) = srv.panes.get_mut(&pane).and_then(|p| p.copy.as_mut()) {
+        cm.word_separators = separators;
+        cm.wrap_search = wrap;
+    }
+}
+
 /// Enter copy mode in `pane` (no-op if already in it).
 pub fn enter(srv: &mut Server, pane: PaneId, page_up: bool) {
     let Some(p) = srv.panes.get_mut(&pane) else {
@@ -16,6 +27,10 @@ pub fn enter(srv: &mut Server, pane: PaneId, page_up: bool) {
     if entered {
         p.copy = Some(CopyMode::new(p.emu.screen_mut()));
     }
+    take_options(srv, pane);
+    let Some(p) = srv.panes.get_mut(&pane) else {
+        return;
+    };
     if page_up && let Some(cm) = p.copy.as_mut() {
         cm.apply("page-up", None);
     }
@@ -51,9 +66,11 @@ pub fn command(
         fresh.carry_over(&old);
         p.copy = Some(fresh);
         let window = p.window;
+        take_options(srv, pane);
         srv.mark_window_dirty(window);
         return Ok(());
     }
+    take_options(srv, pane);
     let Some(cm) = srv.panes.get_mut(&pane).and_then(|p| p.copy.as_mut()) else {
         return Err("not in a mode".into());
     };

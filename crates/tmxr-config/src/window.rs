@@ -263,6 +263,8 @@ options_table! {
     "window-status-separator" => window_status_separator: String,
     /// The style each window's entry is drawn over, on the status line's.
     "window-status-style" => window_status_style: String,
+    /// A copy-mode search goes on from the other end when it reaches one.
+    "wrap-search" => wrap_search: bool,
 }
 
 #[cfg(test)]

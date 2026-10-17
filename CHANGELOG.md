@@ -68,6 +68,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the active pane's command, or `[tmux]` in a mode), whether a bell flags a
   window, and keeping a pane only when its program failed. `remain-on-exit` is
   `off` / `on` / `failed` now; the config file still takes `true` / `false`.
+- **`word-separators` and `wrap-search`**, as tmux's: the characters that end a
+  word in copy mode (its word motions, the word under the cursor or mouse), and
+  whether a copy-mode search goes round from the other end. Word motions now
+  class characters as tmux does, so a non-ASCII symbol like `→` is part of a
+  word.
 - **`#{client_flags}` and `#{client_readonly}`**: the client's `attached`,
   `focused`, `ignore-size` and `read-only` flags, in tmux's order, and whether
   it is read-only. A client is focused from attaching until its terminal reports

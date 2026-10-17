@@ -46,7 +46,15 @@ pub struct CopyMode {
     pub scroll_exit: bool,
     /// `toggle-position`: the position indicator is not drawn.
     pub hide_position: bool,
+    /// The characters that end a word (`word-separators`), besides blanks.
+    pub word_separators: String,
+    /// A search goes on from the other end when it reaches one
+    /// (`wrap-search`).
+    pub wrap_search: bool,
 }
+
+/// tmux's default `word-separators`: ASCII punctuation but `_`.
+pub const WORD_SEPARATORS: &str = "!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~";
 
 /// Columns where `needle` starts in `line`: literal, and case-insensitive
 /// unless the needle has an uppercase letter (smart case).
@@ -68,18 +76,21 @@ fn match_starts(line: &[char], needle: &str) -> Vec<usize> {
         .collect()
 }
 
-/// tmux's default `word-separators` (ASCII punctuation but `_`), and the
-/// blanks it always counts.
-fn is_word_separator(c: char) -> bool {
-    c == ' ' || c == '\t' || (c.is_ascii_punctuation() && c != '_')
+/// Whether `c` ends a word: a blank, as tmux always counts, or one of
+/// `separators` (`word-separators`).
+fn is_word_separator(c: char, separators: &str) -> bool {
+    c == ' ' || c == '\t' || separators.contains(c)
 }
 
 /// The word at column `x` of `line` as tmux 3.6's `format_grid_word`
 /// finds it: the run of non-separators around `x`, or on a separator the
 /// word just after it. tmux also follows a word across a wrapped line; this
 /// keeps to `line`.
-pub fn word_at(line: &[char], x: usize) -> String {
-    let separator = |x: usize| line.get(x).is_none_or(|c| is_word_separator(*c));
+pub fn word_at(line: &[char], x: usize, separators: &str) -> String {
+    let separator = |x: usize| {
+        line.get(x)
+            .is_none_or(|c| is_word_separator(*c, separators))
+    };
     let mut start = x;
     if separator(start) {
         start += 1;
@@ -165,6 +176,8 @@ impl CopyMode {
             mark: None,
             scroll_exit: false,
             hide_position: false,
+            word_separators: WORD_SEPARATORS.to_owned(),
+            wrap_search: true,
         }
     }
 
@@ -328,7 +341,7 @@ impl CopyMode {
     /// word across a wrapped line; this keeps to the cursor's line.
     pub fn cursor_word(&self) -> String {
         let line = self.lines.get(self.cy).map(Line::chars).unwrap_or_default();
-        word_at(&line, self.cx)
+        word_at(&line, self.cx, &self.word_separators)
     }
 
     /// The text of the line shown `row` rows down the view.
@@ -374,10 +387,12 @@ impl CopyMode {
     /// Word class: 0 blank, 1 word char, 2 punctuation; `big` (WORD) makes
     /// every non-blank the same class.
     fn class(&self, y: usize, x: usize, big: bool) -> u8 {
+        // Blanks, word characters and separators, as tmux's
+        // `window_copy_in_set` reads `word-separators`.
         let c = self.char_at(y, x);
         if c.is_whitespace() {
             0
-        } else if big || c.is_alphanumeric() || c == '_' {
+        } else if big || !self.word_separators.contains(c) {
             1
         } else {
             2
@@ -502,6 +517,16 @@ impl CopyMode {
         }
         let n = self.lines.len();
         for step in 0..=n {
+            // Without `wrap-search` the search stops at the end it heads for.
+            if !self.wrap_search
+                && (if forward {
+                    self.cy + step >= n
+                } else {
+                    step > self.cy
+                })
+            {
+                break;
+            }
             let y = if forward {
                 (self.cy + step) % n
             } else {

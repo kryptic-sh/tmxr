@@ -86,7 +86,10 @@ pub fn mouse_var(srv: &Server, mouse: &crate::mouse::MouseTarget, name: &str) ->
     Some(match name {
         "mouse_x" => x.to_string(),
         "mouse_y" => y.to_string(),
-        "mouse_word" => crate::copy::word_at(&line(), usize::from(x)),
+        "mouse_word" => {
+            let separators = &srv.pane_session_options(Some(p.id)).word_separators;
+            crate::copy::word_at(&line(), usize::from(x), separators)
+        }
         "mouse_line" => String::from_iter(line()).trim_end().to_owned(),
         "mouse_hyperlink" => String::new(),
         _ => return None,

@@ -1096,6 +1096,51 @@ fn resurrect_restores_a_multi_pane_layout() {
 }
 
 #[test]
+fn word_separators_and_wrap_search_reach_copy_mode() {
+    let t = Tmxr::new("copyopts");
+    #[cfg(unix)]
+    let program = ["/bin/sh", "-c", "printf 'a.b/c.d e\n'; sleep 30"];
+    #[cfg(windows)]
+    let program = ["cmd", "/c", "echo a.b/c.d e& ping -n 30 127.0.0.1 >NUL"];
+    let mut new = vec!["new-session", "-d", "-s", "co"];
+    new.extend(program);
+    t.run(&new);
+    t.wait_run(&["capture-pane", "-p", "-t", "co"], "the text", |o| {
+        o.contains("a.b/c.d e")
+    });
+    let show = |f: &str| {
+        t.run(&["display-message", "-p", "-t", "co", f])
+            .trim()
+            .to_owned()
+    };
+    let x = |cmd: &str| {
+        t.run(&["send-keys", "-t", "co", "-X", cmd]);
+    };
+    t.run(&["set", "-g", "word-separators", "/"]);
+    t.run(&["copy-mode", "-t", "co"]);
+    x("history-top");
+    x("start-of-line");
+    assert_eq!(show("#{copy_cursor_word}"), "a.b");
+    // `.` is on the line twice. From the second, wrap-search off stays put
+    // and on goes round to the first.
+    let pos = || show("#{copy_cursor_y},#{copy_cursor_x}");
+    let search = |cmd: &str| {
+        t.run(&["send-keys", "-t", "co", "-X", cmd, "."]);
+    };
+    t.run(&["set", "-wg", "wrap-search", "off"]);
+    search("search-forward");
+    let first = pos();
+    search("search-forward");
+    let second = pos();
+    assert_ne!(first, second);
+    search("search-forward");
+    assert_eq!(pos(), second, "wrap-search off");
+    t.run(&["set", "-wg", "wrap-search", "on"]);
+    search("search-forward");
+    assert_eq!(pos(), first, "wrap-search on");
+}
+
+#[test]
 fn respawn_window_finds_its_window_by_index() {
     let t = Tmxr::new("respawnw");
     t.run(&["new-session", "-d", "-s", "rw"]);

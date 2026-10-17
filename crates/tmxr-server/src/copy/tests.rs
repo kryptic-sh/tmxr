@@ -305,3 +305,32 @@ fn the_cursor_word_is_tmuxs() {
     assert_eq!(word_at("foo.bar baz", 3), "bar");
     assert_eq!(word_at("foo  bar", 3), "");
 }
+
+#[test]
+fn word_separators_decide_words_and_word_motions() {
+    // Only `/` separates: `.` is part of a word.
+    let mut cm = at_start("a.b/c.d e");
+    cm.word_separators = "/".to_owned();
+    assert_eq!(cm.cursor_word(), "a.b");
+    cm.apply("next-word", None);
+    assert_eq!(cm.cx, 3, "the separator is a word of its own");
+    cm.apply("next-word", None);
+    assert_eq!(cm.cx, 4);
+    cm.apply("next-word", None);
+    assert_eq!(cm.cx, 8);
+}
+
+#[test]
+fn wrap_search_off_stops_at_the_end() {
+    let mut cm = mode("one hit\r\ntwo\r\nthree");
+    (cm.cy, cm.cx) = (2, 0);
+    cm.apply("search-forward", Some("hit"));
+    assert_eq!((cm.cy, cm.cx), (0, 4), "wraps by default");
+    let mut cm = mode("one hit\r\ntwo\r\nthree");
+    (cm.cy, cm.cx) = (2, 0);
+    cm.wrap_search = false;
+    cm.apply("search-forward", Some("hit"));
+    assert_eq!((cm.cy, cm.cx), (2, 0), "stays put at the bottom");
+    cm.apply("search-backward", Some("hit"));
+    assert_eq!((cm.cy, cm.cx), (0, 4), "found going back");
+}

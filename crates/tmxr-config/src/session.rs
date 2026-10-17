@@ -75,6 +75,8 @@ options_table! {
     "visual-activity" => visual_activity: Visual,
     "visual-bell" => visual_bell: Visual,
     "visual-silence" => visual_silence: Visual,
+    /// The characters that end a word in copy mode, besides blanks.
+    "word-separators" => word_separators: String,
 }
 
 #[cfg(test)]
