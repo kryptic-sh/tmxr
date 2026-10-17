@@ -63,6 +63,11 @@ copy-command = ""
 lock-command = "lock -np"
 # Lock a client idle this many seconds; 0 never does (tmux's default).
 lock-after-time = 0
+# The client terminal's title (tmux's set-titles, off there): the title the
+# active pane's program set, else the session and window names. A pane whose
+# program set no title has the host name for #{pane_title}, as in tmux.
+set-titles = true
+set-titles-string = "#{?#{!=:#{pane_title},#{host}},#{pane_title},#S:#W}"
 # Who may open the server's socket or pipe, read when it starts: "owner", or
 # "users" for every local user, of whom `server-access` admits those it names.
 socket-access = "owner"

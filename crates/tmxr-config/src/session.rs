@@ -43,6 +43,10 @@ options_table! {
     /// How long a repeatable bind (`bind -r`) takes another key without
     /// the prefix, in milliseconds.
     "repeat-time" => repeat_time: u64,
+    /// Whether clients' terminals get a title, as `set-titles-string`
+    /// makes it for the active pane.
+    "set-titles" => set_titles: bool,
+    "set-titles-string" => set_titles_string: String,
     "silence-action" => silence_action: AlertAction,
     /// Seconds between status line redraws.
     "status-interval" => status_interval: u64,

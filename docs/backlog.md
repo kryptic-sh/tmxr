@@ -351,16 +351,14 @@ table. What has been verified, and how:
   the releases pinned in the job (`HJKL_VERSION`, `NAVIGATOR_VERSION`). The hjkl
   script fails with hjkl 0.42.1, which has no handoff (checked on Windows,
   2026-10-11).
-- **The outer terminal's title** (asked for 2026-10-18): the client's terminal
-  should show the title the program in the active pane sets (OSC 0 / 2, kept as
-  `#{pane_title}`), and when it sets none, the session and window names. tmxr
-  sets no outer title today: tmux's `set-titles` and `set-titles-string`
-  (default `#S:#I:#W - "#T" #{session_alerts}`) do not exist. A program that set
-  no title shows as the host name in `#{pane_title}` (`vars.rs`, as tmux's
-  default), so "set none" is `#{pane_title}` equal to `#{host}` unless the pane
-  keeps whether its title was set. Work: the two options, the client told the
-  expanded string when it changes (an OSC 0 to its terminal), and the terminal's
-  own title saved and given back on detach (`CSI 22;0t` / `CSI 23;0t`).
+- **The outer terminal's title** (`set-titles`, `render::title`): on by default,
+  where tmux's is off, with a `set-titles-string` that takes the program's
+  title, else `#S:#W` (asked for 2026-10-18). "The program set no title" is read
+  as `#{pane_title}` equal to `#{host}`, the value tmux and tmxr give a pane
+  with none, so a program that titles itself with the bare host name shows as
+  unset. Not done: the terminal's own title is not saved and given back on
+  detach (`CSI 22;0t` / `CSI 23;0t`), as tmux does not either; a title set while
+  a client is attached reaches it with the next frame, as any change.
 - **A resize just after attaching can go unseen on Linux** (2026-10-18). In
   `refresh_client_sets_and_clears_client_flags`, a client resized as soon as its
   status line showed kept its old size on the server for the test's 30 s. This
@@ -441,14 +439,14 @@ table. What has been verified, and how:
     `pane-border-status` / `-format` / `-lines` / `-indicators`, `window-style`
     / `window-active-style`; session `prefix2`, `default-command`,
     `destroy-unattached`, `key-table`, `status-keys`, `word-separators`,
-    `set-titles` / `-string` (see the title entry above), `assume-paste-time`,
-    `default-size`; window `aggressive-resize`, `allow-rename`,
-    `allow-set-title`, `alternate-screen`, `automatic-rename-format`,
-    `monitor-bell`, `wrap-search`, `clock-mode-style`, `cursor-style`,
-    `remain-on-exit-format`, `remain-on-exit failed`, `window-size largest` /
-    `smallest`; server `exit-empty`, `exit-unattached`, `buffer-limit`,
-    `message-limit`, `focus-events`, `history-file`, `editor`, `prefix-timeout`.
-    `escape-time` is kept but never read.
+    `assume-paste-time`, `default-size`; window `aggressive-resize`,
+    `allow-rename`, `allow-set-title`, `alternate-screen`,
+    `automatic-rename-format`, `monitor-bell`, `wrap-search`,
+    `clock-mode-style`, `cursor-style`, `remain-on-exit-format`,
+    `remain-on-exit failed`, `window-size largest` / `smallest`; server
+    `exit-empty`, `exit-unattached`, `buffer-limit`, `message-limit`,
+    `focus-events`, `history-file`, `editor`, `prefix-timeout`. `escape-time` is
+    kept but never read.
   - Commands: `capture-pane -S -E -e -J -b -a -C -N -T -q`; `-P` / `-F` on
     `new-window`, `split-window`, `new-session`, `break-pane`;
     `new-window -b -k -S`, `split-window -p -I -Z`, `break-pane -n -s -a -b`;

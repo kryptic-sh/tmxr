@@ -661,6 +661,21 @@ fn draw_overlay(
 
 /// Most rows the picker list takes when a preview sits under it.
 const PICKER_LIST_ROWS: u16 = 15;
+/// The title client `id`'s terminal gets: `set-titles-string` for its
+/// session's active pane, when that session has `set-titles` on. Control
+/// characters are dropped, so a program's title cannot carry escape
+/// sequences to the terminal.
+pub fn title(srv: &Server, id: ClientId) -> Option<String> {
+    let session = srv.clients.get(&id)?.att.as_ref()?.session;
+    let opts = srv.session_options(session);
+    if !opts.set_titles {
+        return None;
+    }
+    let vars = Vars::for_pane(srv, srv.active_pane_of_session(session), Some(id));
+    let title = format::expand(&opts.set_titles_string, &vars);
+    Some(title.chars().filter(|c| !c.is_control()).collect())
+}
+
 /// Fewest rows worth giving a preview.
 const PREVIEW_MIN_ROWS: u16 = 3;
 

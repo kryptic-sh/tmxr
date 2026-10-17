@@ -111,6 +111,8 @@ pub struct Attached {
     /// The terminal last reported focus in, not out (`focused` in
     /// `#{client_flags}`).
     pub focused: bool,
+    /// The title last given to the terminal (`set-titles`).
+    pub title: Option<String>,
     /// `refresh-client -L` / `-R` / `-U` / `-D`: the view of a window larger
     /// than the client held at this offset, until `-c` or another window.
     pub pan: Option<(WindowId, u16, u16)>,
@@ -843,10 +845,17 @@ impl Server {
                 let _ = term.clear();
             }
             let ranges = crate::render::draw(self, id, &mut term);
-            let bytes = term.backend_mut().take();
+            let mut bytes = term.backend_mut().take();
+            let title = crate::render::title(self, id);
             if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
                 a.term = Some(term);
                 a.status_ranges = ranges;
+                // The title goes out only when it changes, as tmux's.
+                if title.is_some() && a.title != title {
+                    a.title = title;
+                    let t = a.title.as_deref().unwrap_or_default();
+                    bytes.extend_from_slice(format!("\x1b]0;{t}\x07").as_bytes());
+                }
             }
             if !bytes.is_empty() {
                 self.send(id, ServerMsg::Output(bytes));

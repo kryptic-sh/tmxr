@@ -50,6 +50,7 @@ impl Server {
             status_ranges: crate::render::StatusRanges::default(),
             mouse: false,
             focused: false,
+            title: None,
             pan: None,
             status_at: Instant::now(),
         });

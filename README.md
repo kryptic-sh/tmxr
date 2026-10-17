@@ -47,6 +47,9 @@ listed in [docs/backlog.md](docs/backlog.md).
   the list.
 - **Tokyo Night status line** in the catppuccin layout, built from tmux formats
   you can restyle.
+- **Terminal title**: the client's terminal shows the title the active pane's
+  program sets, or the session and window names when it sets none (`set-titles`,
+  `set-titles-string`).
 - **Session save / restore** like tmux-resurrect: `prefix C-s` / `C-r`,
   auto-save, and restore when the server starts. Each server (`-L` label) keeps
   its own saves.

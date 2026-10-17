@@ -292,6 +292,16 @@ impl Screen {
         self.emu.lock().unwrap().screen().contents()
     }
 
+    /// The title the terminal was last given (OSC 0 / 2).
+    fn title(&self) -> String {
+        self.emu
+            .lock()
+            .unwrap()
+            .title()
+            .unwrap_or_default()
+            .to_owned()
+    }
+
     fn send(&self, bytes: &[u8]) {
         let mut w = self.writer.lock().unwrap();
         w.write_all(bytes).unwrap();
@@ -5968,6 +5978,39 @@ fn an_ignore_size_client_sizes_windows_only_alone() {
         "the window sized for the client left",
         |o| o.trim() == "71x20",
     );
+}
+
+#[test]
+fn the_terminal_title_is_the_programs_else_session_and_window() {
+    let t = Tmxr::new("title");
+    let s = t.attach(&["new", "-s", "tt", "-n", "main"]);
+    s.wait_for("the status line", |text| text.contains("tt"));
+    let wait_title = |want: &str| {
+        let deadline = Instant::now() + TIMEOUT;
+        while s.title() != want {
+            assert!(
+                Instant::now() < deadline,
+                "title {:?}, not {want:?}",
+                s.title()
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    };
+    // A pane whose program set no title has the host name for its title,
+    // so the session and window names show.
+    let host = t.run(&["display-message", "-p", "#{host}"]);
+    t.run(&["select-pane", "-t", "tt", "-T", host.trim()]);
+    wait_title("tt:main");
+    // A program's title wins; control characters never reach the terminal.
+    t.run(&["select-pane", "-t", "tt", "-T", "my [31mprog!"]);
+    wait_title("my [31mprog!");
+    // set-titles off leaves the terminal's title alone.
+    t.run(&["set", "-g", "set-titles", "off"]);
+    t.run(&["select-pane", "-t", "tt", "-T", "other"]);
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(s.title(), "my [31mprog!");
+    t.run(&["set", "-g", "set-titles", "on"]);
+    wait_title("other");
 }
 
 #[test]
