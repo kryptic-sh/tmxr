@@ -371,7 +371,11 @@ table. What has been verified, and how:
   (2026-10-18, CI run 39067127625, the `no test writes real user state` job, all
   three tries): after the test sent a lone Escape, the menu stayed open until
   the 30 s timeout. The regular macOS test job passed in the same run, and
-  re-running the failed job passed. Not reproduced or explained.
+  re-running the failed job passed. Again in run 39078626637
+  (`test macos-latest`, all three tries; the rerun passed): two of about thirty
+  macOS jobs that day, none before it as far as checked, so something from that
+  day's changes (the terminal title, focus reports, the notification hooks) may
+  make it likelier. Not reproduced or explained.
 - **Handoffs to tmxr** at a program's edge: hjkl 0.42.2 (its `App::nav_step`,
   unit-tested in hjkl's suite) and nvim with
   [tmxr-navigator.nvim](https://github.com/kryptic-sh/tmxr-navigator.nvim)
@@ -452,11 +456,10 @@ table. What has been verified, and how:
     `-indicators`, `window-style` / `window-active-style`; session `prefix2`,
     `key-table`, `status-keys`, `word-separators`, `assume-paste-time`,
     `default-size`; window `aggressive-resize`, `allow-rename`,
-    `allow-set-title`, `alternate-screen`, `automatic-rename-format`,
-    `monitor-bell`, `wrap-search`, `clock-mode-style`, `cursor-style`,
-    `remain-on-exit-format`, `remain-on-exit failed`, `window-size largest` /
-    `smallest`; server `focus-events`, `history-file`, `editor`,
-    `prefix-timeout`. `escape-time` is kept but never read.
+    `allow-set-title`, `alternate-screen`, `wrap-search`, `clock-mode-style`,
+    `cursor-style`, `remain-on-exit-format`, `window-size largest` / `smallest`;
+    server `focus-events`, `history-file`, `editor`, `prefix-timeout`.
+    `escape-time` is kept but never read.
   - Commands: `capture-pane -S -E -e -b -a -C -N -T -q`; `-P` / `-F` on
     `new-window`, `split-window`, `new-session`, `break-pane`;
     `new-window -k -S`, `split-window -p -I -Z`, `break-pane -n -s -a -b`;

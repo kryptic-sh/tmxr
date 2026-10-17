@@ -45,6 +45,8 @@ remain-on-exit = false
 # tmux's defaults.
 synchronize-panes = false
 automatic-rename = true
+automatic-rename-format = "#{?pane_in_mode,[tmux],#{pane_current_command}}#{?pane_dead,[dead],}"
+monitor-bell = true
 # How windows are sized: "latest" (by the client that used it last) or
 # "manual" (only by resize-window).
 window-size = "latest"

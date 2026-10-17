@@ -1116,6 +1116,76 @@ fn respawn_window_finds_its_window_by_index() {
 }
 
 #[test]
+fn remain_on_exit_failed_monitor_bell_and_rename_format() {
+    let t = Tmxr::new("winopts");
+    t.run(&["new-session", "-d", "-s", "wo"]);
+    t.run(&["set", "-g", "renumber-windows", "off"]);
+    let show = |target: &str, f: &str| {
+        t.run(&["display-message", "-p", "-t", target, f])
+            .trim()
+            .to_owned()
+    };
+    // automatic-rename-format is what a window is renamed to.
+    t.run(&[
+        "set",
+        "-wg",
+        "automatic-rename-format",
+        "ar-#{window_index}",
+    ]);
+    t.wait_run(
+        &["display-message", "-p", "-t", "wo:0", "#W"],
+        "the window renamed",
+        |o| o.trim() == "ar-0",
+    );
+    // remain-on-exit failed keeps only a pane whose program failed.
+    t.run(&["set", "-g", "remain-on-exit", "failed"]);
+    #[cfg(unix)]
+    let (ok, fail) = (["/bin/sh", "-c", "exit 0"], ["/bin/sh", "-c", "exit 3"]);
+    #[cfg(windows)]
+    let (ok, fail) = (["cmd", "/c", "exit 0"], ["cmd", "/c", "exit 3"]);
+    let mut new = vec!["new-window", "-d", "-t", "wo:1"];
+    new.extend(ok);
+    t.run(&new);
+    let mut new = vec!["new-window", "-d", "-t", "wo:2"];
+    new.extend(fail);
+    t.run(&new);
+    t.wait_run(
+        &["list-windows", "-t", "wo", "-F", "#I #{pane_dead}"],
+        "only the failed pane kept",
+        |o| o == "0 0\n2 1\n",
+    );
+    // monitor-bell off: a bell flags nothing; on, it flags the window.
+    #[cfg(unix)]
+    let ring = ["/bin/sh", "-c", r"printf '\007rung'; sleep 30"];
+    #[cfg(windows)]
+    let ring = [
+        "powershell.exe",
+        "-NoProfile",
+        "-Command",
+        "[Console]::Out.Write([string][char]7 + 'rung'); Start-Sleep 30",
+    ];
+    t.run(&["set", "-g", "remain-on-exit", "off"]);
+    t.run(&["set", "-wg", "monitor-bell", "off"]);
+    let mut new = vec!["new-window", "-d", "-t", "wo:5"];
+    new.extend(ring);
+    t.run(&new);
+    t.wait_run(&["capture-pane", "-p", "-t", "wo:5"], "rung", |o| {
+        o.contains("rung")
+    });
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(show("wo:5", "#{window_bell_flag}"), "0");
+    t.run(&["set", "-wg", "monitor-bell", "on"]);
+    let mut again = vec!["new-window", "-d", "-t", "wo:6"];
+    again.extend(ring);
+    t.run(&again);
+    t.wait_run(
+        &["display-message", "-p", "-t", "wo:6", "#{window_bell_flag}"],
+        "the bell flag",
+        |o| o.trim() == "1",
+    );
+}
+
+#[test]
 fn default_command_is_what_a_new_pane_runs() {
     let t = Tmxr::new("defcmd");
     t.run(&["new-session", "-d", "-s", "dc"]);

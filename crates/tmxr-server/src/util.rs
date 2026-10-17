@@ -188,11 +188,16 @@ pub fn refresh_commands(srv: &mut Server) {
             srv.commands.insert(id, cmd);
         }
     }
+    // The name `automatic-rename-format` gives, for the active pane.
     let renames: Vec<(u32, String)> = srv
         .windows
         .values()
         .filter(|w| srv.window_options(w.id).automatic_rename)
-        .filter_map(|w| srv.commands.get(&w.active).map(|c| (w.id, c.clone())))
+        .map(|w| {
+            let vars = crate::vars::Vars::for_pane(srv, Some(w.active), None);
+            let fmt = &srv.window_options(w.id).automatic_rename_format;
+            (w.id, tmxr_command::format::expand(fmt, &vars))
+        })
         .collect();
     for (wid, name) in renames {
         if let Some(w) = srv.windows.get_mut(&wid)

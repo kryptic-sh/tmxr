@@ -15,7 +15,9 @@ pub use hjkl_config::{ConfigError, ConfigSource};
 pub use import::{Imported, from_tmux_conf};
 pub use session::{OwnSessionOptions, SessionOptions};
 pub use table::{Array, OptionValue, Word};
-pub use window::{BoxLines, ModeKeys, OwnOptions, PANE_OPTIONS, WindowOptions, WindowSize};
+pub use window::{
+    BoxLines, ModeKeys, OwnOptions, PANE_OPTIONS, RemainOnExit, WindowOptions, WindowSize,
+};
 
 mod import;
 mod session;
@@ -103,9 +105,11 @@ struct File {
     set_clipboard: String,
     rgb_colour: String,
     allow_passthrough: bool,
-    remain_on_exit: bool,
+    remain_on_exit: RemainOnExit,
     synchronize_panes: bool,
     automatic_rename: bool,
+    automatic_rename_format: String,
+    monitor_bell: bool,
     window_size: WindowSize,
     monitor_activity: bool,
     monitor_silence: u64,
@@ -177,6 +181,8 @@ impl From<File> for Config {
                 popup_border_style: s.popup_border_style,
                 popup_style: s.popup_style,
                 remain_on_exit: f.remain_on_exit,
+                automatic_rename_format: f.automatic_rename_format,
+                monitor_bell: f.monitor_bell,
                 synchronize_panes: f.synchronize_panes,
                 window_size: f.window_size,
                 window_status_current_format: s.window_current_format,

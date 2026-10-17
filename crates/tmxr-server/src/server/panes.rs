@@ -387,7 +387,7 @@ impl Server {
                 let clips = p.emu.take_clipboard();
                 let passthrough = p.emu.take_passthrough();
                 let wid = p.window;
-                if bell {
+                if bell && self.window_options(wid).monitor_bell {
                     crate::alerts::raise(self, wid, crate::alerts::Alert::Bell);
                 }
                 if let Some(w) = self.windows.get_mut(&wid) {
@@ -417,7 +417,7 @@ impl Server {
                 };
                 // A pane kept dead fires pane-died, one that goes
                 // pane-exited, as tmux's.
-                let remain = self.pane_options(pid).remain_on_exit;
+                let remain = self.pane_options(pid).remain_on_exit.keeps(code);
                 let hook = if remain { "pane-died" } else { "pane-exited" };
                 self.queue_hook(hook, ctx, crate::hooks::HookScope::default());
                 if remain && let Some(p) = self.panes.get_mut(&pid) {

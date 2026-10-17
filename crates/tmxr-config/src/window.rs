@@ -3,8 +3,89 @@
 
 use serde::Deserialize;
 
-use crate::table::{Word, options_table};
+use crate::table::{OptionValue, Word, options_table};
 use crate::{ScrollbarPosition, Scrollbars};
+
+/// `remain-on-exit`: whether a pane whose program exited stays, shown dead,
+/// as tmux's: never, always, or (`failed`) when it exited with an error or
+/// was killed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemainOnExit {
+    Off,
+    On,
+    Failed,
+}
+
+impl RemainOnExit {
+    pub const NAMES: &str = "off, on or failed";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "off" => Some(Self::Off),
+            "on" => Some(Self::On),
+            "failed" => Some(Self::Failed),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::On => "on",
+            Self::Failed => "failed",
+        }
+    }
+
+    /// Whether a pane whose program ended with exit `code` (`None`: killed
+    /// by a signal) stays.
+    pub const fn keeps(self, code: Option<u32>) -> bool {
+        match self {
+            Self::Off => false,
+            Self::On => true,
+            Self::Failed => !matches!(code, Some(0)),
+        }
+    }
+}
+
+/// The config file takes `true` / `false` as well as the names.
+impl<'de> Deserialize<'de> for RemainOnExit {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum File {
+            Flag(bool),
+            Name(String),
+        }
+        match File::deserialize(d)? {
+            File::Flag(true) => Ok(Self::On),
+            File::Flag(false) => Ok(Self::Off),
+            File::Name(n) => Self::parse(&n).ok_or_else(|| {
+                serde::de::Error::custom(format!("unknown value: {n} ({})", Self::NAMES))
+            }),
+        }
+    }
+}
+
+impl OptionValue for RemainOnExit {
+    /// No value toggles between off and on, as tmux toggles a choice
+    /// between its first two.
+    fn parse(value: Option<&str>, current: &Self) -> Result<Self, String> {
+        match value {
+            None => Ok(match current {
+                Self::Off => Self::On,
+                Self::On => Self::Off,
+                Self::Failed => Self::Failed,
+            }),
+            Some(v) => {
+                Self::parse(v).ok_or_else(|| format!("unknown value: {v} ({})", Self::NAMES))
+            }
+        }
+    }
+
+    fn show(&self) -> String {
+        self.as_str().to_owned()
+    }
+}
 
 /// The window options a pane may also set for itself (`set -p`), as tmux's
 /// option table scopes them.
@@ -126,6 +207,9 @@ options_table! {
     "allow-passthrough" => allow_passthrough: bool,
     /// Follow the active pane's command until the window is renamed.
     "automatic-rename" => automatic_rename: bool,
+    /// What `automatic-rename` names the window, expanded for its active
+    /// pane.
+    "automatic-rename-format" => automatic_rename_format: String,
     /// The colour of clock mode's digits.
     "clock-mode-colour" => clock_mode_colour: Word,
     /// Copy mode search matches under the cursor, and the others.
@@ -144,6 +228,8 @@ options_table! {
     "mode-style" => mode_style: String,
     /// Flag a window that prints while not current.
     "monitor-activity" => monitor_activity: bool,
+    /// Flag a window whose program rings the bell.
+    "monitor-bell" => monitor_bell: bool,
     /// Flag a window quiet for this many seconds; 0 is off.
     "monitor-silence" => monitor_silence: u64,
     "other-pane-height" => other_pane_height: String,
@@ -161,8 +247,8 @@ options_table! {
     "popup-border-style" => popup_border_style: String,
     "popup-style" => popup_style: String,
     /// Keep a pane whose program exited, shown as dead, until it is
-    /// respawned or killed.
-    "remain-on-exit" => remain_on_exit: bool,
+    /// respawned or killed: always, or only when it failed.
+    "remain-on-exit" => remain_on_exit: RemainOnExit,
     /// Send what is typed in a pane to all of its window's panes.
     "synchronize-panes" => synchronize_panes: bool,
     "window-size" => window_size: WindowSize,
@@ -216,7 +302,7 @@ mod tests {
         );
         assert_eq!(
             err(&mut o, "remain-on-exit", Some("x")),
-            "remain-on-exit: bad value: x"
+            "remain-on-exit: unknown value: x (off, on or failed)"
         );
         assert_eq!(err(&mut o, "menu-style", None), "menu-style: needs a value");
         assert_eq!(
@@ -238,7 +324,8 @@ mod tests {
             .unwrap();
         let o = own.over(Cow::Borrowed(&global));
         assert_eq!(o.mode_keys, ModeKeys::Emacs);
-        assert_eq!(o.remain_on_exit, !global.remain_on_exit);
+        assert_eq!(o.remain_on_exit, RemainOnExit::On);
+        assert_eq!(global.remain_on_exit, RemainOnExit::Off);
         assert_eq!(o.main_pane_width, format!("{}0", global.main_pane_width));
         assert_eq!(o.menu_style, global.menu_style);
         assert_eq!(own.show("mode-keys").as_deref(), Some("emacs"));

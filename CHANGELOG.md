@@ -63,6 +63,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`default-command`**, as tmux's: what a new window or pane runs, by the
   shell, when given no command (empty, the shell itself). A respawned pane keeps
   its own command.
+- **`automatic-rename-format`, `monitor-bell` and `remain-on-exit failed`**, as
+  tmux's: the format an automatic rename names a window with (tmux's default,
+  the active pane's command, or `[tmux]` in a mode), whether a bell flags a
+  window, and keeping a pane only when its program failed. `remain-on-exit` is
+  `off` / `on` / `failed` now; the config file still takes `true` / `false`.
 - **`#{client_flags}` and `#{client_readonly}`**: the client's `attached`,
   `focused`, `ignore-size` and `read-only` flags, in tmux's order, and whether
   it is read-only. A client is focused from attaching until its terminal reports
