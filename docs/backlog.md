@@ -410,11 +410,9 @@ table. What has been verified, and how:
 - **From a code review by a sub-agent (2026-10-18).** Found by reading code and
   tmux 3.6's source; nothing was run. Items marked _checked_ were confirmed by
   reading the code again; the rest are as reported.
-  - Targets: a `%id` is not taken as a window or session target, as tmux's
-    `cmd_find_target` takes it; pane `{left}` / `{right}` / `{up}` / `{down}`
-    mean the neighbour, where tmux's mean the leftmost / rightmost / top /
-    bottom pane and the neighbour is `{left-of}` and the like; pane `+N` / `-N`
-    are not read.
+  - Targets: pane `{left}` / `{right}` / `{up}` / `{down}` mean the neighbour,
+    where tmux's mean the leftmost / rightmost / top / bottom pane and the
+    neighbour is `{left-of}` and the like; pane `+N` / `-N` are not read.
   - A frame dropped for a slow client (`Server::send`) sets `full_redraw` but
     not `dirty`, so nothing repaints until the next event or status tick (never
     with `status-interval 0`).

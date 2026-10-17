@@ -62,6 +62,8 @@ pub fn session(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<SessionId> {
     let spec = spec.map(|s| s.split(':').next().unwrap_or(s));
     match spec.filter(|s| !s.is_empty()) {
         None => current_session(srv, ctx).ok_or_else(|| "no current session".into()),
+        // A window or pane id names the session it is in, as tmux's.
+        Some(s) if s.starts_with('@') || s.starts_with('%') => Ok(window(srv, ctx, Some(s))?.0),
         Some(s) => find_session(srv, s),
     }
 }
@@ -187,6 +189,22 @@ pub fn window(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, u3
             .ok_or_else(|| format!("can't find window: @{id}"))?;
         let idx = srv.sessions[&sid].index_of(id).unwrap_or_default();
         return Ok((sid, idx, id));
+    }
+    // A pane id names the window it is in, as tmux's `cmd_find_target`.
+    if let Some(pid) = spec
+        .strip_prefix('%')
+        .and_then(|n| n.parse::<PaneId>().ok())
+    {
+        let wid = srv
+            .panes
+            .get(&pid)
+            .map(|p| p.window)
+            .ok_or_else(|| format!("can't find pane: %{pid}"))?;
+        let sid = srv
+            .session_of_window(wid)
+            .ok_or_else(|| format!("can't find window: @{wid}"))?;
+        let idx = srv.sessions[&sid].index_of(wid).unwrap_or_default();
+        return Ok((sid, idx, wid));
     }
     let (sess, rest) = split_target(spec);
     let win_spec = rest.split('.').next().unwrap_or("");

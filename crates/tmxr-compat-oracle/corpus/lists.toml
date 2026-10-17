@@ -62,3 +62,12 @@ steps = [
 checks = [
   { command = "list-windows -t w -F '#I #W #{window_active}'", expect = "1 c 1\n2 a 0\n3 x 0\n4 y 0\n5 b 0\n6 z 0" },
 ]
+
+[[cases]]
+name = "a_pane_id_names_its_window_and_session"
+steps = [{ run = "new-window -d -t o:1 -n w1" }, { run = "rename-window -t %0 named" }]
+checks = [
+  { command = "list-windows -t %0 -F '#S #I #W'", expect = "o 0 named\no 1 w1" },
+  { command = "display -p -t o:0 '#W'", expect = "named" },
+  { command = "list-windows -t @0 -F '#S'", expect = "o\no" },
+]

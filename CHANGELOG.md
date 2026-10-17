@@ -50,6 +50,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A pane id names its window and session**, as tmux's: `kill-window -t %3` and
+  `rename-window -t $TMXR_PANE` failed with "can't find window", and a session
+  target now takes a window or pane id too (`list-windows -t %3`).
 - **`copy-pipe` with a command that writes before it reads, or reads only part
   of its input**: the selection was written whole before the command's error
   output was read, so a command filling that output first never got the rest and
