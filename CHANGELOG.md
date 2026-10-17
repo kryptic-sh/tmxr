@@ -34,6 +34,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`capture-pane` gives one line per row, as tmux's**: a wrapped line came out
+  joined and trailing blank rows were dropped; now each row is a line, blank
+  ones kept and trailing spaces dropped, and `-J` joins wrapped rows and keeps
+  trailing spaces.
 - **A pane's kitty keyboard flag stack is capped**: a program pushing flags
   (`CSI > n u`) without end grew the server's memory; a push to a full stack now
   drops the oldest entry, as the kitty protocol asks.

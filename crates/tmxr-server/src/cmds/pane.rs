@@ -354,12 +354,9 @@ pub(super) fn run(
         }
         "capture-pane" => {
             let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
-            let text = srv.panes[&pid].emu.screen().contents();
+            let text = capture(srv.panes[&pid].emu.screen(), a.has('J'));
             if a.has('p') {
                 out.stdout.push_str(&text);
-                if !text.ends_with('\n') {
-                    out.stdout.push('\n');
-                }
             } else {
                 srv.add_buffer(text, None);
             }
@@ -418,6 +415,28 @@ pub(super) fn run(
 }
 
 /// `-l size` of `split-window` / `join-pane`: cells, or `N%` of the pane.
+/// A pane's visible rows as `capture-pane` gives them, as tmux's: one line
+/// per row, blank rows kept, with its trailing spaces dropped; with `join`
+/// (`-J`) a wrapped row runs on into the next and trailing spaces stay.
+fn capture(screen: &vt100::Screen, join: bool) -> String {
+    let (_, cols) = screen.size();
+    let mut out = String::new();
+    for (row, text) in (0..).zip(screen.rows(0, cols)) {
+        if join {
+            out.push_str(&text);
+        } else {
+            out.push_str(text.trim_end_matches(' '));
+        }
+        if !(join && screen.row_wrapped(row)) {
+            out.push('\n');
+        }
+    }
+    if !out.ends_with('\n') {
+        out.push('\n');
+    }
+    out
+}
+
 fn split_size(a: &Args) -> Result<Option<SplitSize>, String> {
     let Some(l) = a.value('l') else {
         return Ok(None);

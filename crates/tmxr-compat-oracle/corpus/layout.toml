@@ -136,3 +136,14 @@ checks = [
   { command = "display -p -t o.0 '#{history_size} #{cursor_y} #{pane_height}'", expect = "26 14 15" },
   { command = "capture-pane -p -t o.0" },
 ]
+
+[[cases]]
+name = "capture_pane_prints_each_row_and_j_joins_wrapped_ones"
+unix_only = true
+size = [20, 6]
+program = "printf 'abcdefghijklmnopqrstuvwxyz\nhi   \n'; exec sleep 1000"
+steps = [{ sleep = 0.5 }]
+checks = [
+  { command = "capture-pane -p -t o", expect = "abcdefghijklmnopqrst\nuvwxyz\nhi" },
+  { command = "capture-pane -pJ -t o", expect = "abcdefghijklmnopqrstuvwxyz\nhi" },
+]

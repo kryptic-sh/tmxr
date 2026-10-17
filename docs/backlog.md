@@ -385,8 +385,6 @@ table. What has been verified, and how:
     mean the neighbour, where tmux's mean the leftmost / rightmost / top /
     bottom pane and the neighbour is `{left-of}` and the like; pane `+N` / `-N`
     are not read.
-  - `capture-pane -p` returns vt100's `contents()`, which joins wrapped rows and
-    drops trailing blank ones; tmux prints one line per row.
   - A frame dropped for a slow client (`Server::send`) sets `full_redraw` but
     not `dirty`, so nothing repaints until the next event or status tick (never
     with `status-interval 0`).
@@ -434,7 +432,7 @@ table. What has been verified, and how:
     `exit-empty`, `exit-unattached`, `buffer-limit`, `message-limit`,
     `focus-events`, `history-file`, `editor`, `prefix-timeout`. `escape-time` is
     kept but never read.
-  - Commands: `capture-pane -S -E -e -J -b -a -C -N -T -q`; `-P` / `-F` on
+  - Commands: `capture-pane -S -E -e -b -a -C -N -T -q`; `-P` / `-F` on
     `new-window`, `split-window`, `new-session`, `break-pane`;
     `new-window -k -S`, `split-window -p -I -Z`, `break-pane -n -s -a -b`;
     layout strings (`#{window_layout}`, `select-layout '<checksum>,…'`, `-o`);
