@@ -228,9 +228,13 @@ table. What has been verified, and how:
   `ignore-size`, and refuses tmux's others by name: `no-output`, `pause-after`
   and `wait-exit` are control-mode flags, and tmxr has no control mode;
   `active-pane` needs a per-client active pane; `no-detach-on-destroy` needs
-  `detach-on-destroy`, below. `!flag` (turn one off) and `refresh-client -f` are
-  not supported. A client's flags show in no format (`#{client_flags}`,
-  `#{client_readonly}` are missing).
+  `detach-on-destroy`, below. `!flag` and `refresh-client -f` / `-F` work as
+  tmux's (`!read-only` leaves a read-only client read-only). `#{client_flags}`
+  lists only what tmxr keeps: `attached`, `focused`, `ignore-size` and
+  `read-only`, not tmux's `suspended` or `UTF-8` (tmxr does not track either).
+  `focused` follows the terminal's focus reports, which tmxr always asks for;
+  tmux asks only with `focus-events on`. Not compared with a running tmux: the
+  oracle has no attached client.
 - **tmux default binds**: most of tmux's defaults are bound (see above);
   `prefix C-z` (suspend-client) errors on Windows, which has no job control.
   Alerts follow tmux 3.6's, as recorded from a running tmux on 2026-10-10 (WSL

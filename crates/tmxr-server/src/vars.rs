@@ -97,6 +97,22 @@ fn flag(b: bool) -> String {
     if b { "1" } else { "0" }.to_owned()
 }
 
+/// `#{client_flags}`: the flags tmux's `server_client_get_flags` lists that
+/// tmxr keeps, in its order.
+fn client_flags(c: &crate::server::Client) -> String {
+    let att = c.att.as_ref();
+    [
+        (att.is_some(), "attached"),
+        (att.is_some_and(|a| a.focused), "focused"),
+        (c.ignore_size, "ignore-size"),
+        (c.read_only(), "read-only"),
+    ]
+    .into_iter()
+    .filter_map(|(on, name)| on.then_some(name))
+    .collect::<Vec<_>>()
+    .join(",")
+}
+
 impl Context for Vars<'_> {
     fn get(&self, name: &str) -> Option<String> {
         let srv = self.srv;
@@ -121,6 +137,8 @@ impl Context for Vars<'_> {
             "client_prefix" => flag(att.is_some_and(|a| a.table == "prefix")),
             "client_key_table" => att.map(|a| a.table.clone())?,
             "client_name" => self.client?.to_string(),
+            "client_flags" => client_flags(srv.clients.get(&self.client?)?),
+            "client_readonly" => flag(srv.clients.get(&self.client?)?.read_only()),
             "client_width" => att?.cols.to_string(),
             "client_height" => att?.rows.to_string(),
             "client_session" => srv.sessions.get(&att?.session)?.name.clone(),

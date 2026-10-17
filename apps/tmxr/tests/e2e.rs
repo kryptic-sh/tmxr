@@ -5933,3 +5933,79 @@ fn an_ignore_size_client_sizes_windows_only_alone() {
         |o| o.trim() == "71x20",
     );
 }
+
+#[test]
+fn refresh_client_sets_and_clears_client_flags() {
+    let t = Tmxr::new("clientflags");
+    t.run(&["new-session", "-d", "-s", "cf"]);
+    let size = |t: &Tmxr| {
+        t.run(&[
+            "display-message",
+            "-p",
+            "-t",
+            "cf",
+            "#{window_width}x#{window_height}",
+        ])
+        .trim()
+        .to_owned()
+    };
+    let flags = |t: &Tmxr| {
+        t.run(&["list-clients", "-F", "#{client_flags} #{client_readonly}"])
+            .lines()
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+    };
+    let a = t.attach(&["attach", "-t", "cf"]);
+    a.wait_for("the status line", |text| text.contains("cf"));
+    t.wait_run(&["list-clients"], "the first client", |o| {
+        o.lines().count() == 1
+    });
+    let listed = flags(&t);
+    assert_eq!(listed.len(), 1, "{listed:?}");
+    assert!(listed[0].starts_with("attached") && listed[0].ends_with(" 0"));
+    // The second client typed last, so the window takes its size and
+    // refresh-client from outside means it.
+    let b = t.attach(&["attach", "-t", "cf"]);
+    b.wait_for("the status line", |text| text.contains("cf"));
+    b.resize(20, 70);
+    b.send(b"x");
+    t.wait_run(
+        &[
+            "display-message",
+            "-p",
+            "-t",
+            "cf",
+            "#{window_width}x#{window_height}",
+        ],
+        "the window sized for the second client",
+        |o| o.trim() == "70x19",
+    );
+
+    // -f ignore-size gives the window back to the first client at once.
+    t.run(&["refresh-client", "-f", "ignore-size"]);
+    assert_eq!(size(&t), format!("{COLS}x{}", ROWS - 1));
+    assert!(
+        flags(&t).iter().any(|l| l.contains("ignore-size")),
+        "{:?}",
+        flags(&t)
+    );
+    // !ignore-size turns it off, and the window follows that client again.
+    t.run(&["refresh-client", "-f", "!ignore-size"]);
+    assert_eq!(size(&t), "70x19");
+    assert!(!flags(&t).iter().any(|l| l.contains("ignore-size")));
+
+    // read-only shows in both formats, and as in tmux !read-only leaves it.
+    t.run(&["refresh-client", "-F", "read-only"]);
+    let ro = |t: &Tmxr| {
+        flags(t)
+            .iter()
+            .filter(|l| l.contains("read-only") && l.ends_with(" 1"))
+            .count()
+    };
+    assert_eq!(ro(&t), 1, "{:?}", flags(&t));
+    t.run(&["refresh-client", "-f", "!read-only"]);
+    assert_eq!(ro(&t), 1, "{:?}", flags(&t));
+    let out = t.output(&["refresh-client", "-f", "no-output"]);
+    assert!(!out.status.success(), "{out:?}");
+    drop(a);
+}

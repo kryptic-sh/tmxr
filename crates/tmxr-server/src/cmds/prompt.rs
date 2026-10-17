@@ -259,6 +259,12 @@ pub(super) fn run(
             let Some(c) = super::display_client(srv, ctx) else {
                 return Ok(true);
             };
+            // -f sets the client's flags (-F is the same, as tmux's), then
+            // the client redraws.
+            for list in [a.value('F'), a.value('f')] {
+                let flags = super::session::client_flags(list)?;
+                super::session::set_client_flags(srv, c, &flags);
+            }
             // -L / -R / -U / -D pan a window larger than the client by the
             // adjustment (1 by default), from where the view is now; -c
             // goes back to following the cursor. As tmux 3.6's.

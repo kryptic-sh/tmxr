@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`refresh-client -f` / `-F`** sets a client's flags, as tmux's, and `!flag`
+  turns one off (`-f '!ignore-size'`) there and in `attach-session -f` /
+  `new-session -f`; turning `ignore-size` on or off resizes the windows at once.
+- **`#{client_flags}` and `#{client_readonly}`**: the client's `attached`,
+  `focused`, `ignore-size` and `read-only` flags, in tmux's order, and whether
+  it is read-only.
+
 ## [0.9.0] - 2026-10-17
 
 ### Changed

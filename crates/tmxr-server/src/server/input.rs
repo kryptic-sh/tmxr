@@ -52,7 +52,11 @@ impl Server {
                 self.size_session(session);
             }
             TermEvent::Mouse(m) => crate::mouse::handle(self, id, m),
-            TermEvent::FocusGained | TermEvent::FocusLost => {}
+            TermEvent::FocusGained | TermEvent::FocusLost => {
+                if let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
+                    att.focused = matches!(ev, TermEvent::FocusGained);
+                }
+            }
         }
     }
 

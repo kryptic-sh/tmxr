@@ -108,6 +108,9 @@ pub struct Attached {
     pub mouse: bool,
     /// When this client's status timer last fired (`status-interval`).
     pub status_at: Instant,
+    /// The terminal last reported focus in, not out (`focused` in
+    /// `#{client_flags}`).
+    pub focused: bool,
     /// `refresh-client -L` / `-R` / `-U` / `-D`: the view of a window larger
     /// than the client held at this offset, until `-c` or another window.
     pub pan: Option<(WindowId, u16, u16)>,

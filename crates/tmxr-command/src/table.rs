@@ -406,10 +406,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "refresh-client",
         Some("refresh"),
-        "cDLRU",
+        "cDf:F:LRU",
         0,
         1,
-        "[-cDLRU] [adjustment]"
+        "[-cDLRU] [-f flags] [adjustment]"
     ),
     cmd!(
         "rename-session",
