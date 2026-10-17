@@ -132,15 +132,25 @@ fn split_target(spec: &str) -> (Option<&str>, &str) {
 /// the current one; a missing index means "the first free one".
 pub fn destination(srv: &Server, ctx: &Ctx, spec: &str) -> Res<(SessionId, Option<u32>)> {
     let index = |s: &str| s.trim_start_matches('=').parse::<u32>().ok();
-    let (sess, idx) = match spec.split_once(':') {
-        Some((sess, rest)) => (sess, index(rest)),
-        None if index(spec).is_some() => ("", index(spec)),
-        None => (spec, None),
+    let (sess, rest) = match spec.split_once(':') {
+        Some((sess, rest)) => (sess, rest),
+        None if index(spec).is_some() => ("", spec),
+        None => (spec, ""),
     };
     let sid = if sess.is_empty() {
         current_session(srv, ctx).ok_or("no current session")?
     } else {
         find_session(srv, sess)?
+    };
+    // A number is an index that need not exist; anything else names a
+    // window that does (`session:name`, `session:!`), as tmux's
+    // `CMD_FIND_WINDOW_INDEX`.
+    let idx = match rest {
+        "" => None,
+        r => match index(r) {
+            Some(i) => Some(i),
+            None => Some(window_index(srv, sid, r)?),
+        },
     };
     Ok((sid, idx))
 }

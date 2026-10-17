@@ -236,10 +236,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "link-window",
         Some("linkw"),
-        "adks:t:",
+        "abdks:t:",
         0,
         0,
-        "[-adk] [-s src-window] [-t dst-window]"
+        "[-abdk] [-s src-window] [-t dst-window]"
     ),
     cmd!(
         "list-buffers",
@@ -326,10 +326,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "move-window",
         Some("movew"),
-        "dkrs:t:",
+        "abdkrs:t:",
         0,
         0,
-        "[-dkr] [-s src-window] [-t dst-window]"
+        "[-abdkr] [-s src-window] [-t dst-window]"
     ),
     cmd!(
         "navigate-pane",
@@ -350,10 +350,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "new-window",
         Some("neww"),
-        "adc:e:n:t:",
+        "abdc:e:n:t:",
         0,
         ANY,
-        "[-ad] [-c start-directory] [-n window-name] [-t target-window] [command]"
+        "[-abd] [-c start-directory] [-n window-name] [-t target-window] [command]"
     ),
     cmd!(
         "next-layout",

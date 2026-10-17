@@ -28,6 +28,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`move-window -a` / `-b` and `link-window -a` / `-b`** put the window after
+  (or before) the target and move the later windows up, as tmux's
+  `winlink_shuffle_up`; `move-window` refused both flags, `link-window -a` took
+  the next free index, and `-b` did not exist. `new-window -a` moves the later
+  windows up too, and takes `-b`. A destination like `-t session:name` now finds
+  the window of that name; it was read as no index at all.
 - **`-t =name` finds only that exact name**, as tmux's: `has-session -t =foo`
   found a session `foobar` by its prefix, and `-t session:=window` found no
   window at all. A session or window name may also be an `fnmatch` pattern

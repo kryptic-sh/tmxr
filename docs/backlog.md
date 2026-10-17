@@ -342,6 +342,11 @@ table. What has been verified, and how:
   give `["deep", "after"]`. Its output was not captured; it passed 5 runs alone
   and 2 full runs right after. If it recurs, keep the `out` the assertion
   prints.
+- **`popups_and_menus_are_placed_where_tmux_places_them` failed on macOS**
+  (2026-10-18, CI run 39067127625, the `no test writes real user state` job, all
+  three tries): after the test sent a lone Escape, the menu stayed open until
+  the 30 s timeout. The regular macOS test job passed in the same run, and
+  re-running the failed job passed. Not reproduced or explained.
 - **Handoffs to tmxr** at a program's edge: hjkl 0.42.2 (its `App::nav_step`,
   unit-tested in hjkl's suite) and nvim with
   [tmxr-navigator.nvim](https://github.com/kryptic-sh/tmxr-navigator.nvim)
@@ -380,10 +385,6 @@ table. What has been verified, and how:
     mean the neighbour, where tmux's mean the leftmost / rightmost / top /
     bottom pane and the neighbour is `{left-of}` and the like; pane `+N` / `-N`
     are not read.
-  - `move-window -a` / `-b` are refused by the table (`"dkrs:t:"`, _checked_)
-    though the shared `move-window | link-window` arm in `cmds/window.rs` reads
-    `-a`; tmux's `-a` also shifts later windows up rather than taking the next
-    free index.
   - `capture-pane -p` returns vt100's `contents()`, which joins wrapped rows and
     drops trailing blank ones; tmux prints one line per row.
   - A frame dropped for a slow client (`Server::send`) sets `full_redraw` but
@@ -447,7 +448,7 @@ table. What has been verified, and how:
     kept but never read.
   - Commands: `capture-pane -S -E -e -J -b -a -C -N -T -q`; `-P` / `-F` on
     `new-window`, `split-window`, `new-session`, `break-pane`;
-    `new-window -b -k -S`, `split-window -p -I -Z`, `break-pane -n -s -a -b`;
+    `new-window -k -S`, `split-window -p -I -Z`, `break-pane -n -s -a -b`;
     layout strings (`#{window_layout}`, `select-layout '<checksum>,…'`, `-o`);
     `display-message -d -a -v -l -I -N -c -F`; `choose-*` templates and
     `-F -f -K -O -r -N -y`, tagging and sort keys; `command-prompt` with several

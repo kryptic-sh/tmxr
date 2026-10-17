@@ -32,3 +32,33 @@ checks = [
   { command = "display -p -t 'foobar:ma*' '#W'", expect = "main" },
   { command = "display -p -t 'foobar:=1' '#W'", expect = "main" },
 ]
+
+[[cases]]
+name = "new_window_a_and_b_move_later_windows_up"
+steps = [
+  { run = "new-session -d -s w -n a" },
+  { run = "new-window -d -t w:1 -n b" },
+  { run = "new-window -d -t w:2 -n c" },
+  { run = "new-window -d -a -t w:0 -n x" },
+  { run = "new-window -d -b -t w:0 -n y" },
+]
+checks = [
+  { command = "list-windows -t w -F '#I #W #{window_active}'", expect = "0 y 0\n1 a 1\n2 x 0\n3 b 0\n4 c 0" },
+]
+
+[[cases]]
+name = "move_and_link_window_a_and_b_move_later_windows_up"
+steps = [
+  { run = "rename-window -t o:0 z" },
+  { run = "new-session -d -s w -n a" },
+  { run = "new-window -d -t w:1 -n b" },
+  { run = "new-window -d -t w:2 -n c" },
+  { run = "new-window -d -a -t w:0 -n x" },
+  { run = "new-window -d -b -t w:0 -n y" },
+  { run = "move-window -a -s w:c -t w:0" },
+  { run = "move-window -d -b -s w:y -t w:b" },
+  { run = "link-window -d -a -s o:0 -t w:5" },
+]
+checks = [
+  { command = "list-windows -t w -F '#I #W #{window_active}'", expect = "1 c 1\n2 a 0\n3 x 0\n4 y 0\n5 b 0\n6 z 0" },
+]

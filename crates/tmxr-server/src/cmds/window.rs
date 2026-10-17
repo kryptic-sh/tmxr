@@ -25,16 +25,15 @@ pub(super) fn run(
     let pos = a.positional();
     match p.name() {
         "new-window" => {
-            let (sid, cur_idx, _) = target::window(srv, ctx, None)?;
-            let (sid, index) = match a.value('t') {
+            let (sid, _, _) = target::window(srv, ctx, None)?;
+            let (sid, mut index) = match a.value('t') {
                 Some(t) if !t.is_empty() => target::destination(srv, ctx, t)?,
-                _ if a.has('a') => {
-                    let s = &srv.sessions[&sid];
-                    let idx = ((cur_idx + 1)..).find(|i| !s.windows.contains_key(i));
-                    (sid, idx)
-                }
                 _ => (sid, None),
             };
+            // -a / -b: next to the target window, the later ones moving up.
+            if a.has('a') || a.has('b') {
+                index = srv.index_beside(sid, index, a.has('b'));
+            }
             let pane = srv.active_pane_of_session(sid);
             let cwd = cwd_arg(srv, ctx, pane, a);
             let size = srv
@@ -65,11 +64,9 @@ pub(super) fn run(
                 Some(t) if !t.is_empty() => target::destination(srv, ctx, t)?,
                 _ => (target::session(srv, ctx, None)?, None),
             };
-            // -a: the first free index after the target.
-            if a.has('a') {
-                let s = &srv.sessions[&dst];
-                let after = index.unwrap_or(s.current);
-                index = ((after + 1)..).find(|i| !s.windows.contains_key(i));
+            // -a / -b: next to the target window, the later ones moving up.
+            if a.has('a') || a.has('b') {
+                index = srv.index_beside(dst, index, a.has('b'));
             }
             // -k: a window already at the index makes room. It is taken out
             // of the map directly, not unlinked, so a session whose only

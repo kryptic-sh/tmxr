@@ -73,6 +73,46 @@ impl Server {
 
     /// Link `wid` into session `dst` as well, at `index` (the first free
     /// index when `None`): one window, shown in both.
+    /// Make room for a window next to the one at index `at` of session
+    /// `sid`: after it, or with `before` in its place. The windows from
+    /// there to the next free index move up by one, as tmux's
+    /// `winlink_shuffle_up`, and the current and last window stay the same
+    /// windows. Returns the index made free.
+    pub fn shuffle_up(&mut self, sid: SessionId, at: u32, before: bool) -> Option<u32> {
+        let s = self.sessions.get_mut(&sid)?;
+        let idx = if before { at } else { at.checked_add(1)? };
+        let free = (idx..u32::MAX).find(|i| !s.windows.contains_key(i))?;
+        let current = s.windows.get(&s.current).copied();
+        let last = s.last.and_then(|l| s.windows.get(&l).copied());
+        for i in (idx..free).rev() {
+            if let Some(w) = s.windows.remove(&i) {
+                s.windows.insert(i + 1, w);
+            }
+        }
+        if let Some(c) = current.and_then(|w| s.index_of(w)) {
+            s.current = c;
+        }
+        s.last = last.and_then(|w| s.index_of(w));
+        self.mark_session_dirty(sid);
+        Some(idx)
+    }
+
+    /// The index `-a` / `-b` give a window put in session `sid` next to
+    /// `index` (the current window when that holds none): the index
+    /// [`Server::shuffle_up`] frees, else `index` itself, as tmux's.
+    pub fn index_beside(
+        &mut self,
+        sid: SessionId,
+        index: Option<u32>,
+        before: bool,
+    ) -> Option<u32> {
+        let s = self.sessions.get(&sid)?;
+        let at = index
+            .filter(|i| s.windows.contains_key(i))
+            .unwrap_or(s.current);
+        self.shuffle_up(sid, at, before).or(index)
+    }
+
     pub fn link_window(
         &mut self,
         wid: WindowId,
