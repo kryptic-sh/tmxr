@@ -1395,8 +1395,16 @@ fn key_log_fixture() {
     // navigator test), so focus is logged only when the test wants it.
     let focus = std::env::var_os(KEY_LOG_FOCUS).is_some();
     if focus {
+        // The marker follows the mode, so a test that sees it on screen
+        // knows the server has the mode too.
         crossterm::execute!(std::io::stdout(), EnableFocusChange).unwrap();
+        print!("focus-on");
+        std::io::stdout().flush().unwrap();
     }
+    // Start crossterm's reader before saying so: on Linux, input that came
+    // before it existed was lost now and then (a focus report, about one
+    // full run in four; none in twelve once it starts here).
+    let _ = crossterm::event::poll(Duration::ZERO);
     writeln!(log, "ready").unwrap();
     loop {
         match read().unwrap() {
@@ -1619,6 +1627,11 @@ fn a_pane_that_asked_is_told_when_it_gains_and_loses_focus() {
         }
     };
     wait_log("ready", 1);
+    // tmux tells a pane nothing when it turns focus reports on, only when
+    // its focus changes: attach once the server has the mode.
+    t.wait_run(&["capture-pane", "-p", "-t", "fo"], "the mode", |o| {
+        o.contains("focus-on")
+    });
     // Shown to a client, the active pane gains focus.
     let s = t.attach(&["attach", "-t", "fo"]);
     s.wait_for("the status line", |text| text.contains("fo"));

@@ -401,7 +401,12 @@ table. What has been verified, and how:
   resize plainly. The test resizes again until the server has the size. A
   separate gap, not shown to matter: the hello's size is read at connect, before
   crossterm watches for resizes, so a resize between connect and attach would
-  also be missed.
+  also be missed. A related finding: the e2e key-log fixture lost a focus report
+  (`CSI I`, written by the server) in about one full Linux run in four when it
+  arrived before the fixture's first crossterm `read`, and in none of twelve
+  once the fixture polled first (`key_log_fixture`). Whether crossterm drops
+  input that comes before its reader starts, and whether that is what loses the
+  client's resize, is not established.
 - **From a code review by a sub-agent (2026-10-18).** Found by reading code and
   tmux 3.6's source; nothing was run. Items marked _checked_ were confirmed by
   reading the code again; the rest are as reported.
