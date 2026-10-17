@@ -1000,6 +1000,35 @@ fn resurrect_restores_a_multi_pane_layout() {
 }
 
 #[test]
+fn the_buffer_limit_drops_only_automatic_buffers() {
+    let t = Tmxr::new("buflimit");
+    t.run(&["new-session", "-d", "-s", "bl"]);
+    t.run(&["set-buffer", "-b", "keep", "k"]);
+    for i in 0..52 {
+        t.run(&["set-buffer", &format!("a{i}")]);
+    }
+    let names = |t: &Tmxr| -> Vec<String> {
+        t.run(&["list-buffers", "-F", "#{buffer_name}"])
+            .lines()
+            .map(str::to_owned)
+            .collect()
+    };
+    // As tmux 3.6: the 50 newest automatic buffers, and the named one.
+    let listed = names(&t);
+    assert_eq!(listed.len(), 51, "{listed:?}");
+    assert_eq!(listed.first().map(String::as_str), Some("buffer51"));
+    assert_eq!(listed.last().map(String::as_str), Some("keep"));
+    assert!(!listed.contains(&"buffer1".to_owned()), "{listed:?}");
+    // Set by name, an automatic buffer counts as named from then on.
+    t.run(&["set-buffer", "-b", "buffer10", "named"]);
+    t.run(&["set-buffer", "z1"]);
+    t.run(&["set-buffer", "z2"]);
+    let listed = names(&t);
+    assert_eq!(listed.len(), 52, "{listed:?}");
+    assert!(listed.contains(&"buffer10".to_owned()), "{listed:?}");
+}
+
+#[test]
 fn buffers_save_to_and_load_from_files() {
     let t = Tmxr::new("buffers");
     t.run(&["new-session", "-d", "-s", "b"]);

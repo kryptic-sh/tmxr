@@ -122,6 +122,9 @@ pub struct Attached {
 pub struct Buffer {
     pub name: String,
     pub data: String,
+    /// Named by tmxr (`bufferN`), not by `-b`: only these count against
+    /// [`BUFFER_LIMIT`] and make way for new ones, as tmux's.
+    pub automatic: bool,
 }
 
 pub struct Server {
@@ -204,7 +207,8 @@ const DRAIN_BUDGET: Duration = Duration::from_millis(20);
 pub const STATUS_ROWS: u16 = 1;
 /// Messages kept for `show-messages`.
 const MESSAGE_LOG: usize = 100;
-/// Paste buffers kept (tmux's `buffer-limit`).
+/// Automatic paste buffers kept (tmux's `buffer-limit`); named ones are
+/// never dropped for it.
 const BUFFER_LIMIT: usize = 50;
 
 impl Server {
@@ -591,20 +595,33 @@ impl Server {
         }
     }
 
+    /// Add a paste buffer, or with `name` set the one of that name, which
+    /// then counts as named, as tmux's `paste_set`. The oldest automatic
+    /// buffer makes way once there are more than [`BUFFER_LIMIT`].
     pub fn add_buffer(&mut self, data: String, name: Option<String>) {
         if let Some(n) = &name
             && let Some(b) = self.buffers.iter_mut().find(|b| &b.name == n)
         {
             b.data = data;
+            b.automatic = false;
             return;
         }
+        let automatic = name.is_none();
         let name = name.unwrap_or_else(|| {
             let n = format!("buffer{}", self.next_buffer);
             self.next_buffer += 1;
             n
         });
-        self.buffers.push_front(Buffer { name, data });
-        self.buffers.truncate(BUFFER_LIMIT);
+        self.buffers.push_front(Buffer {
+            name,
+            data,
+            automatic,
+        });
+        while self.buffers.iter().filter(|b| b.automatic).count() > BUFFER_LIMIT {
+            if let Some(oldest) = self.buffers.iter().rposition(|b| b.automatic) {
+                self.buffers.remove(oldest);
+            }
+        }
     }
 
     /// Put text on the clipboard: OSC 52 to every attached client (works

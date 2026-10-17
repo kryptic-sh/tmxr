@@ -396,8 +396,6 @@ table. What has been verified, and how:
     every run-time `set -g`; a later plain `source-file` reloads `PATH`.
   - One config error at start throws the whole file away for the defaults; the
     only sign is a line in `show-messages`.
-  - `add_buffer`'s limit evicts named buffers too; tmux evicts only automatic
-    ones.
   - The kitty keyboard flag stack (`Hooks::unhandled_csi`) has no cap.
   - `copy-pipe`'s `pipe_to_shell` writes all of stdin before reading stderr (a
     deadlock if the command fills stderr first); its spawn error is discarded.

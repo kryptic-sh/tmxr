@@ -34,6 +34,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The paste buffer limit drops only automatic buffers**, as tmux's: a buffer
+  named with `-b` was dropped like any other once 50 were kept; now only the
+  oldest `bufferN` makes way, and named buffers stay until deleted. A buffer set
+  by name (`set-buffer -b buffer3`) counts as named from then on, as in tmux.
 - **A `#[` style with no `]` ends the text there**, as tmux stops drawing: the
   status line showed the text before it twice (`ab#[fg` drew `abab#[fg`).
 - **`run-shell`, `if-shell`, `copy-pipe` and `pipe-pane` commands run in their
