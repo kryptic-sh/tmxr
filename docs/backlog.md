@@ -422,8 +422,10 @@ table. What has been verified, and how:
     reading could freeze every session); its errors are discarded.
   - `source-file PATH` sets `cfg_path` and replaces the whole config, losing
     every run-time `set -g`; a later plain `source-file` reloads `PATH`.
-  - One config error at start throws the whole file away for the defaults; the
-    only sign is a line in `show-messages`.
+  - One config error at start throws the whole file away for the defaults
+    (`tmxr_server::run`); the first client to attach is now told so, but the
+    file's good parts are not kept. tmux runs a config line by line and keeps
+    what worked; tmxr's TOML is read whole.
   - Performance: entering copy mode copies every history row into
     `copy::snapshot` (a String per cell) on the server thread; Windows takes two
     process snapshots per pane per second in `util::refresh_commands`;

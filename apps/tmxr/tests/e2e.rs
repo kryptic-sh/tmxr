@@ -775,6 +775,27 @@ fn import_tmux_conf_prints_a_config_that_loads() {
 }
 
 #[test]
+fn a_config_that_cannot_be_used_is_shown_to_the_first_client() {
+    let t = Tmxr::new("badcfg");
+    std::fs::write(
+        &t.config,
+        "mouse = \"maybe\"
+",
+    )
+    .unwrap();
+    let s = t.attach(&["new", "-s", "bc"]);
+    s.wait_for("the error", |text| {
+        text.contains("config error, using defaults")
+    });
+    assert!(t.run(&["show-messages"]).contains("config error"));
+    // Once: a second client is not told again.
+    let second = t.attach(&["attach", "-t", "bc"]);
+    second.wait_for("the status line", |text| text.contains("bc"));
+    std::thread::sleep(Duration::from_millis(300));
+    assert!(!second.text().contains("config error"), "{}", second.text());
+}
+
+#[test]
 fn update_environment_entries_are_patterns() {
     let t = Tmxr::new("envglob");
     // Top-level keys go before the file's first table.

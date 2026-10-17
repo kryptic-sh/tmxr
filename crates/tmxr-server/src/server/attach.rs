@@ -64,6 +64,11 @@ impl Server {
             ..Ctx::default()
         };
         self.queue_hook("client-attached", ctx, crate::hooks::HookScope::default());
+        // A config file that could not be used is said where it is seen, as
+        // tmux shows its config errors to the first client.
+        if let Some(e) = self.config_error.take() {
+            self.show_message(id, e);
+        }
     }
 
     pub fn detach(&mut self, id: ClientId, reason: &str) {

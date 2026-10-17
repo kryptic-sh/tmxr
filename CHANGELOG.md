@@ -28,6 +28,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `pane-mode-changed`, `pane-title-changed`, `client-session-changed`,
   `client-resized` and `pane-died`, fired for the same actions as tmux 3.6's and
   kept with the same options (the window and pane ones with `-wg`).
+- **A config file the server could not use is shown to the first client**:
+  starting with the defaults because of an error in the file was told only in
+  `show-messages`; the first client to attach now sees it as a message too, as
+  tmux shows its config errors.
 - **`#{client_flags}` and `#{client_readonly}`**: the client's `attached`,
   `focused`, `ignore-size` and `read-only` flags, in tmux's order, and whether
   it is read-only. A client is focused from attaching until its terminal reports

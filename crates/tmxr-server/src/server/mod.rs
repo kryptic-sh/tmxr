@@ -181,6 +181,9 @@ pub struct Server {
     pub pending_hooks: Vec<(String, Ctx, crate::hooks::HookScope)>,
     /// The state the notification hooks last saw (`notify`).
     pub watched: crate::notify::Watched,
+    /// Why the config file was not used when the server started, shown to
+    /// the first client that attaches.
+    pub config_error: Option<String>,
     /// A hook's commands are running: they fire no further hooks.
     pub in_hook: bool,
     last_save: Instant,
@@ -269,6 +272,7 @@ impl Server {
             hooks,
             pending_hooks: Vec::new(),
             watched: crate::notify::Watched::default(),
+            config_error: None,
             in_hook: false,
             last_save: Instant::now(),
             last_saved: None,

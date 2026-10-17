@@ -95,7 +95,9 @@ pub fn run(endpoint: Endpoint, config: Option<PathBuf>) -> std::io::Result<()> {
     let acl = std::sync::Arc::clone(&srv.acl);
     if let Some(e) = errors {
         tracing::warn!("config: {e}");
-        srv.log_message(format!("config error, using defaults: {e}"));
+        let message = format!("config error, using defaults: {e}");
+        srv.log_message(message.clone());
+        srv.config_error = Some(message);
     }
     if srv.cfg.resurrect.restore_on_start
         && let Err(e) = resurrect::restore_on_start(&mut srv)
