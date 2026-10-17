@@ -34,6 +34,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A `#[` style with no `]` ends the text there**, as tmux stops drawing: the
+  status line showed the text before it twice (`ab#[fg` drew `abab#[fg`).
 - **`run-shell`, `if-shell`, `copy-pipe` and `pipe-pane` commands run in their
   session's environment, with `TMXR`**, as tmux's jobs do: they had only the
   server's own environment, so a `tmxr` command in one talked to the default

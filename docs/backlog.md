@@ -392,7 +392,6 @@ table. What has been verified, and how:
     with `status-interval 0`).
   - `Pty::write` blocks the server thread (paste into a program that is not
     reading could freeze every session); its errors are discarded.
-  - `format::styled` repeats the text before an unclosed `#[`.
   - `source-file PATH` sets `cfg_path` and replaces the whole config, losing
     every run-time `set -g`; a later plain `source-file` reloads `PATH`.
   - One config error at start throws the whole file away for the defaults; the

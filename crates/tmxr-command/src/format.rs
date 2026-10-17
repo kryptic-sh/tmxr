@@ -414,6 +414,7 @@ pub fn parse_colour(s: &str) -> Option<Colour> {
 
 /// Split expanded text into `(style, text)` runs. Each `#[…]` updates the
 /// running style; text before the first one has the default (empty) style.
+/// A `#[` with no `]` ends the text there, as tmux's `format_draw` stops.
 pub fn styled(text: &str) -> Vec<(Style, String)> {
     let mut runs = Vec::new();
     let mut style = Style::default();
@@ -423,7 +424,7 @@ pub fn styled(text: &str) -> Vec<(Style, String)> {
             runs.push((style, rest[..at].to_owned()));
         }
         let Some(end) = rest[at..].find(']') else {
-            break;
+            return runs;
         };
         style.apply(&rest[at + 2..at + end]);
         rest = &rest[at + end + 1..];
@@ -531,6 +532,11 @@ mod tests {
         assert_eq!(runs[2].0.bg, Some(Colour::Indexed(3)));
         assert_eq!(runs[2].0.bold, Some(false));
         assert_eq!(runs[2].0.fg, Some(Colour::Rgb(0x7a, 0xa2, 0xf7)));
+        assert_eq!(
+            styled("ab#[fg=red"),
+            [(Style::default(), "ab".into())],
+            "an unclosed style ends the text"
+        );
         assert_eq!(parse_colour("brightred"), Some(Colour::Indexed(9)));
         assert_eq!(parse_colour("nope"), None);
     }
