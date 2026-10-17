@@ -430,8 +430,8 @@ table. What has been verified, and how:
     `#{pane_current_path}` inspects the process on each expansion; `#{m:…}`
     compiles its regex on each expansion. Not measured.
   - Large files: `apps/tmxr/tests/e2e.rs` (one file for every e2e test; its test
-    names already group by command family), `copy/mod.rs` (the snapshot model,
-    motions and search, the copy commands).
+    names already group by command family). `copy/mod.rs` keeps `CopyMode` with
+    its motions and search together (about 770 lines); they could part next.
   - A frame over `MAX_FRAME` fails quietly: the server's writer drops the
     connection.
 - **tmux 3.6 features tmxr lacks** (the same review; compared against tmux's
