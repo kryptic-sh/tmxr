@@ -89,6 +89,7 @@ impl Server {
         select: bool,
     ) -> Result<WindowId, String> {
         let base = self.session_options(session).base_index;
+        let argv = self.new_pane_argv(session, argv);
         let s = self.sessions.get(&session).ok_or("no such session")?;
         let index = match index {
             Some(i) if s.windows.contains_key(&i) => return Err(format!("index {i} in use")),

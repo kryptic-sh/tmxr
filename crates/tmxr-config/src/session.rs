@@ -18,6 +18,9 @@ options_table! {
     /// one looked for.
     "base-index" => base_index: u32,
     "bell-action" => bell_action: AlertAction,
+    /// What a new pane runs when given no command, by the shell; empty,
+    /// the shell itself.
+    "default-command" => default_command: String,
     /// The shell new panes run; none (or empty) is the platform's default,
     /// as tmxr-term's `pty::default_shell` picks it.
     "default-shell" => default_shell: Option<String>,

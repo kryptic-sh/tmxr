@@ -96,6 +96,7 @@ struct File {
     status_interval: u64,
     repeat_time: u64,
     default_terminal: String,
+    default_command: String,
     #[serde(default)]
     default_shell: Option<String>,
     extended_keys: String,
@@ -189,6 +190,7 @@ impl From<File> for Config {
                 activity_action: f.activity_action,
                 base_index: f.base_index,
                 bell_action: f.bell_action,
+                default_command: f.default_command,
                 default_shell: f.default_shell,
                 destroy_unattached: f.destroy_unattached,
                 display_panes_active_colour: Word(s.display_panes_active_colour),

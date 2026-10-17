@@ -60,6 +60,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   attached to it (`destroy-unattached on`, checked when a client attaches,
   detaches or switches, as tmux checks; `keep-last` and `keep-group` act as
   tmux's do for a session in no group).
+- **`default-command`**, as tmux's: what a new window or pane runs, by the
+  shell, when given no command (empty, the shell itself). A respawned pane keeps
+  its own command.
 - **`#{client_flags}` and `#{client_readonly}`**: the client's `attached`,
   `focused`, `ignore-size` and `read-only` flags, in tmux's order, and whether
   it is read-only. A client is focused from attaching until its terminal reports

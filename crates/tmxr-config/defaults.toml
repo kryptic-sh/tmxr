@@ -30,6 +30,8 @@ display-panes-time = 1000
 status-interval = 5
 repeat-time = 500
 default-terminal = "tmux-256color"
+# tmux's default: a new pane given no command runs the shell.
+default-command = ""
 extended-keys = "always"
 set-clipboard = "on"
 # 24-bit colour on every terminal, as the tmux config's `terminal-overrides

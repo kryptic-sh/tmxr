@@ -23,6 +23,21 @@ pub struct Started {
 }
 
 impl Server {
+    /// What a new pane runs: `argv`, else `session`'s `default-command`,
+    /// else the shell, as tmux's `spawn_pane`. A respawned pane keeps its own
+    /// command and does not come here.
+    pub fn new_pane_argv(&self, session: SessionId, argv: Vec<String>) -> Vec<String> {
+        if !argv.is_empty() {
+            return argv;
+        }
+        let command = self.session_options(session).default_command.clone();
+        if command.is_empty() {
+            Vec::new()
+        } else {
+            vec![command]
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn spawn_pane(
         &mut self,
@@ -212,6 +227,7 @@ impl Server {
     ) -> Result<PaneId, String> {
         let wid = self.panes.get(&target).ok_or("no such pane")?.window;
         let session = self.session_of_window(wid).ok_or("window has no session")?;
+        let argv = self.new_pane_argv(session, argv);
         let new = self.next_pane;
         self.insert_leaf(target, new, horizontal, before, size)?;
         let win = self.windows.get_mut(&wid).ok_or("no such window")?;

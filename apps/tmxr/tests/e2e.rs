@@ -1096,6 +1096,36 @@ fn resurrect_restores_a_multi_pane_layout() {
 }
 
 #[test]
+fn default_command_is_what_a_new_pane_runs() {
+    let t = Tmxr::new("defcmd");
+    t.run(&["new-session", "-d", "-s", "dc"]);
+    let (marked, other) = if cfg!(windows) {
+        (
+            "echo dc-marker& ping -n 100 127.0.0.1 >NUL",
+            "echo given-cmd& ping -n 100 127.0.0.1 >NUL",
+        )
+    } else {
+        (
+            "echo dc-marker; exec sleep 100",
+            "echo given-cmd; exec sleep 100",
+        )
+    };
+    t.run(&["set", "-g", "default-command", marked]);
+    let shows = |target: &str, text: &'static str| {
+        t.wait_run(&["capture-pane", "-p", "-t", target], text, |o| {
+            o.lines().any(|l| l.trim() == text)
+        });
+    };
+    // A new window and a split run it; a command given wins.
+    t.run(&["new-window", "-t", "dc:1"]);
+    shows("dc:1", "dc-marker");
+    t.run(&["split-window", "-t", "dc:1"]);
+    shows("dc:1.1", "dc-marker");
+    t.run(&["new-window", "-t", "dc:2", other]);
+    shows("dc:2", "given-cmd");
+}
+
+#[test]
 fn destroy_unattached_and_the_exit_options_follow_tmux() {
     let t = Tmxr::new("lifecycle");
     t.run(&["new-session", "-d", "-s", "keep"]);
