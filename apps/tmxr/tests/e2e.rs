@@ -1125,6 +1125,25 @@ fn the_buffer_limit_drops_only_automatic_buffers() {
 }
 
 #[test]
+fn a_reply_too_large_to_send_is_an_error_not_a_dropped_connection() {
+    let t = Tmxr::new("bigreply");
+    t.run(&["new-session", "-d", "-s", "br"]);
+    // Larger than a frame may be (`MAX_FRAME`, 16 MiB).
+    let big = t.dir.path().join("big.txt");
+    std::fs::write(&big, "x".repeat(17 << 20)).unwrap();
+    let load = t.output(&["load-buffer", "-b", "big", &big.display().to_string()]);
+    assert!(load.status.success(), "{load:?}");
+    let out = t.output(&["show-buffer", "-b", "big"]);
+    assert!(!out.status.success());
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.contains("over the") && err.contains("byte limit"),
+        "{err}"
+    );
+    assert!(t.output(&["has-session", "-t", "br"]).status.success());
+}
+
+#[test]
 fn buffers_save_to_and_load_from_files() {
     let t = Tmxr::new("buffers");
     t.run(&["new-session", "-d", "-s", "b"]);

@@ -75,6 +75,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A reply too large to send is an error**: a command whose output was over the
+  protocol's 16 MiB frame (`show-buffer` of a huge buffer) left its client
+  waiting for good, as the server's writer stopped; it now gets an error saying
+  the reply was over the limit, and the connection carries on.
 - **A pane id names its window and session**, as tmux's: `kill-window -t %3` and
   `rename-window -t $TMXR_PANE` failed with "can't find window", and a session
   target now takes a window or pane id too (`list-windows -t %3`).

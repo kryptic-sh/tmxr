@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use interprocess::local_socket::Listener;
 use interprocess::local_socket::traits::{ListenerExt as _, Stream as _};
-use tmxr_proto::{ClientMsg, ServerMsg, read_msg, write_msg};
+use tmxr_proto::{ClientMsg, ProtoError, ServerMsg, read_msg, write_msg};
 use tracing::{debug, warn};
 
 use crate::access::SharedAcl;
@@ -118,8 +118,28 @@ pub fn accept_loop(
                     .name(format!("tmxr-client-{id}-write"))
                     .spawn(move || {
                         for msg in rx {
-                            if write_msg(&mut send, &msg).is_err() {
-                                break;
+                            match write_msg(&mut send, &msg) {
+                                Ok(()) => {}
+                                // Nothing of a message too large was sent,
+                                // so the connection still works: a reply
+                                // becomes an error saying so, anything else
+                                // is dropped.
+                                Err(ProtoError::TooLarge(n)) => {
+                                    if matches!(msg, ServerMsg::CommandResult { .. }) {
+                                        let reply = ServerMsg::CommandResult {
+                                            status: 1,
+                                            stdout: String::new(),
+                                            stderr: format!(
+                                                "the reply, {n} bytes, is over the {}-byte limit",
+                                                tmxr_proto::codec::MAX_FRAME
+                                            ),
+                                        };
+                                        if write_msg(&mut send, &reply).is_err() {
+                                            break;
+                                        }
+                                    }
+                                }
+                                Err(_) => break,
                             }
                         }
                     })

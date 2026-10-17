@@ -429,8 +429,9 @@ table. What has been verified, and how:
   - Large files: `apps/tmxr/tests/e2e.rs` (one file for every e2e test; its test
     names already group by command family). `copy/mod.rs` keeps `CopyMode` with
     its motions and search together (about 770 lines); they could part next.
-  - A frame over `MAX_FRAME` fails quietly: the server's writer drops the
-    connection.
+  - A message over `MAX_FRAME` from the client (`load-buffer -` of more than 16
+    MiB) fails on the client before it is sent; the server turns a reply that
+    large into an error (`conn.rs`).
 - **tmux 3.6 features tmxr lacks** (the same review; compared against tmux's
   `cmd-*.c`, `options-table.c` and `format.c`, not run):
   - Formats: `#(shell)` and strftime in status formats (tmux's default
