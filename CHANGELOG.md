@@ -28,6 +28,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An environment variable that is not valid Unicode no longer crashes tmxr**:
+  the client's hello and `show-environment -g` read the environment with
+  `std::env::vars`, which panics on one, ending the client or the whole server;
+  such variables are left out now (panes still inherit them).
 - **`move-window -a` / `-b` and `link-window -a` / `-b`** put the window after
   (or before) the target and move the later windows up, as tmux's
   `winlink_shuffle_up`; `move-window` refused both flags, `link-window -a` took

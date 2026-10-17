@@ -392,9 +392,6 @@ table. What has been verified, and how:
     with `status-interval 0`).
   - `Pty::write` blocks the server thread (paste into a program that is not
     reading could freeze every session); its errors are discarded.
-  - `std::env::vars()` panics on a variable that is not UTF-8: in `cmds/env.rs`
-    (`show-environment -g`) that is the server, in the client's `hello()` the
-    client (_checked_ both calls).
   - `run-shell`, `if-shell`, `copy-pipe` and `pipe-pane` children get no `TMXR`,
     so `run-shell 'tmxr …'` on a `-L` / `-S` server talks to the default one;
     tmux's jobs get `TMUX`.

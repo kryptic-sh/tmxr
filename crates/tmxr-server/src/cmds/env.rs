@@ -49,7 +49,7 @@ pub(super) fn run(
             let env = if a.has('g') {
                 // The server's own environment, with the global changes over
                 // it: what a new pane starts from.
-                let process: Environment = std::env::vars().collect();
+                let process: Environment = tmxr_term::env::vars().into_iter().collect();
                 srv.global_env.over(&process)
             } else {
                 let sid = target::session(srv, ctx, a.value('t'))?;
