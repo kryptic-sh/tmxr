@@ -282,6 +282,8 @@ fn window_index(srv: &Server, sid: SessionId, spec: &str) -> Res<u32> {
         "!" | "{last}" => return s.last.ok_or_else(|| "no last window".into()),
         "^" | "{start}" => return indices.first().copied().ok_or_else(|| "no windows".into()),
         "$" | "{end}" => return indices.last().copied().ok_or_else(|| "no windows".into()),
+        "{next}" => return step(1, ""),
+        "{previous}" => return step(-1, ""),
         _ if spec.starts_with('+') => return step(1, &spec[1..]),
         _ if spec.starts_with('-') => return step(-1, &spec[1..]),
         _ => {}
@@ -312,6 +314,67 @@ fn window_index(srv: &Server, sid: SessionId, spec: &str) -> Res<u32> {
         }
     }
     Err(format!("can't find window: {spec}"))
+}
+
+/// The pane names tmux takes besides an index and `+N` / `-N`
+/// (`cmd_find_pane_table`): the brace forms, and the edges and corners
+/// `window_find_string` reads.
+const PANE_WORDS: &[&str] = &[
+    "!",
+    "{last}",
+    "{next}",
+    "{previous}",
+    "{up-of}",
+    "{down-of}",
+    "{left-of}",
+    "{right-of}",
+    "{top}",
+    "{bottom}",
+    "{left}",
+    "{right}",
+    "{top-left}",
+    "{top-right}",
+    "{bottom-left}",
+    "{bottom-right}",
+    "top",
+    "bottom",
+    "left",
+    "right",
+    "top-left",
+    "top-right",
+    "bottom-left",
+    "bottom-right",
+];
+
+/// The pane at an edge or corner of a `cols` x `rows` window (`top`,
+/// `{left}`, `bottom-right` and the like), as tmux's `window_find_string`:
+/// the pane holding the middle of that edge, or that corner.
+fn pane_at_edge(
+    rects: &[(PaneId, hjkl_layout::LayoutRect)],
+    cols: u16,
+    rows: u16,
+    word: &str,
+) -> Option<PaneId> {
+    let word = word.trim_start_matches('{').trim_end_matches('}');
+    let (mid_x, mid_y) = (cols / 2, rows / 2);
+    let (right, bottom) = (cols.saturating_sub(1), rows.saturating_sub(1));
+    let (x, y) = match word.to_ascii_lowercase().as_str() {
+        "top" => (mid_x, 0),
+        "bottom" => (mid_x, bottom),
+        "left" => (0, mid_y),
+        "right" => (right, mid_y),
+        "top-left" => (0, 0),
+        "top-right" => (right, 0),
+        "bottom-left" => (0, bottom),
+        "bottom-right" => (right, bottom),
+        _ => return None,
+    };
+    // A cell on a border counts for the pane before it, as tmux's
+    // `window_get_active_at` reads one past each pane's right and bottom.
+    rects
+        .iter()
+        .find(|(_, r)| x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)
+        .map(|(id, _)| *id)
 }
 
 /// Resolve a pane target to `(session, window, pane)`.
@@ -358,18 +421,9 @@ pub fn pane(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, Wind
     // `.` is looked for after the `:`, as the session name may hold dots.
     let pane_token = |p: &str| {
         p.chars().all(|c| c.is_ascii_digit())
-            || matches!(
-                p,
-                "+" | "-"
-                    | "!"
-                    | "{last}"
-                    | "{next}"
-                    | "{previous}"
-                    | "{left}"
-                    | "{right}"
-                    | "{up}"
-                    | "{down}"
-            )
+            || p.starts_with('+')
+            || p.starts_with('-')
+            || PANE_WORDS.contains(&p)
     };
     let (win_part, pane_part) = match spec.split_once(':') {
         Some((sess, rest)) => match rest.rsplit_once('.') {
@@ -402,17 +456,37 @@ pub fn pane(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, Wind
     let pos = panes.iter().position(|p| *p == current).unwrap_or(0);
     let n = panes.len();
     let rects = crate::layout::pane_rects(&win.layout, win.cols, win.rows);
+    let not_found = || format!("can't find pane: {pane_part}");
     let dir =
-        |d| neighbour(&rects, current, win.last_pane, d, win.cols, win.rows).ok_or("no pane there");
+        |d| neighbour(&rects, current, win.last_pane, d, win.cols, win.rows).ok_or_else(not_found);
+    // `+N` / `-N` count from the current pane, wrapping, as tmux's.
+    let step = |forward: bool, count: &str| -> Res<PaneId> {
+        let count = if count.is_empty() {
+            1
+        } else {
+            count.parse::<usize>().map_err(|_| not_found())?
+        };
+        let k = count % n;
+        Ok(panes[if forward {
+            (pos + k) % n
+        } else {
+            (pos + n - k) % n
+        }])
+    };
     let pid = match pane_part {
         "" => current,
         "!" | "{last}" => win.last_pane.ok_or("no last pane")?,
-        "+" | "{next}" => panes[(pos + 1) % n],
-        "-" | "{previous}" => panes[(pos + n - 1) % n],
-        "{left}" => dir(Dir::Left)?,
-        "{right}" => dir(Dir::Right)?,
-        "{up}" => dir(Dir::Up)?,
-        "{down}" => dir(Dir::Down)?,
+        "{next}" => step(true, "")?,
+        "{previous}" => step(false, "")?,
+        "{left-of}" => dir(Dir::Left)?,
+        "{right-of}" => dir(Dir::Right)?,
+        "{up-of}" => dir(Dir::Up)?,
+        "{down-of}" => dir(Dir::Down)?,
+        p if p.starts_with('+') => step(true, &p[1..])?,
+        p if p.starts_with('-') => step(false, &p[1..])?,
+        p if p.parse::<u32>().is_err() => {
+            pane_at_edge(&rects, win.cols, win.rows, p).ok_or_else(not_found)?
+        }
         idx => {
             let i: u32 = idx.parse().map_err(|_| format!("can't find pane: {idx}"))?;
             let i = i

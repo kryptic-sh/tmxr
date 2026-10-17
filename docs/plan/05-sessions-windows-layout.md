@@ -30,11 +30,14 @@ comment says "start at 1"; the values say 0 — tmxr follows the values. See
 ## Targets
 
 tmux target syntax: `-t session:window.pane` with `$id`, `@id`, `%id`, names,
-indices, prefix matches, and the special tokens `{last}` / `!`, `{next}` / `+`,
-`{previous}` / `-`, `{left}`/`{right}`/`{up}`/`{down}` for panes. Resolution
-lives in `tmxr-server::target` with the client's current session/window/pane as
-the default — a command client inherits the pane from `TMXR_PANE`, so
-`tmxr select-pane -L` run inside a pane acts on _that_ pane's window.
+indices, prefix matches, fnmatch patterns, and the special tokens `{last}` /
+`!`, `{next}` / `+`, `{previous}` / `-`; for panes also `+N` / `-N`, the edges
+and corners (`{left}`, `{top-right}`, `bottom` and the like: the pane there, as
+tmux's `window_find_string`) and the neighbours of the active pane (`{left-of}`,
+`{up-of}` and the like). Resolution lives in `tmxr-server::target` with the
+client's current session/window/pane as the default — a command client inherits
+the pane from `TMXR_PANE`, so `tmxr select-pane -L` run inside a pane acts on
+_that_ pane's window.
 
 Session names may hold dots, which tmux's may not (`new-session -s my.app`; tmux
 turns the dot into `_`). Only `:` is refused, as it ends the session part. So a

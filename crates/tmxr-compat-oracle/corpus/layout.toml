@@ -147,3 +147,28 @@ checks = [
   { command = "capture-pane -p -t o", expect = "abcdefghijklmnopqrst\nuvwxyz\nhi" },
   { command = "capture-pane -pJ -t o", expect = "abcdefghijklmnopqrstuvwxyz\nhi" },
 ]
+
+[[cases]]
+name = "pane_targets_name_edges_corners_neighbours_and_offsets"
+steps = [
+  { run = "split-window -h -t o" },
+  { run = "split-window -v -t o.1" },
+  { run = "select-pane -t o.0" },
+  { run = "new-window -d -t o:1" },
+]
+checks = [
+  { command = "display -p -t 'o.{left}' '#P'", expect = "0" },
+  { command = "display -p -t 'o.{right}' '#P'", expect = "1" },
+  { command = "display -p -t 'o.{top}' '#P'", expect = "0" },
+  { command = "display -p -t 'o.{bottom}' '#P'", expect = "0" },
+  { command = "display -p -t 'o.{top-right}' '#P'", expect = "1" },
+  { command = "display -p -t 'o.{bottom-right}' '#P'", expect = "2" },
+  { command = "display -p -t 'o.bottom-left' '#P'", expect = "0" },
+  { command = "display -p -t 'o.{right-of}' '#P'", expect = "2" },
+  { command = "display -p -t 'o.+1' '#P'", expect = "1" },
+  { command = "display -p -t 'o.+2' '#P'", expect = "2" },
+  { command = "display -p -t 'o.-1' '#P'", expect = "2" },
+  { command = "display -p -t 'o.{next}' '#P'", expect = "1" },
+  { command = "display -p -t 'o.{previous}' '#P'", expect = "2" },
+  { command = "display -p -t 'o:{next}' '#I'", expect = "1" },
+]

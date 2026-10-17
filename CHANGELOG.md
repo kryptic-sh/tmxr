@@ -44,6 +44,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Pane targets `{left}`, `{right}`, `{top}` and `{bottom}` mean the pane at
+  that edge of the window, as tmux's**: `{left}` and `{right}` were the
+  neighbouring pane, which is now `{left-of}` / `{right-of}` / `{up-of}` /
+  `{down-of}`; `{up}` and `{down}` are gone, as tmux has neither. The corners
+  (`{top-left}` and the like) and the bare words (`bottom-right`) work too, as
+  do `+N` / `-N` from the current pane and a window's `{next}` / `{previous}`.
 - **`tmxr_proto::socket::format_tmxr_env` takes the session as an `Option`, and
   `parse_tmxr_env` returns it as one**: a job run with no session gets
   `TMXR=path,pid,-1`, as tmux writes `TMUX`.

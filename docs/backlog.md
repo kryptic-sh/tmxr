@@ -410,9 +410,6 @@ table. What has been verified, and how:
 - **From a code review by a sub-agent (2026-10-18).** Found by reading code and
   tmux 3.6's source; nothing was run. Items marked _checked_ were confirmed by
   reading the code again; the rest are as reported.
-  - Targets: pane `{left}` / `{right}` / `{up}` / `{down}` mean the neighbour,
-    where tmux's mean the leftmost / rightmost / top / bottom pane and the
-    neighbour is `{left-of}` and the like; pane `+N` / `-N` are not read.
   - A frame dropped for a slow client (`Server::send`) sets `full_redraw` but
     not `dirty`, so nothing repaints until the next event or status tick (never
     with `status-interval 0`).
@@ -467,15 +464,13 @@ table. What has been verified, and how:
     `-F -f -K -O -r -N -y`, tagging and sort keys; `command-prompt` with several
     `-p` and `%1`…`%9`, `-1 -N -b -F -l`, completion; session groups
     (`new-session -t`); `switch-client -t` / `attach -t` drop the window and
-    pane part, and `switch-client -c -r -Z`; targets `~` / `{marked}`, `{top}` /
-    `{bottom}` and corners, `{up-of}` and friends, window `{next}` /
-    `{previous}`; smaller flags: `send-keys -R -H -K -c`,
-    `display-panes -d -b -N`, `select-pane -d -e`, `last-pane -d -e -Z`,
-    `rotate-window -Z`, `swap-pane -Z`, `kill-session -C`, `set-buffer -n -t`,
-    `copy-mode -s`, `detach-client -E`, `run-shell -E`,
-    `confirm-before -b -c -y`, `list-keys -a -P`, `unbind -q`,
-    `join-pane -f -p`, `source-file -n -v -F` and globs; `source-file` of a tmux
-    command file (`%if`, `%hidden`).
+    pane part, and `switch-client -c -r -Z`; targets `~` / `{marked}`; smaller
+    flags: `send-keys -R -H -K -c`, `display-panes -d -b -N`,
+    `select-pane -d -e`, `last-pane -d -e -Z`, `rotate-window -Z`,
+    `swap-pane -Z`, `kill-session -C`, `set-buffer -n -t`, `copy-mode -s`,
+    `detach-client -E`, `run-shell -E`, `confirm-before -b -c -y`,
+    `list-keys -a -P`, `unbind -q`, `join-pane -f -p`, `source-file -n -v -F`
+    and globs; `source-file` of a tmux command file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `pane-set-clipboard`,
     `client-active`, `command-error`, `client-light-theme` / `-dark-theme`. Copy
     mode lacks `next-prompt` / `previous-prompt`, `copy-line`, `copy-pipe-line`,
