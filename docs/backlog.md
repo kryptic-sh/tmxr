@@ -469,10 +469,10 @@ table. What has been verified, and how:
     pane part, and `switch-client -c -r -Z`; targets `~` / `{marked}`; smaller
     flags: `send-keys -R -H -K -c`, `display-panes -d -b -N`,
     `select-pane -d -e`, `last-pane -d -e -Z`, `rotate-window -Z`,
-    `swap-pane -Z`, `kill-session -C`, `set-buffer -n -t`, `copy-mode -s`,
-    `detach-client -E`, `run-shell -E`, `confirm-before -b -c -y`,
-    `list-keys -a -P`, `unbind -q`, `join-pane -f -p`, `source-file -n -v -F`
-    and globs; `source-file` of a tmux command file (`%if`, `%hidden`).
+    `swap-pane -Z`, `set-buffer -t`, `copy-mode -s`, `detach-client -E`,
+    `run-shell -E`, `confirm-before -b -c -y`, `list-keys -a -P`,
+    `join-pane -f -p`, `source-file -n -v -F` and globs; `source-file` of a tmux
+    command file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `pane-set-clipboard`,
     `client-active`, `command-error`, `client-light-theme` / `-dark-theme`. Copy
     mode lacks `next-prompt` / `previous-prompt`, `copy-line`, `copy-pipe-line`,

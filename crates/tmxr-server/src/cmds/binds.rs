@@ -64,12 +64,21 @@ pub(super) fn run(
             if a.has('a') {
                 srv.keys.unbind_all(table);
             } else {
-                let key: BindKey = pos
+                // -q: a missing or unknown key is no error, as tmux's.
+                let key = pos
                     .first()
-                    .ok_or("unbind-key needs a key")?
-                    .parse()
-                    .map_err(|e: tmxr_command::keys::UnknownKey| e.to_string())?;
-                srv.keys.unbind(table, &key);
+                    .ok_or_else(|| "unbind-key needs a key".to_owned())
+                    .and_then(|k| {
+                        k.parse::<BindKey>()
+                            .map_err(|e: tmxr_command::keys::UnknownKey| e.to_string())
+                    });
+                match key {
+                    Ok(key) => {
+                        srv.keys.unbind(table, &key);
+                    }
+                    Err(_) if a.has('q') => {}
+                    Err(e) => return Err(e),
+                }
             }
         }
         "list-keys" => {

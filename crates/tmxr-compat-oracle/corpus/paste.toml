@@ -55,3 +55,17 @@ steps = [
 checks = [
   { screen_contains = "plain^[[200~marked^[[201~", expect = true },
 ]
+
+[[cases]]
+name = "set_buffer_n_renames_a_buffer"
+steps = [
+  { run = "set-buffer -b a xa" },
+  { run = "set-buffer xtop" },
+  { run = "set-buffer -n renamed" },
+  { run = "set-buffer -b a -n b" },
+  { run = "set-buffer -b c xc" },
+  { run = "set-buffer -b c -n renamed" },
+]
+checks = [
+  { command = "list-buffers -F '#{buffer_name}=#{buffer_sample}'", expect = "renamed=xc\nb=xa" },
+]

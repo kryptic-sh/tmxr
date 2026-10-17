@@ -211,10 +211,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "kill-session",
         None,
-        "at:",
+        "aCt:",
         0,
         0,
-        "[-a] [-t target-session]"
+        "[-aC] [-t target-session]"
     ),
     cmd!(
         "kill-window",
@@ -522,10 +522,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "set-buffer",
         Some("setb"),
-        "ab:w",
+        "ab:n:w",
+        0,
         1,
-        1,
-        "[-aw] [-b buffer-name] data"
+        "[-aw] [-b buffer-name] [-n new-buffer-name] [data]"
     ),
     cmd!(
         "set-environment",
@@ -646,10 +646,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "unbind-key",
         Some("unbind"),
-        "anT:",
+        "anqT:",
         0,
         1,
-        "[-an] [-T key-table] key"
+        "[-anq] [-T key-table] key"
     ),
     cmd!(
         "unlink-window",

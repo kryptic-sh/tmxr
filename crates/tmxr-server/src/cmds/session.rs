@@ -114,6 +114,18 @@ pub(super) fn run(
         "kill-server" => srv.begin_exit(),
         "kill-session" => {
             let sid = target::session(srv, ctx, a.value('t'))?;
+            // -C: the session's windows lose their alert flags in it, and
+            // it lives on, as tmux's.
+            if a.has('C') {
+                let windows: Vec<_> = srv.sessions[&sid].windows.values().copied().collect();
+                for w in windows {
+                    if let Some(win) = srv.windows.get_mut(&w) {
+                        win.forget_session(sid);
+                    }
+                }
+                srv.mark_session_dirty(sid);
+                return Ok(true);
+            }
             if a.has('a') {
                 let others: Vec<SessionId> =
                     srv.sessions.keys().copied().filter(|s| *s != sid).collect();

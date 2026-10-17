@@ -4317,6 +4317,55 @@ fn monitor_activity_and_silence_flag_windows_out_of_sight() {
 }
 
 #[test]
+fn kill_session_c_clears_alerts_and_unbind_q_is_quiet() {
+    let t = Tmxr::new("killc");
+    t.run(&["new-session", "-d", "-s", "kc"]);
+    t.run(&["new-window", "-d", "-t", "kc:1"]);
+    t.run(&["set-window-option", "-g", "monitor-activity", "on"]);
+    t.wait_prompt("kc:1");
+    t.run(&["send-keys", "-t", "kc:1", "echo busy", "Enter"]);
+    let activity = |t: &Tmxr| {
+        t.run(&[
+            "display-message",
+            "-p",
+            "-t",
+            "kc:1",
+            "#{window_activity_flag}",
+        ])
+        .trim()
+        .to_owned()
+    };
+    t.wait_run(
+        &[
+            "display-message",
+            "-p",
+            "-t",
+            "kc:1",
+            "#{window_activity_flag}",
+        ],
+        "activity",
+        |o| o.trim() == "1",
+    );
+    // -C clears the session's alert flags and leaves it be.
+    t.run(&["set-window-option", "-g", "monitor-activity", "off"]);
+    t.run(&["kill-session", "-C", "-t", "kc"]);
+    assert_eq!(activity(&t), "0");
+    assert!(t.output(&["has-session", "-t", "kc"]).status.success());
+
+    // unbind-key -q: an unknown key is no error.
+    assert!(!t.output(&["unbind-key", "NoSuchKey"]).status.success());
+    assert!(
+        t.output(&["unbind-key", "-q", "NoSuchKey"])
+            .status
+            .success()
+    );
+    // set-buffer with neither data nor -n says so.
+    let out = t.output(&["set-buffer"]);
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("no data specified"));
+}
+
+#[test]
 fn window_and_pane_options_override_the_global_ones() {
     let t = Tmxr::new("scopes");
     t.run(&["new-session", "-d", "-s", "sc"]);

@@ -46,6 +46,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `window-separator`, `left-style` and `right-style`. The separator defaults to
   empty, where tmux's is a space, so the list looks as before. Also
   `#{window_last_flag}`.
+- **`set-buffer -n`, `unbind-key -q` and `kill-session -C`**, as tmux's: `-n`
+  renames a buffer (the newest without `-b`; one already of that name goes),
+  `-q` makes a key that is not bound or not known no error, and `-C` clears a
+  session's alert flags instead of killing it. `set-buffer` with no data says
+  so, and with empty data sets nothing.
 - **`#{client_flags}` and `#{client_readonly}`**: the client's `attached`,
   `focused`, `ignore-size` and `read-only` flags, in tmux's order, and whether
   it is read-only. A client is focused from attaching until its terminal reports

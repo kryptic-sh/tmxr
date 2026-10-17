@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use tmxr_command::Parsed;
 
-use super::{Ctx, Outcome, expand_for, list_item};
+use super::{Ctx, Outcome, Res, expand_for, list_item};
 use crate::server::{Buffer, Server};
 use crate::target;
 use crate::vars::Vars;
@@ -84,10 +84,16 @@ pub(super) fn run(
                 srv.buffers.remove(idx);
             }
         }
+        "set-buffer" if a.has('n') => rename_buffer(srv, a.value('b'), a.value('n'))?,
         "set-buffer" => {
+            let data = pos.first().ok_or("no data specified")?;
+            // As tmux's, empty data sets nothing.
+            if data.is_empty() {
+                return Ok(true);
+            }
             // Unlike tmux, the data is format-expanded, so a bind can copy
             // `#{pane_current_path}` (tmux-yank's prefix-Y) without a script.
-            let data = expand_for(srv, ctx, None, &pos[0]);
+            let data = expand_for(srv, ctx, None, data);
             let data = match (a.has('a'), a.value('b')) {
                 (true, name) => {
                     let base = find_buffer(srv, name);
@@ -182,6 +188,36 @@ fn find_buffer<'a>(srv: &'a Server, name: Option<&str>) -> Option<&'a Buffer> {
         Some(n) => srv.buffers.iter().find(|b| b.name == n),
         None => srv.buffers.front(),
     }
+}
+
+/// `set-buffer -n`: buffer `name` (else the newest) takes the name `to`, as
+/// tmux's `paste_rename`: a buffer already called that goes, and the renamed
+/// one counts as named from then on.
+fn rename_buffer(srv: &mut Server, name: Option<&str>, to: Option<&str>) -> Res {
+    let at = match name {
+        Some(n) => srv
+            .buffers
+            .iter()
+            .position(|b| b.name == n)
+            .ok_or_else(|| format!("unknown buffer: {n}"))?,
+        None if srv.buffers.is_empty() => return Err("no buffer".into()),
+        None => 0,
+    };
+    let to = to.filter(|t| !t.is_empty()).ok_or("new name is empty")?;
+    if srv.buffers[at].name == to {
+        return Ok(());
+    }
+    let at = match srv.buffers.iter().position(|b| b.name == to) {
+        Some(old) => {
+            srv.buffers.remove(old);
+            if old < at { at - 1 } else { at }
+        }
+        None => at,
+    };
+    let b = &mut srv.buffers[at];
+    to.clone_into(&mut b.name);
+    b.automatic = false;
+    Ok(())
 }
 
 /// A `save-buffer` / `load-buffer` path: relative paths are relative to the
