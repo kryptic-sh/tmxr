@@ -204,57 +204,14 @@ pub fn refresh_commands(srv: &mut Server) {
     }
 }
 
-/// An `fnmatch` pattern without flags (tmux's `update-environment` entries)
-/// as an anchored regex: `*` any run of characters, `?` any one, `[...]` a
-/// set (`[!...]` its complement), `\` the next character as itself, and
-/// everything else literal. A `[` with no closing `]` is literal, as
-/// fnmatch reads it.
+/// An `fnmatch` pattern without flags (tmux's `update-environment` entries,
+/// target names) as a compiled anchored regex; the translation is
+/// [`tmxr_command::format::glob_regex`], as `#{m:…}` reads patterns.
 pub fn glob_regex(pattern: &str) -> regex::Regex {
-    let literal = |c: char| regex::escape(c.encode_utf8(&mut [0; 4]));
-    let chars: Vec<char> = pattern.chars().collect();
-    let mut re = String::from("^");
-    let mut i = 0;
-    while i < chars.len() {
-        match chars[i] {
-            '*' => re.push_str(".*"),
-            '?' => re.push('.'),
-            '\\' => {
-                i += 1;
-                re.push_str(&literal(chars.get(i).copied().unwrap_or('\\')));
-            }
-            '[' => {
-                let negate = chars.get(i + 1) == Some(&'!');
-                let first = i + 1 + usize::from(negate);
-                // A `]` first in the set is a member, not its end.
-                let close = (first + 1..chars.len()).find(|&j| chars[j] == ']');
-                match close {
-                    Some(close) => {
-                        re.push('[');
-                        if negate {
-                            re.push('^');
-                        }
-                        for &m in &chars[first..close] {
-                            // A `-` keeps making ranges; the rest are members.
-                            if m == '-' {
-                                re.push('-');
-                            } else {
-                                re.push_str(&literal(m));
-                            }
-                        }
-                        re.push(']');
-                        i = close;
-                    }
-                    None => re.push_str(r"\["),
-                }
-            }
-            c => re.push_str(&literal(c)),
-        }
-        i += 1;
-    }
-    re.push('$');
-    // Every piece above is escaped or a fixed construct, so it compiles; a
-    // regex that still would not is matched by nothing.
-    regex::Regex::new(&re).unwrap_or_else(|_| regex::Regex::new("[^\\s\\S]").expect("empty set"))
+    // Every piece of the translation is escaped or a fixed construct, so it
+    // compiles; a regex that still would not is matched by nothing.
+    regex::Regex::new(&tmxr_command::format::glob_regex(pattern))
+        .unwrap_or_else(|_| regex::Regex::new("[^\\s\\S]").expect("empty set"))
 }
 
 #[cfg(test)]

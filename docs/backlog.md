@@ -403,8 +403,6 @@ table. What has been verified, and how:
     process snapshots per pane per second in `util::refresh_commands`;
     `#{pane_current_path}` inspects the process on each expansion; `#{m:…}`
     compiles its regex on each expansion. Not measured.
-  - Two fnmatch-to-regex translators (`util::glob_regex`,
-    `tmxr_command::format::glob_regex`) agree today but are kept apart.
   - Large files: `apps/tmxr/tests/e2e.rs` (one file for every e2e test; its test
     names already group by command family), `overlay.rs` (box styles, the prompt
     editor and the picker), `copy/mod.rs` (the snapshot model, motions and

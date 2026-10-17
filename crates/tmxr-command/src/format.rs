@@ -258,7 +258,7 @@ fn format_match(flags: &str, pattern: &str, text: &str) -> bool {
 /// included), `?` any character, `[…]` a class (`[!…]` negated, a leading
 /// `]` literal), `\x` the character x; anything else literal. An unclosed
 /// `[` is a literal `[`.
-fn glob_regex(glob: &str) -> String {
+pub fn glob_regex(glob: &str) -> String {
     let lit = |c: char| regex::escape(c.encode_utf8(&mut [0; 4]));
     let chars: Vec<char> = glob.chars().collect();
     let mut out = String::from("^");
