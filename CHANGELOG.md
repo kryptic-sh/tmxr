@@ -26,6 +26,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `focused`, `ignore-size` and `read-only` flags, in tmux's order, and whether
   it is read-only.
 
+### Fixed
+
+- **A title holding `;` reaches the pane**: a program's OSC 0 / 2 title with a
+  semicolon in it (`vim; a.rs`) was dropped, leaving the old `#{pane_title}`;
+  everything after the first `;` is the title now, as xterm reads it.
+
 ## [0.9.0] - 2026-10-17
 
 ### Changed

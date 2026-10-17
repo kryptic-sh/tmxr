@@ -117,6 +117,11 @@ impl vt100::Callbacks for Hooks {
                 self.input_mark = Some((history_lines(screen), row, col));
             }
             [b"133", b"A" | b"C" | b"D", ..] => self.input_mark = None,
+            // A title holding `;` arrives split, which vt100 leaves alone:
+            // all of it after the first `;` is the title, as xterm reads it.
+            [b"0" | b"2", rest @ ..] if rest.len() > 1 => {
+                self.title = Some(String::from_utf8_lossy(&rest.join(&b';')).into_owned());
+            }
             [b"7", uri, ..] => {
                 if let Some(path) = file_uri_path(&String::from_utf8_lossy(uri)) {
                     self.cwd = Some(path);
@@ -476,6 +481,8 @@ mod tests {
         let mut e = Emulator::new(24, 80, 0);
         e.process(b"\x1b]2;my title\x07\x07\x1b]52;c;aGk=\x07");
         assert_eq!(e.title(), Some("my title"));
+        e.process(b"\x1b]0;vim; a.rs;\x07");
+        assert_eq!(e.title(), Some("vim; a.rs;"), "a title with semicolons");
         assert!(e.take_bell());
         assert!(!e.take_bell());
         assert_eq!(e.take_clipboard(), vec![("c".into(), "aGk=".into())]);
