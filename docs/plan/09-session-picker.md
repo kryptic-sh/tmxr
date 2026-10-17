@@ -11,11 +11,12 @@ Replaces tmux's `choose-tree -Zs` on `prefix s` (and `choose-tree -Zw` on
   session marked `*`. The current session is first, the rest most recently used
   first, and the picker opens on the second row so `Enter` straight away goes to
   the _previous_ session (fast toggle, like `switch-client -l`).
+- **Two modes.** It opens in normal mode, where `j`/`k`, `Down`/`Up` and
+  `C-n`/`C-p` move and `q`, `Escape` or `C-c` close. `i`, `I`, `a`, `A` or `/`
+  start typing; `Escape` goes back to normal mode, keeping the query.
 - **Typing filters** on the session name with `hjkl-picker`'s fuzzy scoring;
-  matched characters highlighted.
-- **Moving**: `Down`/`Up` and `C-n`/`C-p`, as in hjkl's pickers: there is one
-  mode, so letters (`j` and `k` too) always go to the query.
-- `Enter` switches the client to the selected session; `Escape`/`C-c` cancels.
+  matched characters highlighted. Arrows and `C-n`/`C-p` still move.
+- `Enter` switches the client to the selected session, in either mode.
 - Actions: `C-x` kills the highlighted session after a y/n, `C-r` renames it
   through a prompt, and `Enter` on a name no session matches creates that
   session and switches to it. Each runs as a command addressing the session by
@@ -35,10 +36,10 @@ Replaces tmux's `choose-tree -Zs` on `prefix s` (and `choose-tree -Zw` on
   `select(idx)` → `PickerAction::Custom(Box::new(Target::Session(id, name)))`.
 - `PickerOverlay` keeps each row's label and target, so the renderer can find
   the highlighted row's target from its label (`previewed()`).
-- `PickerOverlay` wraps `hjkl_picker::Picker` and hands keys to
-  `hjkl_picker_tui::handle_key`, as hjkl does, after taking the session picker's
-  `C-x` / `C-r`; keys arrive as the crossterm `KeyEvent`s the client already
-  sends.
+- `PickerOverlay` wraps `hjkl_picker::Picker`. In normal mode it handles the
+  keys itself; while typing it hands them to `hjkl_picker_tui::handle_key`, as
+  hjkl does, except `Escape`. The session picker's `C-x` / `C-r` come first in
+  both; keys arrive as the crossterm `KeyEvent`s the client already sends.
 - Rendering: the list, input row and preview are drawn by tmxr (`draw_picker` in
   `render.rs`) with the `mode-style` for the selected row.
 - The same overlay backs the window picker (`prefix w`, `choose-tree -w`: every

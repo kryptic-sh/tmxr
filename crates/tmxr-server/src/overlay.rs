@@ -633,12 +633,16 @@ impl PickerLogic for Source {
     }
 }
 
-/// The hjkl fuzzy picker, driven the way hjkl drives it
-/// (`hjkl_picker_tui::handle_key`): typing filters, arrows and `C-n`/`C-p`
-/// move, `Enter` picks, `Escape`/`C-c` close. The session picker adds `C-x`
-/// (kill) and `C-r` (rename).
+/// The hjkl fuzzy picker, with a normal mode in front of hjkl's own keys.
+/// It opens in normal mode: `j`/`k`, arrows and `C-n`/`C-p` move, `Enter`
+/// picks, `q`/`Escape`/`C-c` close, and `i`, `I`, `a`, `A` or `/` start
+/// typing. Typing is driven the way hjkl drives it
+/// (`hjkl_picker_tui::handle_key`), except that `Escape` goes back to normal
+/// mode. The session picker adds `C-x` (kill) and `C-r` (rename) in both.
 pub struct PickerOverlay {
     pub picker: Picker,
+    /// Whether keys go to the query (typing) or move the selection (normal).
+    typing: bool,
     /// Each row's label and target, to find the highlighted row's target
     /// (the picker owns its source and exposes rows only by label).
     rows: Vec<(String, Target)>,
@@ -667,7 +671,6 @@ impl PickerOverlay {
             .collect();
         let mut picker = Picker::new(Box::new(Source { title, items }));
         if !query.is_empty() {
-            // Typing after the query keeps refining it.
             picker.query.set_text(query);
             picker.query.enter_insert_at_end();
             picker.refresh();
@@ -675,7 +678,16 @@ impl PickerOverlay {
         if many {
             picker.selected = 1;
         }
-        Self { picker, rows }
+        Self {
+            picker,
+            rows,
+            typing: false,
+        }
+    }
+
+    /// Whether keys go to the query rather than move the selection.
+    pub const fn typing(&self) -> bool {
+        self.typing
     }
 
     /// The window the highlighted row stands for, if it is a session or a
@@ -770,7 +782,14 @@ impl PickerOverlay {
             KeyCode::Enter => return self.accept(),
             KeyCode::Char('x') if ctrl && self.is_sessions() => return self.session_action(true),
             KeyCode::Char('r') if ctrl && self.is_sessions() => return self.session_action(false),
+            KeyCode::Esc if self.typing => {
+                self.typing = false;
+                return OverlayAction::Keep;
+            }
             _ => {}
+        }
+        if !self.typing {
+            return self.normal_key(ev, ctrl);
         }
         if let PickerEvent::Select(_) | PickerEvent::Cancel =
             hjkl_picker_tui::handle_key(&mut self.picker, *ev)
@@ -778,6 +797,23 @@ impl PickerOverlay {
             return OverlayAction::Close;
         }
         self.picker.refresh();
+        OverlayAction::Keep
+    }
+
+    fn normal_key(&mut self, ev: &KeyEvent, ctrl: bool) -> OverlayAction {
+        match ev.code {
+            KeyCode::Char('j') | KeyCode::Down => self.picker.select_next(),
+            KeyCode::Char('k') | KeyCode::Up => self.picker.select_prev(),
+            KeyCode::Char('n') if ctrl => self.picker.select_next(),
+            KeyCode::Char('p') if ctrl => self.picker.select_prev(),
+            KeyCode::Char('c') if ctrl => return OverlayAction::Close,
+            KeyCode::Char('q') | KeyCode::Esc => return OverlayAction::Close,
+            KeyCode::Char('i' | 'I' | 'a' | 'A' | '/') => {
+                self.typing = true;
+                self.picker.query.enter_insert_at_end();
+            }
+            _ => {}
+        }
         OverlayAction::Keep
     }
 }
@@ -869,35 +905,46 @@ mod tests {
 
     #[test]
     fn picker_filters_moves_with_jk_and_selects() {
-        let mut o = Overlay::Picker(Box::new(PickerOverlay::new(
-            "sessions",
-            items(&["main", "work", "dots"]),
-        )));
-        // Sessions open on the second entry (the previous session).
+        let sessions = || {
+            Overlay::Picker(Box::new(PickerOverlay::new(
+                "sessions",
+                items(&["main", "work", "dots"]),
+            )))
+        };
+        let query = |o: &Overlay| {
+            let Overlay::Picker(p) = o else {
+                unreachable!()
+            };
+            (p.query(), p.picker.matched(), p.typing())
+        };
+        // Sessions open on the second entry (the previous session), in
+        // normal mode.
+        let mut o = sessions();
         let Overlay::Picker(p) = &o else {
             unreachable!()
         };
         assert_eq!(p.picker.selected, 1);
-        // Typing filters.
+        assert!(!p.typing());
+        // Letters are not typed until `i`; then typing filters.
+        o.key(&k(KeyCode::Char('d')));
+        assert_eq!(query(&o), (String::new(), 3, false));
+        o.key(&k(KeyCode::Char('i')));
         o.key(&k(KeyCode::Char('d')));
         o.key(&k(KeyCode::Char('o')));
-        let Overlay::Picker(p) = &o else {
-            unreachable!()
-        };
-        assert_eq!(p.picker.matched(), 1);
+        assert_eq!(query(&o), ("do".to_owned(), 1, true));
         assert_eq!(o.key(&k(KeyCode::Enter)), OverlayAction::Switch(2));
 
-        // Arrows and C-n / C-p move, Enter picks; j and k are typed.
-        let mut o = Overlay::Picker(Box::new(PickerOverlay::new(
-            "sessions",
-            items(&["main", "work", "dots"]),
-        )));
+        // j and k move in normal mode, and so do arrows and C-n / C-p.
+        let mut o = sessions();
+        o.key(&k(KeyCode::Char('j')));
+        assert_eq!(o.key(&k(KeyCode::Enter)), OverlayAction::Switch(2));
+        let mut o = sessions();
+        o.key(&k(KeyCode::Char('k')));
+        assert_eq!(o.key(&k(KeyCode::Enter)), OverlayAction::Switch(0));
+        let mut o = sessions();
         o.key(&k(KeyCode::Down));
         assert_eq!(o.key(&k(KeyCode::Enter)), OverlayAction::Switch(2));
-        let mut o = Overlay::Picker(Box::new(PickerOverlay::new(
-            "sessions",
-            items(&["main", "work", "dots"]),
-        )));
+        let mut o = sessions();
         let ctrl_p = KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL);
         o.key(&ctrl_p);
         o.key(&ctrl_p);
@@ -906,16 +953,16 @@ mod tests {
             OverlayAction::Switch(2),
             "C-p wraps"
         );
-        // Escape closes at once.
-        let mut o = Overlay::Picker(Box::new(PickerOverlay::new(
-            "sessions",
-            items(&["main", "work", "dots"]),
-        )));
+
+        // While typing, j is typed and Escape goes back to normal mode,
+        // keeping the query; another Escape closes.
+        let mut o = sessions();
+        o.key(&k(KeyCode::Char('/')));
         o.key(&k(KeyCode::Char('j')));
-        let Overlay::Picker(p) = &o else {
-            unreachable!()
-        };
-        assert_eq!(p.picker.query.text(), "j");
+        assert_eq!(query(&o), ("j".to_owned(), 0, true));
+        assert_eq!(o.key(&k(KeyCode::Esc)), OverlayAction::Keep);
+        assert_eq!(query(&o), ("j".to_owned(), 0, false));
         assert_eq!(o.key(&k(KeyCode::Esc)), OverlayAction::Close);
+        assert_eq!(sessions().key(&k(KeyCode::Char('q'))), OverlayAction::Close);
     }
 }

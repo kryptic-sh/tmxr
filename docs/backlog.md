@@ -207,9 +207,10 @@ table. What has been verified, and how:
     window would make each of those pick one arbitrarily. No one has asked for
     it.
   - `customize-mode` is a picker over the options and binds whose Enter puts the
-    setting command in the prompt, not tmux's tree with `d` / `u` keys: the
-    owner chose hjkl-style pickers, where typing always filters, so letter keys
-    cannot be commands. Its `-f` is a text query, not a format filter.
+    setting command in the prompt, not tmux's tree with `d` / `u` keys: it was
+    built when typing always filtered. Pickers now open in a normal mode
+    (2026-10-17), so tmux's letter keys could be added there; not done, and no
+    one has asked. Its `-f` is a text query, not a format filter.
   - Session names may hold dots (asked for 2026-10-12): tmux 3.6 turns a dot in
     `new-session -s` / `rename-session` into `_`. A target without `:` that
     exactly names a dotted session is that session (`target::names_session`); to

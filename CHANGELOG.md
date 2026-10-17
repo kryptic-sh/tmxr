@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Pickers open in normal mode**: in the session, window, buffer, client,
+  `find-window` and `customize-mode` pickers, `j` / `k` move (as do the arrows
+  and `C-n` / `C-p`), `Enter` picks and `q` or `Escape` closes. `i`, `I`, `a`,
+  `A` or `/` start typing to filter, and `Escape` goes back to normal mode,
+  keeping the query. Letters typed straight away no longer filter, and `Escape`
+  while typing no longer closes the picker.
+
 ## [0.8.0] - 2026-10-17
 
 ### Added

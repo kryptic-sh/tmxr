@@ -666,7 +666,7 @@ const PREVIEW_MIN_ROWS: u16 = 3;
 
 /// The picker overlay: query row, matches, and for sessions and windows a
 /// preview of the highlighted entry's active pane. `y` is the first row
-/// below the window area. Returns the query cursor in insert mode.
+/// below the window area. Returns the query cursor while typing.
 fn draw_picker(
     srv: &Server,
     p: &PickerOverlay,
@@ -788,6 +788,9 @@ fn draw_picker(
             buf,
             Rect::new(inner.x, sep + 1, inner.width, rows),
         );
+    }
+    if !p.typing() {
+        return None;
     }
     let x = inner.x + 2 + Line::raw(query).width() as u16;
     Some(Position::new(

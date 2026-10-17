@@ -871,25 +871,35 @@ fn session_picker_switches_by_enter_filter_and_jk() {
     let ls = t.wait_run(&["ls"], "alpha attached", |o| attached(o, "alpha"));
     assert!(!attached(&ls, "bravo"), "{ls}");
 
-    // Typing filters: "char" leaves one row, Enter switches to it.
+    // `i` starts typing, which filters: "char" leaves one row, Enter
+    // switches to it.
     t.run(&["new-session", "-d", "-s", "charlie"]);
     s.send(PREFIX);
     s.send(b"s");
     s.wait_for("picker", |text| text.contains("sessions 3/3"));
-    s.send(b"char");
+    s.send(b"ichar");
     s.wait_for("filtered", |text| text.contains("sessions 1/3"));
     s.send(b"\r");
     t.wait_run(&["ls"], "charlie attached", |o| attached(o, "charlie"));
 
-    // Down moves a row, as in hjkl's pickers: charlie (current), alpha
-    // (where the picker opens), then bravo.
+    // The picker opens in normal mode, where j and k move: charlie
+    // (current), alpha (where the picker opens), then bravo.
     s.send(PREFIX);
     s.send(b"s");
     s.wait_for("picker", |text| text.contains("sessions 3/3"));
-    s.send(b"\x1b[B");
+    s.send(b"j");
     std::thread::sleep(Duration::from_millis(200));
     s.send(b"\r");
     t.wait_run(&["ls"], "bravo attached", |o| attached(o, "bravo"));
+    // Now bravo (current), charlie (where it opens), alpha: k comes back
+    // from alpha to charlie.
+    s.send(PREFIX);
+    s.send(b"s");
+    s.wait_for("picker", |text| text.contains("sessions 3/3"));
+    s.send(b"jk");
+    std::thread::sleep(Duration::from_millis(200));
+    s.send(b"\r");
+    t.wait_run(&["ls"], "charlie attached", |o| attached(o, "charlie"));
 }
 
 #[test]
@@ -2010,11 +2020,12 @@ fn choose_buffer_pastes_and_find_window_switches() {
     t.run(&["set-buffer", "-b", "alpha", "first-buffer-text"]);
     t.run(&["set-buffer", "-b", "beta", "second-buffer-text"]);
 
-    // prefix = lists the buffers; typing filters, Enter pastes into the pane.
+    // prefix = lists the buffers; typing (after `i`) filters, Enter pastes
+    // into the pane.
     s.send(PREFIX);
     s.send(b"=");
     s.wait_for("buffer picker", |text| text.contains("buffers 2/2"));
-    s.send(b"alpha");
+    s.send(b"ialpha");
     s.wait_for("filtered", |text| text.contains("buffers 1/2"));
     s.send(b"\r");
     s.wait_for("pasted buffer", |text| {
@@ -2110,7 +2121,7 @@ fn session_picker_kills_renames_and_creates_sessions() {
 
     // Enter on a name nothing matches creates it and switches to it.
     open_picker(&s);
-    s.send(b"brand-new\r");
+    s.send(b"ibrand-new\r");
     t.wait_run(&["ls"], "new session attached", |o| {
         o.lines()
             .any(|l| l.starts_with("brand-new:") && l.contains("(attached)"))
