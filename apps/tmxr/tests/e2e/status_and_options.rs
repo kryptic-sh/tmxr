@@ -1249,7 +1249,8 @@ fn cursor_style_and_programs_shape_the_clients_cursor() {
     args.extend(program);
     t.run(&args);
     s.wait_for("the program's shape", |_| s.raw_text().contains("\x1b[6 q"));
-    assert!(s.text().contains("bar-asked"), "{}", s.text());
+    // The shape can reach the terminal a frame before the program's text.
+    s.wait_for("the program's text", |text| text.contains("bar-asked"));
     // Back on the first window, the option's shape again.
     let before = s.raw_text().matches("\x1b[4 q").count();
     t.run(&["select-window", "-t", "cs:0"]);
