@@ -167,6 +167,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A program that reads nothing no longer freezes the server.** Input for a
+  pane (keys, pastes) was written on the server's own thread, so pasting into a
+  raw-mode program that was not reading stopped every session and command (seen
+  on Linux); each pane now has a writer thread.
 - **A client that fell behind** (its frames dropped while it was not reading) is
   repainted on the server's next pass instead of waiting for another event; with
   `status-interval 0` it stayed stale until then.

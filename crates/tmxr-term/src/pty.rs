@@ -4,6 +4,7 @@ use std::ffi::OsString;
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::mpsc::{Sender, channel};
 
 use portable_pty::{ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_system};
 
@@ -40,14 +41,17 @@ pub enum PtyEvent {
 /// call [`Pty::kill`] for that.
 pub struct Pty {
     master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
+    /// Bytes for the program, written by the pane's writer thread: a
+    /// program that does not read its input blocks that thread, never the
+    /// caller.
+    input: Sender<Vec<u8>>,
     killer: Box<dyn ChildKiller + Send + Sync>,
     pid: Option<u32>,
 }
 
 impl Pty {
-    /// Start `spec` and deliver its output and exit to `sink`, from two
-    /// threads owned by this pane (a reader and a waiter).
+    /// Start `spec` and deliver its output and exit to `sink`, from
+    /// threads owned by this pane (a reader, a writer and a waiter).
     pub fn spawn(spec: &SpawnSpec, sink: Arc<dyn Fn(PtyEvent) + Send + Sync>) -> io::Result<Self> {
         let pair = native_pty_system()
             .openpty(PtySize {
@@ -90,7 +94,7 @@ impl Pty {
         let pid = child.process_id();
         let killer = child.clone_killer();
         let mut reader = pair.master.try_clone_reader().map_err(io::Error::other)?;
-        let writer = pair.master.take_writer().map_err(io::Error::other)?;
+        let mut writer = pair.master.take_writer().map_err(io::Error::other)?;
 
         let out = Arc::clone(&sink);
         std::thread::Builder::new()
@@ -107,6 +111,21 @@ impl Pty {
                 }
                 out(PtyEvent::Eof);
             })?;
+        // The writer stops at its first error, and the next write says so.
+        let (input, queued) = channel::<Vec<u8>>();
+        std::thread::Builder::new()
+            .name("tmxr-pty-write".into())
+            .spawn(move || {
+                for bytes in queued {
+                    if writer
+                        .write_all(&bytes)
+                        .and_then(|()| writer.flush())
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            })?;
         std::thread::Builder::new()
             .name("tmxr-pty-wait".into())
             .spawn(move || {
@@ -116,16 +135,18 @@ impl Pty {
 
         Ok(Self {
             master: pair.master,
-            writer,
+            input,
             killer,
             pid,
         })
     }
 
-    /// Send bytes to the program.
+    /// Queue bytes for the program, in order. An error means the writer
+    /// has stopped: a write before this one failed.
     pub fn write(&mut self, bytes: &[u8]) -> io::Result<()> {
-        self.writer.write_all(bytes)?;
-        self.writer.flush()
+        self.input
+            .send(bytes.to_vec())
+            .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "the pane's input is closed"))
     }
 
     pub fn resize(&self, rows: u16, cols: u16) -> io::Result<()> {

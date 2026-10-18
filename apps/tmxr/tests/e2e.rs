@@ -3100,6 +3100,54 @@ fn a_client_that_fell_behind_is_repainted_without_another_event() {
 }
 
 #[test]
+fn a_program_that_reads_nothing_does_not_stall_the_server() {
+    let t = Tmxr::new("nostall");
+    // A program that never reads its input, on a raw terminal: input
+    // backs up instead of being echoed and dropped.
+    #[cfg(unix)]
+    let idle = ["/bin/sh", "-c", "stty raw -echo; sleep 100"];
+    #[cfg(windows)]
+    let idle = [
+        "powershell.exe",
+        "-NoProfile",
+        "-Command",
+        "Start-Sleep 100",
+    ];
+    let mut new = vec!["new-session", "-d", "-s", "ns"];
+    new.extend(idle);
+    t.run(&new);
+    // Far more than a terminal's input buffer holds.
+    let file = t.dir.path().join("big.txt");
+    std::fs::write(&file, "x".repeat(2 * 1024 * 1024)).unwrap();
+    t.run(&["load-buffer", "-b", "big", file.to_str().unwrap()]);
+    // Each command from a thread, so a stalled server fails the test
+    // rather than hanging it (it still hangs at the end, in kill-server).
+    let in_thread = |rest: &[&str]| {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let args = t.args(rest);
+        let env = t.env();
+        std::thread::spawn(move || {
+            let out = tmxr_term::child::command(env!("CARGO_BIN_EXE_tmxr"))
+                .args(args)
+                .envs(env)
+                .output();
+            let _ = tx.send(out.map(|o| String::from_utf8_lossy(&o.stdout).into_owned()));
+        });
+        rx
+    };
+    let paste = in_thread(&["paste-buffer", "-b", "big", "-t", "ns"]);
+    let answer = in_thread(&["display-message", "-p", "-t", "ns", "#S"])
+        .recv_timeout(Duration::from_secs(10))
+        .expect("the server answered no command after the paste")
+        .unwrap();
+    assert_eq!(answer.trim(), "ns");
+    assert!(
+        paste.recv_timeout(Duration::from_secs(10)).is_ok(),
+        "paste-buffer never finished"
+    );
+}
+
+#[test]
 fn source_file_q_and_a_missing_file_leave_the_config_alone() {
     let t = Tmxr::new("sourcefile");
     t.run(&["new-session", "-d", "-s", "sf"]);
