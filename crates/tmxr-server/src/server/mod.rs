@@ -842,7 +842,7 @@ impl Server {
             .map(|p| p.window)
             .collect();
         if !clock_windows.is_empty() {
-            let time = tmxr_term::localtime::hour_minute_second();
+            let time = tmxr_command::localtime::hour_minute_second();
             if time != self.clock_shown {
                 self.clock_shown = time;
                 for w in clock_windows {

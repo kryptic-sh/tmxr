@@ -172,8 +172,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- **`tmxr_term::localtime::hour_minute` is `hour_minute_second`**, returning the
-  second too, for clock mode's clocks with seconds.
+- **`tmxr_term::localtime::hour_minute` is
+  `tmxr_command::localtime::hour_minute_second`**: the module moved to the
+  format crate, which formats times, and the function returns the second too,
+  for clock mode's clocks with seconds.
 - **Pane targets `{left}`, `{right}`, `{top}` and `{bottom}` mean the pane at
   that edge of the window, as tmux's**: `{left}` and `{right}` were the
   neighbouring pane, which is now `{left-of}` / `{right-of}` / `{up-of}` /

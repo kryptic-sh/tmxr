@@ -946,7 +946,7 @@ const CLOCK_FONT: [[&str; 5]; 14] = [
 /// `window_clock_draw_screen`.
 fn draw_clock(buf: &mut Buffer, area: Rect, colour: Style, style: tmxr_config::ClockModeStyle) {
     Clear.render(area, buf);
-    let Some((h, m, s)) = tmxr_term::localtime::hour_minute_second() else {
+    let Some((h, m, s)) = tmxr_command::localtime::hour_minute_second() else {
         return;
     };
     let text = style.text(h, m, s);

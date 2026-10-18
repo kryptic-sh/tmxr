@@ -14,6 +14,7 @@ pub mod args;
 pub mod bind_key;
 pub mod format;
 pub mod keys;
+pub mod localtime;
 pub mod table;
 pub mod tokenize;
 
