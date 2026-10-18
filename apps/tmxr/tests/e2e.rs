@@ -6868,16 +6868,16 @@ fn allow_rename_lets_programs_name_their_window() {
     }
     let t = Tmxr::new("allowrename");
     t.run(&["new-session", "-d", "-s", "ar", "-n", "start"]);
-    // A program that names its window once, then again after a pause.
+    // A program that names its window, then prints `mark`.
     #[cfg(unix)]
     let namer = |name: &str, mark: &str| {
-        let script = format!(r"printf '\033k{name}\033\{mark}'; sleep 30");
+        let script = format!(r"printf '\033k{name}\033\\{mark}'; sleep 30");
         vec!["/bin/sh".to_owned(), "-c".to_owned(), script]
     };
     #[cfg(windows)]
     let namer = |name: &str, mark: &str| {
         let script = format!(
-            "$e=[char]27; [Console]::Out.Write($e+'k{name}'+$e+'\'+'{mark}'); Start-Sleep 30"
+            "$e=[char]27; [Console]::Out.Write($e+'k{name}'+$e+'\\'+'{mark}'); Start-Sleep 30"
         );
         vec![
             "powershell.exe".to_owned(),

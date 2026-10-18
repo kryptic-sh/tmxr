@@ -67,21 +67,22 @@ impl DcsSplitter {
                     out.text.push(b);
                     State::Ground
                 }
-                (State::Esc, b'P' | b'k') => {
-                    self.dcs.clear();
-                    self.name = b == b'k';
-                    State::Dcs
-                }
-                (State::Esc, ESC) => {
-                    out.text.push(ESC);
-                    State::Esc
-                }
-                (State::Esc, _) => {
-                    out.text.extend([ESC, b]);
-                    State::Ground
-                }
+                (State::Esc, _) => self.after_esc(b, &mut out),
                 (State::Dcs, ESC) => State::DcsEsc,
                 (State::Dcs, _) => self.keep(&[b]),
+                // A name ends at its ESC, as tmux's (`input_exit_rename`
+                // runs on leaving the string): `ESC \` is taken whole, and
+                // any other byte is read as after a lone ESC.
+                (State::DcsEsc, _) if self.name => {
+                    out.rename = Some(std::mem::take(&mut self.dcs));
+                    self.name = false;
+                    match b {
+                        b'\\' => State::Ground,
+                        // The name's ESC is spent; this one starts afresh.
+                        ESC => State::Esc,
+                        _ => self.after_esc(b, &mut out),
+                    }
+                }
                 // ESC \ (ST) ends the string.
                 (State::DcsEsc, b'\\') => {
                     if self.name {
@@ -97,15 +98,9 @@ impl DcsSplitter {
                 // Any other ESC ends the string unfinished, as terminal
                 // parsers do, and starts a sequence of its own; a passthrough
                 // never contains one, since its ESCs are all doubled.
-                (State::DcsEsc, b'P' | b'k') => {
-                    self.dcs.clear();
-                    self.name = b == b'k';
-                    State::Dcs
-                }
                 (State::DcsEsc, _) => {
                     self.dcs.clear();
-                    out.text.extend([ESC, b]);
-                    State::Ground
+                    self.after_esc(b, &mut out)
                 }
                 (State::Skip, ESC) => State::SkipEsc,
                 (State::Skip, _) => State::Skip,
@@ -114,6 +109,26 @@ impl DcsSplitter {
             };
         }
         out
+    }
+
+    /// The byte after an `ESC` that starts no string we are in: a DCS or a
+    /// name begins, or the pair goes to the terminal parser.
+    fn after_esc(&mut self, b: u8, out: &mut Split) -> State {
+        match b {
+            b'P' | b'k' => {
+                self.dcs.clear();
+                self.name = b == b'k';
+                State::Dcs
+            }
+            ESC => {
+                out.text.push(ESC);
+                State::Esc
+            }
+            _ => {
+                out.text.extend([ESC, b]);
+                State::Ground
+            }
+        }
     }
 
     /// Append to the DCS being collected, or give up on an oversized one.
@@ -195,6 +210,14 @@ mod tests {
         assert_eq!(s.split(b"\x1bkfirst\x1b").rename, None);
         assert_eq!(s.split(b"\\").rename.as_deref(), Some(&b"first"[..]));
         assert_eq!(s.split(b"\x1bk\x1b\\").rename.as_deref(), Some(&b""[..]));
+        // A name ends at its ESC, as tmux's, the next byte read as after
+        // one.
+        let out = split_all(&[b"\x1bkvim\x1bmore"]);
+        assert_eq!(out.rename.as_deref(), Some(&b"vim"[..]));
+        assert_eq!(out.text, b"\x1bmore");
+        let out = split_all(&[b"\x1bkvim\x1b\x1b[31mred"]);
+        assert_eq!(out.rename.as_deref(), Some(&b"vim"[..]));
+        assert_eq!(out.text, b"\x1b[31mred");
         // A name is never a passthrough, whatever it starts with.
         let out = split_all(&[b"\x1bktmux;x\x1b\\"]);
         assert!(out.passthrough.is_empty());
