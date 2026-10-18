@@ -1325,8 +1325,9 @@ fn destroy_unattached_and_the_exit_options_follow_tmux() {
 
     // exit-unattached on: it goes once no client is attached, sessions or
     // not.
-    t.run(&["set", "-s", "exit-empty", "on"]);
+    // A session first: exit-empty on with none would end the server at once.
     t.run(&["new-session", "-d", "-s", "left"]);
+    t.run(&["set", "-s", "exit-empty", "on"]);
     let mut s = t.attach(&["attach", "-t", "left"]);
     s.wait_for("the status line", |text| text.contains("left"));
     t.run(&["set", "-s", "exit-unattached", "on"]);
