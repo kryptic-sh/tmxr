@@ -71,3 +71,21 @@ checks = [
   { command = "display -p -t o:0 '#W'", expect = "named" },
   { command = "list-windows -t @0 -F '#S'", expect = "o\no" },
 ]
+
+[[cases]]
+name = "new_window_k_replaces_and_s_selects_by_name"
+steps = [
+  { run = "new-session -d -s nk -n first" },
+  { run = "new-window -d -t nk:1 -n one" },
+  { run = "new-window -d -k -t nk:1 -n uno" },
+  { run = "select-window -t nk:1" },
+  { run = "new-window -S -n first -t nk" },
+  { run = "new-window -S -n fresh -t nk" },
+  { run = "new-session -d -s kc -n a" },
+  { run = "new-window -t kc:1 -n b" },
+  { run = "new-window -d -k -t kc:1 -n c" },
+]
+checks = [
+  { command = "list-windows -t nk -F '#I #W #{window_active}'", expect = "0 first 0\n1 uno 0\n2 fresh 1" },
+  { command = "list-windows -t kc -F '#I #W #{window_active}'", expect = "0 a 0\n1 c 1" },
+]

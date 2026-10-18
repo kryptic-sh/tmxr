@@ -100,6 +100,42 @@ impl Server {
     /// The index `-a` / `-b` give a window put in session `sid` next to
     /// `index` (the current window when that holds none): the index
     /// [`Server::shuffle_up`] frees, else `index` itself, as tmux's.
+    /// `-k`: take the window at `index` out of `session` to make room. It
+    /// is taken out of the map directly, not unlinked, so a session whose
+    /// only window it is does not end before the new one arrives;
+    /// [`Server::finish_replace`] settles it after.
+    pub fn take_index(
+        &mut self,
+        session: SessionId,
+        index: Option<u32>,
+    ) -> Option<(u32, WindowId)> {
+        self.sessions
+            .get_mut(&session)?
+            .windows
+            .remove_entry(&index?)
+    }
+
+    /// After a window was placed where [`Server::take_index`] made room: the
+    /// taken window goes back if placing failed, else it is killed unless
+    /// another session links it.
+    pub fn finish_replace(
+        &mut self,
+        session: SessionId,
+        taken: Option<(u32, WindowId)>,
+        placed: bool,
+    ) {
+        let Some((i, old)) = taken else {
+            return;
+        };
+        if !placed {
+            if let Some(s) = self.sessions.get_mut(&session) {
+                s.windows.insert(i, old);
+            }
+        } else if self.session_of_window(old).is_none() {
+            self.kill_window(old);
+        }
+    }
+
     pub fn index_beside(
         &mut self,
         sid: SessionId,

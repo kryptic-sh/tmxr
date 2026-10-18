@@ -357,10 +357,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "new-window",
         Some("neww"),
-        "abdc:e:F:n:Pt:",
+        "abdc:e:F:kn:PSt:",
         0,
         ANY,
-        "[-abdP] [-c start-directory] [-e environment] [-F format] [-n window-name] [-t target-window] [command]"
+        "[-abdkPS] [-c start-directory] [-e environment] [-F format] [-n window-name] [-t target-window] [command]"
     ),
     cmd!(
         "next-layout",

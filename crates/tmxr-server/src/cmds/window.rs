@@ -30,10 +30,43 @@ pub(super) fn run(
                 Some(t) if !t.is_empty() => target::destination(srv, ctx, t)?,
                 _ => (sid, None),
             };
+            // -S: with -n and no index, a window of that name already there
+            // is selected instead (none is made), as tmux's.
+            if a.has('S')
+                && index.is_none()
+                && let Some(name) = a.value('n')
+            {
+                let name = super::expand_for(srv, ctx, None, name);
+                let s = srv.sessions.get(&sid).ok_or("no such session")?;
+                let named: Vec<u32> = s
+                    .windows
+                    .iter()
+                    .filter(|(_, w)| srv.windows.get(w).is_some_and(|w| w.name == name))
+                    .map(|(i, _)| *i)
+                    .collect();
+                match named[..] {
+                    [] => {}
+                    [i] => {
+                        if !a.has('d') {
+                            srv.select_window(sid, i)?;
+                        }
+                        return Ok(true);
+                    }
+                    _ => return Err(format!("multiple windows named {name}")),
+                }
+            }
             // -a / -b: next to the target window, the later ones moving up.
             if a.has('a') || a.has('b') {
                 index = srv.index_beside(sid, index, a.has('b'));
             }
+            // -k: a window already at the index goes, as tmux's. The current
+            // window is an index, so the new one is current if that one was,
+            // even with -d.
+            let replaced = if a.has('k') {
+                srv.take_index(sid, index)
+            } else {
+                None
+            };
             let pane = srv.active_pane_of_session(sid);
             let cwd = cwd_arg(srv, ctx, pane, a);
             let size = srv
@@ -42,7 +75,7 @@ pub(super) fn run(
                 .and_then(|s| s.current_window())
                 .and_then(|w| srv.windows.get(&w))
                 .map_or_else(|| client_size(srv, ctx), |w| (w.cols, w.rows));
-            let wid = srv.new_window(
+            let made = srv.new_window(
                 sid,
                 index,
                 a.value('n').map(str::to_owned),
@@ -51,7 +84,9 @@ pub(super) fn run(
                 &super::env_flags(a)?,
                 size,
                 !a.has('d'),
-            )?;
+            );
+            srv.finish_replace(sid, replaced, made.is_ok());
+            let wid = made?;
             let pane = srv.windows.get(&wid).map(|w| w.active);
             super::print_new(srv, ctx, a, out, sid, pane, super::NEW_PANE_TEMPLATE);
         }
@@ -70,31 +105,18 @@ pub(super) fn run(
             if a.has('a') || a.has('b') {
                 index = srv.index_beside(dst, index, a.has('b'));
             }
-            // -k: a window already at the index makes room. It is taken out
-            // of the map directly, not unlinked, so a session whose only
-            // window it is does not end before the new one arrives.
-            let replaced = match index {
-                Some(i) if a.has('k') => srv
-                    .sessions
-                    .get_mut(&dst)
-                    .and_then(|s| s.windows.remove_entry(&i))
-                    .filter(|(_, old)| *old != wid),
-                _ => None,
+            // -k: a window already at the index makes room.
+            let replaced = if a.has('k') {
+                srv.take_index(dst, index).filter(|(_, old)| *old != wid)
+            } else {
+                None
             };
             let placed = if p.name() == "link-window" {
                 srv.link_window(wid, dst, index, !a.has('d'))
             } else {
                 srv.move_window(wid, src, dst, index, !a.has('d'))
             };
-            if let Some((i, old)) = replaced {
-                if placed.is_err()
-                    && let Some(s) = srv.sessions.get_mut(&dst)
-                {
-                    s.windows.insert(i, old);
-                } else if srv.session_of_window(old).is_none() {
-                    srv.kill_window(old);
-                }
-            }
+            srv.finish_replace(dst, replaced, placed.is_ok());
             placed?;
         }
         "unlink-window" => {
