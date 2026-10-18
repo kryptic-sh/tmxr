@@ -259,6 +259,15 @@ pub(super) fn run(
                 Some(spec) => target_client(srv, spec)?,
                 None => super::display_client(srv, ctx).ok_or("no current client")?,
             };
+            // -r: the client read-only (and ignoring its size) or back, as
+            // tmux's.
+            if a.has('r')
+                && let Some(client) = srv.clients.get_mut(&c)
+            {
+                let ro = !client.attach_read_only;
+                client.attach_read_only = ro;
+                client.ignore_size = ro;
+            }
             if let Some(table) = a.value('T') {
                 if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
                     table.clone_into(&mut att.table);
@@ -291,7 +300,23 @@ pub(super) fn run(
                     ids[(i + n - 1) % n]
                 }
             } else {
-                target::session(srv, ctx, a.value('t'))?
+                // A window or pane in -t becomes the session's current one,
+                // as tmux's (-Z keeping a zoomed window zoomed).
+                match a.value('t').filter(|t| t.contains([':', '.', '%', '@'])) {
+                    Some(t) => {
+                        let (sid, wid, pid) = target::pane(srv, ctx, Some(t))?;
+                        if srv.windows.get(&wid).is_some_and(|w| w.active != pid) {
+                            let zoom = srv.push_zoom(wid, false, a.has('Z'));
+                            srv.select_pane(pid);
+                            srv.pop_zoom(wid, zoom);
+                        }
+                        if let Some(idx) = srv.sessions.get(&sid).and_then(|s| s.index_of(wid)) {
+                            srv.select_window(sid, idx)?;
+                        }
+                        sid
+                    }
+                    None => target::session(srv, ctx, a.value('t'))?,
+                }
             };
             // The switching client's variables, unless -E, as tmux's.
             if !a.has('E') {

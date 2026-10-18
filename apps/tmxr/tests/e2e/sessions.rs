@@ -532,6 +532,47 @@ fn a_program_that_reads_nothing_does_not_stall_the_server() {
 }
 
 #[test]
+fn switch_client_takes_a_window_and_pane_r_and_z() {
+    let t = Tmxr::new("switchwp");
+    t.run(&["new-session", "-d", "-s", "here"]);
+    t.run(&["new-session", "-d", "-s", "other"]);
+    t.run(&["new-window", "-d", "-t", "other:1"]);
+    t.run(&["split-window", "-d", "-t", "other:1"]);
+    t.run(&["split-window", "-d", "-t", "other:1"]);
+    let s = t.attach(&["attach", "-t", "here"]);
+    s.wait_for("attached", |text| text.contains("here"));
+    let show = |f: &str| {
+        t.run(&["display-message", "-p", "-t", "other", f])
+            .trim()
+            .to_owned()
+    };
+    // A window and pane in -t become the session's current ones.
+    t.run(&["switch-client", "-t", "other:1.1"]);
+    t.wait_run(
+        &["list-clients", "-F", "#{session_name}"],
+        "the switch",
+        |o| o.trim() == "other",
+    );
+    assert_eq!(show("#{window_index}.#{pane_index}"), "1.1");
+    // -Z: a zoomed window stays zoomed on the pane picked.
+    t.run(&["resize-pane", "-Z", "-t", "other:1.1"]);
+    t.run(&["switch-client", "-Z", "-t", "other:1.2"]);
+    assert_eq!(show("#{pane_index} #{window_zoomed_flag}"), "2 1");
+    t.run(&["switch-client", "-t", "other:1.0"]);
+    assert_eq!(show("#{pane_index} #{window_zoomed_flag}"), "0 0");
+    // -r turns the client read-only, and back.
+    let flags = || {
+        t.run(&["list-clients", "-F", "#{client_readonly}"])
+            .trim()
+            .to_owned()
+    };
+    t.run(&["switch-client", "-r"]);
+    assert_eq!(flags(), "1");
+    t.run(&["switch-client", "-r"]);
+    assert_eq!(flags(), "0");
+}
+
+#[test]
 fn switch_client_c_names_the_client_to_move() {
     let t = Tmxr::new("switchc");
     t.run(&["new-session", "-d", "-s", "one"]);

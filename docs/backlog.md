@@ -464,14 +464,13 @@ table. What has been verified, and how:
     cells); `split-window -I`; `display-message -a -v -I -N -C`; `choose-*`
     templates and `-F -f -K -O -r -N -y`, tagging and sort keys;
     `command-prompt` with several `-p` and `%1`…`%9`, `-1 -N -b -F -l`,
-    completion; session groups (`new-session -t`); `switch-client -t` /
-    `attach -t` drop the window and pane part, and `switch-client -r -Z`;
-    smaller flags: `send-keys -R -K -c` (`-R` is tmux's `input_reset`, more than
-    a vt100 `ESC c`), `display-panes -d -b -N`, `set-buffer -t`, `copy-mode -s`,
-    `detach-client -E`, `run-shell -E`, `list-keys -a -P` (see `list-keys -N`
-    below), `join-pane -p` (tmux 3.6's reads `-l` instead, so it fails without
-    `-l`), `source-file -n -v -F` and globs; `source-file` of a tmux command
-    file (`%if`, `%hidden`).
+    completion; session groups (`new-session -t`); `attach -t` drops the window
+    and pane part; smaller flags: `send-keys -R -K -c` (`-R` is tmux's
+    `input_reset`, more than a vt100 `ESC c`), `display-panes -d -b -N`,
+    `set-buffer -t`, `copy-mode -s`, `detach-client -E`, `run-shell -E`,
+    `list-keys -a -P` (see `list-keys -N` below), `join-pane -p` (tmux 3.6's
+    reads `-l` instead, so it fails without `-l`), `source-file -n -v -F` and
+    globs; `source-file` of a tmux command file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `pane-set-clipboard`,
     `client-active`, `command-error`, `client-light-theme` / `-dark-theme`. Copy
     mode lacks `next-prompt` / `previous-prompt`, `pipe*`, `*-no-clear`,
@@ -521,6 +520,12 @@ table. What has been verified, and how:
   signalling a process group the session belongs to (`detach-client -P` sends
   SIGHUP to client parents). Workaround: log to a file in `$HOME` and read it
   from a new session.
+- **`remain-on-exit-format`** waits on `#{pane_dead_signal}`: portable-pty's
+  `ExitStatus` gives a signal only as `strsignal` text ("Killed"), and a
+  signalled exit as code 1 where tmux shows no status. The number needs the
+  child reaped another way (on Unix, `waitpid` and `WTERMSIG`); then the
+  format's line can be written into the pane's screen as tmux does
+  (`server_destroy_pane`), where `render.rs` draws a fixed line over it now.
 - **Time expansion is not carried into everything tmux carries it into**:
   `format::expand_time` fills in strftime sequences at each level of a format
   (nested parts, `E:` values, modifier arguments) as tmux's `FORMAT_EXPAND_TIME`

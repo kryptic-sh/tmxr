@@ -156,6 +156,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   0 being the screen's first row, negative ones in the history and `-` either
   end (`capture-pane -p -S -` prints the whole history), formats expanded
   (`-S -#{history_size}`); `-N` keeps trailing blanks and `-b` names the buffer.
+- **`switch-client -t session:window.pane`, `-Z` and `-r`**, as tmux's: the
+  window and pane named become the session's current ones (`-Z` keeping a zoomed
+  window zoomed), and `-r` toggles the client read-only.
 - **`switch-client -c target-client`**, and from a command client (a script,
   `run-shell`) without `-c` it acts on the attached client used most recently,
   as tmux's, where it failed with "no current client".
