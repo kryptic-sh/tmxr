@@ -151,6 +151,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   on the pane's screen holding `text` (a glob, `C/r` a regular expression, `i`
   ignoring case), 0 for none; `#{R:text,n}` repeats `text` n times; `#{!:#{x}}`
   / `#{!!:#{x}}` are 1 when x is false / true.
+- **Format loops**, as tmux's: `#{S:fmt}`, `#{W:fmt}`, `#{P:fmt}` and `#{L:fmt}`
+  expand `fmt` for each session, window of the session, pane of the window or
+  client; `S`, `W` and `P` take a second format after a comma for the current
+  one (`#{W:#I ,*#I }`), `/n` sorts by name, `/t` by activity and `/r` reverses,
+  and `#{loop_last_flag}` is 1 for the last item.
 - **`split-window -p`**, tmux's older percentage (`-p 30` is `-l 30%`), and
   **`join-pane -f` / `move-pane -f`**, the pane spanning the whole window as
   `split-window -f` does.

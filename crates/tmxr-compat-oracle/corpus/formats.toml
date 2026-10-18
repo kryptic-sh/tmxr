@@ -349,3 +349,22 @@ checks = [
   { format = "#{q;=3:@sp}|#{q:#{@sp}}|#{q:@sp}|#{b;q:@p}|#{q;b:@p}|#{q/e;=2:@sp}|" },
   { format = "#{=1;m:a*,abc}|#{m;=1:a*,abc}|#{m/i;n:A*,abc}" },
 ]
+
+[[cases]]
+name = "format_loops_go_over_sessions_windows_and_panes"
+steps = [
+  { run = "new-session -d -s b" },
+  { run = "new-session -d -s m" },
+  { run = "rename-window -t o:0 mid" },
+  { run = "new-window -d -t o:3 -n zed" },
+  { run = "new-window -d -t o:1 -n alpha" },
+  { run = "split-window -d -t o:0" },
+  { run = "split-window -d -t o:0" },
+  { run = "select-pane -t o:0.1" },
+]
+checks = [
+  { command = "display -p -t o:0 '#{S:#{session_name}#{?loop_last_flag,,/}}|#{S/n:#{session_name} }|#{S/nr:#{session_name} }|#{S/r:#{session_name} }|#{S/t:#{session_name} }'" },
+  { command = "display -p -t o:0 '#{W:#{window_index}:#{window_name} }|#{W:#{window_index} ,*#{window_index} }|#{W/n:#{window_name} }|#{W/r:#{window_index} }|#{W:a,b,c}'" },
+  { command = "display -p -t o:0 '#{P:#{pane_index} }|#{P:#{pane_index} ,*#{pane_index} }|#{P/r:#{pane_index} }|#{loop_last_flag}'" },
+  { command = "display -p -t o:0 '#{W:#{session_name}#{window_index}#{loop_last_flag} }|#{S:#{session_name}#{W:#{window_index}}|}|#{W/x:#{window_index}}'" },
+]

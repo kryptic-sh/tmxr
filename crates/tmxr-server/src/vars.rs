@@ -2,12 +2,13 @@
 
 use std::path::PathBuf;
 
-use tmxr_command::format::{Context, NameKind};
+use tmxr_command::format::{Context, LoopItem, LoopKind, NameKind};
 
 use crate::model::{ClientId, PaneId, SessionId, WindowId};
 use crate::server::{Attached, Server};
 
 /// Variables for one (session, window, pane, client) combination.
+#[derive(Clone, Copy)]
 pub struct Vars<'a> {
     pub srv: &'a Server,
     pub session: Option<SessionId>,
@@ -163,7 +164,7 @@ fn client_flags(c: &crate::server::Client) -> String {
     .join(",")
 }
 
-impl Context for Vars<'_> {
+impl<'a> Context for Vars<'a> {
     fn name_exists(&self, kind: NameKind, name: &str) -> Option<bool> {
         let srv = self.srv;
         Some(match kind {
@@ -175,6 +176,103 @@ impl Context for Vars<'_> {
                 .filter_map(|w| srv.windows.get(w))
                 .any(|w| w.name == name),
             NameKind::Session => srv.sessions.values().any(|s| s.name == name),
+        })
+    }
+
+    fn loop_items(&self, kind: LoopKind) -> Option<Vec<LoopItem<'_>>> {
+        let srv = self.srv;
+        let item = |vars: Vars<'a>, current, index, name: &str, activity| LoopItem {
+            ctx: Box::new(vars),
+            current,
+            index,
+            name: name.to_owned(),
+            activity,
+        };
+        // A session's or window's own window and pane, as tmux fills them in.
+        let in_window = |session, window: WindowId| Vars {
+            srv,
+            session,
+            window: Some(window),
+            pane: srv.windows.get(&window).map(|w| w.active),
+            client: self.client,
+        };
+        Some(match kind {
+            LoopKind::Sessions => {
+                let current = self
+                    .client
+                    .and_then(|c| srv.clients.get(&c))
+                    .and_then(|c| c.att.as_ref())
+                    .map(|a| a.session);
+                srv.sessions
+                    .values()
+                    .map(|s| {
+                        let mut vars = Vars {
+                            session: Some(s.id),
+                            window: None,
+                            pane: None,
+                            ..*self
+                        };
+                        if let Some(w) = s.current_window() {
+                            vars = in_window(Some(s.id), w);
+                        }
+                        item(
+                            vars,
+                            current == Some(s.id),
+                            u64::from(s.id),
+                            &s.name,
+                            s.activity,
+                        )
+                    })
+                    .collect()
+            }
+            LoopKind::Windows => {
+                let s = srv.sessions.get(&self.session?)?;
+                s.windows
+                    .iter()
+                    .filter_map(|(index, wid)| {
+                        let w = srv.windows.get(wid)?;
+                        let activity = std::time::SystemTime::now() - w.last_output.elapsed();
+                        let vars = in_window(Some(s.id), *wid);
+                        Some(item(
+                            vars,
+                            *index == s.current,
+                            u64::from(*index),
+                            &w.name,
+                            activity,
+                        ))
+                    })
+                    .collect()
+            }
+            LoopKind::Panes => {
+                let w = srv.windows.get(&self.window?)?;
+                w.panes()
+                    .into_iter()
+                    .map(|pid| {
+                        let vars = Vars {
+                            pane: Some(pid),
+                            ..*self
+                        };
+                        let activity = std::time::SystemTime::now();
+                        item(vars, w.active == pid, u64::from(pid), "", activity)
+                    })
+                    .collect()
+            }
+            LoopKind::Clients => srv
+                .clients
+                .values()
+                .map(|c| {
+                    let vars = Vars {
+                        client: Some(c.id),
+                        ..*self
+                    };
+                    // A client's activity is its last key or mouse event,
+                    // else when it connected, as tmux's activity_time.
+                    let activity = c.att.as_ref().map_or(c.created, |a| {
+                        std::time::SystemTime::now() - a.last_input.elapsed()
+                    });
+                    item(vars, false, u64::from(c.id), &c.id.to_string(), activity)
+                })
+                .collect(),
         })
     }
 
@@ -229,6 +327,8 @@ impl Context for Vars<'_> {
             "client_flags" => client_flags(srv.clients.get(&self.client?)?),
             "client_readonly" => flag(srv.clients.get(&self.client?)?.read_only()),
             "client_width" => att?.cols.to_string(),
+            // Set by a format loop for its last item.
+            "loop_last_flag" => "0".to_owned(),
             "client_created" => epoch(srv.clients.get(&self.client?)?.created),
             // The users the server and the client run as: a uid on Unix, a
             // SID on Windows, and that user's name.

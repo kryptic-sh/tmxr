@@ -10,7 +10,10 @@
 //! session is called that) and `#{N/s:name}` (a session is), `#{C:text}`
 //! (the first line of the pane's screen holding text, as a glob; `C/r` a
 //! regex, `i` ignoring case), `#{R:text,n}` (text n times), `#{!:x}` /
-//! `#{!!:x}` (whether x expands to false / true), `#{||:a,b}`,
+//! `#{!!:x}` (whether x expands to false / true), the loops `#{S:fmt}`,
+//! `#{W:fmt}`, `#{P:fmt}` and `#{L:fmt}` (fmt for each session, window of the
+//! session, pane of the window, or client; `S`, `W` and `P` take a second
+//! format for the current one), `#{||:a,b}`,
 //! `#{&&:a,b}`, the short aliases
 //! `#S #W #I #P #H #h #F #D #T` and `##` for a literal `#`. Commas inside
 //! nested `#{…}` do not split.
@@ -30,6 +33,36 @@ pub trait Context {
     /// The lines on the screen of the context's pane, top to bottom, for
     /// `#{C:…}`; `None` when there is no pane.
     fn pane_lines(&self) -> Option<Vec<String>>;
+
+    /// What a loop goes over, in index order (session id, window index,
+    /// pane id, the order clients connected), each as a context of its own;
+    /// `None` when there is nothing to loop in (no session for windows, no
+    /// window for panes), which expands to nothing.
+    fn loop_items(&self, kind: LoopKind) -> Option<Vec<LoopItem<'_>>>;
+}
+
+/// What a format loop goes over.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoopKind {
+    Sessions,
+    Windows,
+    Panes,
+    Clients,
+}
+
+/// One session, window, pane or client of a loop.
+pub struct LoopItem<'a> {
+    /// The variables as they are for it.
+    pub ctx: Box<dyn Context + 'a>,
+    /// It is the current one: the client's session, the session's window,
+    /// the window's active pane.
+    pub current: bool,
+    /// Its place in index order.
+    pub index: u64,
+    /// The name `n` sorts by.
+    pub name: String,
+    /// The activity `t` sorts by, most recent first.
+    pub activity: std::time::SystemTime,
 }
 
 /// What `#{N:…}` looks a name up among.
@@ -52,6 +85,81 @@ impl<F: Fn(&str) -> Option<String>> Context for F {
     fn pane_lines(&self) -> Option<Vec<String>> {
         None
     }
+
+    fn loop_items(&self, _kind: LoopKind) -> Option<Vec<LoopItem<'_>>> {
+        None
+    }
+}
+
+/// A loop item's context with `loop_last_flag` set for it.
+struct InLoop<'c> {
+    inner: &'c dyn Context,
+    last: bool,
+}
+
+impl Context for InLoop<'_> {
+    fn get(&self, name: &str) -> Option<String> {
+        if name == "loop_last_flag" {
+            return Some(if self.last { "1" } else { "0" }.to_owned());
+        }
+        self.inner.get(name)
+    }
+
+    fn name_exists(&self, kind: NameKind, name: &str) -> Option<bool> {
+        self.inner.name_exists(kind, name)
+    }
+
+    fn pane_lines(&self) -> Option<Vec<String>> {
+        self.inner.pane_lines()
+    }
+
+    fn loop_items(&self, kind: LoopKind) -> Option<Vec<LoopItem<'_>>> {
+        self.inner.loop_items(kind)
+    }
+}
+
+/// tmux's format loops: `fmt` expanded for each item in turn, sorted as
+/// `flags` ask (`i` index, `n` name, `t` activity, `r` reversed; panes by
+/// id only), the part after the first comma used for the current item
+/// instead (not for clients).
+fn expand_loop(kind: LoopKind, flags: &str, fmt: &str, ctx: &dyn Context, pass: Pass) -> String {
+    let Some(mut items) = ctx.loop_items(kind) else {
+        return String::new();
+    };
+    let reversed = flags.contains('r');
+    let by_name = |a: &LoopItem<'_>, b: &LoopItem<'_>| a.name.cmp(&b.name);
+    if kind != LoopKind::Panes && !flags.contains('i') && flags.contains('n') {
+        items.sort_by(by_name);
+    } else if kind != LoopKind::Panes && !flags.contains('i') && flags.contains('t') {
+        items.sort_by(|a, b| b.activity.cmp(&a.activity).then_with(|| by_name(a, b)));
+    } else {
+        items.sort_by_key(|item| item.index);
+    }
+    if reversed {
+        items.reverse();
+    }
+    let (all, current) = match split_top(fmt).first() {
+        Some(first) if kind != LoopKind::Clients && first.len() < fmt.len() => {
+            (*first, Some(&fmt[first.len() + 1..]))
+        }
+        _ => (fmt, None),
+    };
+    let count = items.len();
+    items
+        .iter()
+        .enumerate()
+        .map(|(i, item)| {
+            let use_fmt = match current {
+                Some(c) if item.current => c,
+                _ => all,
+            };
+            let in_loop = InLoop {
+                inner: item.ctx.as_ref(),
+                last: i + 1 == count,
+            };
+            expand_depth(use_fmt, &in_loop, pass.deeper())
+        })
+        .collect()
 }
 
 /// The most times `#{R:…}` repeats its text, as tmux's.
@@ -423,6 +531,16 @@ fn expand_item(body: &str, ctx: &dyn Context, pass: Pass) -> String {
     }
     if let Some(text) = body.strip_prefix("!:") {
         return if truthy(&ex(text)) { "0" } else { "1" }.to_owned();
+    }
+    for (letter, kind) in [
+        ('S', LoopKind::Sessions),
+        ('W', LoopKind::Windows),
+        ('P', LoopKind::Panes),
+        ('L', LoopKind::Clients),
+    ] {
+        if let Some((flags, fmt)) = body.strip_prefix(letter).and_then(modifier_args) {
+            return expand_loop(kind, flags, fmt, ctx, pass);
+        }
     }
     // R: the text repeated the given number of times, from 1 to tmux's
     // limit; any other count, or no count, gives nothing.

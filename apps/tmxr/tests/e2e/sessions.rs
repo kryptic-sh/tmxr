@@ -607,6 +607,14 @@ fn client_variables_tell_its_times_and_last_session() {
     let server_user = t.run(&["display-message", "-p", "#{uid} #{user}"]);
     assert!(!server_user.trim().ends_with(' '), "{server_user:?}");
     assert_eq!(client("#{client_uid} #{client_user}"), server_user.trim());
+    // In a loop the client's session is the current one, and the client loop
+    // takes in the attached client.
+    assert_eq!(
+        client("#{S:#{session_name} ,[#{session_name}] }"),
+        "first [second]"
+    );
+    let all = client("#{L:#{client_name}/}");
+    assert!(all.split('/').any(|n| n == name), "{all:?} has {name}");
 }
 
 #[test]

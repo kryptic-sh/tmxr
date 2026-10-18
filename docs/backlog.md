@@ -437,20 +437,20 @@ table. What has been verified, and how:
 - **tmux 3.6 features tmxr lacks** (the same review; compared against tmux's
   `cmd-*.c`, `options-table.c` and `format.c`, not run):
   - Formats: `#(shell)` in status formats (tmux's default `status-right` uses
-    it); loops `S:` `W:` `P:` `L:`; modifiers `w:` (it needs a display-width
-    measure `tmxr-command` does not have, unicode-width being a new dependency),
-    `c:` (a colour as hex RGB: needs a 256-colour-to-RGB table, which tmxr does
-    not have — `backend.rs` maps only RGB to the 256 and the 256 to 16 — and
-    tmux's `colour.c`, not read, decides which colour names it takes); a syntax
-    error ends tmux's whole expansion (2026-10-18, tmux 3.6: `A#{==:a}B`,
-    `A#{m:a}B` and `A#{R:x}B` all print `A`) where tmxr expands only that item
-    (`==:` compares against an empty right side); many of tmux's format
-    variables (compare tmux's `format_table` with `vars.rs` for the list;
-    `origin_flag`, `wrap_flag`, `insert_flag`, `scroll_region_*`,
-    `alternate_saved_*`, `pane_tabs` and `cursor_shape` / `cursor_colour` need
-    terminal state the `vt100` crate does not expose); styles `align=` `fill=`
-    `list=` `range=` `push-default` / `pop-default`, strikethrough, blink,
-    overline, curly and coloured underlines.
+    it); modifiers `w:` (it needs a display-width measure `tmxr-command` does
+    not have, unicode-width being a new dependency), `c:` (a colour as hex RGB:
+    needs a 256-colour-to-RGB table, which tmxr does not have — `backend.rs`
+    maps only RGB to the 256 and the 256 to 16 — and tmux's `colour.c`, not
+    read, decides which colour names it takes); a syntax error ends tmux's whole
+    expansion (2026-10-18, tmux 3.6: `A#{==:a}B`, `A#{m:a}B` and `A#{R:x}B` all
+    print `A`) where tmxr expands only that item (`==:` compares against an
+    empty right side); many of tmux's format variables (compare tmux's
+    `format_table` with `vars.rs` for the list; `origin_flag`, `wrap_flag`,
+    `insert_flag`, `scroll_region_*`, `alternate_saved_*`, `pane_tabs` and
+    `cursor_shape` / `cursor_colour` need terminal state the `vt100` crate does
+    not expose); styles `align=` `fill=` `list=` `range=` `push-default` /
+    `pop-default`, strikethrough, blink, overline, curly and coloured
+    underlines.
   - Options: the status line is one row at the bottom (`STATUS_ROWS`): no
     `status off` / `2`–`5`, `status-position`, `status-format`; no
     `window-status-activity-style` / `-bell-style` (tmux's default `reverse`
@@ -559,6 +559,13 @@ table. What has been verified, and how:
   `session_alert` / `session_alerts` give the session's alerts correctly.
   Options: add them with tmux's answers (scripts get what tmux gives) or with
   the evident intent (any window alerted); not decided, so not added.
+- **tmux crashes on a session loop's current format from a detached client**
+  (2026-10-18, tmux 3.6): `display -p '#{S:a,b}'` run from the command line
+  takes down the server, as `format_loop_sessions` reads the client's session,
+  which a command client has none of. tmxr marks no session current there. The
+  oracle case for the loops therefore leaves that form out; the e2e test
+  `client_variables_tell_its_times_and_last_session` covers it with an attached
+  client.
 - **Oracle checks must be free of side effects**: `compare` in
   `tmxr-compat-oracle` reads a check again until both sides agree, so a check
   that creates something (`new-window -P`) runs twice on a mismatch and fails
