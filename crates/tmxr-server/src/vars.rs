@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use tmxr_command::format::Context;
 
 use crate::model::{ClientId, PaneId, SessionId, WindowId};
-use crate::server::Server;
+use crate::server::{Attached, Server};
 
 /// Variables for one (session, window, pane, client) combination.
 pub struct Vars<'a> {
@@ -98,6 +98,17 @@ pub fn mouse_var(srv: &Server, mouse: &crate::mouse::MouseTarget, name: &str) ->
 
 fn flag(b: bool) -> String {
     if b { "1" } else { "0" }.to_owned()
+}
+
+/// The names of the attached clients `keep` takes, in the order they
+/// connected as tmux's client list, joined by commas.
+fn client_names(srv: &Server, keep: impl Fn(&Attached) -> bool) -> String {
+    srv.clients
+        .values()
+        .filter(|c| c.att.as_ref().is_some_and(&keep))
+        .map(|c| c.id.to_string())
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 /// The names of the sessions `keep` takes, in name order, joined by commas.
@@ -201,6 +212,11 @@ impl Context for Vars<'_> {
             "session_id" => format!("${}", session?.id),
             "session_windows" => session?.windows.len().to_string(),
             "session_attached" => attached(session?.id).to_string(),
+            "session_attached_list" => {
+                let sid = session?.id;
+                client_names(srv, |a| a.session == sid)
+            }
+            "session_path" => session?.cwd.display().to_string(),
             "session_created" => epoch(session?.created),
             "session_activity" => epoch(session?.activity),
             "session_last_attached" => epoch(session?.last_attached?),
@@ -240,6 +256,24 @@ impl Context for Vars<'_> {
                     .filter(|s| s.current_window() == Some(wid))
                     .count()
                     .to_string()
+            }
+            "window_active_clients" | "window_active_clients_list" => {
+                let wid = window?.id;
+                let showing = |a: &Attached| {
+                    srv.sessions
+                        .get(&a.session)
+                        .and_then(|s| s.current_window())
+                        == Some(wid)
+                };
+                if name == "window_active_clients" {
+                    srv.clients
+                        .values()
+                        .filter(|c| c.att.as_ref().is_some_and(showing))
+                        .count()
+                        .to_string()
+                } else {
+                    client_names(srv, showing)
+                }
             }
             "window_active_sessions_list" => {
                 let wid = window?.id;
@@ -310,6 +344,7 @@ impl Context for Vars<'_> {
                 (i as u32 + srv.window_options(w.id).pane_base_index).to_string()
             }
             "pane_active" => flag(window?.active == pane?.id),
+            "pane_last" => flag(window?.last_pane == Some(pane?.id)),
             "pane_title" => pane?
                 .emu
                 .title()

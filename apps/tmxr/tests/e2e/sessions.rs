@@ -591,6 +591,18 @@ fn client_variables_tell_its_times_and_last_session() {
         client("#{client_pid}"),
         s.child.process_id().unwrap().to_string()
     );
+    // The client is in "second" now, showing its window, and no longer in
+    // "first".
+    let name = client("#{client_name}");
+    let lists = |target: &str| {
+        let f =
+            "[#{session_attached_list}] #{window_active_clients} [#{window_active_clients_list}]";
+        t.run(&["display-message", "-p", "-t", target, f])
+            .trim()
+            .to_owned()
+    };
+    assert_eq!(lists("second"), format!("[{name}] 1 [{name}]"));
+    assert_eq!(lists("first"), "[] 0 []");
 }
 
 #[test]

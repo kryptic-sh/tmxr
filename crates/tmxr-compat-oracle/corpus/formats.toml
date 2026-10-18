@@ -196,3 +196,24 @@ steps = [{ run = "new-session -d -s never" }]
 checks = [
   { command = "display -p -t never '[#{session_last_attached}][#{t:session_last_attached}]'", expect = "[][]" },
 ]
+
+[[cases]]
+name = "pane_last_is_the_previously_active_pane"
+steps = [
+  { run = "new-window -d -t o:1" },
+  { run = "split-window -d -t o:1" },
+  { run = "split-window -d -t o:1" },
+  { run = "select-pane -t o:1.1" },
+  { run = "select-pane -t o:1.2" },
+]
+checks = [
+  { command = "list-panes -t o:1 -F '#{pane_index} #{pane_last} #{pane_active}'" },
+]
+
+[[cases]]
+name = "session_path_is_the_sessions_directory"
+unix_only = true
+steps = [{ run = "new-session -d -s there -c /tmp" }]
+checks = [
+  { command = "display -p -t there '#{session_path}'", expect = "/tmp" },
+]
