@@ -77,6 +77,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   default), and the key table a client's keys start in (`root` by default). A
   key not bound in the table a client is in gets a second try in that default
   table, and is not passed to the pane, as tmux does.
+- **`clock-mode-style`**, as tmux's: `12`, `24` (the default), `12-with-seconds`
+  or `24-with-seconds`, the 12-hour clock with `AM` / `PM` in tmux's big
+  letters.
 - **`#{client_flags}` and `#{client_readonly}`**: the client's `attached`,
   `focused`, `ignore-size` and `read-only` flags, in tmux's order, and whether
   it is read-only. A client is focused from attaching until its terminal reports
@@ -89,6 +92,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`tmxr_term::localtime::hour_minute` is `hour_minute_second`**, returning the
+  second too, for clock mode's clocks with seconds.
 - **Pane targets `{left}`, `{right}`, `{top}` and `{bottom}` mean the pane at
   that edge of the window, as tmux's**: `{left}` and `{right}` were the
   neighbouring pane, which is now `{left-of}` / `{right-of}` / `{up-of}` /

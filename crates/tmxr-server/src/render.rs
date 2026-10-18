@@ -270,6 +270,7 @@ fn draw_window(
         matched: style_option(&options.copy_mode_match_style, &vars),
         current: style_option(&options.copy_mode_current_match_style, &vars),
         clock: style_option(&format!("fg={}", options.clock_mode_colour), &vars),
+        clock_style: options.clock_mode_style,
     };
     let w = win.cols.min(cols);
     let h = win.rows.min(rows);
@@ -374,6 +375,7 @@ struct PaneStyles {
     matched: Style,
     current: Style,
     clock: Style,
+    clock_style: tmxr_config::ClockModeStyle,
 }
 
 fn draw_pane(
@@ -389,7 +391,7 @@ fn draw_pane(
     let w = r.w.min(max_w.saturating_sub(r.x));
     let h = r.h.min(max_h.saturating_sub(r.y));
     if pane.clock {
-        draw_clock(buf, Rect::new(r.x, r.y, w, h), copy.clock);
+        draw_clock(buf, Rect::new(r.x, r.y, w, h), copy.clock, copy.clock_style);
         return None;
     }
     if let Some(cm) = &pane.copy {
@@ -868,7 +870,7 @@ fn draw_preview(srv: &Server, pane: PaneId, buf: &mut Buffer, area: Rect) {
 }
 
 /// tmux's clock font: 5x5 cells per glyph, `#` painted.
-const CLOCK_FONT: [[&str; 5]; 11] = [
+const CLOCK_FONT: [[&str; 5]; 14] = [
     ["#####", "#...#", "#...#", "#...#", "#####"], // 0
     ["....#", "....#", "....#", "....#", "....#"], // 1
     ["#####", "....#", "#####", "#....", "#####"], // 2
@@ -880,31 +882,48 @@ const CLOCK_FONT: [[&str; 5]; 11] = [
     ["#####", "#...#", "#####", "#...#", "#####"], // 8
     ["#####", "#...#", "#####", "....#", "#####"], // 9
     [".....", "..#..", ".....", "..#..", "....."], // :
+    ["#####", "#...#", "#####", "#...#", "#...#"], // A
+    ["#####", "#...#", "#####", "#....", "#...."], // P
+    ["#...#", "##.##", "#.#.#", "#...#", "#...#"], // M
 ];
 
 /// Clock mode: the local time in big digits in the middle of the pane, or as
-/// plain `HH:MM` when the pane is too small for them.
-fn draw_clock(buf: &mut Buffer, area: Rect, colour: Style) {
+/// plain text when the pane is too small for them, laid out as tmux's
+/// `window_clock_draw_screen`.
+fn draw_clock(buf: &mut Buffer, area: Rect, colour: Style, style: tmxr_config::ClockModeStyle) {
     Clear.render(area, buf);
-    let Some((h, m)) = tmxr_term::localtime::hour_minute() else {
+    let Some((h, m, s)) = tmxr_term::localtime::hour_minute_second() else {
         return;
     };
-    let text = format!("{h:02}:{m:02}");
-    let glyphs: Vec<usize> = text
-        .chars()
-        .map(|c| c.to_digit(10).map_or(10, |d| d as usize))
-        .collect();
-    let big_w = (glyphs.len() * 6 - 1) as u16;
-    if area.width < big_w || area.height < 5 {
-        let x = area.x + area.width.saturating_sub(5) / 2;
-        let y = area.y + area.height / 2;
-        buf.set_stringn(x, y, &text, usize::from(area.width), colour);
+    let text = style.text(h, m, s);
+    let len = text.chars().count() as u16;
+    if area.width < 6 * len || area.height < 6 {
+        if area.width >= len && area.height != 0 {
+            let x = area.x + area.width / 2 - len / 2;
+            let y = area.y + area.height / 2;
+            buf.set_stringn(x, y, &text, usize::from(area.width), colour);
+        }
         return;
     }
+    // A blank (the 12-hour clock's padding and gap) takes a glyph's room.
+    let glyphs: Vec<Option<usize>> = text
+        .chars()
+        .map(|c| match c {
+            '0'..='9' => c.to_digit(10).map(|d| d as usize),
+            ':' => Some(10),
+            'A' => Some(11),
+            'P' => Some(12),
+            'M' => Some(13),
+            _ => None,
+        })
+        .collect();
     let paint = Style::default().bg(colour.fg.unwrap_or(Color::Blue));
-    let x0 = area.x + (area.width - big_w) / 2;
-    let y0 = area.y + (area.height - 5) / 2;
+    let x0 = area.x + area.width / 2 - 3 * len;
+    let y0 = area.y + area.height / 2 - 3;
     for (i, g) in glyphs.iter().enumerate() {
+        let Some(g) = g else {
+            continue;
+        };
         for (row, bits) in CLOCK_FONT[*g].iter().enumerate() {
             for (col, bit) in bits.chars().enumerate() {
                 if bit == '#'

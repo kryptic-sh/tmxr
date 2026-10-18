@@ -2,13 +2,14 @@
 //! time zones, so this asks the platform: `localtime_r` on Unix,
 //! `GetLocalTime` on Windows.
 
-/// The local `(hour, minute)`, or `None` if the platform cannot say.
-pub fn hour_minute() -> Option<(u8, u8)> {
+/// The local `(hour, minute, second)`, or `None` if the platform cannot
+/// say.
+pub fn hour_minute_second() -> Option<(u8, u8, u8)> {
     imp()
 }
 
 #[cfg(unix)]
-fn imp() -> Option<(u8, u8)> {
+fn imp() -> Option<(u8, u8, u8)> {
     // SAFETY: `time` with a null pointer only returns the current time.
     let now = unsafe { libc::time(std::ptr::null_mut()) };
     // SAFETY: `tm` is integers and (on some platforms) a nullable pointer,
@@ -22,11 +23,12 @@ fn imp() -> Option<(u8, u8)> {
     Some((
         u8::try_from(tm.tm_hour).ok()?,
         u8::try_from(tm.tm_min).ok()?,
+        u8::try_from(tm.tm_sec).ok()?,
     ))
 }
 
 #[cfg(windows)]
-fn imp() -> Option<(u8, u8)> {
+fn imp() -> Option<(u8, u8, u8)> {
     use windows_sys::Win32::Foundation::SYSTEMTIME;
     use windows_sys::Win32::System::SystemInformation::GetLocalTime;
     let mut st = SYSTEMTIME {
@@ -42,7 +44,11 @@ fn imp() -> Option<(u8, u8)> {
     // SAFETY: `GetLocalTime` writes the time into `st`, which outlives the
     // call.
     unsafe { GetLocalTime(&mut st) };
-    Some((u8::try_from(st.wHour).ok()?, u8::try_from(st.wMinute).ok()?))
+    Some((
+        u8::try_from(st.wHour).ok()?,
+        u8::try_from(st.wMinute).ok()?,
+        u8::try_from(st.wSecond).ok()?,
+    ))
 }
 
 #[cfg(test)]
@@ -64,7 +70,8 @@ mod tests {
         // local minus UTC must be too; swapped or garbage fields would not be.
         for _ in 0..3 {
             let before = utc_minute_of_day();
-            let (h, m) = hour_minute().expect("local time");
+            let (h, m, s) = hour_minute_second().expect("local time");
+            assert!(s < 61, "second {s}");
             if utc_minute_of_day() != before {
                 continue; // crossed a minute boundary; try again
             }

@@ -53,6 +53,8 @@ monitor-bell = true
 # tmux's defaults: copy-mode searches wrap, and words end at ASCII punctuation
 # but `_` (and blanks).
 wrap-search = true
+# tmux's default: a 24-hour clock without seconds.
+clock-mode-style = "24"
 word-separators = '''!"#$%&'()*+,-./:;<=>?@[\]^`{|}~'''
 # How windows are sized: "latest" (by the client that used it last) or
 # "manual" (only by resize-window).

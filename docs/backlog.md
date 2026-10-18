@@ -456,9 +456,9 @@ table. What has been verified, and how:
     `-indicators`, `window-style` / `window-active-style`; session
     `status-keys`, `assume-paste-time`, `default-size`; window
     `aggressive-resize`, `allow-rename`, `allow-set-title`, `alternate-screen`,
-    `clock-mode-style`, `cursor-style`, `remain-on-exit-format`,
-    `window-size largest` / `smallest`; server `focus-events`, `history-file`,
-    `editor`, `prefix-timeout`. `escape-time` is kept but never read.
+    `cursor-style`, `remain-on-exit-format`, `window-size largest` / `smallest`;
+    server `focus-events`, `history-file`, `editor`, `prefix-timeout`.
+    `escape-time` is kept but never read.
   - Commands: `capture-pane -S -E -e -b -a -C -N -T -q`; `-P` / `-F` on
     `new-window`, `split-window`, `new-session`, `break-pane`;
     `new-window -k -S`, `split-window -p -I -Z`, `break-pane -n -s -a -b`;

@@ -2942,6 +2942,36 @@ fn clock_mode_shows_big_digits_until_a_key() {
 }
 
 #[test]
+fn clock_mode_style_twelve_shows_am_or_pm() {
+    let t = Tmxr::new("clock12");
+    let s = t.attach(&["new", "-s", "c12"]);
+    s.wait_for("status line", |text| text.contains("c12"));
+    // Panes too narrow for big digits show the time as text.
+    t.run(&["split-window", "-h", "-t", "c12"]);
+    t.run(&["split-window", "-h", "-t", "c12"]);
+    // `H:MM AM` or `HH:MM PM`: a digit, then `:`, two digits, a blank, `AM`
+    // or `PM`.
+    let twelve_hour = |text: &str| {
+        let chars: Vec<char> = text.chars().collect();
+        chars.windows(7).any(|w| {
+            w[0].is_ascii_digit()
+                && w[1] == ':'
+                && w[2].is_ascii_digit()
+                && w[3].is_ascii_digit()
+                && w[4] == ' '
+                && (w[5] == 'A' || w[5] == 'P')
+                && w[6] == 'M'
+        })
+    };
+    t.run(&["clock-mode", "-t", "c12"]);
+    s.wait_for("the 24-hour clock", |text| {
+        text.chars().filter(|c| *c == ':').count() >= 1 && !twelve_hour(text)
+    });
+    t.run(&["set", "-wg", "clock-mode-style", "12"]);
+    s.wait_for("the 12-hour clock", twelve_hour);
+}
+
+#[test]
 fn clients_are_listed_and_detached_by_id() {
     let t = Tmxr::new("clients");
     t.run(&["new-session", "-d", "-s", "cl"]);

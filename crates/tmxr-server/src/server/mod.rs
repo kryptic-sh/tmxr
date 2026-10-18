@@ -190,8 +190,9 @@ pub struct Server {
     last_save: Instant,
     /// What resurrect last wrote, so an unchanged layout is not saved again.
     pub last_saved: Option<crate::resurrect::Save>,
-    /// The time clock-mode panes last showed, to redraw them each minute.
-    clock_shown: Option<(u8, u8)>,
+    /// The time clock-mode panes last showed, to redraw them when it
+    /// changes (each second, for a clock that shows seconds).
+    clock_shown: Option<(u8, u8, u8)>,
 }
 
 /// The navigator pattern, anchored to the whole process name. An invalid
@@ -830,7 +831,7 @@ impl Server {
             .map(|p| p.window)
             .collect();
         if !clock_windows.is_empty() {
-            let time = tmxr_term::localtime::hour_minute();
+            let time = tmxr_term::localtime::hour_minute_second();
             if time != self.clock_shown {
                 self.clock_shown = time;
                 for w in clock_windows {

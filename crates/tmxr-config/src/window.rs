@@ -6,6 +6,64 @@ use serde::Deserialize;
 use crate::table::{OptionValue, Word, options_table};
 use crate::{ScrollbarPosition, Scrollbars};
 
+/// `clock-mode-style`: how clock mode tells the time, as tmux's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+pub enum ClockModeStyle {
+    #[serde(rename = "12")]
+    Twelve,
+    #[serde(rename = "24")]
+    TwentyFour,
+    #[serde(rename = "12-with-seconds")]
+    TwelveSeconds,
+    #[serde(rename = "24-with-seconds")]
+    TwentyFourSeconds,
+}
+
+impl ClockModeStyle {
+    pub const NAMES: &str = "12, 24, 12-with-seconds or 24-with-seconds";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "12" => Some(Self::Twelve),
+            "24" => Some(Self::TwentyFour),
+            "12-with-seconds" => Some(Self::TwelveSeconds),
+            "24-with-seconds" => Some(Self::TwentyFourSeconds),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Twelve => "12",
+            Self::TwentyFour => "24",
+            Self::TwelveSeconds => "12-with-seconds",
+            Self::TwentyFourSeconds => "24-with-seconds",
+        }
+    }
+
+    /// The time as clock mode shows it, as tmux's `strftime` formats it:
+    /// `%l:%M AM` (the hour space-padded, 12 for 0), `%H:%M`, and either
+    /// with `:%S`.
+    pub fn text(self, hour: u8, minute: u8, second: u8) -> String {
+        let seconds = matches!(self, Self::TwelveSeconds | Self::TwentyFourSeconds);
+        let tail = if seconds {
+            format!(":{second:02}")
+        } else {
+            String::new()
+        };
+        if matches!(self, Self::Twelve | Self::TwelveSeconds) {
+            let h12 = match hour % 12 {
+                0 => 12,
+                h => h,
+            };
+            let half = if hour >= 12 { "PM" } else { "AM" };
+            format!("{h12:>2}:{minute:02}{tail} {half}")
+        } else {
+            format!("{hour:02}:{minute:02}{tail}")
+        }
+    }
+}
+
 /// `remain-on-exit`: whether a pane whose program exited stays, shown dead,
 /// as tmux's: never, always, or (`failed`) when it exited with an error or
 /// was killed.
@@ -212,6 +270,8 @@ options_table! {
     "automatic-rename-format" => automatic_rename_format: String,
     /// The colour of clock mode's digits.
     "clock-mode-colour" => clock_mode_colour: Word,
+    /// How clock mode tells the time: 12 or 24 hours, with seconds or not.
+    "clock-mode-style" => clock_mode_style: ClockModeStyle,
     /// Copy mode search matches under the cursor, and the others.
     "copy-mode-current-match-style" => copy_mode_current_match_style: String,
     "copy-mode-match-style" => copy_mode_match_style: String,
@@ -287,6 +347,17 @@ mod tests {
         assert_eq!(o.main_pane_width, "801");
         o.set("pane-base-index", Some("1"), true).unwrap();
         assert_eq!(o.pane_base_index, 1);
+    }
+
+    #[test]
+    fn clock_text_is_tmuxs() {
+        let t = |style: &str, h, m, s| ClockModeStyle::parse(style).unwrap().text(h, m, s);
+        assert_eq!(t("24", 9, 5, 7), "09:05");
+        assert_eq!(t("24-with-seconds", 9, 5, 7), "09:05:07");
+        assert_eq!(t("12", 15, 4, 9), " 3:04 PM");
+        assert_eq!(t("12", 0, 30, 0), "12:30 AM");
+        assert_eq!(t("12", 12, 0, 0), "12:00 PM");
+        assert_eq!(t("12-with-seconds", 23, 59, 58), "11:59:58 PM");
     }
 
     #[test]
