@@ -618,6 +618,32 @@ fn environment_commands_set_show_and_reach_new_panes() {
 }
 
 #[test]
+fn command_error_runs_once_for_each_command_that_fails() {
+    let t = Tmxr::new("cmderror");
+    t.run(&["new-session", "-d", "-s", "ce"]);
+    t.run(&["set", "-g", "@n", "0"]);
+    t.run(&[
+        "set-hook",
+        "-g",
+        "command-error",
+        "set -gF @n '#{e|+|:#{@n},1}'",
+    ]);
+    let n = || t.run(&["show", "-gv", "@n"]).trim().to_owned();
+    // A command that fails as it runs, each time; one that does not parse
+    // does not run at all, as in tmux.
+    assert!(!t.output(&["select-window", "-t", "ce:9"]).status.success());
+    assert_eq!(n(), "1");
+    assert!(!t.output(&["select-window", "-t", "ce:9"]).status.success());
+    assert_eq!(n(), "2");
+    assert!(!t.output(&["no-such-command"]).status.success());
+    assert_eq!(n(), "2");
+    // A hook that fails itself does not fire it again.
+    t.run(&["set-hook", "-g", "command-error", "select-window -t ce:9"]);
+    assert!(!t.output(&["select-window", "-t", "ce:9"]).status.success());
+    assert_eq!(t.run(&["display-message", "-p", "alive"]).trim(), "alive");
+}
+
+#[test]
 fn hooks_run_after_commands_and_events() {
     let t = Tmxr::new("hooks");
     t.run(&["new-session", "-d", "-s", "hk"]);

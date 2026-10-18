@@ -19,6 +19,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The `command-error` hook**, as tmux's: it runs once for each command that
+  fails as it runs (not one that does not parse), against the command's target.
 - **`refresh-client -f` / `-F`** sets a client's flags, as tmux's, and `!flag`
   turns one off (`-f '!ignore-size'`) there and in `attach-session -f` /
   `new-session -f`; turning `ignore-size` on or off resizes the windows at once.

@@ -136,33 +136,13 @@ pub fn run_list(srv: &mut Server, ctx: &Ctx, cmds: &[Vec<String>]) -> Outcome {
         if let Err(e) = run_one(srv, ctx, &parsed, &mut out) {
             out.status = 1;
             out.stderr.push_str(&e);
+            // A command that failed as it ran (not one that did not parse)
+            // fires command-error, as tmux's cmdq_fire_command.
+            let scope = hook_scope(srv, ctx, &parsed);
+            srv.queue_hook("command-error", ctx.clone(), scope);
             return out;
         }
-        // Where the command acted, by its -t target: its pane, window or
-        // session, as far as the target names one.
-        let scope = parsed.args.value('t').map_or_else(Default::default, |t| {
-            use crate::hooks::HookScope;
-            crate::target::pane(srv, ctx, Some(t))
-                .map(|(s, w, p)| HookScope {
-                    session: Some(s),
-                    window: Some(w),
-                    pane: Some(p),
-                })
-                .or_else(|_| {
-                    crate::target::window(srv, ctx, Some(t)).map(|(s, _, w)| HookScope {
-                        session: Some(s),
-                        window: Some(w),
-                        pane: None,
-                    })
-                })
-                .or_else(|_| {
-                    crate::target::session(srv, ctx, Some(t)).map(|s| HookScope {
-                        session: Some(s),
-                        ..HookScope::default()
-                    })
-                })
-                .unwrap_or_default()
-        });
+        let scope = hook_scope(srv, ctx, &parsed);
         srv.queue_hook(&format!("after-{}", parsed.name()), ctx.clone(), scope);
         // run-shell, wait-for: the rest of the list waits for the job.
         if let Some(job) = out.job.as_mut() {
@@ -172,6 +152,34 @@ pub fn run_list(srv: &mut Server, ctx: &Ctx, cmds: &[Vec<String>]) -> Outcome {
         }
     }
     out
+}
+
+/// Where a command acted, for its hooks, by its -t target: its pane, window
+/// or session, as far as the target names one.
+fn hook_scope(srv: &Server, ctx: &Ctx, parsed: &Parsed) -> crate::hooks::HookScope {
+    use crate::hooks::HookScope;
+    parsed.args.value('t').map_or_else(Default::default, |t| {
+        crate::target::pane(srv, ctx, Some(t))
+            .map(|(s, w, p)| HookScope {
+                session: Some(s),
+                window: Some(w),
+                pane: Some(p),
+            })
+            .or_else(|_| {
+                crate::target::window(srv, ctx, Some(t)).map(|(s, _, w)| HookScope {
+                    session: Some(s),
+                    window: Some(w),
+                    pane: None,
+                })
+            })
+            .or_else(|_| {
+                crate::target::session(srv, ctx, Some(t)).map(|s| HookScope {
+                    session: Some(s),
+                    ..HookScope::default()
+                })
+            })
+            .unwrap_or_default()
+    })
 }
 
 fn attached_client(srv: &Server, ctx: &Ctx) -> Option<ClientId> {

@@ -149,8 +149,12 @@ table. What has been verified, and how:
     `window-layout-changed` twice in tmux 3.6, once in tmxr), and a change made
     by a hook's own commands fires nothing. Which action fires which hook was
     compared with tmux 3.6 on 2026-10-18
-    (`state_changes_fire_tmuxs_notification_hooks`). tmux 3.6 fired no
-    `command-error` for a command line from a client that failed.
+    (`state_changes_fire_tmuxs_notification_hooks`). `command-error` runs for a
+    command that fails as it runs, from a command client too, and not for one
+    that does not parse (tmux 3.6, 2026-10-18: `select-window` and `kill-pane`
+    at a missing target each fired it once, an unknown command none); an earlier
+    note here said tmux fired none for a client's failed command line, which
+    that probe contradicts.
   - **Synchronized input skips panes as tmux's does** (`input_targets`, from
     `window_pane_copy_key`): in a mode, dead, or hidden by a zoom. The copy mode
     and zoom cases were compared with tmux 3.6 (2026-10-14); they and the
@@ -476,14 +480,13 @@ table. What has been verified, and how:
     `-l`), `source-file -n -v -F` and globs; `source-file` of a tmux command
     file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `pane-set-clipboard`,
-    `client-active`, `command-error`, `client-light-theme` / `-dark-theme`. Copy
-    mode lacks `next-prompt` / `previous-prompt`, `pipe*`, `*-no-clear`,
-    `stop-selection` (it needs a selection end apart from the cursor, which
-    `CopyMode` does not keep), `selection-mode` and `search-*-text`;
-    `copy-selection` / `copy-pipe` ignore a buffer name. Not compared with tmux:
-    the cursor motions under `select-line` (tmux's `lineflag` moves the cursor
-    to a line's end or start on up / down), and on lines holding wide
-    characters.
+    `client-active`, `client-light-theme` / `-dark-theme`. Copy mode lacks
+    `next-prompt` / `previous-prompt`, `pipe*`, `*-no-clear`, `stop-selection`
+    (it needs a selection end apart from the cursor, which `CopyMode` does not
+    keep), `selection-mode` and `search-*-text`; `copy-selection` / `copy-pipe`
+    ignore a buffer name. Not compared with tmux: the cursor motions under
+    `select-line` (tmux's `lineflag` moves the cursor to a line's end or start
+    on up / down), and on lines holding wide characters.
 
 - **`word_separators_and_wrap_search_reach_copy_mode` failed once** (Windows,
   full e2e suite, 2026-10-18) at its first `#{copy_cursor_word}` check; four

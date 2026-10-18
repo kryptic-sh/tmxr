@@ -28,6 +28,7 @@ pub const EVENTS: &[&str] = &[
     "client-focus-out",
     "client-resized",
     "client-session-changed",
+    "command-error",
     "pane-died",
     "pane-exited",
     "pane-focus-in",
