@@ -42,9 +42,17 @@ pub fn hour_minute_second() -> Option<(u8, u8, u8)> {
     now().map(|t| (t.hour, t.minute, t.second))
 }
 
+/// `epoch` as `localtime_r`'s time_t, which is narrower than i64 on some
+/// targets and is to change width on musl (whose libc deprecates the name
+/// meanwhile), so its type is inferred rather than spelled.
+#[cfg(unix)]
+fn narrow<T: TryFrom<i64>>(epoch: i64) -> Option<T> {
+    T::try_from(epoch).ok()
+}
+
 #[cfg(unix)]
 fn imp(epoch: i64) -> Option<LocalTime> {
-    let secs = libc::time_t::try_from(epoch).ok()?;
+    let secs = narrow(epoch)?;
     // SAFETY: `tm` is integers and (on some platforms) a nullable pointer,
     // for all of which zero is a valid value.
     let mut tm: libc::tm = unsafe { std::mem::zeroed() };
