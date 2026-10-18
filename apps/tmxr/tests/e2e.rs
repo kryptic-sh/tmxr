@@ -6685,6 +6685,54 @@ fn each_session_redraws_its_status_line_at_its_own_interval() {
 /// `attach -f ignore-size`: the client's size sizes no window while a client
 /// without the flag is attached, as tmux's; alone, it does.
 #[test]
+fn allow_set_title_off_keeps_programs_from_titling_panes() {
+    let t = Tmxr::new("settitle");
+    t.run(&["new-session", "-d", "-s", "st"]);
+    // A program that titles its pane once the option has changed.
+    #[cfg(unix)]
+    let titler = [
+        "/bin/sh",
+        "-c",
+        r"sleep 1; printf '\033]2;prog-title\007ready'; sleep 30",
+    ];
+    #[cfg(windows)]
+    let titler = [
+        "powershell.exe",
+        "-NoProfile",
+        "-Command",
+        "Start-Sleep 1; [Console]::Out.Write([string][char]27 + ']2;prog-title' + [char]7 + 'ready'); Start-Sleep 30",
+    ];
+    let title = |t: &Tmxr, w: &str| {
+        t.run(&["display-message", "-p", "-t", w, "#{pane_title}"])
+            .trim()
+            .to_owned()
+    };
+    let mut new = vec!["new-window", "-d", "-t", "st:1"];
+    new.extend(titler);
+    t.run(&new);
+    t.run(&["set", "-g", "allow-set-title", "off"]);
+    t.wait_run(
+        &["capture-pane", "-p", "-t", "st:1"],
+        "the program ran",
+        |o| o.contains("ready"),
+    );
+    assert_ne!(title(&t, "st:1"), "prog-title", "off");
+    // select-pane -T still titles it.
+    t.run(&["select-pane", "-t", "st:1", "-T", "by-hand"]);
+    assert_eq!(title(&t, "st:1"), "by-hand");
+    // On, as by default, the program's title is taken.
+    t.run(&["set", "-g", "allow-set-title", "on"]);
+    let mut new = vec!["new-window", "-d", "-t", "st:2"];
+    new.extend(titler);
+    t.run(&new);
+    t.wait_run(
+        &["display-message", "-p", "-t", "st:2", "#{pane_title}"],
+        "the program's title",
+        |o| o.trim() == "prog-title",
+    );
+}
+
+#[test]
 fn window_size_largest_and_smallest_take_each_way() {
     let t = Tmxr::new("wsize");
     t.run(&["new-session", "-d", "-s", "ws"]);

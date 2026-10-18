@@ -149,6 +149,7 @@ impl OptionValue for RemainOnExit {
 /// option table scopes them.
 pub const PANE_OPTIONS: &[&str] = &[
     "allow-passthrough",
+    "allow-set-title",
     "pane-scrollbars-style",
     "remain-on-exit",
     "synchronize-panes",
@@ -273,6 +274,8 @@ options_table! {
     /// Forward programs' `ESC P tmux; … ESC \` passthrough to the outer
     /// terminal (inline images and the like).
     "allow-passthrough" => allow_passthrough: bool,
+    /// Programs may title their pane (OSC 0 / 2).
+    "allow-set-title" => allow_set_title: bool,
     /// Follow the active pane's command until the window is renamed.
     "automatic-rename" => automatic_rename: bool,
     /// What `automatic-rename` names the window, expanded for its active

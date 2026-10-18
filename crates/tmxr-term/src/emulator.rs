@@ -321,6 +321,11 @@ impl Emulator {
         self.parser.callbacks_mut().title = Some(title);
     }
 
+    /// Forget the title, as before any program set one.
+    pub fn clear_title(&mut self) {
+        self.parser.callbacks_mut().title = None;
+    }
+
     pub fn cwd(&self) -> Option<&std::path::Path> {
         self.parser.callbacks().cwd.as_deref()
     }

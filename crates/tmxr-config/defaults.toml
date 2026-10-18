@@ -44,6 +44,8 @@ set-clipboard = "on"
 rgb-colour = "on"
 # tmux.conf: set -g allow-passthrough on
 allow-passthrough = true
+# tmux's default: programs may title their pane.
+allow-set-title = true
 remain-on-exit = false
 # tmux's defaults.
 synchronize-panes = false

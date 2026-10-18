@@ -364,11 +364,20 @@ impl Server {
     pub(super) fn pty_event(&mut self, pid: PaneId, ev: PtyEvent) {
         match ev {
             PtyEvent::Output(bytes) => {
+                let allow_title = self.pane_options(pid).allow_set_title;
                 let Some(p) = self.panes.get_mut(&pid) else {
                     return;
                 };
                 let alternate = p.emu.screen().alternate_screen();
+                let title = p.emu.title().map(str::to_owned);
                 let replies = p.emu.process(&bytes);
+                // allow-set-title off: the program's OSC 0 / 2 is ignored.
+                if !allow_title && p.emu.title() != title.as_deref() {
+                    match title {
+                        Some(t) => p.emu.set_title(t),
+                        None => p.emu.clear_title(),
+                    }
+                }
                 if !replies.is_empty() {
                     let _ = p.pty.write(&replies);
                 }

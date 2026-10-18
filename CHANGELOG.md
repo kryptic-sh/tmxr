@@ -83,6 +83,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`window-size largest` and `smallest`**, as tmux's: a window as wide and as
   tall as the session's widest and tallest clients, or its narrowest and
   shortest, each way.
+- **`allow-set-title`**, as tmux's: off, a program's OSC 0 / 2 no longer titles
+  its pane (`select-pane -T` still does); on by default.
 - **`#{client_flags}` and `#{client_readonly}`**: the client's `attached`,
   `focused`, `ignore-size` and `read-only` flags, in tmux's order, and whether
   it is read-only. A client is focused from attaching until its terminal reports
