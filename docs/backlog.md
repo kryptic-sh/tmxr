@@ -471,12 +471,11 @@ table. What has been verified, and how:
     `command-prompt` with several `-p` and `%1`…`%9`, `-1 -N -b -F -l`,
     completion; session groups (`new-session -t`); `switch-client -t` /
     `attach -t` drop the window and pane part, and `switch-client -r -Z`;
-    targets `~` / `{marked}`; smaller flags: `send-keys -R -K -c` (`-R` is
-    tmux's `input_reset`, more than a vt100 `ESC c`), `display-panes -d -b -N`,
-    `set-buffer -t`, `copy-mode -s`, `detach-client -E`, `run-shell -E`,
-    `confirm-before -b -c -y`, `list-keys -a -P`, `join-pane -f -p`,
-    `source-file -n -v -F` and globs; `source-file` of a tmux command file
-    (`%if`, `%hidden`).
+    smaller flags: `send-keys -R -K -c` (`-R` is tmux's `input_reset`, more than
+    a vt100 `ESC c`), `display-panes -d -b -N`, `set-buffer -t`, `copy-mode -s`,
+    `detach-client -E`, `run-shell -E`, `confirm-before -b -c -y`,
+    `list-keys -a -P`, `join-pane -f -p`, `source-file -n -v -F` and globs;
+    `source-file` of a tmux command file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `pane-set-clipboard`,
     `client-active`, `command-error`, `client-light-theme` / `-dark-theme`. Copy
     mode lacks `next-prompt` / `previous-prompt`, `copy-line`, `copy-pipe-line`,

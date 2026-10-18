@@ -7,7 +7,8 @@
 //! `^` / `{start}`, `$` / `{end}`, name or name prefix. Panes: `%id`, index,
 //! `+`/`-`, `!` / `{last}`, `{left}`/`{right}`/`{up}`/`{down}`. Any part may be
 //! empty to mean "current". In a mouse bind, `=` or `{mouse}` is the window or
-//! pane under the mouse.
+//! pane under the mouse. A whole target of `~` or `{marked}` is the marked
+//! pane, its window and session.
 
 use crate::cmds::Ctx;
 use crate::layout::{Dir, neighbour};
@@ -58,7 +59,26 @@ fn current_pane(srv: &Server, ctx: &Ctx, session: SessionId) -> Option<PaneId> {
     srv.active_pane_of_session(session)
 }
 
+/// The marked pane as `(session, index, window, pane)`, for a target of
+/// `~` or `{marked}`, as tmux's `cmd_find_target`.
+fn marked(srv: &Server) -> Res<(SessionId, u32, WindowId, PaneId)> {
+    let pane = srv.marked_pane().ok_or("no marked target")?;
+    let window = srv.panes[&pane].window;
+    let session = srv.session_of_window(window).ok_or("no marked target")?;
+    let index = srv.sessions[&session]
+        .index_of(window)
+        .ok_or("no marked target")?;
+    Ok((session, index, window, pane))
+}
+
+fn is_marked(spec: &str) -> bool {
+    matches!(spec, "~" | "{marked}")
+}
+
 pub fn session(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<SessionId> {
+    if spec.is_some_and(is_marked) {
+        return marked(srv).map(|(s, ..)| s);
+    }
     let spec = spec.map(|s| s.split(':').next().unwrap_or(s));
     match spec.filter(|s| !s.is_empty()) {
         None => current_session(srv, ctx).ok_or_else(|| "no current session".into()),
@@ -160,6 +180,9 @@ pub fn destination(srv: &Server, ctx: &Ctx, spec: &str) -> Res<(SessionId, Optio
 /// Resolve a window target to `(session, index, window)`.
 pub fn window(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, u32, WindowId)> {
     let spec = spec.unwrap_or("");
+    if is_marked(spec) {
+        return marked(srv).map(|(s, i, w, _)| (s, i, w));
+    }
     if is_mouse(spec) {
         let t = ctx.mouse.ok_or("no mouse target")?;
         // Off any window (the status line's left part): the session's
@@ -380,6 +403,9 @@ fn pane_at_edge(
 /// Resolve a pane target to `(session, window, pane)`.
 pub fn pane(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, WindowId, PaneId)> {
     let spec = spec.unwrap_or("");
+    if is_marked(spec) {
+        return marked(srv).map(|(s, _, w, p)| (s, w, p));
+    }
     if is_mouse(spec) {
         let t = ctx.mouse.ok_or("no mouse target")?;
         // Off a pane (the status line): that window's active pane, as

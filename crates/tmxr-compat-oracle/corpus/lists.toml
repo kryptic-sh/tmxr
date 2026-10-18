@@ -18,6 +18,21 @@ checks = [
 ]
 
 [[cases]]
+name = "tilde_and_marked_name_the_marked_pane"
+steps = [
+  { run = "split-window -t o:0" },
+  { run = "select-pane -m -t o:0.0" },
+  { run = "new-window -d -t o:1" },
+  { run = "select-window -t o:1" },
+]
+checks = [
+  { command = "display -p -t '~' '#{window_index}.#{pane_index} #{pane_marked}'", expect = "0.0 1" },
+  { command = "display -p -t '{marked}' '#S:#{window_index}.#{pane_index}'", expect = "o:0.0" },
+  { command = "list-panes -t '~' -F '#{pane_index}'", expect = "0\n1" },
+  { command = "list-windows -t '{marked}' -F '#I'", expect = "0\n1" },
+]
+
+[[cases]]
 name = "targets_find_names_by_prefix_pattern_or_exactly"
 steps = [
   { run = "new-session -d -s foobar" },

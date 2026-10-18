@@ -103,6 +103,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pressed longer than that after the prefix (or `switch-client -T prefix`) goes
   to the root table instead (unless it repeats a repeatable binding). 0, the
   default, waits forever.
+- **`~` and `{marked}` targets**, as tmux's: the marked pane (`select-pane -m`),
+  its window and its session, wherever a target is taken.
 - **`new-window -k` and `-S`**, as tmux's: `-k` replaces a window already at the
   target index, and `-S` with `-n` (and no index) selects a window of that name
   if there is one instead of making another.
