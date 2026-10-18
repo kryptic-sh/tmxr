@@ -183,6 +183,21 @@ fn expand_item(body: &str, ctx: &dyn Context, depth: usize) -> String {
             return if f(&a, &b) { "1" } else { "0" }.to_owned();
         }
     }
+    if let Some(text) = body.strip_prefix("a:") {
+        // `a`: the character with that code, printable ASCII only.
+        return ex(text)
+            .parse::<u8>()
+            .ok()
+            .filter(|c| (32..=126).contains(c))
+            .map(|c| char::from(c).to_string())
+            .unwrap_or_default();
+    }
+    if let Some((args, rest)) = body.strip_prefix('e').and_then(expression_args) {
+        let parts = split_top(rest);
+        let left = ex(parts.first().copied().unwrap_or_default());
+        let right = ex(parts.get(1).copied().unwrap_or_default());
+        return expression(&args, &left, &right).unwrap_or_default();
+    }
     if let Some(name) = body.strip_prefix("E:").or_else(|| body.strip_prefix("T:")) {
         let raw = ctx.get(name).unwrap_or_default();
         return ex(&raw);
@@ -213,6 +228,68 @@ fn expand_item(body: &str, ctx: &dyn Context, depth: usize) -> String {
         return ex(body);
     }
     ctx.get(body).unwrap_or_default()
+}
+
+/// `e`'s arguments and what follows their `:`: `|+|:` or `|/|f|4:` (any
+/// punctuation for `|`; the last argument ends at its `|` or at the `:`),
+/// as tmux's `format_build_modifiers` splits them.
+fn expression_args(rest: &str) -> Option<(Vec<&str>, &str)> {
+    let sep = rest.chars().next().filter(char::is_ascii_punctuation)?;
+    let mut args = Vec::new();
+    let mut s = &rest[1..];
+    loop {
+        let end = s.find([sep, ':'])?;
+        args.push(&s[..end]);
+        // Both are ASCII, one byte.
+        let after = &s[end + 1..];
+        if s.as_bytes()[end] == b':' {
+            return Some((args, after));
+        }
+        if let Some(inner) = after.strip_prefix(':') {
+            return Some((args, inner));
+        }
+        s = after;
+    }
+}
+
+/// `#{e|op|flags|precision:left,right}`, as tmux's
+/// `format_replace_expression`: arithmetic (`+ - * / %` or `m`) or a
+/// comparison (`== != < > <= >=`, 1 or 0) on numbers, whole unless the
+/// flags hold `f`, printed with `precision` decimals (2 with `f`, else 0).
+/// `None` for anything tmux would not expand.
+fn expression(args: &[&str], left: &str, right: &str) -> Option<String> {
+    let (&op, rest) = args.split_first()?;
+    if rest.len() > 2 {
+        return None;
+    }
+    let float = rest.first().is_some_and(|f| f.contains('f'));
+    let precision = match rest.get(1) {
+        Some(p) => p.parse::<usize>().ok()?,
+        None if float => 2,
+        None => 0,
+    };
+    let number = |s: &str| {
+        let n = s.parse::<f64>().ok()?;
+        Some(if float { n } else { n.trunc() })
+    };
+    let (l, r) = (number(left)?, number(right)?);
+    let flag = |b: bool| if b { 1.0 } else { 0.0 };
+    let result = match op {
+        "+" => l + r,
+        "-" => l - r,
+        "*" => l * r,
+        "/" => l / r,
+        "%" | "m" => l % r,
+        "==" => flag((l - r).abs() < 1e-9),
+        "!=" => flag((l - r).abs() > 1e-9),
+        ">" => flag(l > r),
+        "<" => flag(l < r),
+        ">=" => flag(l >= r),
+        "<=" => flag(l <= r),
+        _ => return None,
+    };
+    let result = if float { result } else { result.trunc() };
+    Some(format!("{result:.precision$}"))
 }
 
 /// One of tmux's modifiers that change a value, as `format_replace` reads
@@ -708,6 +785,28 @@ mod tests {
     }
 
     /// Each value is what tmux 3.6 printed for the same format (2026-10-18).
+    #[test]
+    fn expressions_and_characters_are_tmuxs() {
+        assert_eq!(x("#{e|+|:1,2}"), "3");
+        assert_eq!(x("#{e|-|:1,5}"), "-4");
+        assert_eq!(x("#{e|*|:3,4}"), "12");
+        assert_eq!(x("#{e|/|:7,2}"), "3", "whole numbers");
+        assert_eq!(x("#{e|/|:-7,2}"), "-3", "towards zero");
+        assert_eq!(x("#{e|/|f|:7,2}"), "3.50");
+        assert_eq!(x("#{e|/|f|4:7,2}"), "3.5000");
+        assert_eq!(x("#{e|%|:7,3}"), "1");
+        assert_eq!(x("#{e|m|:7,3}"), "1");
+        assert_eq!(x("#{e|>|:10,9}"), "1", "as numbers, not strings");
+        assert_eq!(x("#{e|==|:2.9,2}"), "1", "whole: 2.9 is 2");
+        assert_eq!(x("#{e|<=|f|:2.9,2}"), "0.00");
+        assert_eq!(x("#{e|+|:#{n:session_name},1}"), "5");
+        assert_eq!(x("#{e|+|:x,1}"), "", "not a number");
+        assert_eq!(x("#{e|^|:1,1}"), "", "no such operator");
+        assert_eq!(x("#{a:65}"), "A");
+        assert_eq!(x("#{a:#{e|+|:96,1}}"), "a");
+        assert_eq!(x("#{a:10}"), "", "not printable");
+    }
+
     #[test]
     fn value_modifiers_chain_in_tmuxs_order() {
         assert_eq!(x("#{b:@p}"), "proj");
