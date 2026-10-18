@@ -473,9 +473,9 @@ table. What has been verified, and how:
     `attach -t` drop the window and pane part, and `switch-client -r -Z`;
     smaller flags: `send-keys -R -K -c` (`-R` is tmux's `input_reset`, more than
     a vt100 `ESC c`), `display-panes -d -b -N`, `set-buffer -t`, `copy-mode -s`,
-    `detach-client -E`, `run-shell -E`, `list-keys -a -P`, `join-pane -f -p`,
-    `source-file -n -v -F` and globs; `source-file` of a tmux command file
-    (`%if`, `%hidden`).
+    `detach-client -E`, `run-shell -E`, `list-keys -a -P` (see `list-keys -N`
+    below), `join-pane -f -p`, `source-file -n -v -F` and globs; `source-file`
+    of a tmux command file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `pane-set-clipboard`,
     `client-active`, `command-error`, `client-light-theme` / `-dark-theme`. Copy
     mode lacks `next-prompt` / `previous-prompt`, `copy-line`, `copy-pipe-line`,
@@ -488,6 +488,19 @@ table. What has been verified, and how:
   runs alone and the next full run passed. The failure output was not kept, so
   the cause is unknown: a guess is ConPTY redrawing the pane after
   `cmd /c echo`, moving the line `history-top` lands on.
+- **`list-keys -N` is laid out unlike tmux's** (compared on WSL with tmux 3.6,
+  2026-10-18: tmux 87 lines, tmxr 276). tmux, without `-T`, lists only the root
+  table (padded by the prefix's width) then the prefix table, each line `C-b `
+  (the `prefix` key, or `-P`'s string) + the key padded to the widest noted
+  key + 1 + the note, in key-code order (`key_bindings_cmp`: `Space`, `!`, `"`,
+  `#` …). tmxr lists every table with `[table] ` prefixes and its own width and
+  order (`binds.rs`, `list-keys`). `-a` (unnoted binds too, their command as the
+  note) and `-P` belong with the rewrite. The order needs tmux's key codes:
+  characters by code point, `KEYC_META` / `KEYC_CTRL` / `KEYC_SHIFT` bits above
+  them, special keys from `KEYC_BASE` in `tmux.h`'s enum order; how `C-b` is
+  stored in 3.6 (control code or `b` with `KEYC_CTRL`) was not checked. Default
+  binds' notes would also have to match tmux's word for word for an oracle case
+  to pass.
 - **The full e2e suite kills its `wsl.exe` session** (2026-10-18): run as
   `wsl.exe -e bash -lc 'cargo test -p tmxr-cli --test e2e …'`, output stops and
   nothing after the run prints, though a log file shows every test finished.
