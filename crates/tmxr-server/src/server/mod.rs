@@ -88,6 +88,8 @@ pub struct Attached {
     pub term: Option<Terminal<AnsiBackend>>,
     /// Key table the next key is looked up in.
     pub table: String,
+    /// When `table` was entered, for `prefix-timeout`.
+    pub table_at: Instant,
     pub repeat_until: Option<Instant>,
     pub overlay: Option<Overlay>,
     /// A status message, and when it goes; `None` lasts until a key.

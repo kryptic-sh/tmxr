@@ -1096,6 +1096,33 @@ fn resurrect_restores_a_multi_pane_layout() {
 }
 
 #[test]
+fn prefix_timeout_gives_a_late_key_to_the_root_table() {
+    let t = Tmxr::new("pfxtimeout");
+    let s = t.attach(&["new", "-s", "pt"]);
+    s.wait_for("status line", |text| text.contains("pt"));
+    let windows = |t: &Tmxr| t.run(&["list-windows", "-t", "pt"]).lines().count();
+    t.run(&["set", "-s", "prefix-timeout", "200"]);
+    assert_eq!(t.run(&["show", "-sv", "prefix-timeout"]).trim(), "200");
+    // In time, the prefix table takes the key.
+    s.send(PREFIX);
+    s.send(b"c");
+    t.wait_run(&["list-windows", "-t", "pt"], "a second window", |o| {
+        o.lines().count() == 2
+    });
+    // Too late, `c` goes to the pane, as a key in the root table would.
+    s.send(PREFIX);
+    std::thread::sleep(Duration::from_millis(600));
+    s.send(b"c");
+    s.send(b"late-key");
+    t.wait_run(
+        &["capture-pane", "-p", "-t", "pt"],
+        "the late key typed",
+        |o| o.contains("clate-key"),
+    );
+    assert_eq!(windows(&t), 2);
+}
+
+#[test]
 fn prefix2_and_key_table_decide_where_keys_go() {
     let t = Tmxr::new("prefix2");
     let s = t.attach(&["new", "-s", "p2"]);

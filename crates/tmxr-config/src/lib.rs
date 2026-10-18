@@ -44,6 +44,9 @@ pub struct Config {
     /// `exit-unattached`: the server exits once no client is attached,
     /// sessions or not.
     pub exit_unattached: bool,
+    /// `prefix-timeout`: milliseconds the prefix table waits for its next
+    /// key before giving it to the root table; 0 waits forever.
+    pub prefix_timeout: u64,
     pub escape_time: u64,
     pub default_terminal: String,
     pub extended_keys: String,
@@ -93,6 +96,7 @@ struct File {
     buffer_limit: usize,
     message_limit: usize,
     exit_empty: bool,
+    prefix_timeout: u64,
     exit_unattached: bool,
     destroy_unattached: DestroyUnattached,
     escape_time: u64,
@@ -246,6 +250,7 @@ impl From<File> for Config {
             buffer_limit: f.buffer_limit,
             message_limit: f.message_limit,
             exit_empty: f.exit_empty,
+            prefix_timeout: f.prefix_timeout,
             exit_unattached: f.exit_unattached,
             escape_time: f.escape_time,
             default_terminal: f.default_terminal,

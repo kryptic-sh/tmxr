@@ -199,13 +199,27 @@ impl Server {
         let session = att.session;
         let now = Instant::now();
         let repeating = att.repeat_until.is_some_and(|t| t > now);
+        // prefix-timeout: a prefix table waited on too long gives the key
+        // to the root table, unless it repeats a repeatable binding, as
+        // tmux's `server_client_key_callback`.
+        let timeout = self.cfg.prefix_timeout;
+        let expired = timeout > 0
+            && att.table == "prefix"
+            && now.duration_since(att.table_at) > Duration::from_millis(timeout)
+            && !(repeating
+                && self
+                    .keys
+                    .get(&att.table, &key.into())
+                    .is_some_and(|b| b.repeat));
         let root = self.default_key_table(session);
         let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
             return;
         };
         let table = std::mem::replace(&mut att.table, root.clone());
         att.repeat_until = None;
-        if table != root {
+        if expired {
+            att.dirty = true;
+        } else if table != root {
             att.dirty = true;
             if let Some(b) = self.keys.get(&table, &key.into()).cloned() {
                 if !repeating || b.repeat {
@@ -232,6 +246,7 @@ impl Server {
         if self.is_prefix(session, &key) {
             if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
                 a.table = "prefix".into();
+                a.table_at = now;
                 a.dirty = true;
             }
             return;

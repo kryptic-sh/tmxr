@@ -37,6 +37,7 @@ impl Server {
             rows,
             term: terminal,
             table,
+            table_at: Instant::now(),
             repeat_until: None,
             overlay: None,
             message: None,

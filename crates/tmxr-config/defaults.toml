@@ -26,6 +26,8 @@ message-limit = 1000
 # client leaves, and a session outlives its clients.
 exit-empty = true
 exit-unattached = false
+# tmux's default: the prefix waits for its next key however long it takes.
+prefix-timeout = 0
 destroy-unattached = "off"
 escape-time = 0
 display-time = 4000
