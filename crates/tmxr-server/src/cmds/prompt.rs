@@ -21,7 +21,12 @@ pub(super) fn run(
     let pos = a.positional();
     match p.name() {
         "command-prompt" => {
-            let c = attached_client(srv, ctx).ok_or("no current client")?;
+            // -t names the client; else the caller, or (from a command
+            // client) the best attached one, as tmux's.
+            let c = match a.value('t') {
+                Some(spec) => super::session::target_client(srv, spec)?,
+                None => super::display_client(srv, ctx).ok_or("no current client")?,
+            };
             let initial = a
                 .value('I')
                 .map(|i| expand_for(srv, ctx, None, i))
@@ -43,9 +48,9 @@ pub(super) fn run(
             if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
                 att.overlay = Some(overlay);
             }
+            srv.mark_client_dirty(c);
         }
         "display-menu" => {
-            // tmux's -O is accepted and not followed.
             let (c, pane) = shown_on(srv, ctx, a)?;
 
             let title = a

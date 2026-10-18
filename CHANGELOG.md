@@ -176,9 +176,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`split-window -f`** was accepted and ignored; the new pane now spans the
   whole window (full width or height, sized against it), first or last in the
   pane list, as tmux's.
-- **`confirm-before` from a script** (a command client) asks the attached client
-  used most recently instead of failing with "no current client", and its prompt
-  shows at once rather than at the next status-line redraw.
+- **`confirm-before` and `command-prompt` from a script** (a command client) ask
+  the attached client used most recently instead of failing with "no current
+  client", their prompts show at once rather than at the next status-line
+  redraw, and `command-prompt -t` names the client, as tmux's.
 - **The active pane after `rotate-window` and `swap-pane`** is tmux's: the pane
   after the active one in the turned list (before it with `-D`), and for
   `swap-pane` the target pane (each window's arriving pane across windows); both

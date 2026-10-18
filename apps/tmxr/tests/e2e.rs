@@ -3060,6 +3060,38 @@ fn source_file_q_and_a_missing_file_leave_the_config_alone() {
 }
 
 #[test]
+fn command_prompt_from_a_script_opens_on_the_client() {
+    let t = Tmxr::new("cmdprompt");
+    let s = t.attach(&["new", "-s", "cp"]);
+    s.wait_for("status line", |text| text.contains("cp"));
+    // From a command client: the attached client gets the prompt, at once.
+    t.run(&["command-prompt", "-p", "name?", "rename-window '%%'"]);
+    s.wait_for("the prompt", |text| text.contains("name? "));
+    s.send(b"typed\r");
+    t.wait_run(
+        &["display-message", "-p", "-t", "cp", "#W"],
+        "the rename",
+        |o| o.trim() == "typed",
+    );
+    // -t names the client.
+    let id = t.run(&["list-clients", "-F", "#{client_name}"]);
+    t.run(&[
+        "command-prompt",
+        "-t",
+        id.trim(),
+        "-p",
+        "again?",
+        "rename-window '%%'",
+    ]);
+    s.wait_for("the -t prompt", |text| text.contains("again? "));
+    assert!(
+        !t.output(&["command-prompt", "-t", "999", "x"])
+            .status
+            .success()
+    );
+}
+
+#[test]
 fn confirm_before_c_and_y_choose_what_confirms() {
     let t = Tmxr::new("confirmc");
     let s = t.attach(&["new", "-s", "cf"]);
