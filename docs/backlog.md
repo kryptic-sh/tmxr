@@ -463,19 +463,21 @@ table. What has been verified, and how:
     `#{pane_dead_signal}`, none of which tmxr has; the dead-pane line is a fixed
     `Pane is dead (status N)` in `render.rs`); server `focus-events`,
     `history-file`, `editor`. `escape-time` is kept but never read.
-  - Commands: `capture-pane -S -E -e -b -a -C -N -T -q`; `new-window -k -S`,
-    `split-window -p -I -Z`; layout strings (`#{window_layout}`,
-    `select-layout '<checksum>,…'`, `-o`); `display-message -a -v -I -N -C`;
-    `choose-*` templates and `-F -f -K -O -r -N -y`, tagging and sort keys;
-    `command-prompt` with several `-p` and `%1`…`%9`, `-1 -N -b -F -l`,
-    completion; session groups (`new-session -t`); `switch-client -t` /
-    `attach -t` drop the window and pane part, and `switch-client -r -Z`;
-    targets `~` / `{marked}`; smaller flags: `send-keys -R -H -K -c`,
-    `display-panes -d -b -N`, `select-pane -d -e`, `last-pane -d -e -Z`,
-    `rotate-window -Z`, `swap-pane -Z`, `set-buffer -t`, `copy-mode -s`,
-    `detach-client -E`, `run-shell -E`, `confirm-before -b -c -y`,
-    `list-keys -a -P`, `join-pane -f -p`, `source-file -n -v -F` and globs;
-    `source-file` of a tmux command file (`%if`, `%hidden`).
+  - Commands: `capture-pane -e -a -C -T -q` (and `-J` keeping spaces a program
+    wrote at a line's end, which the history snapshot cannot tell from blank
+    cells); `new-window -k -S`, `split-window -p -I -Z`; layout strings
+    (`#{window_layout}`, `select-layout '<checksum>,…'`, `-o`);
+    `display-message -a -v -I -N -C`; `choose-*` templates and
+    `-F -f -K -O -r -N -y`, tagging and sort keys; `command-prompt` with several
+    `-p` and `%1`…`%9`, `-1 -N -b -F -l`, completion; session groups
+    (`new-session -t`); `switch-client -t` / `attach -t` drop the window and
+    pane part, and `switch-client -r -Z`; targets `~` / `{marked}`; smaller
+    flags: `send-keys -R -H -K -c`, `display-panes -d -b -N`,
+    `select-pane -d -e`, `last-pane -d -e -Z`, `rotate-window -Z`,
+    `swap-pane -Z`, `set-buffer -t`, `copy-mode -s`, `detach-client -E`,
+    `run-shell -E`, `confirm-before -b -c -y`, `list-keys -a -P`,
+    `join-pane -f -p`, `source-file -n -v -F` and globs; `source-file` of a tmux
+    command file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `pane-set-clipboard`,
     `client-active`, `command-error`, `client-light-theme` / `-dark-theme`. Copy
     mode lacks `next-prompt` / `previous-prompt`, `copy-line`, `copy-pipe-line`,

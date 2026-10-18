@@ -149,6 +149,24 @@ checks = [
 ]
 
 [[cases]]
+name = "capture_pane_s_and_e_reach_into_the_history"
+unix_only = true
+size = [20, 6]
+program = "seq 1 30; exec sleep 1000"
+steps = [{ sleep = 0.5 }, { run = "capture-pane -b cap -S -2 -E 0 -t o" }]
+checks = [
+  { command = "display -p -t o '#{history_size}'", expect = "25" },
+  { command = "capture-pane -p -S - -t o" },
+  { command = "capture-pane -p -S -3 -E -1 -t o", expect = "23\n24\n25" },
+  { command = "capture-pane -p -S 1 -E 2 -t o", expect = "27\n28" },
+  { command = "capture-pane -p -S 2 -E 1 -t o", expect = "27\n28" },
+  { command = "capture-pane -p -S '-#{history_size}' -E -24 -t o", expect = "1\n2" },
+  { command = "capture-pane -p -S -1000 -E -999 -t o", expect = "1" },
+  { command = "capture-pane -p -S x -t o", expect = "26\n27\n28\n29\n30" },
+  { command = "show-buffer -b cap", expect = "24\n25\n26" },
+]
+
+[[cases]]
 name = "pane_targets_name_edges_corners_neighbours_and_offsets"
 steps = [
   { run = "split-window -h -t o" },

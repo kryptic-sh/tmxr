@@ -11,8 +11,7 @@ mod model;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 pub use commands::{command, enter};
-use model::snapshot;
-pub use model::{Cell, Line, cell_style, colour};
+pub use model::{Cell, Line, cell_style, colour, snapshot};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelKind {

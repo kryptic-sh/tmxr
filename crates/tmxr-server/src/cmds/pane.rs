@@ -390,11 +390,20 @@ pub(super) fn run(
         }
         "capture-pane" => {
             let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
-            let text = capture(srv.panes[&pid].emu.screen(), a.has('J'));
+            // -S / -E may be formats (`-S -#{history_size}`), as tmux's.
+            let start = a
+                .value('S')
+                .map(|v| super::expand_for(srv, ctx, Some(pid), v));
+            let end = a
+                .value('E')
+                .map(|v| super::expand_for(srv, ctx, Some(pid), v));
+            let pane = srv.panes.get_mut(&pid).ok_or("no such pane")?;
+            let range = (start.as_deref(), end.as_deref());
+            let text = capture(pane.emu.screen_mut(), range, a.has('J'), a.has('N'));
             if a.has('p') {
                 out.stdout.push_str(&text);
             } else {
-                srv.add_buffer(text, None);
+                srv.add_buffer(text, a.value('b').map(str::to_owned));
             }
         }
         "send-keys" => {
@@ -454,16 +463,43 @@ pub(super) fn run(
 /// A pane's visible rows as `capture-pane` gives them, as tmux's: one line
 /// per row, blank rows kept, with its trailing spaces dropped; with `join`
 /// (`-J`) a wrapped row runs on into the next and trailing spaces stay.
-fn capture(screen: &vt100::Screen, join: bool) -> String {
-    let (_, cols) = screen.size();
+/// The pane's lines from `start` to `end` (`-S` / `-E`), as tmux's
+/// `cmd_capture_pane_history`: 0 is the screen's first row, a negative line
+/// is in the history, `-` is the history's top or the screen's bottom, and
+/// the default (or a value that is not a number) is the screen. Trailing
+/// blanks go unless `keep_blanks` (`-N`); `join` (`-J`) runs a wrapped line
+/// into the next. (tmux's `-J` keeps spaces a program wrote at a line's end,
+/// which the history snapshot cannot tell from blank cells.)
+fn capture(
+    screen: &mut vt100::Screen,
+    (start, end): (Option<&str>, Option<&str>),
+    join: bool,
+    keep_blanks: bool,
+) -> String {
+    let lines = crate::copy::snapshot(screen);
+    let rows = usize::from(screen.size().0);
+    let history = lines.len().saturating_sub(rows);
+    let last = lines.len().saturating_sub(1);
+    let line = |value: Option<&str>, dash: usize, default: usize| match value {
+        Some("-") => dash,
+        Some(v) => v.parse::<i64>().map_or(default, |n| {
+            let at = i64::try_from(history).unwrap_or(i64::MAX).saturating_add(n);
+            usize::try_from(at).unwrap_or(0).min(last)
+        }),
+        None => default,
+    };
+    let top = line(start, 0, history);
+    let bottom = line(end, last, last);
+    let (top, bottom) = (top.min(bottom), top.max(bottom));
     let mut out = String::new();
-    for (row, text) in (0..).zip(screen.rows(0, cols)) {
-        if join {
+    for l in lines.get(top..=bottom).unwrap_or_default() {
+        let text: String = l.cells.iter().map(|c| c.symbol.as_str()).collect();
+        if keep_blanks {
             out.push_str(&text);
         } else {
             out.push_str(text.trim_end_matches(' '));
         }
-        if !(join && screen.row_wrapped(row)) {
+        if !(join && l.wrapped) {
             out.push('\n');
         }
     }

@@ -78,7 +78,7 @@ pub fn cell_style(cell: &vt100::Cell) -> Style {
 }
 
 /// Capture every line of history plus the visible screen.
-pub(super) fn snapshot(screen: &mut vt100::Screen) -> Vec<Line> {
+pub fn snapshot(screen: &mut vt100::Screen) -> Vec<Line> {
     let (rows, cols) = screen.size();
     let original = screen.scrollback();
     screen.set_scrollback(usize::MAX);

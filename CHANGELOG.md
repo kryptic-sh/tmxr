@@ -103,6 +103,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pressed longer than that after the prefix (or `switch-client -T prefix`) goes
   to the root table instead (unless it repeats a repeatable binding). 0, the
   default, waits forever.
+- **`capture-pane -S` / `-E`, `-N` and `-b`**, as tmux's: the lines to capture,
+  0 being the screen's first row, negative ones in the history and `-` either
+  end (`capture-pane -p -S -` prints the whole history), formats expanded
+  (`-S -#{history_size}`); `-N` keeps trailing blanks and `-b` names the buffer.
 - **`switch-client -c target-client`**, and from a command client (a script,
   `run-shell`) without `-c` it acts on the attached client used most recently,
   as tmux's, where it failed with "no current client".
