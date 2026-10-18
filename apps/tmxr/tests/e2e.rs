@@ -1725,7 +1725,7 @@ fn key_log_program(t: &Tmxr, name: &str) -> Vec<String> {
 /// Not a test: the program [`key_log_program`] starts. In raw mode, it logs
 /// `ready`, then each key press it reads as `code modifiers`, one a line;
 /// with [`KEY_LOG_FOCUS`] set it asks for focus reports and logs each as
-/// `FocusGained` or `FocusLost`.
+/// `FocusGained` or `FocusLost` (and on Unix, no keys).
 #[test]
 #[ignore = "a fixture other tests run in a pane"]
 fn key_log_fixture() {
@@ -1745,9 +1745,17 @@ fn key_log_fixture() {
         print!("focus-on");
         std::io::stdout().flush().unwrap();
     }
+    // On Unix, focus reports are read from stdin as bytes: crossterm's
+    // reader lost the first one about half the time on Linux (WSL,
+    // 2026-10-18; tmxr had written it), and raw reads lost none in eight
+    // runs. On Windows ConPTY turns the reports into console focus events,
+    // which only crossterm reads.
+    #[cfg(unix)]
+    if focus {
+        log_focus_bytes(&mut log);
+    }
     // Start crossterm's reader before saying so: on Linux, input that came
-    // before it existed was lost now and then (a focus report, about one
-    // full run in four; none in twelve once it starts here).
+    // before it existed was lost now and then.
     let _ = crossterm::event::poll(Duration::ZERO);
     writeln!(log, "ready").unwrap();
     loop {
@@ -1758,6 +1766,33 @@ fn key_log_fixture() {
             Event::FocusGained if focus => writeln!(log, "FocusGained").unwrap(),
             Event::FocusLost if focus => writeln!(log, "FocusLost").unwrap(),
             _ => {}
+        }
+    }
+}
+
+/// [`key_log_fixture`]'s focus mode on Unix: log `ready`, then each
+/// `CSI I` / `CSI O` on stdin as `FocusGained` / `FocusLost`, forever.
+#[cfg(unix)]
+fn log_focus_bytes(log: &mut std::fs::File) -> ! {
+    use std::io::Read as _;
+    writeln!(log, "ready").unwrap();
+    let mut stdin = std::io::stdin();
+    let mut seen = Vec::new();
+    let mut buf = [0u8; 256];
+    loop {
+        let n = stdin.read(&mut buf).unwrap();
+        seen.extend_from_slice(&buf[..n]);
+        while let Some(i) = seen
+            .windows(3)
+            .position(|w| w == b"\x1b[I" || w == b"\x1b[O")
+        {
+            let what = if seen[i + 2] == b'I' {
+                "FocusGained"
+            } else {
+                "FocusLost"
+            };
+            writeln!(log, "{what}").unwrap();
+            seen.drain(..i + 3);
         }
     }
 }

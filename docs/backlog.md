@@ -256,9 +256,12 @@ table. What has been verified, and how:
   `CSI I` / `CSI O` when that changes, with `pane-focus-in` / `-out`. tmux
   counts only a popup or a menu as covering the pane; tmxr's pickers are
   overlays too (tmux's are pane modes) but leave the pane focused, as tmux's
-  would. Checked end to end on Windows
+  would. Checked end to end on Windows and Linux
   (`a_pane_that_asked_is_told_when_it_gains_and_loses_focus`); a client's own
-  focus out reaching the pane is not tested.
+  focus out reaching the pane is not tested. The test's fixture reads the
+  reports as raw bytes on Unix (`log_focus_bytes`): crossterm's reader lost the
+  first one in about half of the Linux runs although tmxr had written it (seen
+  with a log line in `update_pane_focus`). Why crossterm loses it was not found.
 - **tmux default binds**: most of tmux's defaults are bound (see above);
   `prefix C-z` (suspend-client) errors on Windows, which has no job control.
   Alerts follow tmux 3.6's, as recorded from a running tmux on 2026-10-10 (WSL
