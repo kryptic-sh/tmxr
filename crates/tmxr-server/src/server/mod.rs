@@ -442,9 +442,13 @@ impl Server {
         };
         match c.tx.try_send(msg) {
             Ok(()) => {}
+            // A client too slow for its frames: this one is dropped, and it
+            // is repainted whole on a later pass (the loop makes one each
+            // tick), until one fits.
             Err(TrySendError::Full(_)) => {
                 if let Some(a) = c.att.as_mut() {
                     a.full_redraw = true;
+                    a.dirty = true;
                 }
             }
             Err(TrySendError::Disconnected(_)) => {}

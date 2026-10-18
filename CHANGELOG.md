@@ -167,6 +167,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A client that fell behind** (its frames dropped while it was not reading) is
+  repainted on the server's next pass instead of waiting for another event; with
+  `status-interval 0` it stayed stale until then.
 - **`set-environment -h` / `show-environment -h`** were accepted and ignored;
   `-h` now sets a hidden variable, left out of new panes and jobs and shown only
   by `show-environment -h`, as tmux's.

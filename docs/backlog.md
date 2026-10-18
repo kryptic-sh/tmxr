@@ -417,9 +417,6 @@ table. What has been verified, and how:
 - **From a code review by a sub-agent (2026-10-18).** Found by reading code and
   tmux 3.6's source; nothing was run. Items marked _checked_ were confirmed by
   reading the code again; the rest are as reported.
-  - A frame dropped for a slow client (`Server::send`) sets `full_redraw` but
-    not `dirty`, so nothing repaints until the next event or status tick (never
-    with `status-interval 0`).
   - `Pty::write` blocks the server thread (paste into a program that is not
     reading could freeze every session); its errors are discarded.
   - `source-file PATH` sets `cfg_path` and replaces the whole config, losing

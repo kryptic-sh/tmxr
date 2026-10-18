@@ -214,13 +214,21 @@ impl Tmxr {
         let writer = Arc::new(Mutex::new(pair.master.take_writer().unwrap()));
         let emu = Arc::new(Mutex::new(Emulator::new(ROWS, COLS, 0)));
         let raw = Arc::new(Mutex::new(Vec::new()));
+        let paused = Arc::new(std::sync::atomic::AtomicBool::new(false));
         {
             let emu = Arc::clone(&emu);
             let writer = Arc::clone(&writer);
             let raw = Arc::clone(&raw);
+            let paused = Arc::clone(&paused);
             std::thread::spawn(move || {
                 let mut buf = [0u8; 8192];
-                while let Ok(n) = reader.read(&mut buf) {
+                loop {
+                    while paused.load(std::sync::atomic::Ordering::Relaxed) {
+                        std::thread::sleep(Duration::from_millis(20));
+                    }
+                    let Ok(n) = reader.read(&mut buf) else {
+                        break;
+                    };
                     if n == 0 {
                         break;
                     }
@@ -240,6 +248,7 @@ impl Tmxr {
             emu,
             raw,
             child,
+            paused,
         }
     }
 }
@@ -272,6 +281,8 @@ struct Screen {
     emu: Arc<Mutex<Emulator>>,
     raw: Arc<Mutex<Vec<u8>>>,
     child: Box<dyn portable_pty::Child + Send + Sync>,
+    /// While set, the terminal reads nothing, as a stalled one would.
+    paused: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Screen {
@@ -290,6 +301,12 @@ impl Screen {
 
     fn text(&self) -> String {
         self.emu.lock().unwrap().screen().contents()
+    }
+
+    /// Stop reading the terminal's output (`true`), or start again.
+    fn pause(&self, paused: bool) {
+        self.paused
+            .store(paused, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// The title the terminal was last given (OSC 0 / 2).
@@ -3039,6 +3056,47 @@ fn clock_mode_style_twelve_shows_am_or_pm() {
     });
     t.run(&["set", "-wg", "clock-mode-style", "12"]);
     s.wait_for("the 12-hour clock", twelve_hour);
+}
+
+#[test]
+fn a_client_that_fell_behind_is_repainted_without_another_event() {
+    let t = Tmxr::new("fellbehind");
+    t.run(&["new-session", "-d", "-s", "fb"]);
+    // No status-line timer to repaint it by chance.
+    t.run(&["set", "-g", "status-interval", "0"]);
+    let s = t.attach(&["attach", "-t", "fb"]);
+    s.wait_for("status line", |text| text.contains("fb"));
+    // A terminal that stops reading while a pane prints a lot: the
+    // server drops frames for it once its queue is full. On Windows this
+    // burst overfills the queue (without the repaint the test fails there);
+    // on Linux it passes either way (2026-10-18, WSL), so the queue
+    // evidently did not fill there.
+    s.pause(true);
+    #[cfg(unix)]
+    let burst = [
+        "/bin/sh",
+        "-c",
+        "i=0; while [ $i -lt 20000 ]; do echo \"line $i\"; i=$((i+1)); done; echo done-marker; sleep 100",
+    ];
+    #[cfg(windows)]
+    let burst = [
+        "powershell.exe",
+        "-NoProfile",
+        "-Command",
+        "1..20000 | % { \"line $_\" }; 'done-marker'; Start-Sleep 100",
+    ];
+    let mut respawn = vec!["respawn-pane", "-k", "-t", "fb"];
+    respawn.extend(burst);
+    t.run(&respawn);
+    t.wait_run(
+        &["capture-pane", "-p", "-t", "fb"],
+        "the burst's end",
+        |o| o.contains("done-marker"),
+    );
+    std::thread::sleep(Duration::from_millis(500));
+    // Reading again, it catches up to the end with nothing else happening.
+    s.pause(false);
+    s.wait_for("the end on screen", |text| text.contains("done-marker"));
 }
 
 #[test]
