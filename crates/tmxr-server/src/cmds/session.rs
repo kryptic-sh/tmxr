@@ -79,7 +79,7 @@ pub(super) fn run(
             if srv.sessions.is_empty() {
                 return Err("no sessions".into());
             }
-            let sid = target::session(srv, ctx, a.value('t'))?;
+            let sid = session_with_window(srv, ctx, a.value('t'), false)?;
             attach_to(srv, ctx, a, sid, Others::from_flags(a, 'd', 'x'), out)?;
         }
         "detach-client" => {
@@ -300,23 +300,7 @@ pub(super) fn run(
                     ids[(i + n - 1) % n]
                 }
             } else {
-                // A window or pane in -t becomes the session's current one,
-                // as tmux's (-Z keeping a zoomed window zoomed).
-                match a.value('t').filter(|t| t.contains([':', '.', '%', '@'])) {
-                    Some(t) => {
-                        let (sid, wid, pid) = target::pane(srv, ctx, Some(t))?;
-                        if srv.windows.get(&wid).is_some_and(|w| w.active != pid) {
-                            let zoom = srv.push_zoom(wid, false, a.has('Z'));
-                            srv.select_pane(pid);
-                            srv.pop_zoom(wid, zoom);
-                        }
-                        if let Some(idx) = srv.sessions.get(&sid).and_then(|s| s.index_of(wid)) {
-                            srv.select_window(sid, idx)?;
-                        }
-                        sid
-                    }
-                    None => target::session(srv, ctx, a.value('t'))?,
-                }
+                session_with_window(srv, ctx, a.value('t'), a.has('Z'))?
             };
             // The switching client's variables, unless -E, as tmux's.
             if !a.has('E') {
@@ -345,6 +329,30 @@ pub(super) fn run(
         _ => return Ok(false),
     }
     Ok(true)
+}
+
+/// The session a `-t` names, and a window or pane it names too made that
+/// session's current window and its active pane, as tmux's switch-client
+/// and attach-session do; `keep_zoom` (`-Z`) keeps a zoomed window zoomed.
+fn session_with_window(
+    srv: &mut Server,
+    ctx: &Ctx,
+    spec: Option<&str>,
+    keep_zoom: bool,
+) -> Result<SessionId, String> {
+    let Some(spec) = spec.filter(|t| t.contains([':', '.', '%', '@'])) else {
+        return target::session(srv, ctx, spec);
+    };
+    let (sid, wid, pid) = target::pane(srv, ctx, Some(spec))?;
+    if srv.windows.get(&wid).is_some_and(|w| w.active != pid) {
+        let zoom = srv.push_zoom(wid, false, keep_zoom);
+        srv.select_pane(pid);
+        srv.pop_zoom(wid, zoom);
+    }
+    if let Some(idx) = srv.sessions.get(&sid).and_then(|s| s.index_of(wid)) {
+        srv.select_window(sid, idx)?;
+    }
+    Ok(sid)
 }
 
 /// An attached client by its id (`list-clients` shows them).

@@ -570,6 +570,20 @@ fn switch_client_takes_a_window_and_pane_r_and_z() {
     assert_eq!(flags(), "1");
     t.run(&["switch-client", "-r"]);
     assert_eq!(flags(), "0");
+    // attach-session takes a window and pane in -t the same way.
+    t.run(&["new-session", "-d", "-s", "third"]);
+    t.run(&["new-window", "-d", "-t", "third:1"]);
+    t.run(&["split-window", "-d", "-t", "third:1"]);
+    let third = t.attach(&["attach", "-t", "third:1.1"]);
+    third.wait_for("attached to third", |text| text.contains("third"));
+    let at = t.run(&[
+        "display-message",
+        "-p",
+        "-t",
+        "third",
+        "#{window_index}.#{pane_index}",
+    ]);
+    assert_eq!(at.trim(), "1.1");
 }
 
 #[test]
