@@ -233,7 +233,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `copy-line` and `copy-end-of-line` take a prefix for the buffer's name
   (`copy-selection mine` makes `mine0`, numbered as tmux's buffers are), as does
   `copy-pipe` after its command; `-P` adds no buffer and `-C` sets no clipboard;
-  and the prefix and copy-pipe's command are expanded as formats.
+  and the prefix and copy-pipe's command are expanded as formats. Plain
+  `append-selection` appends and clears the selection, staying in copy mode.
 - **Copy mode's rectangle is the mode's, as tmux's**: toggled on, it holds for
   the next `begin-selection` and past `clear-selection`, until it is toggled off
   or a line or word is selected; and `select-line` puts the cursor at the line's

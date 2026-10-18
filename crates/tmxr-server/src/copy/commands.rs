@@ -125,8 +125,9 @@ pub fn command(
     match name {
         "cancel" => leave(srv, pane),
         // tmux's: the clipboard gets the selection, the newest buffer gets it
-        // added to its end (a new buffer when there is none).
-        "append-selection-and-cancel" => {
+        // added to its end (a new buffer when there is none); then the
+        // selection is cleared, or copy mode left.
+        "append-selection" | "append-selection-and-cancel" => {
             if let Some(text) = cm.selection_text() {
                 srv.set_clipboard(&text);
                 match srv.buffers.front_mut() {
@@ -134,7 +135,13 @@ pub fn command(
                     None => srv.add_buffer(text, None),
                 }
             }
-            leave(srv, pane);
+            if name == "append-selection" {
+                if let Some(cm) = srv.panes.get_mut(&pane).and_then(|p| p.copy.as_mut()) {
+                    cm.apply("clear-selection", None);
+                }
+            } else {
+                leave(srv, pane);
+            }
         }
         "copy-selection"
         | "copy-selection-and-cancel"
