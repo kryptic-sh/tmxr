@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use tmxr_command::format::Context;
+use tmxr_command::format::{Context, NameKind};
 
 use crate::model::{ClientId, PaneId, SessionId, WindowId};
 use crate::server::{Attached, Server};
@@ -164,6 +164,20 @@ fn client_flags(c: &crate::server::Client) -> String {
 }
 
 impl Context for Vars<'_> {
+    fn name_exists(&self, kind: NameKind, name: &str) -> Option<bool> {
+        let srv = self.srv;
+        Some(match kind {
+            NameKind::Window => srv
+                .sessions
+                .get(&self.session?)?
+                .windows
+                .values()
+                .filter_map(|w| srv.windows.get(w))
+                .any(|w| w.name == name),
+            NameKind::Session => srv.sessions.values().any(|s| s.name == name),
+        })
+    }
+
     fn get(&self, name: &str) -> Option<String> {
         let srv = self.srv;
         if name.starts_with('@')

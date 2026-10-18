@@ -6,7 +6,9 @@
 //! cut), `#{==:a,b}`, `#{!=:a,b}`, `#{<:a,b}`, `#{>:a,b}`, `#{<=:a,b}`,
 //! `#{>=:a,b}` (compared as strings, as tmux's), `#{m:glob,text}`,
 //! `#{m/r:regex,text}` (`i` ignores case), `#{q:x}` (shell-quoted) and
-//! `#{q/e:x}` (`#` doubled), `#{||:a,b}`, `#{&&:a,b}`, the short aliases
+//! `#{q/e:x}` (`#` doubled), `#{N:name}` / `#{N/w:name}` (a window of the
+//! session is called that) and `#{N/s:name}` (a session is), `#{||:a,b}`,
+//! `#{&&:a,b}`, the short aliases
 //! `#S #W #I #P #H #h #F #D #T` and `##` for a literal `#`. Commas inside
 //! nested `#{…}` do not split.
 //!
@@ -16,11 +18,28 @@
 /// Supplies variable values (`session_name`, `@my_option`, …).
 pub trait Context {
     fn get(&self, name: &str) -> Option<String>;
+
+    /// Whether a window of the context's session (`Window`) or any session
+    /// (`Session`) is called `name`, for `#{N:…}`; `None` when there is no
+    /// session to ask, which expands to nothing, as tmux's.
+    fn name_exists(&self, kind: NameKind, name: &str) -> Option<bool>;
 }
 
+/// What `#{N:…}` looks a name up among.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NameKind {
+    Window,
+    Session,
+}
+
+/// A plain lookup function has variables and no sessions to ask.
 impl<F: Fn(&str) -> Option<String>> Context for F {
     fn get(&self, name: &str) -> Option<String> {
         self(name)
+    }
+
+    fn name_exists(&self, _kind: NameKind, _name: &str) -> Option<bool> {
+        None
     }
 }
 
@@ -454,6 +473,22 @@ fn expand_item(body: &str, ctx: &dyn Context, pass: Pass) -> String {
             "0"
         }
         .to_owned();
+    }
+    // N: whether a window (no flag, or w) or a session (s) has the name the
+    // rest expands to; with neither flag, an ordinary lookup, as tmux's.
+    if let Some((flags, inner)) = body.strip_prefix('N').and_then(modifier_args) {
+        let kind = if flags.is_empty() || flags.contains('w') {
+            NameKind::Window
+        } else if flags.contains('s') {
+            NameKind::Session
+        } else {
+            return ctx.get(inner).unwrap_or_default();
+        };
+        return ctx
+            .name_exists(kind, &ex(inner))
+            .map_or_else(String::new, |found| {
+                if found { "1" } else { "0" }.to_owned()
+            });
     }
     if let Some((flags, inner)) = body.strip_prefix('q').and_then(modifier_args) {
         let text = expand_item(inner, ctx, pass.deeper());
@@ -995,6 +1030,13 @@ mod tests {
         ] {
             assert_eq!(x(format), tmux, "{format}");
         }
+    }
+
+    #[test]
+    fn n_without_sessions_to_ask_is_empty() {
+        assert_eq!(x("[#{N:main}][#{N/s:main}]"), "[][]");
+        // With neither w nor s, an ordinary lookup.
+        assert_eq!(x("#{N/x:session_name}"), "main");
     }
 
     #[test]

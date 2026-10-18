@@ -306,3 +306,15 @@ program = 'printf "\346\274\242\b"; exec sleep 1000'
 steps = [{ sleep = 0.5 }]
 checks = [{ format = "[#{cursor_character}]" }]
 
+[[cases]]
+name = "n_modifier_asks_whether_a_name_exists"
+steps = [
+  { run = "new-window -d -t o:1 -n mywin" },
+  { run = "new-session -d -s other" },
+  { run = "new-window -d -t other:1 -n theirs" },
+]
+checks = [
+  { command = "display -p -t o '#{N:mywin} #{N:nope} #{N/w:mywin} #{N/s:other} #{N/s:zz}'" },
+  { command = "display -p -t o '#{N:theirs} #{N/s:#{session_name}} #{N:#{window_name}}'" },
+  { command = "display -p -t o '[#{N/x:session_name}]'" },
+]
