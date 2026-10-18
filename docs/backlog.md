@@ -15,13 +15,14 @@ table. What has been verified, and how:
   binds), `tmxr-term` (PTY spawn incl. ConPTY, vt100 hooks, key/paste/mouse
   encoding, foreground-process inspection), `tmxr-server` (layout, ANSI backend
   and colour mapping, overlays, menus, copy mode, resurrect), and `tmxr-client`.
-- **End to end** by `apps/tmxr/tests/e2e.rs`: the real binary in a ConPTY
-  locally and in a pty on every CI platform, each test shown to fail when the
-  code it covers is broken. It drives attaching, typing, splits, navigation, the
-  pickers, copy mode (vi and emacs), buffers, mouse clicks, drags and the wheel,
-  every command family including hooks, menus, popups, locking, `run-shell` /
-  `if-shell` ordering and linked windows, resurrect, and the status line's cells
-  and colours. The test names say what each covers.
+- **End to end** by `apps/tmxr/tests/e2e/` (harness in `main.rs`, tests by area
+  in its modules): the real binary in a ConPTY locally and in a pty on every CI
+  platform, each test shown to fail when the code it covers is broken. It drives
+  attaching, typing, splits, navigation, the pickers, copy mode (vi and emacs),
+  buffers, mouse clicks, drags and the wheel, every command family including
+  hooks, menus, popups, locking, `run-shell` / `if-shell` ordering and linked
+  windows, resurrect, and the status line's cells and colours. The test names
+  say what each covers.
 - **Seen in a real terminal** (2026-10-10, Windows Terminal 1.24, by
   screenshot): two panes, the vertical border and the catppuccin status line
   draw as the tests expect. hjkl's own handoff to tmxr was checked too (see
@@ -428,9 +429,8 @@ table. What has been verified, and how:
     process snapshots per pane per second in `util::refresh_commands`;
     `#{pane_current_path}` inspects the process on each expansion; `#{m:…}`
     compiles its regex on each expansion. Not measured.
-  - Large files: `apps/tmxr/tests/e2e.rs` (one file for every e2e test; its test
-    names already group by command family). `copy/mod.rs` keeps `CopyMode` with
-    its motions and search together (about 770 lines); they could part next.
+  - Large files: `copy/mod.rs` keeps `CopyMode` with its motions and search
+    together; they could part next.
   - A message over `MAX_FRAME` from the client (`load-buffer -` of more than 16
     MiB) fails on the client before it is sent; the server turns a reply that
     large into an error (`conn.rs`).
