@@ -103,6 +103,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pressed longer than that after the prefix (or `switch-client -T prefix`) goes
   to the root table instead (unless it repeats a repeatable binding). 0, the
   default, waits forever.
+- **`-Z` on `last-pane`, `rotate-window`, `swap-pane` and `split-window`**, as
+  tmux's: a zoomed window stays zoomed, on the pane that is active after
+  (`split-window -Z` zooms the new pane whether the window was zoomed or not).
 - **`select-pane -d` / `-e` and `last-pane -d` / `-e`**, as tmux's: a pane's
   input off (no keys, pastes or mouse reach its program, nor its synchronized
   siblings through it) and back on, shown by `#{pane_input_off}`.
@@ -148,6 +151,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The active pane after `rotate-window` and `swap-pane`** is tmux's: the pane
+  after the active one in the turned list (before it with `-D`), and for
+  `swap-pane` the target pane (each window's arriving pane across windows); both
+  unzoom a zoomed window unless `-Z`.
 - **`respawn-window -t` respawns the window named**: it took the window's index
   for its id, so on a window whose index and id differ it failed with "no
   window" or respawned another window.

@@ -259,7 +259,24 @@ impl Server {
                 p.window = ws;
             }
         }
-        if !keep && let Some(w) = self.windows.get_mut(&wd) {
+        // Which pane is active after, as tmux's `cmd_swap_pane_exec`: the
+        // target's window takes the source and the source's the target; in
+        // one window, the target. With -d, panes that moved away from being
+        // active across windows were replaced above, and in one window an
+        // active target hands over to the source.
+        if !keep {
+            if let Some(w) = self.windows.get_mut(&ws) {
+                w.active = dst;
+            }
+            if ws != wd
+                && let Some(w) = self.windows.get_mut(&wd)
+            {
+                w.active = src;
+            }
+        } else if ws == wd
+            && let Some(w) = self.windows.get_mut(&ws)
+            && w.active == dst
+        {
             w.active = src;
         }
         self.relayout(ws);

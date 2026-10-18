@@ -227,10 +227,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "last-pane",
         Some("lastp"),
-        "det:",
+        "det:Z",
         0,
         0,
-        "[-de] [-t target-window]"
+        "[-deZ] [-t target-window]"
     ),
     cmd!(
         "last-window",
@@ -471,10 +471,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "rotate-window",
         Some("rotatew"),
-        "Dt:U",
+        "Dt:UZ",
         0,
         0,
-        "[-DU] [-t target-window]"
+        "[-DUZ] [-t target-window]"
     ),
     cmd!(
         "run-shell",
@@ -612,10 +612,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "split-window",
         Some("splitw"),
-        "bc:de:F:fhl:Pt:v",
+        "bc:de:F:fhl:Pt:vZ",
         0,
         ANY,
-        "[-bdfhPv] [-c start-directory] [-e environment] [-F format] [-l size] [-t target-pane] [command]"
+        "[-bdfhPvZ] [-c start-directory] [-e environment] [-F format] [-l size] [-t target-pane] [command]"
     ),
     cmd!("start-server", Some("start"), "", 0, 0, ""),
     cmd!(
@@ -629,10 +629,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "swap-pane",
         Some("swapp"),
-        "dDs:t:U",
+        "dDs:t:UZ",
         0,
         0,
-        "[-dDU] [-s src-pane] [-t dst-pane]"
+        "[-dDUZ] [-s src-pane] [-t dst-pane]"
     ),
     cmd!(
         "swap-window",

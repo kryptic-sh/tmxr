@@ -315,6 +315,34 @@ impl Server {
         Ok(())
     }
 
+    /// Unzoom `wid` for a command that rearranges it, as tmux's
+    /// `window_push_zoom`. Returns whether to zoom it again afterwards
+    /// ([`Server::pop_zoom`]): with `keep` (`-Z`), when it was zoomed, or
+    /// with `always` whether it was or not.
+    pub fn push_zoom(&mut self, wid: WindowId, always: bool, keep: bool) -> bool {
+        let Some(win) = self.windows.get_mut(&wid) else {
+            return false;
+        };
+        let again = keep && (always || win.zoomed);
+        if win.zoomed {
+            win.zoomed = false;
+            self.relayout(wid);
+        }
+        again
+    }
+
+    /// Zoom `wid`'s active pane again after [`Server::push_zoom`] said to,
+    /// as tmux's `window_pop_zoom` (a window of one pane does not zoom).
+    pub fn pop_zoom(&mut self, wid: WindowId, again: bool) {
+        if let Some(win) = self.windows.get_mut(&wid)
+            && again
+            && win.panes().len() > 1
+        {
+            win.zoomed = true;
+            self.relayout(wid);
+        }
+    }
+
     pub fn select_pane(&mut self, pane: PaneId) {
         let Some(wid) = self.panes.get(&pane).map(|p| p.window) else {
             return;

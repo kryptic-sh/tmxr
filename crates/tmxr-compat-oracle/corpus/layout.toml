@@ -207,3 +207,37 @@ checks = [
   { command = "list-windows -t bp -F '#I #W #{window_panes}'", expect = "0 first 2\n5 before 1\n6 five 1\n9 moved 1" },
   { command = "show -wv -t bp:6 automatic-rename", expect = "off" },
 ]
+
+[[cases]]
+name = "z_keeps_a_window_zoomed_through_pane_commands"
+steps = [
+  # 0: last-pane -Z moves the zoom to the last pane.
+  { run = "split-window -h -t o:0" },
+  { run = "select-pane -t o:0.0" },
+  { run = "resize-pane -Z -t o:0.0" },
+  { run = "last-pane -Z -t o:0" },
+  # 1: rotate-window unzooms; 2: with -Z it stays zoomed.
+  { run = "new-window -d -t o:1" },
+  { run = "split-window -h -t o:1" },
+  { run = "resize-pane -Z -t o:1" },
+  { run = "rotate-window -t o:1" },
+  { run = "new-window -d -t o:2" },
+  { run = "split-window -h -t o:2" },
+  { run = "resize-pane -Z -t o:2" },
+  { run = "rotate-window -Z -t o:2" },
+  # 3: split-window -Z zooms the new pane, zoomed before or not.
+  { run = "new-window -d -t o:3" },
+  { run = "split-window -h -Z -t o:3" },
+  # 4: swap-pane unzooms; 5: with -Z it stays zoomed.
+  { run = "new-window -d -t o:4" },
+  { run = "split-window -h -t o:4" },
+  { run = "resize-pane -Z -t o:4" },
+  { run = "swap-pane -s o:4.0 -t o:4.1" },
+  { run = "new-window -d -t o:5" },
+  { run = "split-window -h -t o:5" },
+  { run = "resize-pane -Z -t o:5" },
+  { run = "swap-pane -Z -s o:5.0 -t o:5.1" },
+]
+checks = [
+  { command = "list-windows -t o -F '#I #{window_zoomed_flag} #{pane_index}'", expect = "0 1 1\n1 0 1\n2 1 1\n3 1 1\n4 0 0\n5 1 0" },
+]

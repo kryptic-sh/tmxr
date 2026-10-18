@@ -22,11 +22,14 @@ pub(super) fn run(
     let pos = a.positional();
     match p.name() {
         "split-window" => {
-            let (sid, _, pid) = target::pane(srv, ctx, a.value('t'))?;
+            let (sid, wid, pid) = target::pane(srv, ctx, a.value('t'))?;
             let size = split_size(a)?;
             let cwd = cwd_arg(srv, ctx, Some(pid), a)
                 .or_else(|| srv.panes.get(&pid).map(|p| p.start_cwd.clone()))
                 .unwrap_or_else(crate::util::home_dir);
+            // -Z: the window zoomed on the active pane after, zoomed before
+            // or not, as tmux's.
+            let zoom = srv.push_zoom(wid, true, a.has('Z'));
             let new = srv.split(
                 pid,
                 a.has('h'),
@@ -37,6 +40,7 @@ pub(super) fn run(
                 &super::env_flags(a)?,
                 !a.has('d'),
             )?;
+            srv.pop_zoom(wid, zoom);
             super::print_new(srv, ctx, a, out, sid, Some(new), super::NEW_PANE_TEMPLATE);
         }
         "kill-pane" => {
@@ -91,15 +95,10 @@ pub(super) fn run(
             } else {
                 pid
             };
-            let zoomed = srv.windows[&wid].zoomed;
-            srv.select_pane(to);
             // -Z: a zoomed window stays zoomed, now on the selected pane.
-            if a.has('Z') && zoomed {
-                if let Some(w) = srv.windows.get_mut(&wid) {
-                    w.zoomed = true;
-                }
-                srv.relayout(wid);
-            }
+            let zoom = srv.push_zoom(wid, false, a.has('Z'));
+            srv.select_pane(to);
+            srv.pop_zoom(wid, zoom);
         }
         "last-pane" => {
             let (_, wid, _) = target::window(srv, ctx, a.value('t'))?;
@@ -108,7 +107,9 @@ pub(super) fn run(
             if a.has('d') || a.has('e') {
                 set_input_off(srv, last, a.has('d'));
             } else {
+                let zoom = srv.push_zoom(wid, false, a.has('Z'));
                 srv.select_pane(last);
+                srv.pop_zoom(wid, zoom);
             }
         }
         "navigate-pane" => navigate(srv, ctx, a)?,
@@ -145,7 +146,8 @@ pub(super) fn run(
                 (Some(s), _) => (target::pane(srv, ctx, Some(s))?.2, pid),
                 (None, Some(m)) => (m, pid),
                 (None, None) => {
-                    // -U / -D: swap with the previous / next pane.
+                    // -U / -D: the previous / next pane is the source, as
+                    // tmux's.
                     let panes = srv.windows.get(&wid).ok_or("no window")?.panes();
                     let i = panes.iter().position(|p| *p == pid).unwrap_or(0);
                     let n = panes.len();
@@ -154,10 +156,17 @@ pub(super) fn run(
                     } else {
                         panes[(i + 1) % n]
                     };
-                    (pid, other)
+                    (other, pid)
                 }
             };
-            srv.swap_panes(src, dst, a.has('d'))?;
+            // -Z: each window zoomed before stays zoomed, as tmux's.
+            let (src_w, dst_w) = (srv.panes[&src].window, srv.panes[&dst].window);
+            let zoom_dst = srv.push_zoom(dst_w, false, a.has('Z'));
+            let zoom_src = src_w != dst_w && srv.push_zoom(src_w, false, a.has('Z'));
+            let swapped = srv.swap_panes(src, dst, a.has('d'));
+            srv.pop_zoom(src_w, zoom_src);
+            srv.pop_zoom(dst_w, zoom_dst);
+            swapped?;
         }
         "respawn-pane" => {
             let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
@@ -239,21 +248,34 @@ pub(super) fn run(
         }
         "rotate-window" => {
             let (_, wid, _) = target::window(srv, ctx, a.value('t'))?;
+            // It unzooms, or with -Z zooms again after, as tmux's.
+            let zoom = srv.push_zoom(wid, false, a.has('Z'));
             let w = srv.windows.get_mut(&wid).ok_or("no window")?;
             // tmux rotates up unless -D: its pane list turns, each place in
             // it keeping its cell.
             let panes = w.panes();
             w.layout = crate::layout::rotate(&w.layout, &panes, !a.has('D'));
+            let mut order = panes;
+            if a.has('D') {
+                order.rotate_right(1);
+            } else {
+                order.rotate_left(1);
+            }
+            // The pane after the active one in the turned list takes over
+            // (before it with -D), as tmux's.
+            let n = order.len();
+            let i = order.iter().position(|p| *p == w.active).unwrap_or(0);
+            let next = if a.has('D') {
+                order[(i + n - 1) % n]
+            } else {
+                order[(i + 1) % n]
+            };
             if !w.order.is_empty() {
-                let mut order = panes;
-                if a.has('D') {
-                    order.rotate_right(1);
-                } else {
-                    order.rotate_left(1);
-                }
                 w.order = order;
             }
             srv.relayout(wid);
+            srv.select_pane(next);
+            srv.pop_zoom(wid, zoom);
         }
         "break-pane" => {
             // As tmux's: -s the pane, -t the window it becomes.
