@@ -100,6 +100,24 @@ fn flag(b: bool) -> String {
     if b { "1" } else { "0" }.to_owned()
 }
 
+/// The session's windows that have alerts, in index order, each with its
+/// alerts as tmux marks them: `#` activity, `!` bell, `~` silence.
+fn alerts(srv: &Server, session: &crate::model::Session) -> Vec<(u32, String)> {
+    session
+        .windows
+        .iter()
+        .filter_map(|(index, wid)| {
+            let w = srv.windows.get(wid)?;
+            let marks: String = [(&w.activity, '#'), (&w.bell, '!'), (&w.silence, '~')]
+                .into_iter()
+                .filter(|(set, _)| set.contains(&session.id))
+                .map(|(_, mark)| mark)
+                .collect();
+            (!marks.is_empty()).then_some((*index, marks))
+        })
+        .collect()
+}
+
 /// The names of the attached clients `keep` takes, in the order they
 /// connected as tmux's client list, joined by commas.
 fn client_names(srv: &Server, keep: impl Fn(&Attached) -> bool) -> String {
@@ -217,6 +235,24 @@ impl Context for Vars<'_> {
                 client_names(srv, |a| a.session == sid)
             }
             "session_path" => session?.cwd.display().to_string(),
+            // Each kind of alert any of its windows has, once, as tmux's.
+            "session_alert" => {
+                let mut seen = String::new();
+                for (_, marks) in alerts(srv, session?) {
+                    for c in marks.chars() {
+                        if !seen.contains(c) {
+                            seen.push(c);
+                        }
+                    }
+                }
+                seen
+            }
+            // The alerted windows' indexes, each with its alerts.
+            "session_alerts" => alerts(srv, session?)
+                .into_iter()
+                .map(|(index, marks)| format!("{index}{marks}"))
+                .collect::<Vec<_>>()
+                .join(","),
             "session_created" => epoch(session?.created),
             "session_activity" => epoch(session?.activity),
             "session_last_attached" => epoch(session?.last_attached?),

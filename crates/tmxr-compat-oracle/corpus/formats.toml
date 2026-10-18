@@ -217,3 +217,20 @@ steps = [{ run = "new-session -d -s there -c /tmp" }]
 checks = [
   { command = "display -p -t there '#{session_path}'", expect = "/tmp" },
 ]
+
+[[cases]]
+name = "session_alerts_list_each_alerted_window"
+attach = true
+program = 'read x; printf "\a"; exec sleep 1000'
+steps = [
+  { run = "set -g monitor-activity on" },
+  { run = "new-session -d -s p" },
+  { run = "link-window -d -s o:0 -t p:5" },
+  { run = "new-window -d -t p:3" },
+  { run = "send-keys -t o:0 Enter" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "display -p -t p '[#{session_alert}] [#{session_alerts}]'" },
+  { command = "display -p -t o '[#{session_alert}] [#{session_alerts}]'" },
+]

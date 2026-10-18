@@ -538,6 +538,14 @@ table. What has been verified, and how:
   window they place (2026-10-18, tmux 3.6): `server_link_window` moves
   `marked_pane.wl` to the new link but keeps `marked_pane.s`, so the mark no
   longer validates. tmxr keeps the mark; not copied, as it reads as a tmux bug.
+- **tmux's `session_bell_flag`, `session_activity_flag` and
+  `session_silence_flag` do not ask the session** (tmux 3.6 `format.c`, read,
+  not run): the loop over the session's windows returns on its first pass, so
+  the bell flag is the session's first window's, and the other two test the
+  format's target window (`ft->wl`), not the loop's. tmxr has none of the three;
+  `session_alert` / `session_alerts` give the session's alerts correctly.
+  Options: add them with tmux's answers (scripts get what tmux gives) or with
+  the evident intent (any window alerted); not decided, so not added.
 - **Oracle checks must be free of side effects**: `compare` in
   `tmxr-compat-oracle` reads a check again until both sides agree, so a check
   that creates something (`new-window -P`) runs twice on a mismatch and fails
