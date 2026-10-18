@@ -38,6 +38,7 @@ impl Server {
             term: terminal,
             table,
             table_at: Instant::now(),
+            cursor_style: 0,
             repeat_until: None,
             overlay: None,
             message: None,

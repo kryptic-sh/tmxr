@@ -201,6 +201,24 @@ pub fn window_offset(srv: &Server, att: &crate::server::Attached) -> (u16, u16) 
     )
 }
 
+/// The cursor shape client `id` shows, as DECSCUSR's `Ps`: what the
+/// active pane's program asked for, else its `cursor-style`, as tmux's
+/// `tty_update_mode`.
+pub fn cursor_style(srv: &Server, id: ClientId) -> u8 {
+    let Some(pane) = srv
+        .clients
+        .get(&id)
+        .and_then(|c| c.att.as_ref())
+        .and_then(|a| srv.active_pane_of_session(a.session))
+    else {
+        return 0;
+    };
+    match srv.panes.get(&pane).map_or(0, |p| p.emu.cursor_style()) {
+        0 => srv.pane_options(pane).cursor_style.ps(),
+        ps => ps,
+    }
+}
+
 /// Draw the client's frame. Returns the status-line window ranges.
 pub fn draw(srv: &Server, id: ClientId, term: &mut Terminal<AnsiBackend>) -> StatusRanges {
     let mut ranges = StatusRanges::default();

@@ -6712,6 +6712,37 @@ fn each_session_redraws_its_status_line_at_its_own_interval() {
 /// `attach -f ignore-size`: the client's size sizes no window while a client
 /// without the flag is attached, as tmux's; alone, it does.
 #[test]
+fn cursor_style_and_programs_shape_the_clients_cursor() {
+    let t = Tmxr::new("cursorstyle");
+    let s = t.attach(&["new", "-s", "cs"]);
+    s.wait_for("status line", |text| text.contains("cs"));
+    // No program has asked: the option's shape (underline, 4).
+    t.run(&["set", "-g", "cursor-style", "underline"]);
+    s.wait_for("the option's shape", |_| s.raw_text().contains("\x1b[4 q"));
+    // A program's own shape (bar, 6) wins over the option.
+    #[cfg(unix)]
+    let program = ["/bin/sh", "-c", r"printf '\033[6 qbar-asked'; sleep 30"];
+    #[cfg(windows)]
+    let program = [
+        "powershell.exe",
+        "-NoProfile",
+        "-Command",
+        "[Console]::Out.Write([string][char]27 + '[6 qbar-asked'); Start-Sleep 30",
+    ];
+    let mut args = vec!["new-window", "-t", "cs"];
+    args.extend(program);
+    t.run(&args);
+    s.wait_for("the program's shape", |_| s.raw_text().contains("\x1b[6 q"));
+    assert!(s.text().contains("bar-asked"), "{}", s.text());
+    // Back on the first window, the option's shape again.
+    let before = s.raw_text().matches("\x1b[4 q").count();
+    t.run(&["select-window", "-t", "cs:0"]);
+    s.wait_for("the option's shape again", |_| {
+        s.raw_text().matches("\x1b[4 q").count() > before
+    });
+}
+
+#[test]
 fn allow_rename_lets_programs_name_their_window() {
     // The name string is found by the splitter passthrough uses, which needs
     // Microsoft's ConPTY beside tmxr.exe on Windows (see the passthrough

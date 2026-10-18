@@ -6,6 +6,55 @@ use serde::Deserialize;
 use crate::table::{OptionValue, Word, options_table};
 use crate::{ScrollbarPosition, Scrollbars};
 
+/// `cursor-style`: a pane's cursor shape when its program has not asked
+/// for one, as tmux's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CursorStyle {
+    Default,
+    BlinkingBlock,
+    Block,
+    BlinkingUnderline,
+    Underline,
+    BlinkingBar,
+    Bar,
+}
+
+impl CursorStyle {
+    pub const NAMES: &str =
+        "default, blinking-block, block, blinking-underline, underline, blinking-bar or bar";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "default" => Some(Self::Default),
+            "blinking-block" => Some(Self::BlinkingBlock),
+            "block" => Some(Self::Block),
+            "blinking-underline" => Some(Self::BlinkingUnderline),
+            "underline" => Some(Self::Underline),
+            "blinking-bar" => Some(Self::BlinkingBar),
+            "bar" => Some(Self::Bar),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::BlinkingBlock => "blinking-block",
+            Self::Block => "block",
+            Self::BlinkingUnderline => "blinking-underline",
+            Self::Underline => "underline",
+            Self::BlinkingBar => "blinking-bar",
+            Self::Bar => "bar",
+        }
+    }
+
+    /// The shape as DECSCUSR's `Ps`.
+    pub const fn ps(self) -> u8 {
+        self as u8
+    }
+}
+
 /// `clock-mode-style`: how clock mode tells the time, as tmux's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum ClockModeStyle {
@@ -151,6 +200,7 @@ pub const PANE_OPTIONS: &[&str] = &[
     "allow-passthrough",
     "allow-rename",
     "allow-set-title",
+    "cursor-style",
     "pane-scrollbars-style",
     "remain-on-exit",
     "synchronize-panes",
@@ -291,6 +341,8 @@ options_table! {
     /// Copy mode search matches under the cursor, and the others.
     "copy-mode-current-match-style" => copy_mode_current_match_style: String,
     "copy-mode-match-style" => copy_mode_match_style: String,
+    /// A pane's cursor shape until its program asks for one.
+    "cursor-style" => cursor_style: CursorStyle,
     /// main-horizontal / main-vertical sizes: cells or `N%`.
     "main-pane-height" => main_pane_height: String,
     "main-pane-width" => main_pane_width: String,
@@ -363,6 +415,15 @@ mod tests {
         assert_eq!(o.main_pane_width, "801");
         o.set("pane-base-index", Some("1"), true).unwrap();
         assert_eq!(o.pane_base_index, 1);
+    }
+
+    #[test]
+    fn cursor_styles_are_decscusrs_numbers() {
+        let ps = |s| CursorStyle::parse(s).unwrap().ps();
+        assert_eq!(ps("default"), 0);
+        assert_eq!(ps("blinking-block"), 1);
+        assert_eq!(ps("underline"), 4);
+        assert_eq!(ps("bar"), 6);
     }
 
     #[test]

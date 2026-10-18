@@ -16,8 +16,8 @@ pub use import::{Imported, from_tmux_conf};
 pub use session::{OwnSessionOptions, SessionOptions};
 pub use table::{Array, OptionValue, Word};
 pub use window::{
-    BoxLines, ClockModeStyle, ModeKeys, OwnOptions, PANE_OPTIONS, RemainOnExit, WindowOptions,
-    WindowSize,
+    BoxLines, ClockModeStyle, CursorStyle, ModeKeys, OwnOptions, PANE_OPTIONS, RemainOnExit,
+    WindowOptions, WindowSize,
 };
 
 mod import;
@@ -122,6 +122,7 @@ struct File {
     wrap_search: bool,
     word_separators: String,
     clock_mode_style: ClockModeStyle,
+    cursor_style: CursorStyle,
     window_size: WindowSize,
     monitor_activity: bool,
     monitor_silence: u64,
@@ -199,6 +200,7 @@ impl From<File> for Config {
                 monitor_bell: f.monitor_bell,
                 wrap_search: f.wrap_search,
                 clock_mode_style: f.clock_mode_style,
+                cursor_style: f.cursor_style,
                 synchronize_panes: f.synchronize_panes,
                 window_size: f.window_size,
                 window_status_current_format: s.window_current_format,

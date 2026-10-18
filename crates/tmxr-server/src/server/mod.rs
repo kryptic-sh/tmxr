@@ -88,6 +88,8 @@ pub struct Attached {
     pub term: Option<Terminal<AnsiBackend>>,
     /// Key table the next key is looked up in.
     pub table: String,
+    /// The cursor shape (DECSCUSR's `Ps`) last sent to the terminal.
+    pub cursor_style: u8,
     /// When `table` was entered, for `prefix-timeout`.
     pub table_at: Instant,
     pub repeat_until: Option<Instant>,
@@ -900,9 +902,15 @@ impl Server {
             let ranges = crate::render::draw(self, id, &mut term);
             let mut bytes = term.backend_mut().take();
             let title = crate::render::title(self, id);
+            let cursor_style = crate::render::cursor_style(self, id);
             if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
                 a.term = Some(term);
                 a.status_ranges = ranges;
+                // So does the cursor shape.
+                if a.cursor_style != cursor_style {
+                    a.cursor_style = cursor_style;
+                    bytes.extend_from_slice(format!("\x1b[{cursor_style} q").as_bytes());
+                }
                 // The title goes out only when it changes, as tmux's.
                 if title.is_some() && a.title != title {
                     a.title = title;

@@ -83,6 +83,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`window-size largest` and `smallest`**, as tmux's: a window as wide and as
   tall as the session's widest and tallest clients, or its narrowest and
   shortest, each way.
+- **Cursor shapes**: a program's `CSI Ps SP q` (vim's bar cursor in insert mode,
+  say) reaches the client's terminal for the active pane instead of being
+  dropped, and **`cursor-style`**, as tmux's, gives the shape for a pane whose
+  program has not asked for one.
 - **`prefix-timeout`**, as tmux's: a server option in milliseconds; a key
   pressed longer than that after the prefix goes to the root table instead
   (unless it repeats a repeatable binding). 0, the default, waits forever.

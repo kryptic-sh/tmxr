@@ -455,12 +455,11 @@ table. What has been verified, and how:
     format), `status-fg` / `-bg`; `pane-border-status` / `-format` / `-lines` /
     `-indicators`, `window-style` / `window-active-style`; session
     `status-keys`, `assume-paste-time`, `default-size`; window
-    `aggressive-resize`, `alternate-screen`, `cursor-style`,
-    `remain-on-exit-format` (its default needs the `t:` modifier and
-    `#{pane_dead_time}` / `#{pane_dead_signal}`, none of which tmxr has; the
-    dead-pane line is a fixed `Pane is dead (status N)` in `render.rs`); server
-    `focus-events`, `history-file`, `editor`. `escape-time` is kept but never
-    read.
+    `aggressive-resize`, `alternate-screen`, `remain-on-exit-format` (its
+    default needs the `t:` modifier and `#{pane_dead_time}` /
+    `#{pane_dead_signal}`, none of which tmxr has; the dead-pane line is a fixed
+    `Pane is dead (status N)` in `render.rs`); server `focus-events`,
+    `history-file`, `editor`. `escape-time` is kept but never read.
   - Commands: `capture-pane -S -E -e -b -a -C -N -T -q`; `-P` / `-F` on
     `new-window`, `split-window`, `new-session`, `break-pane`;
     `new-window -k -S`, `split-window -p -I -Z`, `break-pane -n -s -a -b`;

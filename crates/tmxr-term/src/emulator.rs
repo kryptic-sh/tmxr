@@ -27,6 +27,9 @@ pub struct Hooks {
     kitty_flags: Vec<u8>,
     /// The program asked for focus reports (`CSI ? 1004 h`).
     focus_reports: bool,
+    /// The cursor shape the program asked for (`CSI Ps SP q`, DECSCUSR):
+    /// 0 for the terminal's own.
+    cursor_style: u8,
     /// Where the shell's input starts, from its OSC 133;B prompt mark:
     /// (lines of history then, screen row, column).
     input_mark: Option<(usize, u16, u16)>,
@@ -71,6 +74,13 @@ impl vt100::Callbacks for Hooks {
             // A mode vt100 does not keep: focus reports.
             (Some(b'?'), 'h' | 'l') if params.iter().any(|v| v.first() == Some(&1004)) => {
                 self.focus_reports = c == 'h';
+            }
+            // DECSCUSR: a cursor shape, 0 to 6; others leave it as it was,
+            // as tmux's.
+            (Some(b' '), 'q') => {
+                if let Ok(ps @ 0..=6) = u8::try_from(p(0).unwrap_or(0)) {
+                    self.cursor_style = ps;
+                }
             }
             // DA1: identify as a VT220 with ANSI colour, as tmux does.
             (None, 'c') if p(0).unwrap_or(0) == 0 => self.replies.extend(b"\x1b[?62;22c"),
@@ -317,6 +327,12 @@ impl Emulator {
     /// as `CSI I` and `CSI O`.
     pub fn focus_reports(&self) -> bool {
         self.parser.callbacks().focus_reports
+    }
+
+    /// The cursor shape the program asked for, as DECSCUSR's `Ps`: 0 (the
+    /// terminal's own) until it asks.
+    pub fn cursor_style(&self) -> u8 {
+        self.parser.callbacks().cursor_style
     }
 
     pub fn title(&self) -> Option<&str> {

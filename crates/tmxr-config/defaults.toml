@@ -59,6 +59,8 @@ monitor-bell = true
 # tmux's defaults: copy-mode searches wrap, and words end at ASCII punctuation
 # but `_` (and blanks).
 wrap-search = true
+# tmux's default: the terminal's own cursor until a program asks for a shape.
+cursor-style = "default"
 # tmux's default: a 24-hour clock without seconds.
 clock-mode-style = "24"
 word-separators = '''!"#$%&'()*+,-./:;<=>?@[\]^`{|}~'''
