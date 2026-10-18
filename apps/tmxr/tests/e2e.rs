@@ -1120,6 +1120,13 @@ fn prefix_timeout_gives_a_late_key_to_the_root_table() {
         |o| o.contains("clate-key"),
     );
     assert_eq!(windows(&t), 2);
+    // switch-client -T starts the wait afresh, as the prefix key does.
+    std::thread::sleep(Duration::from_millis(300));
+    t.run(&["switch-client", "-T", "prefix"]);
+    s.send(b"c");
+    t.wait_run(&["list-windows", "-t", "pt"], "a third window", |o| {
+        o.lines().count() == 3
+    });
 }
 
 #[test]
@@ -3032,6 +3039,44 @@ fn clock_mode_style_twelve_shows_am_or_pm() {
     });
     t.run(&["set", "-wg", "clock-mode-style", "12"]);
     s.wait_for("the 12-hour clock", twelve_hour);
+}
+
+#[test]
+fn switch_client_c_names_the_client_to_move() {
+    let t = Tmxr::new("switchc");
+    t.run(&["new-session", "-d", "-s", "one"]);
+    t.run(&["new-session", "-d", "-s", "two"]);
+    t.run(&["new-session", "-d", "-s", "three"]);
+    let a = t.attach(&["attach", "-t", "one"]);
+    a.wait_for("first client", |text| text.contains("one"));
+    let b = t.attach(&["attach", "-t", "two"]);
+    b.wait_for("second client", |text| text.contains("two"));
+    let clients = || t.run(&["list-clients", "-F", "#{client_name} #{session_name}"]);
+    let id_on = |session: &str| {
+        clients()
+            .lines()
+            .find(|l| l.ends_with(&format!(" {session}")))
+            .and_then(|l| l.split(' ').next())
+            .map_or_else(
+                || panic!("no client on {session}: {}", clients()),
+                str::to_owned,
+            )
+    };
+    let first = id_on("one");
+    let second = id_on("two");
+    t.run(&["switch-client", "-c", &first, "-t", "three"]);
+    t.wait_run(
+        &["list-clients", "-F", "#{client_name} #{session_name}"],
+        "the move",
+        |o| o.lines().any(|l| l == format!("{first} three")),
+    );
+    // The other client stayed where it was.
+    assert_eq!(id_on("two"), second);
+    assert!(
+        !t.output(&["switch-client", "-c", "999", "-t", "one"])
+            .status
+            .success()
+    );
 }
 
 #[test]

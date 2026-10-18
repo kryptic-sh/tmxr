@@ -638,10 +638,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "switch-client",
         Some("switchc"),
-        "Elnpt:T:",
+        "c:Elnpt:T:",
         0,
         0,
-        "[-Elnp] [-t target-session] [-T key-table]"
+        "[-Elnp] [-c target-client] [-t target-session] [-T key-table]"
     ),
     cmd!(
         "unbind-key",

@@ -100,8 +100,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   dropped, and **`cursor-style`**, as tmux's, gives the shape for a pane whose
   program has not asked for one.
 - **`prefix-timeout`**, as tmux's: a server option in milliseconds; a key
-  pressed longer than that after the prefix goes to the root table instead
-  (unless it repeats a repeatable binding). 0, the default, waits forever.
+  pressed longer than that after the prefix (or `switch-client -T prefix`) goes
+  to the root table instead (unless it repeats a repeatable binding). 0, the
+  default, waits forever.
+- **`switch-client -c target-client`**, and from a command client (a script,
+  `run-shell`) without `-c` it acts on the attached client used most recently,
+  as tmux's, where it failed with "no current client".
 - **`allow-rename`**, as tmux's: on, a program names its window with
   `ESC k name ESC \` (and stops automatic renaming; an empty name gives it
   back). Off by default; either way the string is no longer printed. On Windows

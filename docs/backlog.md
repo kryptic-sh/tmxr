@@ -469,7 +469,7 @@ table. What has been verified, and how:
     `choose-*` templates and `-F -f -K -O -r -N -y`, tagging and sort keys;
     `command-prompt` with several `-p` and `%1`…`%9`, `-1 -N -b -F -l`,
     completion; session groups (`new-session -t`); `switch-client -t` /
-    `attach -t` drop the window and pane part, and `switch-client -c -r -Z`;
+    `attach -t` drop the window and pane part, and `switch-client -r -Z`;
     targets `~` / `{marked}`; smaller flags: `send-keys -R -H -K -c`,
     `display-panes -d -b -N`, `select-pane -d -e`, `last-pane -d -e -Z`,
     `rotate-window -Z`, `swap-pane -Z`, `set-buffer -t`, `copy-mode -s`,

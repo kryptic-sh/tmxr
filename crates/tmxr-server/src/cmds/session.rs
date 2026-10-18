@@ -253,10 +253,18 @@ pub(super) fn run(
             srv.mark_session_dirty(sid);
         }
         "switch-client" => {
-            let c = attached_client(srv, ctx).ok_or("no current client")?;
+            // -c names the client; else the caller, or (from a command
+            // client) the best attached one, as tmux's.
+            let c = match a.value('c') {
+                Some(spec) => target_client(srv, spec)?,
+                None => super::display_client(srv, ctx).ok_or("no current client")?,
+            };
             if let Some(table) = a.value('T') {
                 if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
                     table.clone_into(&mut att.table);
+                    // From now, for prefix-timeout, as tmux's
+                    // `server_client_set_key_table`.
+                    att.table_at = std::time::Instant::now();
                     att.dirty = true;
                 }
                 return Ok(true);
