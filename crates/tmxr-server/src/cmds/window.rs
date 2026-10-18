@@ -309,7 +309,8 @@ pub(super) fn run(
         "select-layout" if a.has('E') => {
             let (_, _, wid) = target::window(srv, ctx, a.value('t'))?;
             let win = srv.windows.get_mut(&wid).ok_or("no window")?;
-            win.layout = crate::layout::spread(&win.layout, win.active);
+            let spread = crate::layout::spread(&win.layout, win.active);
+            win.old_layout = Some(std::mem::replace(&mut win.layout, spread));
             win.zoomed = false;
             srv.relayout(wid);
         }
@@ -330,10 +331,30 @@ pub(super) fn run(
                 let n = crate::layout::PRESETS.len();
                 win.preset = (win.preset + n - 1) % n;
                 crate::layout::PRESETS[win.preset].to_owned()
+            } else if let Some(name) = pos.first() {
+                name.clone()
+            } else if a.has('o') {
+                // -o: the layout before the last select-layout, as tmux's;
+                // none, and only this one is kept for next time.
+                let panes = win.panes();
+                let current = win.layout.clone();
+                let Some(old) = win.old_layout.replace(current) else {
+                    return Ok(true);
+                };
+                let tree = match crate::layout::reuse(&old, &panes) {
+                    Ok(tree) => tree,
+                    Err(e) => {
+                        win.old_layout = Some(old);
+                        return Err(e);
+                    }
+                };
+                win.order = Vec::new();
+                win.layout = tree;
+                win.zoomed = false;
+                srv.relayout(wid);
+                return Ok(true);
             } else {
-                pos.first()
-                    .cloned()
-                    .unwrap_or_else(|| crate::layout::PRESETS[win.preset].to_owned())
+                crate::layout::PRESETS[win.preset].to_owned()
             };
             let panes = win.panes();
             let tree = crate::layout::preset(&name, &panes, (win.cols, win.rows), &sizes)
@@ -349,7 +370,7 @@ pub(super) fn run(
             if let Some(i) = crate::layout::PRESETS.iter().position(|p| *p == name) {
                 win.preset = i;
             }
-            win.layout = tree;
+            win.old_layout = Some(std::mem::replace(&mut win.layout, tree));
             win.zoomed = false;
             srv.relayout(wid);
         }

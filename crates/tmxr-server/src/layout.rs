@@ -228,6 +228,31 @@ fn tree_contains(t: &LayoutTree, id: usize) -> bool {
     t.contains(id)
 }
 
+/// `old` laid over `panes`, as tmux's `layout_parse` lays a layout over a
+/// window's panes: its cells go to them in order, after cells beyond their
+/// number go from the bottom right. More panes than cells is an error.
+pub fn reuse(old: &LayoutTree, panes: &[PaneId]) -> Result<LayoutTree, String> {
+    let mut tree = old.clone();
+    let mut cells = tree.leaves();
+    if panes.len() > cells.len() {
+        return Err(format!(
+            "have {} panes but need {}",
+            panes.len(),
+            cells.len()
+        ));
+    }
+    while cells.len() > panes.len() {
+        let last = cells.pop().ok_or("invalid layout")?;
+        tree.remove_leaf(last).map_err(|_| "invalid layout")?;
+    }
+    let to: std::collections::HashMap<usize, usize> = cells
+        .iter()
+        .zip(panes)
+        .map(|(cell, pane)| (*cell, *pane as usize))
+        .collect();
+    Ok(relabel(&tree, &|id| to.get(&id).copied().unwrap_or(id)))
+}
+
 /// Rebuild `tree` with every leaf id passed through `f`.
 pub fn relabel(tree: &LayoutTree, f: &dyn Fn(usize) -> usize) -> LayoutTree {
     match tree {
@@ -358,6 +383,38 @@ pub const PRESETS: &[&str] = &[
     "tiled",
 ];
 
+/// `ids` side by side along `dir` over `len` cells, sized as tmux's
+/// `layout_spread_cell`: each the same, a border between them, and the
+/// cells left over one each to the first panes.
+fn spread_cells(dir: SplitDir, ids: &[usize], len: u16) -> LayoutTree {
+    match ids {
+        [] => LayoutTree::Leaf(0),
+        [one] => LayoutTree::Leaf(*one),
+        [first, rest @ ..] => {
+            let n = u16::try_from(ids.len()).unwrap_or(u16::MAX);
+            let each = len.saturating_sub(n - 1) / n;
+            let extra = len.saturating_add(1).saturating_sub(n * (each + 1));
+            let first_cells = if extra > 0 && each > 0 {
+                each + 1
+            } else {
+                each
+            };
+            if first_cells == 0 || len < 2 {
+                return even(dir, ids);
+            }
+            // hjkl-layout gives the first child round(len × ratio) cells,
+            // its border among them.
+            let ratio = f32::from(first_cells + 1) / f32::from(len);
+            LayoutTree::split(
+                dir,
+                ratio,
+                LayoutTree::Leaf(*first),
+                spread_cells(dir, rest, len - first_cells - 1),
+            )
+        }
+    }
+}
+
 fn even(dir: SplitDir, ids: &[usize]) -> LayoutTree {
     match ids {
         [] => LayoutTree::Leaf(0),
@@ -454,20 +511,27 @@ pub fn preset(
                 let (m, o) = main_split(cols, &sizes.width, &sizes.other_width, 80);
                 (cols, m, o)
             };
+            // The other panes share the length across the split.
+            let across = if dir == SplitDir::Horizontal {
+                cols
+            } else {
+                rows
+            };
+            let others = spread_cells(rest_dir, rest, across);
             let len = f32::from(len.max(1));
             if mirrored {
                 let ratio = f32::from(other_cells + 1) / len;
-                LayoutTree::split(dir, ratio, even(rest_dir, rest), LayoutTree::Leaf(*first))
+                LayoutTree::split(dir, ratio, others, LayoutTree::Leaf(*first))
             } else {
                 let ratio = f32::from(main_cells + 1) / len;
-                LayoutTree::split(dir, ratio, LayoutTree::Leaf(*first), even(rest_dir, rest))
+                LayoutTree::split(dir, ratio, LayoutTree::Leaf(*first), others)
             }
         }
         [] => LayoutTree::Leaf(0),
     };
     Some(match name {
-        "even-horizontal" => even(SplitDir::Vertical, &ids),
-        "even-vertical" => even(SplitDir::Horizontal, &ids),
+        "even-horizontal" => spread_cells(SplitDir::Vertical, &ids, cols),
+        "even-vertical" => spread_cells(SplitDir::Horizontal, &ids, rows),
         "main-horizontal" => main(SplitDir::Horizontal, SplitDir::Vertical, false),
         "main-horizontal-mirrored" => main(SplitDir::Horizontal, SplitDir::Vertical, true),
         "main-vertical" => main(SplitDir::Vertical, SplitDir::Horizontal, false),
@@ -681,5 +745,19 @@ mod tests {
             "{widths:?}"
         );
         assert!(preset("nope", &panes, (100, 40), &MainPane::default()).is_none());
+    }
+
+    #[test]
+    fn even_layouts_give_the_spare_cells_to_the_first_panes() {
+        // tmux's layout_spread_cell: 30 rows for two panes and a border
+        // are 15 and 14 (checked against tmux 3.6).
+        let heights = |n: usize, rows: u16| -> Vec<u16> {
+            let panes: Vec<PaneId> = (1..=n as PaneId).collect();
+            let t = preset("even-vertical", &panes, (80, rows), &MainPane::default()).unwrap();
+            pane_rects(&t, 80, rows).iter().map(|(_, r)| r.h).collect()
+        };
+        assert_eq!(heights(2, 30), [15, 14]);
+        assert_eq!(heights(3, 10), [3, 3, 2]);
+        assert_eq!(heights(4, 83), [20, 20, 20, 20]);
     }
 }

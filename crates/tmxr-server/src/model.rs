@@ -107,6 +107,8 @@ pub struct Window {
     pub rows: u16,
     /// Position in `layout::PRESETS` for `next-layout`.
     pub preset: usize,
+    /// The layout before the last `select-layout`, for `select-layout -o`.
+    pub old_layout: Option<LayoutTree>,
     /// `set-option -w`: options set on this window, over the global ones
     /// (`resize-window` sets `window-size manual` here, and `rename-window`
     /// `automatic-rename off`, as tmux's).

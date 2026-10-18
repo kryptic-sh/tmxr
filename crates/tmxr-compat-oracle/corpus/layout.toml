@@ -283,3 +283,32 @@ checks = [
   { command = "list-panes -t o:1 -F '#{pane_index} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'" },
   { command = "list-panes -t o:2 -F '#{pane_index} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'" },
 ]
+
+[[cases]]
+name = "select_layout_o_goes_back_to_the_layout_before"
+steps = [
+  # 0: a hand-made layout, a preset, then back.
+  { run = "split-window -h -t o:0" },
+  { run = "split-window -v -l 4 -t o:0.1" },
+  { run = "select-layout -t o:0 even-vertical" },
+  { run = "select-layout -o -t o:0" },
+  # 1: the old layout over fewer panes loses its last cells.
+  { run = "new-window -d -t o:1" },
+  { run = "split-window -h -t o:1" },
+  { run = "split-window -v -t o:1.1" },
+  { run = "select-layout -t o:1 tiled" },
+  { run = "kill-pane -t o:1.2" },
+  { run = "select-layout -o -t o:1" },
+  # 2: -o with nothing before keeps the layout; then -o toggles.
+  { run = "new-window -d -t o:2" },
+  { run = "split-window -h -l 20 -t o:2" },
+  { run = "select-layout -o -t o:2" },
+  { run = "select-layout -t o:2 even-vertical" },
+  { run = "select-layout -o -t o:2" },
+  { run = "select-layout -o -t o:2" },
+]
+checks = [
+  { command = "list-panes -t o:0 -F '#{pane_index} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'" },
+  { command = "list-panes -t o:1 -F '#{pane_index} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'" },
+  { command = "list-panes -t o:2 -F '#{pane_index} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'" },
+]

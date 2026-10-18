@@ -167,6 +167,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`select-layout -o`** was accepted and ignored; it now goes back to the
+  layout before the last `select-layout`, as tmux's (its cells to the panes in
+  order, the last cells dropped when there are fewer panes).
+- **`even-horizontal` / `even-vertical`, and the other panes of the `main-*`
+  layouts**, give the spare cells to the first panes, as tmux's (30 rows for two
+  panes are 15 and 14, not 14 and 15).
 - **`source-file -q`** was accepted and ignored; a missing file is now no error
   with it, as tmux's. And a file that does not load no longer becomes the config
   to reload: a plain `source-file` after it reloads the old one.

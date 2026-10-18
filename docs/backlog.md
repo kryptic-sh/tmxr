@@ -467,7 +467,7 @@ table. What has been verified, and how:
   - Commands: `capture-pane -e -a -C -T -q` (and `-J` keeping spaces a program
     wrote at a line's end, which the history snapshot cannot tell from blank
     cells); `split-window -I`; layout strings (`#{window_layout}`,
-    `select-layout '<checksum>,…'`, `-o`); `display-message -a -v -I -N -C`;
+    `select-layout '<checksum>,…'`); `display-message -a -v -I -N -C`;
     `choose-*` templates and `-F -f -K -O -r -N -y`, tagging and sort keys;
     `command-prompt` with several `-p` and `%1`…`%9`, `-1 -N -b -F -l`,
     completion; session groups (`new-session -t`); `switch-client -t` /
@@ -491,18 +491,17 @@ table. What has been verified, and how:
   the cause is unknown: a guess is ConPTY redrawing the pane after
   `cmd /c echo`, moving the line `history-top` lands on.
 - **Flags the command table accepts but no handler reads** (an audit of every
-  `cmd!` entry against its arm and helpers, 2026-10-18; `source-file` and
-  `select-layout` re-read by hand, the rest as the audit reported):
-  `select-layout -o` (undo), (`source-file` replaces the config path and reloads
-  everything, where tmux runs the file's commands), `set-environment -h` /
-  `show-environment -h` (hidden variables), `-Z` on `choose-buffer`,
-  `choose-client`, `choose-tree`, `find-window` and `customize-mode`, `-t` on
-  `choose-tree` and `find-window`, `customize-mode -a -F -N -t`,
-  `clear-history -H` (tmxr keeps no hyperlinks). Harmless: `-v` on
-  `split-window` / `join-pane` / `move-pane`, `rotate-window -U` and
-  `choose-tree -s` are what happens anyway, and `set-option -s` picks the table
-  tmxr would pick from the name. Each of these should be implemented or refused,
-  not accepted silently.
+  `cmd!` entry against its arm and helpers, 2026-10-18; `source-file` re-read by
+  hand, the rest as the audit reported): (`source-file` replaces the config path
+  and reloads everything, where tmux runs the file's commands),
+  `set-environment -h` / `show-environment -h` (hidden variables), `-Z` on
+  `choose-buffer`, `choose-client`, `choose-tree`, `find-window` and
+  `customize-mode`, `-t` on `choose-tree` and `find-window`,
+  `customize-mode -a -F -N -t`, `clear-history -H` (tmxr keeps no hyperlinks).
+  Harmless: `-v` on `split-window` / `join-pane` / `move-pane`,
+  `rotate-window -U` and `choose-tree -s` are what happens anyway, and
+  `set-option -s` picks the table tmxr would pick from the name. Each of these
+  should be implemented or refused, not accepted silently.
 - **`list-keys -N` is laid out unlike tmux's** (compared on WSL with tmux 3.6,
   2026-10-18: tmux 87 lines, tmxr 276). tmux, without `-T`, lists only the root
   table (padded by the prefix's width) then the prefix table, each line `C-b `
