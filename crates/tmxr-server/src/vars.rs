@@ -274,6 +274,7 @@ impl Context for Vars<'_> {
             }
             "pane_synchronized" => flag(srv.pane_options(pane?.id).synchronize_panes),
             "pane_dead" => flag(pane?.dead.is_some()),
+            "pane_start_path" => pane?.start_cwd.display().to_string(),
             // Each word quoted as tmux's args_escape, as its
             // cmd_stringify_argv joins them.
             "pane_start_command" => pane?

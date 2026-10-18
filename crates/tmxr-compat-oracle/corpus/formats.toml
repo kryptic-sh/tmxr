@@ -177,3 +177,15 @@ checks = [
   { command = "display -p -t a:1 '#{window_linked_sessions} [#{window_linked_sessions_list}] [#{window_active_sessions_list}] #{window_active_sessions}'" },
   { command = "display -p -t a:0 '#{window_linked_sessions} [#{window_linked_sessions_list}] [#{window_active_sessions_list}]'" },
 ]
+
+[[cases]]
+name = "pane_start_path_is_where_the_pane_started"
+unix_only = true
+steps = [
+  { run = "new-window -d -t o:1 -c /tmp" },
+  { run = "split-window -d -t o:1 -c /usr" },
+]
+checks = [
+  { command = "display -p -t o:1.0 '#{pane_start_path}'", expect = "/tmp" },
+  { command = "display -p -t o:1.1 '#{pane_start_path}'", expect = "/usr" },
+]
