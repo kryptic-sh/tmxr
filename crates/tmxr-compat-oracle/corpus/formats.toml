@@ -327,3 +327,10 @@ checks = [
   { format = "#{C:Beta} #{C:beta} #{C/i:beta} #{C:zzz} #{C:a*a}" },
   { format = "#{C/r:a$} #{C/r:^ +gam} #{C/r:^B.*o$} #{C/ri:^beta} #{C/r:(}" },
 ]
+
+[[cases]]
+name = "r_and_not_modifiers_are_tmuxs"
+checks = [
+  { format = "#{R:#{session_name}-,2}|#{R:ab,3}|#{R:x,0}" },
+  { format = "#{!:#{window_active}}|#{!!:#{window_active}}|#{!:window_active}|#{!:#{pane_dead}}" },
+]

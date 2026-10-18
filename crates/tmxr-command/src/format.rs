@@ -9,7 +9,8 @@
 //! `#{q/e:x}` (`#` doubled), `#{N:name}` / `#{N/w:name}` (a window of the
 //! session is called that) and `#{N/s:name}` (a session is), `#{C:text}`
 //! (the first line of the pane's screen holding text, as a glob; `C/r` a
-//! regex, `i` ignoring case), `#{||:a,b}`,
+//! regex, `i` ignoring case), `#{R:text,n}` (text n times), `#{!:x}` /
+//! `#{!!:x}` (whether x expands to false / true), `#{||:a,b}`,
 //! `#{&&:a,b}`, the short aliases
 //! `#S #W #I #P #H #h #F #D #T` and `##` for a literal `#`. Commas inside
 //! nested `#{…}` do not split.
@@ -52,6 +53,9 @@ impl<F: Fn(&str) -> Option<String>> Context for F {
         None
     }
 }
+
+/// The most times `#{R:…}` repeats its text, as tmux's.
+const MAX_REPEAT: usize = 10_000;
 
 /// Nesting limit for `#{E:…}`, so an option that refers to itself cannot
 /// recurse forever.
@@ -411,6 +415,28 @@ fn expand_item(body: &str, ctx: &dyn Context, pass: Pass) -> String {
             let b = ex(parts.get(1).copied().unwrap_or_default());
             return if f(&a, &b) { "1" } else { "0" }.to_owned();
         }
+    }
+    // !: and !!: whether the text expands to something false or true; it is
+    // expanded as a format, not looked up as a variable, as tmux's.
+    if let Some(text) = body.strip_prefix("!!:") {
+        return if truthy(&ex(text)) { "1" } else { "0" }.to_owned();
+    }
+    if let Some(text) = body.strip_prefix("!:") {
+        return if truthy(&ex(text)) { "0" } else { "1" }.to_owned();
+    }
+    // R: the text repeated the given number of times, from 1 to tmux's
+    // limit; any other count, or no count, gives nothing.
+    if let Some(rest) = body.strip_prefix("R:") {
+        let parts = split_top(rest);
+        let [text, count] = parts.as_slice() else {
+            return String::new();
+        };
+        return ex(count)
+            .parse::<usize>()
+            .ok()
+            .filter(|n| (1..=MAX_REPEAT).contains(n))
+            .map(|n| ex(text).repeat(n))
+            .unwrap_or_default();
     }
     // t: a time in seconds as ctime writes it; t/p as short as its age
     // allows; t/f/FORMAT by strftime; nothing when the value is not a time,
@@ -1055,6 +1081,19 @@ mod tests {
             (r"#{=/-2/...:@w}", r"...kl"),
             (r"#{=/9/...:@w}", r"hjkl"),
             (r"#{=2:@w}", r"hj"),
+            (r"#{R:ab,3}", r"ababab"),
+            (r"#{R:x,#{e|+|:1,1}}", r"xx"),
+            (r"#{R:x,0}", r""),
+            (r"#{R:x,10001}", r""),
+            (r"#{R:x,y}", r""),
+            (r"#{R:x}", r""),
+            (r"#{R:a,b,2}", r""),
+            (r"#{R:,3}", r""),
+            (r"#{!:window_active}", r"0"),
+            (r"#{!:0}", r"1"),
+            (r"#{!:}", r"1"),
+            (r"#{!!:abc}", r"1"),
+            (r"#{!!:0}", r"0"),
         ] {
             assert_eq!(x(format), tmux, "{format}");
         }
