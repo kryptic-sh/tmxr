@@ -486,30 +486,6 @@ fn expand_item(body: &str, ctx: &dyn Context, pass: Pass) -> String {
         let right = ex(parts.get(1).copied().unwrap_or_default());
         return expression(&args, &left, &right).unwrap_or_default();
     }
-    if let Some(name) = body.strip_prefix("E:") {
-        let raw = ctx.get(name).unwrap_or_default();
-        return ex(&raw);
-    }
-    // T: expanded with time expansion on, as tmux's.
-    if let Some(name) = body.strip_prefix("T:") {
-        let raw = ctx.get(name).unwrap_or_default();
-        let timed = Pass {
-            time: true,
-            ..pass.deeper()
-        };
-        return expand_depth(&raw, ctx, timed);
-    }
-    if let Some((flags, rest)) = body.strip_prefix('m').and_then(modifier_args) {
-        let parts = split_top(rest);
-        let pattern = ex(parts.first().copied().unwrap_or_default());
-        let text = ex(parts.get(1).copied().unwrap_or_default());
-        return if format_match(flags, &pattern, &text) {
-            "1"
-        } else {
-            "0"
-        }
-        .to_owned();
-    }
     // N: whether a window (no flag, or w) or a session (s) has the name the
     // rest expands to; with neither flag, an ordinary lookup, as tmux's.
     if let Some((flags, inner)) = body.strip_prefix('N').and_then(modifier_args) {
@@ -543,14 +519,6 @@ fn expand_item(body: &str, ctx: &dyn Context, pass: Pass) -> String {
             })
         });
         return found.map_or(0, |i| i + 1).to_string();
-    }
-    if let Some((flags, inner)) = body.strip_prefix('q').and_then(modifier_args) {
-        let text = expand_item(inner, ctx, pass.deeper());
-        return if flags.contains('e') || flags.contains('h') {
-            text.replace('#', "##")
-        } else {
-            quote_shell(&text)
-        };
     }
     if let Some((mods, inner)) = value_modifiers(body) {
         return apply_modifiers(&mods, inner, ctx, pass);
@@ -647,6 +615,15 @@ enum Mod<'a> {
     Limit(i64, &'a str),
     /// `pN` pads to N characters with spaces after, `p-N` before.
     Pad(i64),
+    /// `E`: the value expanded again as a format.
+    Expand,
+    /// `T`: the same with time expansion on.
+    ExpandTime,
+    /// `q`: a variable's value shell-quoted; `q/e` (or `q/h`) with `#`
+    /// doubled instead.
+    Quote(&'a str),
+    /// `m/flags:pattern,text`: 1 when the pattern matches the text.
+    Match(&'a str),
 }
 
 /// `body` as a list of value modifiers and what follows their `:`; `None`
@@ -661,14 +638,32 @@ fn value_modifiers(body: &str) -> Option<(Vec<Mod<'_>>, &str)> {
         let after = chars.as_str();
         // What follows the modifier, up to the `;` or `:` that ends it.
         let (m, tail) = match letter {
-            'b' | 'd' | 'l' | 'n' => {
+            'b' | 'd' | 'l' | 'n' | 'E' | 'T' => {
                 let m = match letter {
                     'b' => Mod::Basename,
                     'd' => Mod::Dirname,
                     'l' => Mod::Literal,
-                    _ => Mod::Length,
+                    'n' => Mod::Length,
+                    'E' => Mod::Expand,
+                    _ => Mod::ExpandTime,
                 };
                 (m, after)
+            }
+            'q' | 'm' => {
+                // Optional `/flags` before the `;` or `:`.
+                let (flags, tail) = match after.strip_prefix('/') {
+                    Some(f) => {
+                        let end = f.find([';', ':'])?;
+                        (&f[..end], &f[end..])
+                    }
+                    None => ("", after),
+                };
+                let m = if letter == 'q' {
+                    Mod::Quote(flags)
+                } else {
+                    Mod::Match(flags)
+                };
+                (m, tail)
             }
             's' => {
                 let sep = after.chars().next().filter(|c| !c.is_alphanumeric())?;
@@ -718,19 +713,34 @@ fn value_modifiers(body: &str) -> Option<(Vec<Mod<'_>>, &str)> {
 
 /// The value of `inner` with `mods` applied, in the order tmux's
 /// `format_replace` applies them whatever order they were written in: the
-/// value (a path's parts for a variable read directly, the text itself for
-/// `l`), then substitutions, the length limit, padding, and the length.
+/// value (the text itself for `l`, a match's result for `m`, a variable read
+/// directly with its path part taken and then quoted), expanded again for
+/// `E` or `T`, then substitutions, the length limit, padding, and the length.
 fn apply_modifiers(mods: &[Mod<'_>], inner: &str, ctx: &dyn Context, pass: Pass) -> String {
     let ex = |s: &str| expand_depth(s, ctx, pass.deeper());
+    let matching = mods.iter().find_map(|m| match m {
+        Mod::Match(flags) => Some(*flags),
+        _ => None,
+    });
     let mut value = if mods.contains(&Mod::Literal) {
         inner.to_owned()
+    } else if let Some(flags) = matching {
+        let parts = split_top(inner);
+        let pattern = ex(parts.first().copied().unwrap_or_default());
+        let text = ex(parts.get(1).copied().unwrap_or_default());
+        if format_match(flags, &pattern, &text) {
+            "1"
+        } else {
+            "0"
+        }
+        .to_owned()
     } else if inner.contains("#{") {
         ex(inner)
     } else {
         let found = ctx.get(inner).unwrap_or_default();
         let path = std::path::Path::new(&found);
         let part = |p: Option<&std::ffi::OsStr>| p.map(|p| p.to_string_lossy().into_owned());
-        if mods.contains(&Mod::Basename) {
+        let found = if mods.contains(&Mod::Basename) {
             part(path.file_name()).unwrap_or(found)
         } else if mods.contains(&Mod::Dirname) {
             part(path.parent().map(std::path::Path::as_os_str))
@@ -738,8 +748,27 @@ fn apply_modifiers(mods: &[Mod<'_>], inner: &str, ctx: &dyn Context, pass: Pass)
                 .unwrap_or_else(|| ".".to_owned())
         } else {
             found
+        };
+        // Quoting applies to a variable read directly only, as tmux's
+        // format_find: `#{q:#{x}}` is not quoted.
+        match mods.iter().find_map(|m| match m {
+            Mod::Quote(flags) => Some(*flags),
+            _ => None,
+        }) {
+            Some(flags) if flags.contains('e') || flags.contains('h') => found.replace('#', "##"),
+            Some(_) => quote_shell(&found),
+            None => found,
         }
     };
+    if mods.contains(&Mod::Expand) {
+        value = ex(&value);
+    } else if mods.contains(&Mod::ExpandTime) {
+        let timed = Pass {
+            time: true,
+            ..pass.deeper()
+        };
+        value = expand_depth(&value, ctx, timed);
+    }
     for m in mods {
         if let Mod::Sub {
             pattern,

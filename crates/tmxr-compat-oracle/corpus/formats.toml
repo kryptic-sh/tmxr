@@ -334,3 +334,18 @@ checks = [
   { format = "#{R:#{session_name}-,2}|#{R:ab,3}|#{R:x,0}" },
   { format = "#{!:#{window_active}}|#{!!:#{window_active}}|#{!:window_active}|#{!:#{pane_dead}}" },
 ]
+
+[[cases]]
+name = "e_t_q_and_m_chain_with_other_modifiers"
+steps = [
+  { run = "set -g @f '#{session_name}-long-text'" },
+  { run = "set -g @sp 'a b;c'" },
+  { run = "set -g @p '/home/me/my dir'" },
+  { run = "set -g @t '%Y'" },
+]
+checks = [
+  { format = "#{E;=5:@f}|#{=5;E:@f}|#{E;n:@f}|#{E;s/o/0/:@f}|#{E;p20:@f}|" },
+  { format = "#{T;=2:@t}|#{l;E:@f}|#{E;q:@f}" },
+  { format = "#{q;=3:@sp}|#{q:#{@sp}}|#{q:@sp}|#{b;q:@p}|#{q;b:@p}|#{q/e;=2:@sp}|" },
+  { format = "#{=1;m:a*,abc}|#{m;=1:a*,abc}|#{m/i;n:A*,abc}" },
+]

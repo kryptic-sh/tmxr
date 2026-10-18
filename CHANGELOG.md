@@ -217,6 +217,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The `E`, `T`, `q` and `m` format modifiers chain with others** by `;`, as
+  tmux's (`#{E;=5:@f}`, `#{q;=3:@x}`, `#{=1;m:a*,abc}`), where such a chain
+  expanded to nothing; and `q` quotes only a variable's value, so `#{q:#{@x}}`
+  is no longer quoted, as in tmux.
 - **Copy mode's `page-up` / `page-down`** move `rows - 2` lines, as tmux's, not
   a whole screen, and at the top or bottom of the history they move the cursor
   on by the page as tmux's do.

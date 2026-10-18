@@ -441,12 +441,11 @@ table. What has been verified, and how:
     measure `tmxr-command` does not have, unicode-width being a new dependency),
     `c:` (a colour as hex RGB: needs a 256-colour-to-RGB table, which tmxr does
     not have — `backend.rs` maps only RGB to the 256 and the 256 to 16 — and
-    tmux's `colour.c`, not read, decides which colour names it takes), and `E` /
-    `T` / `q` / `m` chained with others by `;` (an unknown modifier expands to
-    nothing); a syntax error ends tmux's whole expansion (2026-10-18, tmux 3.6:
-    `A#{==:a}B`, `A#{m:a}B` and `A#{R:x}B` all print `A`) where tmxr expands
-    only that item (`==:` compares against an empty right side); many of tmux's
-    format variables (compare tmux's `format_table` with `vars.rs` for the list;
+    tmux's `colour.c`, not read, decides which colour names it takes); a syntax
+    error ends tmux's whole expansion (2026-10-18, tmux 3.6: `A#{==:a}B`,
+    `A#{m:a}B` and `A#{R:x}B` all print `A`) where tmxr expands only that item
+    (`==:` compares against an empty right side); many of tmux's format
+    variables (compare tmux's `format_table` with `vars.rs` for the list;
     `origin_flag`, `wrap_flag`, `insert_flag`, `scroll_region_*`,
     `alternate_saved_*`, `pane_tabs` and `cursor_shape` / `cursor_colour` need
     terminal state the `vt100` crate does not expose); styles `align=` `fill=`
