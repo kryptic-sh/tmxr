@@ -103,6 +103,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pressed longer than that after the prefix (or `switch-client -T prefix`) goes
   to the root table instead (unless it repeats a repeatable binding). 0, the
   default, waits forever.
+- **`send-keys -H`**, each key a byte in hex (`send-keys -H 1b 5b 41`), and
+  **`-N` for keys**, sending them that many times; both as tmux's (`-N` worked
+  only with `-X` before).
 - **`capture-pane -S` / `-E`, `-N` and `-b`**, as tmux's: the lines to capture,
   0 being the screen's first row, negative ones in the history and `-` either
   end (`capture-pane -p -S -` prints the whole history), formats expanded

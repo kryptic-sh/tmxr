@@ -439,12 +439,31 @@ pub(super) fn run(
                 }
                 return crate::copy::command(srv, ctx, pid, name, rest).map(|()| true);
             }
-            for word in pos {
-                match word.parse::<Key>() {
-                    Ok(k) if !a.has('l') && word.chars().count() > 1 => {
-                        srv.send_key_to_pane(pid, &KeyEvent::new(k.code, k.mods));
+            // -N: the keys again and again, as tmux's.
+            let repeat = match a.value('N') {
+                Some(n) => n
+                    .parse::<u32>()
+                    .ok()
+                    .filter(|n| *n > 0)
+                    .ok_or_else(|| format!("repeat count {n}"))?,
+                None => 1,
+            };
+            for _ in 0..repeat {
+                for word in pos {
+                    // -H: each word is a byte in hex; one that is not is
+                    // skipped, as tmux's.
+                    if a.has('H') {
+                        if let Ok(b) = u8::from_str_radix(word, 16) {
+                            srv.type_bytes_to_pane(pid, &[b]);
+                        }
+                        continue;
                     }
-                    _ => srv.type_to_pane(pid, word),
+                    match word.parse::<Key>() {
+                        Ok(k) if !a.has('l') && word.chars().count() > 1 => {
+                            srv.send_key_to_pane(pid, &KeyEvent::new(k.code, k.mods));
+                        }
+                        _ => srv.type_to_pane(pid, word),
+                    }
                 }
             }
         }

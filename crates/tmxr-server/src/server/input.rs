@@ -359,9 +359,15 @@ impl Server {
     /// Type `text` into a pane as it is (`send-keys` words that name no
     /// key), and into its siblings with synchronize-panes, as tmux's.
     pub fn type_to_pane(&mut self, pane: PaneId, text: &str) {
+        self.type_bytes_to_pane(pane, text.as_bytes());
+    }
+
+    /// Write `bytes` to a pane (and its synchronized siblings) as they are:
+    /// [`Server::type_to_pane`], and `send-keys -H`.
+    pub fn type_bytes_to_pane(&mut self, pane: PaneId, bytes: &[u8]) {
         for t in self.input_targets(pane) {
             if let Some(p) = self.panes.get_mut(&t) {
-                let _ = p.pty.write(text.as_bytes());
+                let _ = p.pty.write(bytes);
             }
         }
     }

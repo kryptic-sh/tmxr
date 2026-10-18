@@ -9,3 +9,17 @@ unix_only = true
 program = "stty raw -echo; exec cat -v"
 steps = [{ sleep = 0.5 }, { keys = "\u001bx\u001b\u001b" }, { sleep = 0.5 }]
 checks = [{ screen_contains = "^[x^[^[", expect = true }]
+
+[[cases]]
+name = "send_keys_h_sends_bytes_and_n_repeats"
+unix_only = true
+program = "stty raw -echo; exec cat -v"
+steps = [
+  { sleep = 0.5 },
+  { run = "send-keys -t o -H 41 1b zz 7f 42" },
+  { run = "send-keys -t o -N 3 ab Enter" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "capture-pane -p -t o", expect = "A^[^?Bab^Mab^Mab^M" },
+]
