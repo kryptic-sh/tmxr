@@ -281,6 +281,9 @@ pub struct Session {
     /// When it was made, last attached to, or last typed into by a client
     /// (`#{session_activity}`), as tmux's activity_time.
     pub activity: std::time::SystemTime,
+    /// When a client last attached or switched to it, none before one has
+    /// (`#{session_last_attached}`).
+    pub last_attached: Option<std::time::SystemTime>,
 }
 
 impl Session {

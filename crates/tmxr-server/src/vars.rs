@@ -192,6 +192,7 @@ impl Context for Vars<'_> {
             "session_attached" => attached(session?.id).to_string(),
             "session_created" => epoch(session?.created),
             "session_activity" => epoch(session?.activity),
+            "session_last_attached" => epoch(session?.last_attached?),
             "session_many_attached" => flag(attached(session?.id) > 1),
             "session_marked" => flag(marked_session() == Some(session?.id)),
             "server_sessions" => srv.sessions.len().to_string(),

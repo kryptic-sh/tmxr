@@ -543,12 +543,22 @@ fn session_activity_moves_on_with_attaching_and_keys() {
     };
     let created = time("#{session_created}");
     assert_eq!(time("#{session_activity}"), created);
+    let never = t.run(&[
+        "display-message",
+        "-p",
+        "-t",
+        "act",
+        "[#{session_last_attached}]",
+    ]);
+    assert_eq!(never.trim(), "[]");
     // The times are whole seconds: wait past one before each step.
     std::thread::sleep(Duration::from_millis(1100));
     let s = t.attach(&["attach", "-t", "act"]);
     s.wait_for("attached", |text| text.contains("act"));
     let attached = time("#{session_activity}");
     assert!(attached > created, "{attached} after {created}");
+    // Attaching also sets when it was last attached.
+    assert_eq!(time("#{session_last_attached}"), attached);
     std::thread::sleep(Duration::from_millis(1100));
     s.send(b"x");
     t.wait_run(

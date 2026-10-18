@@ -110,8 +110,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `session_many_attached`, `server_sessions`, `history_limit`, `cursor_flag`,
   `keypad_flag`, `keypad_cursor_flag`, `pane_start_command` (the command as
   given, quoted as tmux quotes it), `pane_start_path`, and the times
-  `start_time`, `session_created`, `session_activity` and `window_activity`
-  (seconds since the epoch), as tmux's.
+  `start_time`, `session_created`, `session_activity`, `session_last_attached`
+  (empty until a client attaches) and `window_activity` (seconds since the
+  epoch), as tmux's.
 - **Layout strings**, as tmux's: `#{window_layout}` and
   `#{window_visible_layout}` write the window's layout as tmux does (checksum
   and all), and `select-layout` takes such a string back, laying its cells over

@@ -189,3 +189,10 @@ checks = [
   { command = "display -p -t o:1.0 '#{pane_start_path}'", expect = "/tmp" },
   { command = "display -p -t o:1.1 '#{pane_start_path}'", expect = "/usr" },
 ]
+
+[[cases]]
+name = "session_last_attached_is_empty_until_a_client_attaches"
+steps = [{ run = "new-session -d -s never" }]
+checks = [
+  { command = "display -p -t never '[#{session_last_attached}][#{t:session_last_attached}]'", expect = "[][]" },
+]
