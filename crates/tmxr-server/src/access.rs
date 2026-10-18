@@ -74,11 +74,11 @@ fn is_privileged(id: &str) -> bool {
     }
 }
 
-pub use sys::{current_user, lookup_user, peer_user};
+pub use sys::{current_user, lookup_user, peer_user, user_name};
 
 #[cfg(unix)]
 mod sys {
-    use std::ffi::CString;
+    use std::ffi::{CStr, CString};
     use std::io;
 
     use interprocess::local_socket::Stream;
@@ -103,27 +103,59 @@ mod sys {
 
     /// The uid of the user called `name`.
     pub fn lookup_user(name: &str) -> io::Result<UserId> {
-        /// The most `getpwnam_r` is given for the entry's strings.
-        const BUF_LIMIT: usize = 1 << 20;
         let cname =
             CString::new(name).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+        // SAFETY: cname is NUL-terminated and outlives the call; the other
+        // arguments are passed through as `passwd` gives them.
+        passwd(
+            |pwd, buf, len, found| unsafe {
+                libc::getpwnam_r(cname.as_ptr(), pwd, buf, len, found)
+            },
+            |pwd| pwd.pw_uid.to_string(),
+        )
+    }
+
+    /// The name of the user whose uid is `id`.
+    pub fn user_name(id: &str) -> io::Result<String> {
+        let uid: libc::uid_t = id
+            .parse()
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+        passwd(
+            // SAFETY: the arguments are passed through as `passwd` gives them.
+            |pwd, buf, len, found| unsafe { libc::getpwuid_r(uid, pwd, buf, len, found) },
+            // SAFETY: on success pw_name is a NUL-terminated string in the
+            // buffer, which `passwd` keeps alive while this reads it.
+            |pwd| {
+                unsafe { CStr::from_ptr(pwd.pw_name) }
+                    .to_string_lossy()
+                    .into_owned()
+            },
+        )
+    }
+
+    /// One `getpw*_r` call, `get`, retried with a larger buffer while the
+    /// entry does not fit, and `read` applied to the entry it finds. `get`
+    /// receives the entry to fill, the buffer for its strings and that
+    /// buffer's length, and where to store the entry found.
+    fn passwd<T>(
+        get: impl Fn(*mut libc::passwd, *mut libc::c_char, usize, *mut *mut libc::passwd) -> libc::c_int,
+        read: impl FnOnce(&libc::passwd) -> T,
+    ) -> io::Result<T> {
+        /// The most a `getpw*_r` call is given for the entry's strings.
+        const BUF_LIMIT: usize = 1 << 20;
         let mut buf = vec![0u8; 1024];
         loop {
             // SAFETY: passwd is plain data, valid when zeroed.
             let mut pwd: libc::passwd = unsafe { std::mem::zeroed() };
             let mut found: *mut libc::passwd = std::ptr::null_mut();
-            // SAFETY: cname is NUL-terminated; pwd and found are live locals;
-            // buf is writable for buf.len() bytes and outlives the call, and
-            // pwd's strings (which point into it) are not used.
-            let rc = unsafe {
-                libc::getpwnam_r(
-                    cname.as_ptr(),
-                    &raw mut pwd,
-                    buf.as_mut_ptr().cast(),
-                    buf.len(),
-                    &raw mut found,
-                )
-            };
+            // pwd and found are live locals; buf is writable for buf.len()
+            // bytes and outlives both the call and `read`.
+            let rc = get(
+                &raw mut pwd,
+                buf.as_mut_ptr().cast(),
+                buf.len(),
+                &raw mut found,
+            );
             if rc == libc::ERANGE && buf.len() < BUF_LIMIT {
                 buf.resize(buf.len() * 2, 0);
                 continue;
@@ -134,7 +166,7 @@ mod sys {
             if found.is_null() {
                 return Err(io::Error::new(io::ErrorKind::NotFound, "no such user"));
             }
-            return Ok(pwd.pw_uid.to_string());
+            return Ok(read(&pwd));
         }
     }
 }
@@ -147,10 +179,12 @@ mod sys {
     use interprocess::local_socket::Stream;
     use interprocess::local_socket::traits::StreamCommon as _;
     use windows_sys::Win32::Foundation::{HANDLE, LocalFree};
-    use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
+    use windows_sys::Win32::Security::Authorization::{
+        ConvertSidToStringSidW, ConvertStringSidToSidW,
+    };
     use windows_sys::Win32::Security::{
-        GetTokenInformation, LookupAccountNameW, PSID, SID_NAME_USE, SidTypeUser, TOKEN_QUERY,
-        TOKEN_USER, TokenUser,
+        GetTokenInformation, LookupAccountNameW, LookupAccountSidW, PSID, SID_NAME_USE,
+        SidTypeUser, TOKEN_QUERY, TOKEN_USER, TokenUser,
     };
     use windows_sys::Win32::System::Threading::{
         GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
@@ -242,6 +276,64 @@ mod sys {
         Ok(text)
     }
 
+    /// The account name (without its domain) of the user whose SID string is
+    /// `id`.
+    pub fn user_name(id: &str) -> io::Result<String> {
+        let wide: Vec<u16> = id.encode_utf16().chain(std::iter::once(0)).collect();
+        let mut sid: PSID = std::ptr::null_mut();
+        // SAFETY: wide is NUL-terminated and sid a live out-pointer.
+        if unsafe { ConvertStringSidToSidW(wide.as_ptr(), &raw mut sid) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let name = account_name(sid);
+        // SAFETY: ConvertStringSidToSidW allocated sid, to be freed with
+        // LocalFree; nothing uses it after this.
+        unsafe { LocalFree(sid.cast()) };
+        name
+    }
+
+    /// The account name `sid` (a valid SID) belongs to.
+    fn account_name(sid: PSID) -> io::Result<String> {
+        let (mut name_len, mut dom_len) = (0u32, 0u32);
+        let mut kind: SID_NAME_USE = 0;
+        // SAFETY: sid is valid; null buffers with zero lengths only ask for
+        // the sizes needed, written to the live locals.
+        unsafe {
+            LookupAccountSidW(
+                std::ptr::null(),
+                sid,
+                std::ptr::null_mut(),
+                &raw mut name_len,
+                std::ptr::null_mut(),
+                &raw mut dom_len,
+                &raw mut kind,
+            )
+        };
+        if name_len == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let mut name = vec![0u16; name_len as usize];
+        let mut domain = vec![0u16; dom_len as usize];
+        // SAFETY: the buffers have the sizes the first call asked for.
+        if unsafe {
+            LookupAccountSidW(
+                std::ptr::null(),
+                sid,
+                name.as_mut_ptr(),
+                &raw mut name_len,
+                domain.as_mut_ptr(),
+                &raw mut dom_len,
+                &raw mut kind,
+            )
+        } == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+        // On success name_len counts the name's characters, not its NUL.
+        name.truncate(name_len as usize);
+        Ok(String::from_utf16_lossy(&name))
+    }
+
     /// The SID of the user account called `name` (`user` or `DOMAIN\user`).
     pub fn lookup_user(name: &str) -> io::Result<UserId> {
         let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
@@ -329,5 +421,14 @@ mod tests {
             lookup_user("no-such-user-tmxr").unwrap_err().kind(),
             io::ErrorKind::NotFound
         );
+    }
+
+    #[test]
+    fn this_users_name_finds_it_again() {
+        let me = current_user().unwrap();
+        let name = user_name(&me).unwrap();
+        assert!(!name.is_empty());
+        assert_eq!(lookup_user(&name).unwrap(), me, "{name}");
+        assert!(user_name("not an id").is_err());
     }
 }

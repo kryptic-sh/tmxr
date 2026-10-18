@@ -603,6 +603,10 @@ fn client_variables_tell_its_times_and_last_session() {
     };
     assert_eq!(lists("second"), format!("[{name}] 1 [{name}]"));
     assert_eq!(lists("first"), "[] 0 []");
+    // The client runs as the user the server does.
+    let server_user = t.run(&["display-message", "-p", "#{uid} #{user}"]);
+    assert!(!server_user.trim().ends_with(' '), "{server_user:?}");
+    assert_eq!(client("#{client_uid} #{client_user}"), server_user.trim());
 }
 
 #[test]

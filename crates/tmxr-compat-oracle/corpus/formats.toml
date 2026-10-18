@@ -261,3 +261,6 @@ checks = [
   { format = "#{mouse_any_flag} #{mouse_standard_flag} #{mouse_button_flag} #{mouse_all_flag} #{mouse_sgr_flag}" },
 ]
 
+[[cases]]
+name = "uid_and_user_are_the_servers"
+checks = [{ format = "#{uid} #{user}" }]

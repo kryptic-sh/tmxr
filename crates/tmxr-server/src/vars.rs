@@ -205,6 +205,14 @@ impl Context for Vars<'_> {
             "client_readonly" => flag(srv.clients.get(&self.client?)?.read_only()),
             "client_width" => att?.cols.to_string(),
             "client_created" => epoch(srv.clients.get(&self.client?)?.created),
+            // The users the server and the client run as: a uid on Unix, a
+            // SID on Windows, and that user's name.
+            "uid" => srv.owner.clone(),
+            "user" => crate::access::user_name(&srv.owner).ok()?,
+            "client_uid" => srv.clients.get(&self.client?)?.user.clone(),
+            "client_user" => {
+                crate::access::user_name(&srv.clients.get(&self.client?)?.user).ok()?
+            }
             "client_pid" => srv
                 .clients
                 .get(&self.client?)?
