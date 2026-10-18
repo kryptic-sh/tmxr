@@ -15,7 +15,7 @@ pub use codec::{ProtoError, read_msg, write_msg};
 
 /// Bumped on any change to a type in this module. Client and server refuse to
 /// talk across a mismatch rather than mis-decode each other.
-pub const PROTOCOL_VERSION: u32 = 5;
+pub const PROTOCOL_VERSION: u32 = 6;
 
 /// First message a client sends.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -25,6 +25,8 @@ pub struct Hello {
     pub version: String,
     /// The client's working directory: the default `-c` for new sessions.
     pub cwd: String,
+    /// The client's process id (`#{client_pid}`).
+    pub pid: u32,
     /// Environment variables the server may copy into new panes
     /// (`update-environment`), plus `TMXR_PANE` for command clients.
     pub env: Vec<(String, String)>,

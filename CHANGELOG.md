@@ -8,6 +8,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Breaking
 
+- **The client-server protocol is now 6** (the client sends its process id, for
+  `#{client_pid}`): after upgrading, a running server must be restarted
+  (`tmxr kill-server`); the client says so if it meets one.
 - **`break-pane -t` is the window the pane becomes**, as tmux's, not the pane to
   break: that is `-s` now (the current pane without it). `-t` takes an index
   (`-t :5`), `-a` / `-b` place it next to the target window, and `-n` names it
@@ -110,9 +113,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `session_many_attached`, `server_sessions`, `history_limit`, `cursor_flag`,
   `keypad_flag`, `keypad_cursor_flag`, `pane_start_command` (the command as
   given, quoted as tmux quotes it), `pane_start_path`, `client_last_session`,
-  and the times `start_time`, `session_created`, `session_activity`,
-  `session_last_attached` (empty until a client attaches), `window_activity`,
-  `client_created` and `client_activity` (seconds since the epoch), as tmux's.
+  `client_pid`, and the times `start_time`, `session_created`,
+  `session_activity`, `session_last_attached` (empty until a client attaches),
+  `window_activity`, `client_created` and `client_activity` (seconds since the
+  epoch), as tmux's.
 - **Layout strings**, as tmux's: `#{window_layout}` and
   `#{window_visible_layout}` write the window's layout as tmux does (checksum
   and all), and `select-layout` takes such a string back, laying its cells over

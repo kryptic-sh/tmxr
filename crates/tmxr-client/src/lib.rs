@@ -127,6 +127,7 @@ fn hello() -> Hello {
         cwd: std::env::current_dir()
             .map(|d| d.display().to_string())
             .unwrap_or_default(),
+        pid: std::process::id(),
         env: tmxr_term::env::vars(),
         terminal,
     }

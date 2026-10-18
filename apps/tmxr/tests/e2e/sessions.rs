@@ -587,6 +587,10 @@ fn client_variables_tell_its_times_and_last_session() {
     let times =
         client("#{e|>|:#{client_created},1700000000} #{e|>=:#{client_activity},#{client_created}}");
     assert_eq!(times, "1 1");
+    assert_eq!(
+        client("#{client_pid}"),
+        s.child.process_id().unwrap().to_string()
+    );
 }
 
 #[test]

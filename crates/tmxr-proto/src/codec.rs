@@ -70,6 +70,7 @@ mod tests {
                 protocol: PROTOCOL_VERSION,
                 version: "0.1.0".into(),
                 cwd: "/home/u".into(),
+                pid: 4242,
                 env: vec![("TERM".into(), "xterm-256color".into())],
                 terminal: Some(TerminalInfo {
                     cols: 80,
@@ -156,7 +157,7 @@ mod tests {
         for m in sample_server() {
             write_msg(&mut buf, &m).unwrap();
         }
-        assert_eq!(PROTOCOL_VERSION, 5, "update the golden digest below too");
+        assert_eq!(PROTOCOL_VERSION, 6, "update the golden digest below too");
         assert_eq!(
             fnv1a(&buf),
             GOLDEN,
@@ -164,7 +165,7 @@ mod tests {
         );
     }
 
-    const GOLDEN: u64 = 9_638_520_815_211_193_956;
+    const GOLDEN: u64 = 12_098_653_689_586_821_493;
 
     /// FNV-1a 64-bit (http://www.isthe.com/chongo/tech/comp/fnv/), used only to
     /// pin the golden bytes in a readable constant.
