@@ -285,3 +285,24 @@ checks = [
   { command = "display -p -t o:1 '#{e|>|:#{pane_dead_time},1700000000} #{e|>=:#{pane_dead_time},#{start_time}} #{pane_dead_status}'" },
   { command = "display -p -t o:0 '[#{pane_dead_time}]'" },
 ]
+
+[[cases]]
+name = "cursor_character_is_under_the_cursor_letter"
+program = 'printf "abc\b"; exec sleep 1000'
+steps = [{ sleep = 0.5 }]
+checks = [{ format = "[#{cursor_character}]" }]
+
+
+[[cases]]
+name = "cursor_character_is_under_the_cursor_empty"
+program = 'printf "abc"; exec sleep 1000'
+steps = [{ sleep = 0.5 }]
+checks = [{ format = "[#{cursor_character}]" }]
+
+
+[[cases]]
+name = "cursor_character_is_under_the_cursor_wide_half"
+program = 'printf "\346\274\242\b"; exec sleep 1000'
+steps = [{ sleep = 0.5 }]
+checks = [{ format = "[#{cursor_character}]" }]
+

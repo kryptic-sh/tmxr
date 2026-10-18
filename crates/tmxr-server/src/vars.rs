@@ -461,6 +461,20 @@ impl Context for Vars<'_> {
             "pane_at_bottom" => flag(pane?.rect.y + pane?.rect.h >= window?.rows),
             "cursor_x" => pane?.emu.screen().cursor_position().1.to_string(),
             "cursor_y" => pane?.emu.screen().cursor_position().0.to_string(),
+            // The character under the cursor: a space for an empty cell, and
+            // nothing for the second half of a wide one, as tmux's.
+            "cursor_character" => {
+                let screen = pane?.emu.screen();
+                let (row, col) = screen.cursor_position();
+                let cell = screen.cell(row, col)?;
+                if cell.is_wide_continuation() {
+                    String::new()
+                } else if cell.has_contents() {
+                    cell.contents().to_owned()
+                } else {
+                    " ".to_owned()
+                }
+            }
             _ => return None,
         })
     }

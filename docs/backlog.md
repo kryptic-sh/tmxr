@@ -443,9 +443,12 @@ table. What has been verified, and how:
     format `Context` has only `get`, so it needs a way to ask the server), and
     `E` / `T` / `q` / `m` chained with others by `;` (an unknown modifier
     expands to nothing); many of tmux's format variables (compare tmux's
-    `format_table` with `vars.rs` for the list); styles `align=` `fill=` `list=`
-    `range=` `push-default` / `pop-default`, strikethrough, blink, overline,
-    curly and coloured underlines.
+    `format_table` with `vars.rs` for the list; `origin_flag`, `wrap_flag`,
+    `insert_flag`, `scroll_region_*`, `alternate_saved_*`, `pane_tabs` and
+    `cursor_shape` / `cursor_colour` need terminal state the `vt100` crate does
+    not expose); styles `align=` `fill=` `list=` `range=` `push-default` /
+    `pop-default`, strikethrough, blink, overline, curly and coloured
+    underlines.
   - Options: the status line is one row at the bottom (`STATUS_ROWS`): no
     `status off` / `2`–`5`, `status-position`, `status-format`; no
     `window-status-activity-style` / `-bell-style` (tmux's default `reverse`
