@@ -442,10 +442,12 @@ table. What has been verified, and how:
     being a new dependency), `c:` `C:` `R:` `t:`, and `N:` (whether a window or
     session name exists: the format `Context` has only `get`, so it needs a way
     to ask the server), and `E` / `T` / `q` / `m` chained with others by `;` (an
-    unknown modifier expands to nothing); roughly 110 of tmux's format variables
-    (`session_created`, `pane_start_command`, `client_pid`, `start_time`, ...);
-    styles `align=` `fill=` `list=` `range=` `push-default` / `pop-default`,
-    strikethrough, blink, overline, curly and coloured underlines.
+    unknown modifier expands to nothing); many of tmux's format variables
+    (`session_created`, `pane_start_command`, `client_pid`, `start_time`,
+    `window_linked_sessions` ...; compare tmux's `format_table` with `vars.rs`
+    for the list); styles `align=` `fill=` `list=` `range=` `push-default` /
+    `pop-default`, strikethrough, blink, overline, curly and coloured
+    underlines.
   - Options: the status line is one row at the bottom (`STATUS_ROWS`): no
     `status off` / `2`–`5`, `status-position`, `status-format`; no
     `window-status-activity-style` / `-bell-style` (tmux's default `reverse`
@@ -520,6 +522,10 @@ table. What has been verified, and how:
   signalling a process group the session belongs to (`detach-client -P` sends
   SIGHUP to client parents). Workaround: log to a file in `$HOME` and read it
   from a new session.
+- **tmux's `link-window` and `move-window` drop the mark** of a pane in the
+  window they place (2026-10-18, tmux 3.6): `server_link_window` moves
+  `marked_pane.wl` to the new link but keeps `marked_pane.s`, so the mark no
+  longer validates. tmxr keeps the mark; not copied, as it reads as a tmux bug.
 - **Oracle checks must be free of side effects**: `compare` in
   `tmxr-compat-oracle` reads a check again until both sides agree, so a check
   that creates something (`new-window -P`) runs twice on a mismatch and fails

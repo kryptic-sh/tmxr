@@ -73,3 +73,25 @@ checks = [
   { command = "display -p -l '#{session_name}'", expect = "#{session_name}" },
   { command = "display -p -F '#{session_name}!'", expect = "o!" },
 ]
+
+[[cases]]
+name = "window_session_and_pane_variables_are_tmuxs"
+steps = [
+  { run = "set -g history-limit 3000" },
+  { run = "new-window -d -t o:3" },
+  { run = "new-window -d -t o:5" },
+  { run = "select-window -t o:3" },
+  { run = "split-window -t o:3" },
+  { run = "new-session -d -s other" },
+  { run = "link-window -s o:3 -t other:9" },
+  { run = "select-window -t other:9" },
+  # Marked after linking: tmux's link-window leaves a mark it moves invalid.
+  { run = "select-pane -m -t o:3.1" },
+]
+checks = [
+  { command = "display -p -t o:3 '#{active_window_index} #{last_window_index} #{window_start_flag} #{window_end_flag} #{window_active_sessions} #{window_marked_flag} #{session_marked} #{server_sessions} #{session_many_attached}'" },
+  { command = "display -p -t o:0 '#{window_start_flag} #{window_end_flag} #{window_marked_flag} #{window_active_sessions}'" },
+  { command = "display -p -t o:5 '#{window_start_flag} #{window_end_flag}'" },
+  { command = "display -p -t other '#{session_marked} #{active_window_index} #{last_window_index}'" },
+  { command = "display -p -t o:3.1 '#{history_limit} #{cursor_flag} #{keypad_flag} #{keypad_cursor_flag}'" },
+]

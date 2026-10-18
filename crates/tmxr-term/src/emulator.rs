@@ -249,6 +249,11 @@ impl Emulator {
         self.history
     }
 
+    /// The most lines of history kept (tmux's `#{history_limit}`).
+    pub fn history_limit(&self) -> usize {
+        self.scrollback
+    }
+
     fn count_history(&mut self) {
         self.history = history_lines(self.parser.screen_mut());
     }

@@ -131,6 +131,19 @@ impl Context for Vars<'_> {
             .client
             .and_then(|c| srv.clients.get(&c))
             .and_then(|c| c.att.as_ref());
+        let attached = |sid: SessionId| {
+            srv.clients
+                .values()
+                .filter(|c| c.att.as_ref().is_some_and(|a| a.session == sid))
+                .count()
+        };
+        // The session the marked pane counts as marked in. tmux keeps the
+        // one it was marked in (marked_pane.s); tmxr keeps only the pane, so
+        // the first session holding its window.
+        let marked_session = || {
+            let window = srv.panes.get(&srv.marked_pane()?)?.window;
+            srv.session_of_window(window)
+        };
         Some(match name {
             "host" => srv.host.clone(),
             "host_short" => srv.host.split('.').next().unwrap_or(&srv.host).to_owned(),
@@ -157,19 +170,36 @@ impl Context for Vars<'_> {
             "session_name" => session?.name.clone(),
             "session_id" => format!("${}", session?.id),
             "session_windows" => session?.windows.len().to_string(),
-            "session_attached" => {
-                let sid = session?.id;
-                srv.clients
-                    .values()
-                    .filter(|c| c.att.as_ref().is_some_and(|a| a.session == sid))
-                    .count()
-                    .to_string()
-            }
+            "session_attached" => attached(session?.id).to_string(),
+            "session_many_attached" => flag(attached(session?.id) > 1),
+            "session_marked" => flag(marked_session() == Some(session?.id)),
+            "server_sessions" => srv.sessions.len().to_string(),
+            // As tmux's: the current window's index, and the highest.
+            "active_window_index" => session?.current.to_string(),
+            "last_window_index" => session?.windows.keys().next_back()?.to_string(),
             "window_index" => session?.index_of(window?.id)?.to_string(),
             "window_id" => format!("@{}", window?.id),
             "window_name" => window?.name.clone(),
             "window_panes" => window?.panes().len().to_string(),
             "window_linked" => flag(srv.sessions_of_window(window?.id).len() > 1),
+            "window_start_flag" => {
+                flag(session?.windows.keys().next() == session?.index_of(window?.id).as_ref())
+            }
+            "window_end_flag" => {
+                flag(session?.windows.keys().next_back() == session?.index_of(window?.id).as_ref())
+            }
+            // The sessions showing it as their current window.
+            "window_active_sessions" => {
+                let wid = window?.id;
+                srv.sessions
+                    .values()
+                    .filter(|s| s.current_window() == Some(wid))
+                    .count()
+                    .to_string()
+            }
+            "window_marked_flag" => {
+                flag(srv.window_is_marked(window?.id) && marked_session() == Some(session?.id))
+            }
             "window_width" => window?.cols.to_string(),
             "window_height" => window?.rows.to_string(),
             "window_zoomed_flag" => flag(window?.zoomed),
@@ -208,6 +238,10 @@ impl Context for Vars<'_> {
             }
             "pane_synchronized" => flag(srv.pane_options(pane?.id).synchronize_panes),
             "pane_dead" => flag(pane?.dead.is_some()),
+            "history_limit" => pane?.emu.history_limit().to_string(),
+            "cursor_flag" => flag(!pane?.emu.screen().hide_cursor()),
+            "keypad_flag" => flag(pane?.emu.screen().application_keypad()),
+            "keypad_cursor_flag" => flag(pane?.emu.screen().application_cursor()),
             "pane_input_off" => flag(pane?.input_off),
             "pane_dead_status" => pane?.dead.flatten()?.to_string(),
             "pane_marked" => flag(srv.marked_pane() == Some(pane?.id)),
