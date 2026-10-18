@@ -3042,6 +3042,24 @@ fn clock_mode_style_twelve_shows_am_or_pm() {
 }
 
 #[test]
+fn source_file_q_and_a_missing_file_leave_the_config_alone() {
+    let t = Tmxr::new("sourcefile");
+    t.run(&["new-session", "-d", "-s", "sf"]);
+    let missing = t.dir.path().join("no-such.toml");
+    let missing = missing.to_str().unwrap();
+    // -q: a missing file is no error.
+    assert!(t.output(&["source-file", "-q", missing]).status.success());
+    // Without -q it is, and the config to reload stays the old one.
+    assert!(!t.output(&["source-file", missing]).status.success());
+    let reload = t.output(&["source-file"]);
+    assert!(
+        reload.status.success(),
+        "{}",
+        String::from_utf8_lossy(&reload.stderr)
+    );
+}
+
+#[test]
 fn confirm_before_c_and_y_choose_what_confirms() {
     let t = Tmxr::new("confirmc");
     let s = t.attach(&["new", "-s", "cf"]);

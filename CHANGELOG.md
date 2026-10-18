@@ -167,6 +167,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`source-file -q`** was accepted and ignored; a missing file is now no error
+  with it, as tmux's. And a file that does not load no longer becomes the config
+  to reload: a plain `source-file` after it reloads the old one.
 - **`resize-pane -x` / `-y`** were accepted and ignored; they now set the pane's
   width or height, in cells or as a percentage of the window's (`-x 25%`), as
   tmux's `layout_resize_pane_to`.

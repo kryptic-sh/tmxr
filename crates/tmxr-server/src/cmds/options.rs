@@ -50,7 +50,15 @@ pub(super) fn run(
         }
         "source-file" => {
             if let Some(path) = pos.first() {
-                srv.cfg_path = Some(PathBuf::from(path));
+                let path = PathBuf::from(path);
+                // -q: a file that is not there is no error, as tmux's.
+                if a.has('q') && !path.exists() {
+                    return Ok(true);
+                }
+                // One that does not load changes nothing, the config path
+                // included, so the next reload still finds the old file.
+                tmxr_config::load(Some(&path)).map_err(|e| e.to_string())?;
+                srv.cfg_path = Some(path);
             }
             srv.reload_config()?;
             if let Some(c) = attached_client(srv, ctx) {
