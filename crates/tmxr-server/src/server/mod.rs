@@ -648,17 +648,38 @@ impl Server {
             b.automatic = false;
             return;
         }
-        let automatic = name.is_none();
-        let name = name.unwrap_or_else(|| {
-            let n = format!("buffer{}", self.next_buffer);
-            self.next_buffer += 1;
-            n
-        });
+        let Some(name) = name else {
+            self.add_buffer_prefixed(data, "buffer");
+            return;
+        };
         self.buffers.push_front(Buffer {
             name,
             data,
-            automatic,
+            automatic: false,
         });
+        self.trim_buffers();
+    }
+
+    /// Add an automatic buffer named `prefix` and the next buffer number,
+    /// skipping names already taken, as tmux's paste_add.
+    pub fn add_buffer_prefixed(&mut self, data: String, prefix: &str) {
+        let name = loop {
+            let n = format!("{prefix}{}", self.next_buffer);
+            self.next_buffer += 1;
+            if !self.buffers.iter().any(|b| b.name == n) {
+                break n;
+            }
+        };
+        self.buffers.push_front(Buffer {
+            name,
+            data,
+            automatic: true,
+        });
+        self.trim_buffers();
+    }
+
+    /// Drop the oldest automatic buffers beyond `buffer-limit`.
+    fn trim_buffers(&mut self) {
         while self.buffers.iter().filter(|b| b.automatic).count() > self.cfg.buffer_limit {
             if let Some(oldest) = self.buffers.iter().rposition(|b| b.automatic) {
                 self.buffers.remove(oldest);

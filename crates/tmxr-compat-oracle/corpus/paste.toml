@@ -451,3 +451,29 @@ steps = [
 checks = [
   { command = "show-buffer" },
 ]
+
+[[cases]]
+name = "copy_commands_name_their_buffer_by_prefix"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:1 'echo abcdef; echo ghijkl; echo mnopqr; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:1" },
+  { run = "send-keys -t o:1 -X history-top" },
+  { run = "send-keys -t o:1 -X begin-selection" },
+  { run = "send-keys -t o:1 -X cursor-right" },
+  { run = "send-keys -t o:1 -X copy-selection mine" },
+  { run = "send-keys -t o:1 -X begin-selection" },
+  { run = "send-keys -t o:1 -X cursor-right" },
+  { run = "send-keys -t o:1 -X copy-selection -P other" },
+  { run = "send-keys -t o:1 -X begin-selection" },
+  { run = "send-keys -t o:1 -X cursor-right" },
+  { run = "send-keys -t o:1 -X copy-pipe 'cat >/dev/null' '#{session_name}x'" },
+  { run = "send-keys -t o:1 -X begin-selection" },
+  { run = "send-keys -t o:1 -X cursor-right" },
+  { run = "send-keys -t o:1 -X copy-selection" },
+]
+checks = [
+  { command = "list-buffers -F '#{buffer_name}=#{buffer_sample}'" },
+]

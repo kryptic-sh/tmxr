@@ -214,7 +214,7 @@ fn client_size(srv: &Server, ctx: &Ctx) -> (u16, u16) {
     (cols.max(2), rows.saturating_sub(STATUS_ROWS).max(2))
 }
 
-fn expand_for(srv: &Server, ctx: &Ctx, pane: Option<PaneId>, s: &str) -> String {
+pub(crate) fn expand_for(srv: &Server, ctx: &Ctx, pane: Option<PaneId>, s: &str) -> String {
     expand_with(
         srv,
         ctx,

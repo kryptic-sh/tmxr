@@ -50,10 +50,58 @@ fn leave(srv: &mut Server, pane: PaneId) {
     }
 }
 
+/// A copying command's arguments, as tmux's `CP` flags and positionals:
+/// `-P` adds no buffer, `-C` sets no clipboard; then copy-pipe's command,
+/// and the prefix of the buffer's name.
+struct CopyArgs<'a> {
+    no_buffer: bool,
+    no_clipboard: bool,
+    command: Option<&'a str>,
+    prefix: Option<&'a str>,
+}
+
+impl<'a> CopyArgs<'a> {
+    fn parse(args: &'a [String], pipe: bool) -> Self {
+        let mut copy = Self {
+            no_buffer: false,
+            no_clipboard: false,
+            command: None,
+            prefix: None,
+        };
+        let mut rest = args.iter().map(String::as_str);
+        let mut positional = Vec::new();
+        for arg in rest.by_ref() {
+            if arg == "--" {
+                break;
+            }
+            match arg
+                .strip_prefix('-')
+                .filter(|f| !f.is_empty() && f.chars().all(|c| c == 'P' || c == 'C'))
+            {
+                Some(flags) => {
+                    copy.no_buffer |= flags.contains('P');
+                    copy.no_clipboard |= flags.contains('C');
+                }
+                None => {
+                    positional.push(arg);
+                    break;
+                }
+            }
+        }
+        positional.extend(rest);
+        let mut positional = positional.into_iter();
+        if pipe {
+            copy.command = positional.next();
+        }
+        copy.prefix = positional.next();
+        copy
+    }
+}
+
 /// `send-keys -X <name>` in a copy-mode pane.
 pub fn command(
     srv: &mut Server,
-    _ctx: &Ctx,
+    ctx: &Ctx,
     pane: PaneId,
     name: &str,
     args: &[String],
@@ -142,18 +190,24 @@ pub fn command(
                 if name.contains("no-newlines") {
                     text = text.replace(['\r', '\n'], "");
                 }
+                let copy = CopyArgs::parse(args, name.starts_with("copy-pipe"));
+                let expand = |s: &str| crate::cmds::expand_for(srv, ctx, Some(pane), s);
                 // copy-pipe also hands the text to a command: its argument,
                 // else the copy-command option.
                 let pipe = name.starts_with("copy-pipe").then(|| {
-                    args.first()
-                        .cloned()
-                        .unwrap_or_else(|| srv.cfg.copy_command.clone())
+                    copy.command
+                        .map_or_else(|| srv.cfg.copy_command.clone(), expand)
                 });
+                let prefix = copy.prefix.map(expand);
                 if let Some(cmd) = pipe.filter(|c| !c.is_empty()) {
                     crate::server::pipe_to_shell(srv, pane, cmd, text.clone());
                 }
-                srv.set_clipboard(&text);
-                srv.add_buffer(text, None);
+                if !copy.no_clipboard {
+                    srv.set_clipboard(&text);
+                }
+                if !copy.no_buffer {
+                    srv.add_buffer_prefixed(text, prefix.as_deref().unwrap_or("buffer"));
+                }
             }
             if cancel {
                 leave(srv, pane);
