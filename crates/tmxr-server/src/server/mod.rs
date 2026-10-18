@@ -141,6 +141,9 @@ pub struct Server {
     pub started: std::time::SystemTime,
     pub cfg: Config,
     pub cfg_path: Option<PathBuf>,
+    /// The file the config was last read from, none when it is the defaults
+    /// alone (`#{config_files}`).
+    pub cfg_file: Option<PathBuf>,
     pub events: Sender<Event>,
     pub sessions: BTreeMap<SessionId, Session>,
     pub windows: BTreeMap<WindowId, Window>,
@@ -247,6 +250,7 @@ impl Server {
             started: std::time::SystemTime::now(),
             cfg,
             cfg_path,
+            cfg_file: None,
             events,
             sessions: BTreeMap::new(),
             windows: BTreeMap::new(),
@@ -938,7 +942,9 @@ impl Server {
     }
 
     pub fn reload_config(&mut self) -> Result<(), String> {
-        let (cfg, _) = tmxr_config::load(self.cfg_path.as_deref()).map_err(|e| e.to_string())?;
+        let (cfg, source) =
+            tmxr_config::load(self.cfg_path.as_deref()).map_err(|e| e.to_string())?;
+        self.cfg_file = config_file(source);
         let (keys, mut errors) = KeyTables::from_config(&cfg);
         self.navigator = match navigator_regex(&cfg.navigator.pattern) {
             Ok(re) => Some(re),
@@ -984,6 +990,14 @@ pub fn bare_command(cwd: &str) -> Vec<String> {
 pub enum SplitSize {
     Cells(u16),
     Percent(u16),
+}
+
+/// The file a config was read from, none for the defaults alone.
+pub(crate) fn config_file(source: tmxr_config::ConfigSource) -> Option<PathBuf> {
+    match source {
+        tmxr_config::ConfigSource::File(path) => Some(path),
+        tmxr_config::ConfigSource::Defaults => None,
+    }
 }
 
 #[cfg(test)]

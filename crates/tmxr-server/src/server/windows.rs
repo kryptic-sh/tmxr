@@ -18,6 +18,11 @@ impl Server {
     }
 
     /// The first unused numeric session name ("0", "1", …), as tmux does.
+    /// The id the next session made will have.
+    pub fn next_session_id(&self) -> SessionId {
+        self.next_session
+    }
+
     pub fn next_session_name(&self) -> String {
         (0..)
             .map(|n: u32| n.to_string())

@@ -72,9 +72,9 @@ pub fn close_inherited_fds() {
 /// Bind `endpoint` and serve until the last session exits or `kill-server`.
 /// `config` is the `-f` path, if any.
 pub fn run(endpoint: Endpoint, config: Option<PathBuf>) -> std::io::Result<()> {
-    let (cfg, errors) = match tmxr_config::load(config.as_deref()) {
-        Ok((cfg, _)) => (cfg, None),
-        Err(e) => (tmxr_config::defaults(), Some(e.to_string())),
+    let (cfg, cfg_file, errors) = match tmxr_config::load(config.as_deref()) {
+        Ok((cfg, source)) => (cfg, server::config_file(source), None),
+        Err(e) => (tmxr_config::defaults(), None, Some(e.to_string())),
     };
     let socket_access = match cfg.socket_access.as_str() {
         "users" => tmxr_proto::socket::Access::Users,
@@ -91,6 +91,7 @@ pub fn run(endpoint: Endpoint, config: Option<PathBuf>) -> std::io::Result<()> {
     let (tx, rx) = mpsc::channel();
     let mut srv = Server::new(endpoint, cfg, config, tx.clone());
     srv.owner.clone_from(&owner);
+    srv.cfg_file = cfg_file;
     srv.socket_access = socket_access;
     let acl = std::sync::Arc::clone(&srv.acl);
     if let Some(e) = errors {

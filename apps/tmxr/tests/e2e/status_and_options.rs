@@ -549,6 +549,13 @@ fn source_file_q_and_a_missing_file_leave_the_config_alone() {
         "{}",
         String::from_utf8_lossy(&reload.stderr)
     );
+    let config_files = || t.run(&["display-message", "-p", "#{config_files}"]);
+    assert_eq!(config_files().trim(), t.config.display().to_string());
+    // A file that does load becomes the config's file.
+    let other = t.dir.path().join("other.toml");
+    std::fs::write(&other, "").unwrap();
+    t.run(&["source-file", other.to_str().unwrap()]);
+    assert_eq!(config_files().trim(), other.display().to_string());
 }
 
 #[test]

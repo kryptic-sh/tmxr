@@ -197,6 +197,12 @@ impl Context for Vars<'_> {
             "pid" => srv.pid.to_string(),
             "version" => env!("CARGO_PKG_VERSION").to_owned(),
             "start_time" => epoch(srv.started),
+            "config_files" => srv
+                .cfg_file
+                .as_ref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_default(),
+            "next_session_id" => format!("${}", srv.next_session_id()),
             "socket_path" => srv.endpoint.path().display().to_string(),
             "client_prefix" => flag(att.is_some_and(|a| a.table == "prefix")),
             "client_key_table" => att.map(|a| a.table.clone())?,
