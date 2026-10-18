@@ -72,7 +72,8 @@ pub(super) fn run(
             let newline = if a.has('r') { "\n" } else { "\r" };
             let sep = a.value('s').unwrap_or(newline);
             let text = srv.buffers[idx].data.replace('\n', sep);
-            if let Some(p) = srv.panes.get_mut(&pid) {
+            // Not to a pane with its input off, as tmux's.
+            if let Some(p) = srv.panes.get_mut(&pid).filter(|p| !p.input_off) {
                 let bytes = if a.has('p') {
                     tmxr_term::encode_paste(&text, p.emu.input_modes())
                 } else {

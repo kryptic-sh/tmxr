@@ -64,6 +64,11 @@ pub(super) fn run(
                 srv.mark_window_dirty(w);
             }
         }
+        "select-pane" if a.has('d') || a.has('e') => {
+            let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
+            // -e wins, as tmux's.
+            set_input_off(srv, pid, !a.has('e'));
+        }
         "select-pane" => {
             let (_, wid, pid) = target::pane(srv, ctx, a.value('t'))?;
             // -T titles the pane (the program may title it again).
@@ -99,7 +104,12 @@ pub(super) fn run(
         "last-pane" => {
             let (_, wid, _) = target::window(srv, ctx, a.value('t'))?;
             let last = srv.windows[&wid].last_pane.ok_or("no last pane")?;
-            srv.select_pane(last);
+            // -d / -e: the last pane's input off or on, and it stays last.
+            if a.has('d') || a.has('e') {
+                set_input_off(srv, last, a.has('d'));
+            } else {
+                srv.select_pane(last);
+            }
         }
         "navigate-pane" => navigate(srv, ctx, a)?,
         "resize-pane" => {
@@ -526,6 +536,15 @@ fn capture(
         out.push('\n');
     }
     out
+}
+
+/// `select-pane -d` / `-e`: turn `pane`'s input off or back on.
+fn set_input_off(srv: &mut Server, pane: PaneId, off: bool) {
+    if let Some(p) = srv.panes.get_mut(&pane) {
+        p.input_off = off;
+        let window = p.window;
+        srv.mark_window_dirty(window);
+    }
 }
 
 fn split_size(a: &Args) -> Result<Option<SplitSize>, String> {

@@ -37,6 +37,9 @@ pub struct Pane {
     pub dead: Option<Option<u32>>,
     /// `clock-mode`: the pane shows a big clock until a key is pressed.
     pub clock: bool,
+    /// `select-pane -d`: no keys, pastes or mouse reach the program, as
+    /// tmux's `PANE_INPUTOFF`, until `select-pane -e`.
+    pub input_off: bool,
     /// Focused: the active pane of a window a focused client shows, as
     /// tmux's `PANE_FOCUSED` (`notify`).
     pub focused: bool,

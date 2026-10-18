@@ -194,6 +194,7 @@ impl Context for Vars<'_> {
             }
             "pane_synchronized" => flag(srv.pane_options(pane?.id).synchronize_panes),
             "pane_dead" => flag(pane?.dead.is_some()),
+            "pane_input_off" => flag(pane?.input_off),
             "pane_dead_status" => pane?.dead.flatten()?.to_string(),
             "pane_marked" => flag(srv.marked_pane() == Some(pane?.id)),
             "pane_marked_set" => flag(srv.marked_pane().is_some()),

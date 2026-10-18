@@ -162,6 +162,9 @@ impl Server {
     fn key_to_one_pane(&mut self, pane: PaneId, key: &KeyEvent) -> Result<(), String> {
         let always = self.cfg.extended_keys == "always";
         let p = self.panes.get_mut(&pane).ok_or("no such pane")?;
+        if p.input_off {
+            return Ok(());
+        }
         let bytes = tmxr_term::encode_key(key, p.emu.input_modes(), always);
         p.pty.write(&bytes).map_err(|e| e.to_string())
     }

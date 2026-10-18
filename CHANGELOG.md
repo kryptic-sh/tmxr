@@ -103,6 +103,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pressed longer than that after the prefix (or `switch-client -T prefix`) goes
   to the root table instead (unless it repeats a repeatable binding). 0, the
   default, waits forever.
+- **`select-pane -d` / `-e` and `last-pane -d` / `-e`**, as tmux's: a pane's
+  input off (no keys, pastes or mouse reach its program, nor its synchronized
+  siblings through it) and back on, shown by `#{pane_input_off}`.
 - **`send-keys -H`**, each key a byte in hex (`send-keys -H 1b 5b 41`), and
   **`-N` for keys**, sending them that many times; both as tmux's (`-N` worked
   only with `-X` before).

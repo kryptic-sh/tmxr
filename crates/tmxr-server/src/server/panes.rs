@@ -66,6 +66,7 @@ impl Server {
                 argv: started.argv,
                 dead: None,
                 clock: false,
+                input_off: false,
                 focused: false,
                 output: started.output,
                 pipe: None,

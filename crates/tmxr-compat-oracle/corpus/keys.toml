@@ -23,3 +23,33 @@ steps = [
 checks = [
   { command = "capture-pane -p -t o", expect = "A^[^?Bab^Mab^Mab^M" },
 ]
+
+[[cases]]
+name = "select_pane_d_turns_a_panes_input_off_and_e_on"
+unix_only = true
+program = "stty raw -echo; exec cat -v"
+steps = [
+  { sleep = 0.5 },
+  { run = "split-window -t o 'stty raw -echo; exec cat -v'" },
+  { sleep = 0.5 },
+  { run = "select-pane -d -t o.0" },
+  { run = "send-keys -t o.0 abc" },
+  { run = "set-buffer pb" },
+  { run = "paste-buffer -t o.0" },
+  { run = "select-pane -e -t o.0" },
+  { run = "send-keys -t o.0 xyz" },
+  { run = "select-pane -d -t o.1" },
+  { run = "send-keys -t o.1 abc" },
+  { run = "select-pane -t o.0" },
+  { run = "last-pane -e -t o" },
+  { run = "send-keys -t o.1 def" },
+  { run = "last-pane -d -t o" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "capture-pane -p -t o.0", expect = "xyz" },
+  { command = "capture-pane -p -t o.1", expect = "def" },
+  { command = "display -p -t o.0 '#{pane_input_off}'", expect = "0" },
+  { command = "display -p -t o.1 '#{pane_input_off}'", expect = "1" },
+  { command = "display -p -t o '#{pane_index}'", expect = "0" },
+]

@@ -224,7 +224,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         0,
         "[-a] [-t target-window]"
     ),
-    cmd!("last-pane", Some("lastp"), "t:", 0, 0, "[-t target-window]"),
+    cmd!(
+        "last-pane",
+        Some("lastp"),
+        "det:",
+        0,
+        0,
+        "[-de] [-t target-window]"
+    ),
     cmd!(
         "last-window",
         Some("last"),
@@ -496,10 +503,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "select-pane",
         Some("selectp"),
-        "DLlMmRt:T:UZ",
+        "DdeLlMmRt:T:UZ",
         0,
         0,
-        "[-DLlMmRUZ] [-t target-pane]"
+        "[-DdeLlMmRUZ] [-t target-pane]"
     ),
     cmd!(
         "select-window",

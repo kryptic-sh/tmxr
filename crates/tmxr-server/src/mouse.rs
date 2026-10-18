@@ -436,6 +436,9 @@ pub fn forward(srv: &mut Server, ctx: &Ctx) -> Result<(), String> {
     let t = ctx.mouse.ok_or("send-keys -M needs a mouse event")?;
     let pane = t.pane.ok_or("no pane under the mouse")?;
     let p = srv.panes.get_mut(&pane).ok_or("no pane under the mouse")?;
+    if p.input_off {
+        return Ok(());
+    }
     let r = p.rect;
     let col = t
         .event
