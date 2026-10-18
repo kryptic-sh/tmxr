@@ -53,6 +53,28 @@ impl Server {
 
     /// `session`'s prefix key. A `prefix` that names no key (`set-option`
     /// refuses one; a config file can still hold one) is C-b.
+    /// Whether `key` is one of `session`'s prefix keys (`prefix`, or
+    /// `prefix2` unless `None`).
+    pub fn is_prefix(&self, session: SessionId, key: &Key) -> bool {
+        *key == self.prefix_key(session)
+            || self
+                .session_options(session)
+                .prefix2
+                .parse::<Key>()
+                .is_ok_and(|p| p == *key)
+    }
+
+    /// The key table `session`'s clients start in (`key-table`, `root`
+    /// when empty), as tmux's `server_client_get_key_table`.
+    pub fn default_key_table(&self, session: SessionId) -> String {
+        let table = &self.session_options(session).key_table;
+        if table.is_empty() {
+            "root".to_owned()
+        } else {
+            table.clone()
+        }
+    }
+
     pub fn prefix_key(&self, session: SessionId) -> Key {
         self.session_options(session)
             .prefix

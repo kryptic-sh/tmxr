@@ -73,6 +73,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   whether a copy-mode search goes round from the other end. Word motions now
   class characters as tmux does, so a non-ASCII symbol like `→` is part of a
   word.
+- **`prefix2` and `key-table`**, as tmux's: a second prefix key (`None` by
+  default), and the key table a client's keys start in (`root` by default). A
+  key not bound in the table a client is in gets a second try in that default
+  table, and is not passed to the pane, as tmux does.
 - **`#{client_flags}` and `#{client_readonly}`**: the client's `attached`,
   `focused`, `ignore-size` and `read-only` flags, in tmux's order, and whether
   it is read-only. A client is focused from attaching until its terminal reports

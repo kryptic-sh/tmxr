@@ -78,6 +78,8 @@ pub struct Config {
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 struct File {
     prefix: String,
+    prefix2: String,
+    key_table: String,
     mouse: bool,
     base_index: u32,
     pane_base_index: u32,
@@ -212,6 +214,8 @@ impl From<File> for Config {
                 message_style: s.message_style,
                 mouse: f.mouse,
                 prefix: Word(f.prefix),
+                prefix2: Word(f.prefix2),
+                key_table: f.key_table,
                 renumber_windows: f.renumber_windows,
                 repeat_time: f.repeat_time,
                 set_titles: f.set_titles,

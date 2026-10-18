@@ -35,6 +35,8 @@ options_table! {
     "display-time" => display_time: u64,
     /// Lines of history a new pane keeps.
     "history-limit" => history_limit: usize,
+    /// The key table a client's keys start in (tmux's `root` by default).
+    "key-table" => key_table: String,
     /// Seconds a client may sit idle before it is locked; 0 never.
     "lock-after-time" => lock_after_time: u64,
     /// Shell command a locked client runs in its terminal; the client is
@@ -44,6 +46,8 @@ options_table! {
     "mouse" => mouse: bool,
     /// The prefix key, by tmux key name.
     "prefix" => prefix: Word,
+    /// A second prefix key; `None` for none.
+    "prefix2" => prefix2: Word,
     "renumber-windows" => renumber_windows: bool,
     /// How long a repeatable bind (`bind -r`) takes another key without
     /// the prefix, in milliseconds.

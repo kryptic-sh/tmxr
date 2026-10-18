@@ -766,6 +766,12 @@ impl Server {
         self.advance_copy_line();
         self.lock_idle_clients();
         let now = Instant::now();
+        // The table a client goes back to once a repeat ends.
+        let roots: BTreeMap<SessionId, String> = self
+            .sessions
+            .keys()
+            .map(|&s| (s, self.default_key_table(s)))
+            .collect();
         for c in self.clients.values_mut() {
             if let Some(a) = c.att.as_mut() {
                 if a.message
@@ -775,8 +781,9 @@ impl Server {
                     a.message = None;
                     a.dirty = true;
                 }
-                if a.table != "root" && a.repeat_until.is_some_and(|t| t <= now) {
-                    a.table = "root".into();
+                let root = roots.get(&a.session).map_or("root", String::as_str);
+                if a.table != root && a.repeat_until.is_some_and(|t| t <= now) {
+                    root.clone_into(&mut a.table);
                     a.repeat_until = None;
                     a.dirty = true;
                 }

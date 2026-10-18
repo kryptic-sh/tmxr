@@ -187,11 +187,12 @@ pub(super) fn set(
     if !unset && a.has('o') && own(srv, scope, name).is_some() {
         return Err(format!("already set: {name}"));
     }
-    if name == "prefix" && !unset {
-        value
-            .ok_or("prefix: needs a value")?
-            .parse::<Key>()
-            .map_err(|e| e.to_string())?;
+    if (name == "prefix" || name == "prefix2") && !unset {
+        let key = value.ok_or_else(|| format!("{name}: needs a value"))?;
+        // prefix2 may be `None`, as tmux's default is.
+        if !(name == "prefix2" && key == "None") {
+            key.parse::<Key>().map_err(|e| e.to_string())?;
+        }
     }
     if name == "allow-passthrough"
         && !unset

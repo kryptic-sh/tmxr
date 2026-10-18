@@ -27,6 +27,7 @@ impl Server {
             },
         )
         .ok();
+        let table = self.default_key_table(session);
         let Some(c) = self.clients.get_mut(&id) else {
             return;
         };
@@ -35,7 +36,7 @@ impl Server {
             cols,
             rows,
             term: terminal,
-            table: "root".into(),
+            table,
             repeat_until: None,
             overlay: None,
             message: None,

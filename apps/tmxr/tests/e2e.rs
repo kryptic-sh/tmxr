@@ -1096,6 +1096,45 @@ fn resurrect_restores_a_multi_pane_layout() {
 }
 
 #[test]
+fn prefix2_and_key_table_decide_where_keys_go() {
+    let t = Tmxr::new("prefix2");
+    let s = t.attach(&["new", "-s", "p2"]);
+    s.wait_for("the status line", |text| text.contains("p2"));
+    let windows = |t: &Tmxr| t.run(&["list-windows", "-t", "p2"]).lines().count();
+    // A second prefix works as the first.
+    t.run(&["set", "-g", "prefix2", "C-a"]);
+    s.send(b"");
+    s.send(b"c");
+    t.wait_run(
+        &["list-windows", "-t", "p2"],
+        "a window from prefix2",
+        |o| o.lines().count() == 2,
+    );
+    assert!(
+        !t.output(&["set", "-g", "prefix2", "NoSuchKey"])
+            .status
+            .success()
+    );
+    // key-table: keys start in that table; the prefix still works.
+    t.run(&["bind-key", "-T", "mine", "y", "new-window"]);
+    t.run(&["set", "-g", "key-table", "mine"]);
+    s.send(b"y");
+    t.wait_run(
+        &["list-windows", "-t", "p2"],
+        "a window from key-table",
+        |o| o.lines().count() == 3,
+    );
+    s.send(PREFIX);
+    s.send(b"c");
+    t.wait_run(
+        &["list-windows", "-t", "p2"],
+        "the prefix still works",
+        |o| o.lines().count() == 4,
+    );
+    assert_eq!(windows(&t), 4);
+}
+
+#[test]
 fn word_separators_and_wrap_search_reach_copy_mode() {
     let t = Tmxr::new("copyopts");
     #[cfg(unix)]

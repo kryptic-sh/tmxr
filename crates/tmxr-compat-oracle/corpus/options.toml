@@ -226,3 +226,11 @@ checks = [
   { command = "show -s buffer-limit", expect = "buffer-limit 50" },
   { command = "show -s message-limit", expect = "message-limit 1000" },
 ]
+
+[[cases]]
+name = "prefix2_and_key_table_default_as_tmuxs"
+steps = []
+checks = [
+  { command = "show -g prefix2", expect = "prefix2 None" },
+  { command = "show -g key-table", expect = "key-table root" },
+]

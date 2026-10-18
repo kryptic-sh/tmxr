@@ -199,9 +199,13 @@ impl Server {
         let session = att.session;
         let now = Instant::now();
         let repeating = att.repeat_until.is_some_and(|t| t > now);
-        let table = std::mem::replace(&mut att.table, "root".into());
+        let root = self.default_key_table(session);
+        let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
+            return;
+        };
+        let table = std::mem::replace(&mut att.table, root.clone());
         att.repeat_until = None;
-        if table != "root" {
+        if table != root {
             att.dirty = true;
             if let Some(b) = self.keys.get(&table, &key.into()).cloned() {
                 if !repeating || b.repeat {
@@ -216,11 +220,16 @@ impl Server {
                     return;
                 }
             } else if !repeating {
+                // As tmux's: an unbound key gets a second try in the default
+                // table, and is not passed to the pane either way.
+                if let Some(b) = self.keys.get(&root, &key.into()).cloned() {
+                    self.run_bind(id, &b.cmd, Some(ev));
+                }
                 return;
             }
             // A non-repeatable key while repeating is handled as a fresh key.
         }
-        if key == self.prefix_key(session) {
+        if self.is_prefix(session, &key) {
             if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
                 a.table = "prefix".into();
                 a.dirty = true;
@@ -256,7 +265,7 @@ impl Server {
             }
             return;
         }
-        if let Some(b) = self.keys.get("root", &key.into()).cloned() {
+        if let Some(b) = self.keys.get(&root, &key.into()).cloned() {
             self.run_bind(id, &b.cmd, Some(ev));
             return;
         }

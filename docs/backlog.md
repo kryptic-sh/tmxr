@@ -453,8 +453,8 @@ table. What has been verified, and how:
     `status-format`; no `window-status-activity-style` / `-bell-style` (tmux's
     default `reverse` would change tmxr's theme, which shows flags in its window
     format), `status-fg` / `-bg`; `pane-border-status` / `-format` / `-lines` /
-    `-indicators`, `window-style` / `window-active-style`; session `prefix2`,
-    `key-table`, `status-keys`, `assume-paste-time`, `default-size`; window
+    `-indicators`, `window-style` / `window-active-style`; session
+    `status-keys`, `assume-paste-time`, `default-size`; window
     `aggressive-resize`, `allow-rename`, `allow-set-title`, `alternate-screen`,
     `clock-mode-style`, `cursor-style`, `remain-on-exit-format`,
     `window-size largest` / `smallest`; server `focus-events`, `history-file`,

@@ -7,6 +7,9 @@
 # to remove it. Binds are tmux command strings. See docs/plan/06 and /07.
 
 prefix = "C-b"
+# tmux's defaults: no second prefix, and keys start in the root table.
+prefix2 = "None"
+key-table = "root"
 mouse = true
 base-index = 0
 pane-base-index = 0
