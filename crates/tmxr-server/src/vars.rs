@@ -252,6 +252,14 @@ impl Context for Vars<'_> {
             }
             "pane_synchronized" => flag(srv.pane_options(pane?.id).synchronize_panes),
             "pane_dead" => flag(pane?.dead.is_some()),
+            // Each word quoted as tmux's args_escape, as its
+            // cmd_stringify_argv joins them.
+            "pane_start_command" => pane?
+                .argv
+                .iter()
+                .map(|w| tmxr_command::escape_arg(w))
+                .collect::<Vec<_>>()
+                .join(" "),
             "history_limit" => pane?.emu.history_limit().to_string(),
             "cursor_flag" => flag(!pane?.emu.screen().hide_cursor()),
             "keypad_flag" => flag(pane?.emu.screen().application_keypad()),

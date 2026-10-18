@@ -30,7 +30,9 @@ pub struct Pane {
     /// Which start of this pane the PTY belongs to: `respawn-pane` starts a
     /// new program under the same id, and events from the old one are stale.
     pub spawn: u64,
-    /// The command the pane was started with, for `respawn-pane`.
+    /// The command the pane was started with, as given (`default-command`
+    /// filled in, not the shell that runs it), as tmux's `wp->argv`: what
+    /// `respawn-pane` starts again and `#{pane_start_command}` shows.
     pub argv: Vec<String>,
     /// Set when the program exited and `remain-on-exit` kept the pane: the
     /// exit code, if the program had one.

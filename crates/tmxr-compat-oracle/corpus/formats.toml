@@ -142,3 +142,24 @@ checks = [
   { screen_contains = "|%", expect = true },
   { screen_contains = "W=%m", expect = false },
 ]
+
+[[cases]]
+name = "pane_start_command_is_the_command_as_given"
+unix_only = true
+steps = [
+  { run = "new-window -d -t o:1 'sleep 100'" },
+  { run = "new-window -d -t o:2 sleep 100" },
+  { run = "new-window -d -t o:3 sh -c 'echo \"a b\"; sleep 100'" },
+  { run = "split-window -d -t o:0" },
+  { run = "set -g default-command 'sleep 200'" },
+  { run = "new-window -d -t o:4" },
+  { run = "respawn-pane -k -t o:1" },
+]
+checks = [
+  { command = "display -p -t o:0.0 '[#{pane_start_command}]'" },
+  { command = "display -p -t o:0.1 '[#{pane_start_command}]'" },
+  { command = "display -p -t o:1 '[#{pane_start_command}]'" },
+  { command = "display -p -t o:2 '[#{pane_start_command}]'" },
+  { command = "display -p -t o:3 '[#{pane_start_command}]'" },
+  { command = "display -p -t o:4 '[#{pane_start_command}]'" },
+]

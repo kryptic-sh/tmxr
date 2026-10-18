@@ -16,8 +16,6 @@ pub struct Started {
     pub output: crate::output::OutputHandle,
     /// Which start this is, to tell its events from a previous one's.
     pub spawn: u64,
-    /// The argv actually run (the shell filled in).
-    pub argv: Vec<String>,
     /// The directory it started in.
     pub cwd: PathBuf,
 }
@@ -63,7 +61,7 @@ impl Server {
                 start_cwd: started.cwd,
                 copy: None,
                 spawn: started.spawn,
-                argv: started.argv,
+                argv: argv.to_vec(),
                 dead: None,
                 clock: false,
                 input_off: false,
@@ -168,7 +166,6 @@ impl Server {
             pty,
             output,
             spawn,
-            argv,
             cwd,
         })
     }
