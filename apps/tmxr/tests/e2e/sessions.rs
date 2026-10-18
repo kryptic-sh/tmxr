@@ -569,6 +569,27 @@ fn session_activity_moves_on_with_attaching_and_keys() {
 }
 
 #[test]
+fn client_variables_tell_its_times_and_last_session() {
+    let t = Tmxr::new("clientvars");
+    t.run(&["new-session", "-d", "-s", "first"]);
+    t.run(&["new-session", "-d", "-s", "second"]);
+    let s = t.attach(&["attach", "-t", "first"]);
+    s.wait_for("attached", |text| text.contains("first"));
+    let client = |f: &str| t.run(&["list-clients", "-F", f]).trim().to_owned();
+    assert_eq!(client("[#{client_last_session}]"), "[]");
+    t.run(&["switch-client", "-t", "second"]);
+    t.wait_run(
+        &["list-clients", "-F", "#{client_last_session}"],
+        "the last session",
+        |o| o.trim() == "first",
+    );
+    // Seconds since the epoch, the activity no earlier than the connection.
+    let times =
+        client("#{e|>|:#{client_created},1700000000} #{e|>=:#{client_activity},#{client_created}}");
+    assert_eq!(times, "1 1");
+}
+
+#[test]
 fn switch_client_takes_a_window_and_pane_r_and_z() {
     let t = Tmxr::new("switchwp");
     t.run(&["new-session", "-d", "-s", "here"]);

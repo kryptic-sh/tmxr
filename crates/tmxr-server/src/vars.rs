@@ -175,6 +175,10 @@ impl Context for Vars<'_> {
             "client_flags" => client_flags(srv.clients.get(&self.client?)?),
             "client_readonly" => flag(srv.clients.get(&self.client?)?.read_only()),
             "client_width" => att?.cols.to_string(),
+            "client_created" => epoch(srv.clients.get(&self.client?)?.created),
+            // Its last key or mouse event, as tmux's activity_time.
+            "client_activity" => epoch(std::time::SystemTime::now() - att?.last_input.elapsed()),
+            "client_last_session" => srv.sessions.get(&att?.last_session?)?.name.clone(),
             "client_height" => att?.rows.to_string(),
             "client_session" => srv.sessions.get(&att?.session)?.name.clone(),
             "client_termname" => srv

@@ -72,6 +72,8 @@ pub struct Client {
     pub ignore_size: bool,
     /// The standard input it sent for `load-buffer -`, until that takes it.
     pub stdin: Option<Vec<u8>>,
+    /// When it connected (`#{client_created}`).
+    pub created: std::time::SystemTime,
 }
 
 impl Client {
@@ -385,6 +387,7 @@ impl Server {
                         attach_read_only: false,
                         ignore_size: false,
                         stdin: None,
+                        created: std::time::SystemTime::now(),
                     },
                 );
             }
