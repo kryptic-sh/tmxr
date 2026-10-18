@@ -204,24 +204,41 @@ pub(super) fn run(
             None => srv.prompt_history.clear(),
         },
         "confirm-before" => {
-            let c = attached_client(srv, ctx).ok_or("no current client")?;
+            // -t names the client to ask; else the caller, or (from a
+            // command client) the best attached one, as tmux's.
+            let c = match a.value('t') {
+                Some(spec) => super::session::target_client(srv, spec)?,
+                None => super::display_client(srv, ctx).ok_or("no current client")?,
+            };
             let cmd = if pos.len() == 1 {
                 pos[0].clone()
             } else {
                 join_args(pos)
             };
+            // -c: the key that confirms, one printable ASCII character, as
+            // tmux's.
+            let key = match a.value('c') {
+                None => 'y',
+                Some(c) => match c.as_bytes() {
+                    [b @ b' '..=b'~'] => char::from(*b),
+                    _ => return Err("invalid confirm key".into()),
+                },
+            };
             let prompt = a.value('p').map_or_else(
                 || {
                     format!(
-                        "Confirm '{}'? (y/n)",
+                        "Confirm '{}'? ({key}/n)",
                         cmd.split_whitespace().next().unwrap_or("")
                     )
                 },
                 |p| expand_for(srv, ctx, None, p),
             );
+            // -b (do not wait for the answer) is how tmxr's prompt always
+            // works: the commands after it run at once.
             if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
-                att.overlay = Some(Overlay::confirm(prompt, cmd));
+                att.overlay = Some(Overlay::confirm(prompt, cmd, key, a.has('y')));
             }
+            srv.mark_client_dirty(c);
         }
         "display-message" => {
             // A -t that names nothing is an error, as tmux's; with no -t and

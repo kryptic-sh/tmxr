@@ -103,6 +103,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pressed longer than that after the prefix (or `switch-client -T prefix`) goes
   to the root table instead (unless it repeats a repeatable binding). 0, the
   default, waits forever.
+- **`confirm-before -c`, `-y`, `-b` and `-t`**, as tmux's: `-c` picks the key
+  that confirms (the prompt shows it), `-y` makes Enter confirm, `-t` names the
+  client to ask, and `-b` is accepted (tmxr's prompt never holds up the commands
+  after it). Only the confirm key itself confirms now, not its capital (`Y`), as
+  in tmux.
 - **`~` and `{marked}` targets**, as tmux's: the marked pane (`select-pane -m`),
   its window and its session, wherever a target is taken.
 - **`new-window -k` and `-S`**, as tmux's: `-k` replaces a window already at the
@@ -156,6 +161,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`confirm-before` from a script** (a command client) asks the attached client
+  used most recently instead of failing with "no current client", and its prompt
+  shows at once rather than at the next status-line redraw.
 - **The active pane after `rotate-window` and `swap-pane`** is tmux's: the pane
   after the active one in the turned list (before it with `-D`), and for
   `swap-pane` the target pane (each window's arriving pane across windows); both

@@ -3042,6 +3042,41 @@ fn clock_mode_style_twelve_shows_am_or_pm() {
 }
 
 #[test]
+fn confirm_before_c_and_y_choose_what_confirms() {
+    let t = Tmxr::new("confirmc");
+    let s = t.attach(&["new", "-s", "cf"]);
+    s.wait_for("status line", |text| text.contains("cf"));
+    let windows = |t: &Tmxr| t.run(&["list-windows", "-t", "cf"]).lines().count();
+    // -c x: the prompt says so, `y` does nothing and `x` confirms.
+    t.run(&["confirm-before", "-c", "x", "new-window -d"]);
+    s.wait_for("the prompt", |text| {
+        text.contains("Confirm 'new-window'? (x/n)")
+    });
+    s.send(b"y");
+    s.wait_for("the prompt gone", |text| !text.contains("Confirm"));
+    assert_eq!(windows(&t), 1);
+    t.run(&["confirm-before", "-c", "x", "new-window -d"]);
+    s.wait_for("the prompt again", |text| text.contains("(x/n)"));
+    s.send(b"x");
+    t.wait_run(&["list-windows", "-t", "cf"], "a second window", |o| {
+        o.lines().count() == 2
+    });
+    // -y: Enter confirms.
+    t.run(&["confirm-before", "-y", "new-window -d"]);
+    s.wait_for("the -y prompt", |text| text.contains("(y/n)"));
+    s.send(b"\r");
+    t.wait_run(&["list-windows", "-t", "cf"], "a third window", |o| {
+        o.lines().count() == 3
+    });
+    // A confirm key is one printable character.
+    assert!(
+        !t.output(&["confirm-before", "-c", "xx", "new-window"])
+            .status
+            .success()
+    );
+}
+
+#[test]
 fn switch_client_c_names_the_client_to_move() {
     let t = Tmxr::new("switchc");
     t.run(&["new-session", "-d", "-s", "one"]);

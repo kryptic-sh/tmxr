@@ -104,10 +104,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "confirm-before",
         Some("confirm"),
-        "p:t:",
+        "bc:p:t:y",
         1,
         ANY,
-        "[-p prompt] command"
+        "[-by] [-c confirm-key] [-p prompt] command"
     ),
     cmd!("copy-command-line", None, "t:", 0, 0, "[-t target-pane]"),
     cmd!(

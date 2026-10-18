@@ -43,9 +43,13 @@ pub enum Overlay {
     /// `display-menu`.
     Menu(Box<crate::menu::Menu>),
     Prompt(Prompt),
+    /// `confirm-before`: `cmd` runs on `key`, or on Enter with
+    /// `default_yes` (`-y`); any other key closes it.
     Confirm {
         prompt: String,
         cmd: String,
+        key: char,
+        default_yes: bool,
     },
     Text {
         lines: Vec<String>,
@@ -91,8 +95,13 @@ impl Overlay {
         })
     }
 
-    pub fn confirm(prompt: String, cmd: String) -> Self {
-        Self::Confirm { prompt, cmd }
+    pub fn confirm(prompt: String, cmd: String, key: char, default_yes: bool) -> Self {
+        Self::Confirm {
+            prompt,
+            cmd,
+            key,
+            default_yes,
+        }
     }
 
     pub fn text(lines: Vec<String>) -> Self {
@@ -259,8 +268,14 @@ impl Overlay {
             Self::Prompt(p) => p.key(ev),
             Self::Menu(m) => m.key(ev),
             Self::Popup(p) => p.key(ev),
-            Self::Confirm { cmd, .. } => match ev.code {
-                KeyCode::Char('y' | 'Y') => OverlayAction::Run(cmd.clone()),
+            Self::Confirm {
+                cmd,
+                key,
+                default_yes,
+                ..
+            } => match ev.code {
+                KeyCode::Char(c) if c == *key => OverlayAction::Run(cmd.clone()),
+                KeyCode::Enter if *default_yes => OverlayAction::Run(cmd.clone()),
                 _ => OverlayAction::Close,
             },
             Self::Text { lines, top } => {
@@ -360,14 +375,30 @@ mod tests {
     }
 
     #[test]
-    fn confirm_runs_only_on_y() {
-        let mut o = Overlay::confirm("kill?".into(), "kill-pane".into());
+    fn confirm_runs_only_on_its_key() {
+        let run = || OverlayAction::Run("kill-pane".into());
+        let confirm = |key, yes| Overlay::confirm("kill?".into(), "kill-pane".into(), key, yes);
+        assert_eq!(confirm('y', false).key(&k(KeyCode::Char('y'))), run());
         assert_eq!(
-            o.key(&k(KeyCode::Char('y'))),
-            OverlayAction::Run("kill-pane".into())
+            confirm('y', false).key(&k(KeyCode::Char('n'))),
+            OverlayAction::Close
         );
-        let mut o = Overlay::confirm("kill?".into(), "kill-pane".into());
-        assert_eq!(o.key(&k(KeyCode::Char('n'))), OverlayAction::Close);
+        // Exactly the key, as tmux's: not its capital.
+        assert_eq!(
+            confirm('y', false).key(&k(KeyCode::Char('Y'))),
+            OverlayAction::Close
+        );
+        assert_eq!(confirm('x', false).key(&k(KeyCode::Char('x'))), run());
+        assert_eq!(
+            confirm('x', false).key(&k(KeyCode::Char('y'))),
+            OverlayAction::Close
+        );
+        // Enter confirms only with -y.
+        assert_eq!(confirm('y', true).key(&k(KeyCode::Enter)), run());
+        assert_eq!(
+            confirm('y', false).key(&k(KeyCode::Enter)),
+            OverlayAction::Close
+        );
     }
 
     #[test]
