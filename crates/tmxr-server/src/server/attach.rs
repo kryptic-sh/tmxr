@@ -229,6 +229,7 @@ impl Server {
     pub fn touch_session(&mut self, session: SessionId) {
         if let Some(s) = self.sessions.get_mut(&session) {
             s.last_used = Instant::now();
+            s.activity = std::time::SystemTime::now();
         }
     }
 

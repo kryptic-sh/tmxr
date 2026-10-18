@@ -278,6 +278,9 @@ pub struct Session {
     pub options: tmxr_config::OwnSessionOptions,
     pub created: std::time::SystemTime,
     pub last_used: Instant,
+    /// When it was made, last attached to, or last typed into by a client
+    /// (`#{session_activity}`), as tmux's activity_time.
+    pub activity: std::time::SystemTime,
 }
 
 impl Session {

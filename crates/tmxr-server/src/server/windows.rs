@@ -59,6 +59,7 @@ impl Server {
                 options: tmxr_config::OwnSessionOptions::default(),
                 created: SystemTime::now(),
                 last_used: Instant::now(),
+                activity: SystemTime::now(),
             },
         );
         if let Err(e) = self.new_window(id, None, window_name, Some(cwd), argv, &[], size, true) {

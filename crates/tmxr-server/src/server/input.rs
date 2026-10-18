@@ -135,6 +135,16 @@ impl Server {
     }
 
     fn key(&mut self, id: ClientId, ev: KeyEvent) {
+        // A key is activity in the client's session, as tmux's
+        // session_update_activity.
+        if let Some(s) = self
+            .clients
+            .get(&id)
+            .and_then(|c| c.att.as_ref())
+            .and_then(|a| self.sessions.get_mut(&a.session))
+        {
+            s.activity = std::time::SystemTime::now();
+        }
         let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
             return;
         };

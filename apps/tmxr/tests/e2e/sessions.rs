@@ -532,6 +532,33 @@ fn a_program_that_reads_nothing_does_not_stall_the_server() {
 }
 
 #[test]
+fn session_activity_moves_on_with_attaching_and_keys() {
+    let t = Tmxr::new("sessactivity");
+    t.run(&["new-session", "-d", "-s", "act"]);
+    let time = |f: &str| -> u64 {
+        t.run(&["display-message", "-p", "-t", "act", f])
+            .trim()
+            .parse()
+            .unwrap()
+    };
+    let created = time("#{session_created}");
+    assert_eq!(time("#{session_activity}"), created);
+    // The times are whole seconds: wait past one before each step.
+    std::thread::sleep(Duration::from_millis(1100));
+    let s = t.attach(&["attach", "-t", "act"]);
+    s.wait_for("attached", |text| text.contains("act"));
+    let attached = time("#{session_activity}");
+    assert!(attached > created, "{attached} after {created}");
+    std::thread::sleep(Duration::from_millis(1100));
+    s.send(b"x");
+    t.wait_run(
+        &["display-message", "-p", "-t", "act", "#{session_activity}"],
+        "a key's activity",
+        |o| o.trim().parse::<u64>().is_ok_and(|n| n > attached),
+    );
+}
+
+#[test]
 fn switch_client_takes_a_window_and_pane_r_and_z() {
     let t = Tmxr::new("switchwp");
     t.run(&["new-session", "-d", "-s", "here"]);
