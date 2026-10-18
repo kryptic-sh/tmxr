@@ -155,7 +155,9 @@ pub fn command(
         | "copy-line"
         | "copy-line-and-cancel"
         | "copy-pipe-line"
-        | "copy-pipe-line-and-cancel" => {
+        | "copy-pipe-line-and-cancel"
+        | "copy-selection-no-clear"
+        | "copy-pipe-no-clear" => {
             let whole_lines = matches!(
                 name,
                 "copy-line"
@@ -218,8 +220,31 @@ pub fn command(
             }
             if cancel {
                 leave(srv, pane);
-            } else if let Some(cm) = srv.panes.get_mut(&pane).and_then(|p| p.copy.as_mut()) {
-                cm.anchor = None;
+            } else if !name.ends_with("-no-clear")
+                && let Some(cm) = srv.panes.get_mut(&pane).and_then(|p| p.copy.as_mut())
+            {
+                cm.apply("clear-selection", None);
+            }
+        }
+        // The selection to a command (its argument, else copy-command), with
+        // no buffer or clipboard; then the selection cleared, kept, or copy
+        // mode left, as tmux's window_copy_cmd_pipe*.
+        "pipe" | "pipe-no-clear" | "pipe-and-cancel" => {
+            if let Some(text) = cm.selection_text() {
+                let cmd = args.first().map_or_else(
+                    || srv.cfg.copy_command.clone(),
+                    |c| crate::cmds::expand_for(srv, ctx, Some(pane), c),
+                );
+                if !cmd.is_empty() {
+                    crate::server::pipe_to_shell(srv, pane, cmd, text);
+                }
+            }
+            if name == "pipe-and-cancel" {
+                leave(srv, pane);
+            } else if name == "pipe"
+                && let Some(cm) = srv.panes.get_mut(&pane).and_then(|p| p.copy.as_mut())
+            {
+                cm.apply("clear-selection", None);
             }
         }
         // A motion down that leaves copy mode once it is at the bottom, as

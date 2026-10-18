@@ -499,3 +499,53 @@ checks = [
   { command = "list-buffers -F '#{buffer_name}=#{buffer_sample}'" },
   { command = "display -p -t o:1 '#{pane_in_mode} #{selection_present} #{copy_cursor_y},#{copy_cursor_x}'" },
 ]
+
+[[cases]]
+name = "no_clear_and_pipe_commands_keep_or_clear_the_selection"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:1 'echo abcdef; echo ghijkl; echo mnopqr; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:1" },
+  { run = "send-keys -t o:1 -X history-top" },
+  { run = "send-keys -t o:1 -X begin-selection" },
+  { run = "send-keys -t o:1 -X cursor-right" },
+  { run = "send-keys -t o:1 -X copy-selection-no-clear" },
+  { run = "new-window -d -t o:2 'echo abcdef; echo ghijkl; echo mnopqr; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:2" },
+  { run = "send-keys -t o:2 -X history-top" },
+  { run = "send-keys -t o:2 -X begin-selection" },
+  { run = "send-keys -t o:2 -X cursor-right" },
+  { run = "send-keys -t o:2 -X copy-pipe-no-clear 'cat >/dev/null'" },
+  { run = "new-window -d -t o:3 'echo abcdef; echo ghijkl; echo mnopqr; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:3" },
+  { run = "send-keys -t o:3 -X history-top" },
+  { run = "send-keys -t o:3 -X begin-selection" },
+  { run = "send-keys -t o:3 -X cursor-right" },
+  { run = "send-keys -t o:3 -X pipe 'cat >/dev/null'" },
+  { run = "new-window -d -t o:4 'echo abcdef; echo ghijkl; echo mnopqr; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:4" },
+  { run = "send-keys -t o:4 -X history-top" },
+  { run = "send-keys -t o:4 -X begin-selection" },
+  { run = "send-keys -t o:4 -X cursor-right" },
+  { run = "send-keys -t o:4 -X pipe-no-clear 'cat >/dev/null'" },
+  { run = "new-window -d -t o:5 'echo abcdef; echo ghijkl; echo mnopqr; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:5" },
+  { run = "send-keys -t o:5 -X history-top" },
+  { run = "send-keys -t o:5 -X begin-selection" },
+  { run = "send-keys -t o:5 -X cursor-right" },
+  { run = "send-keys -t o:5 -X pipe-and-cancel 'cat >/dev/null'" },
+]
+checks = [
+  { command = "list-buffers -F '#{buffer_name}=#{buffer_sample}'" },
+  { command = "display -p -t o:1 '#{pane_in_mode} #{selection_present}'" },
+  { command = "display -p -t o:2 '#{pane_in_mode} #{selection_present}'" },
+  { command = "display -p -t o:3 '#{pane_in_mode} #{selection_present}'" },
+  { command = "display -p -t o:4 '#{pane_in_mode} #{selection_present}'" },
+  { command = "display -p -t o:5 '#{pane_in_mode} #{selection_present}'" },
+]

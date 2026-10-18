@@ -481,11 +481,11 @@ table. What has been verified, and how:
     file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `pane-set-clipboard`,
     `client-active`, `client-light-theme` / `-dark-theme`. Copy mode lacks
-    `next-prompt` / `previous-prompt`, `pipe*`, `*-no-clear`, `stop-selection`
-    (it needs a selection end apart from the cursor, which `CopyMode` does not
-    keep), `selection-mode` and `search-*-text`. Not compared with tmux: the
-    cursor motions under `select-line` (tmux's `lineflag` moves the cursor to a
-    line's end or start on up / down), and on lines holding wide characters.
+    `next-prompt` / `previous-prompt`, `stop-selection` (it needs a selection
+    end apart from the cursor, which `CopyMode` does not keep), `selection-mode`
+    and `search-*-text`. Not compared with tmux: the cursor motions under
+    `select-line` (tmux's `lineflag` moves the cursor to a line's end or start
+    on up / down), and on lines holding wide characters.
 
 - **`word_separators_and_wrap_search_reach_copy_mode` failed once** (Windows,
   full e2e suite, 2026-10-18) at its first `#{copy_cursor_word}` check; four

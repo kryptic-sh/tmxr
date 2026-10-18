@@ -215,6 +215,40 @@ fn copy_pipe_sends_the_selection_to_copy_command() {
         std::thread::sleep(Duration::from_millis(100));
     }
     assert_eq!(t.run(&["show-buffer"]), "pipeme-77");
+
+    // pipe-and-cancel hands the selection to its command and adds no buffer.
+    let sink2 = t.dir.path().join("piped2.txt");
+    #[cfg(unix)]
+    let command2 = format!("cat > '{}'", sink2.display());
+    #[cfg(windows)]
+    let command2 = format!(
+        "$input | Set-Content -NoNewline -Path '{}'",
+        sink2.display()
+    );
+    t.run(&["copy-mode", "-t", "pp"]);
+    for (cmd, arg) in [
+        ("search-backward", Some("pipeme")),
+        ("begin-selection", None),
+        ("next-space-end", None),
+    ] {
+        let mut args = vec!["send-keys", "-t", "pp", "-X", cmd];
+        args.extend(arg);
+        t.run(&args);
+    }
+    t.run(&["send-keys", "-t", "pp", "-X", "pipe-and-cancel", &command2]);
+    let deadline = Instant::now() + TIMEOUT;
+    loop {
+        let got = std::fs::read_to_string(&sink2).unwrap_or_default();
+        if got.trim_end() == "pipeme-77" {
+            break;
+        }
+        assert!(Instant::now() < deadline, "second sink holds {got:?}");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert_eq!(
+        t.run(&["list-buffers", "-F", "#{buffer_name}"]).trim(),
+        "buffer0"
+    );
 }
 
 /// Unix only: it needs a shell that can write to its error output before

@@ -19,6 +19,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Copy mode's `pipe`, `pipe-no-clear`, `pipe-and-cancel`,
+  `copy-selection-no-clear` and `copy-pipe-no-clear`**, as tmux's: the `pipe`
+  commands hand the selection to a command (else `copy-command`) with no buffer
+  or clipboard, and the `-no-clear` ones keep the selection.
 - **The `command-error` hook**, as tmux's: it runs once for each command that
   fails as it runs (not one that does not parse), against the command's target.
 - **`refresh-client -f` / `-F`** sets a client's flags, as tmux's, and `!flag`
