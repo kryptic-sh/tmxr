@@ -178,6 +178,11 @@ impl Context for Vars<'_> {
         })
     }
 
+    fn pane_lines(&self) -> Option<Vec<String>> {
+        let screen = self.srv.panes.get(&self.pane?)?.emu.screen();
+        Some(screen.rows(0, screen.size().1).collect())
+    }
+
     fn get(&self, name: &str) -> Option<String> {
         let srv = self.srv;
         if name.starts_with('@')

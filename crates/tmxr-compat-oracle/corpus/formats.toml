@@ -318,3 +318,12 @@ checks = [
   { command = "display -p -t o '#{N:theirs} #{N/s:#{session_name}} #{N:#{window_name}}'" },
   { command = "display -p -t o '[#{N/x:session_name}]'" },
 ]
+
+[[cases]]
+name = "c_modifier_finds_the_first_line_holding_the_text"
+program = 'printf "  gamma  \nalpha\nBeta two"; exec sleep 1000'
+steps = [{ sleep = 0.5 }]
+checks = [
+  { format = "#{C:Beta} #{C:beta} #{C/i:beta} #{C:zzz} #{C:a*a}" },
+  { format = "#{C/r:a$} #{C/r:^ +gam} #{C/r:^B.*o$} #{C/ri:^beta} #{C/r:(}" },
+]

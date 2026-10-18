@@ -7,7 +7,9 @@
 //! `#{>=:a,b}` (compared as strings, as tmux's), `#{m:glob,text}`,
 //! `#{m/r:regex,text}` (`i` ignores case), `#{q:x}` (shell-quoted) and
 //! `#{q/e:x}` (`#` doubled), `#{N:name}` / `#{N/w:name}` (a window of the
-//! session is called that) and `#{N/s:name}` (a session is), `#{||:a,b}`,
+//! session is called that) and `#{N/s:name}` (a session is), `#{C:text}`
+//! (the first line of the pane's screen holding text, as a glob; `C/r` a
+//! regex, `i` ignoring case), `#{||:a,b}`,
 //! `#{&&:a,b}`, the short aliases
 //! `#S #W #I #P #H #h #F #D #T` and `##` for a literal `#`. Commas inside
 //! nested `#{…}` do not split.
@@ -23,6 +25,10 @@ pub trait Context {
     /// (`Session`) is called `name`, for `#{N:…}`; `None` when there is no
     /// session to ask, which expands to nothing, as tmux's.
     fn name_exists(&self, kind: NameKind, name: &str) -> Option<bool>;
+
+    /// The lines on the screen of the context's pane, top to bottom, for
+    /// `#{C:…}`; `None` when there is no pane.
+    fn pane_lines(&self) -> Option<Vec<String>>;
 }
 
 /// What `#{N:…}` looks a name up among.
@@ -39,6 +45,10 @@ impl<F: Fn(&str) -> Option<String>> Context for F {
     }
 
     fn name_exists(&self, _kind: NameKind, _name: &str) -> Option<bool> {
+        None
+    }
+
+    fn pane_lines(&self) -> Option<Vec<String>> {
         None
     }
 }
@@ -489,6 +499,24 @@ fn expand_item(body: &str, ctx: &dyn Context, pass: Pass) -> String {
             .map_or_else(String::new, |found| {
                 if found { "1" } else { "0" }.to_owned()
             });
+    }
+    // C: the number (from 1) of the first screen line holding the text, its
+    // trailing spaces cut; 0 for none or no pane, as tmux's
+    // window_pane_search.
+    if let Some((flags, inner)) = body.strip_prefix('C').and_then(modifier_args) {
+        let term = ex(inner);
+        let pattern = if flags.contains('r') {
+            term
+        } else {
+            format!("*{term}*")
+        };
+        let found = ctx.pane_lines().and_then(|lines| {
+            lines.iter().position(|line| {
+                let line = line.trim_end_matches(|c: char| c.is_ascii_whitespace());
+                format_match(flags, &pattern, line)
+            })
+        });
+        return found.map_or(0, |i| i + 1).to_string();
     }
     if let Some((flags, inner)) = body.strip_prefix('q').and_then(modifier_args) {
         let text = expand_item(inner, ctx, pass.deeper());

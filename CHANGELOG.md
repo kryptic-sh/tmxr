@@ -145,8 +145,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Format modifiers `e|op|` and `a:`**, as tmux's: arithmetic and numeric
   comparison (`#{e|+|:#{window_index},1}`, `#{e|/|f|4:7,2}` for decimals) and
   the character for a code (`#{a:65}` is `A`).
-- **The `N:` format modifier**, as tmux's: `#{N:name}` (or `N/w`) is 1 when a
-  window of the session is called `name`, `#{N/s:name}` when a session is.
+- **The `N:` and `C:` format modifiers**, as tmux's: `#{N:name}` (or `N/w`) is 1
+  when a window of the session is called `name`, `#{N/s:name}` when a session
+  is; `#{C:text}` is the number of the first line on the pane's screen holding
+  `text` (a glob, `C/r` a regular expression, `i` ignoring case), 0 for none.
 - **`split-window -p`**, tmux's older percentage (`-p 30` is `-l 30%`), and
   **`join-pane -f` / `move-pane -f`**, the pane spanning the whole window as
   `split-window -f` does.

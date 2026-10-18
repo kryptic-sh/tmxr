@@ -439,15 +439,14 @@ table. What has been verified, and how:
   - Formats: `#(shell)` in status formats (tmux's default `status-right` uses
     it); loops `S:` `W:` `P:` `L:`; modifiers `w:` (it needs a display-width
     measure `tmxr-command` does not have, unicode-width being a new dependency),
-    `c:` `C:` `R:` (`C:` can ask the server for a pane's content the way `N:`
-    asks for names, through `format::Context`), and `E` / `T` / `q` / `m`
-    chained with others by `;` (an unknown modifier expands to nothing); many of
-    tmux's format variables (compare tmux's `format_table` with `vars.rs` for
-    the list; `origin_flag`, `wrap_flag`, `insert_flag`, `scroll_region_*`,
-    `alternate_saved_*`, `pane_tabs` and `cursor_shape` / `cursor_colour` need
-    terminal state the `vt100` crate does not expose); styles `align=` `fill=`
-    `list=` `range=` `push-default` / `pop-default`, strikethrough, blink,
-    overline, curly and coloured underlines.
+    `c:` `R:`, and `E` / `T` / `q` / `m` chained with others by `;` (an unknown
+    modifier expands to nothing); many of tmux's format variables (compare
+    tmux's `format_table` with `vars.rs` for the list; `origin_flag`,
+    `wrap_flag`, `insert_flag`, `scroll_region_*`, `alternate_saved_*`,
+    `pane_tabs` and `cursor_shape` / `cursor_colour` need terminal state the
+    `vt100` crate does not expose); styles `align=` `fill=` `list=` `range=`
+    `push-default` / `pop-default`, strikethrough, blink, overline, curly and
+    coloured underlines.
   - Options: the status line is one row at the bottom (`STATUS_ROWS`): no
     `status off` / `2`–`5`, `status-position`, `status-format`; no
     `window-status-activity-style` / `-bell-style` (tmux's default `reverse`
