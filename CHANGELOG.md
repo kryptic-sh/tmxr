@@ -103,6 +103,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pressed longer than that after the prefix (or `switch-client -T prefix`) goes
   to the root table instead (unless it repeats a repeatable binding). 0, the
   default, waits forever.
+- **`split-window -p`**, tmux's older percentage (`-p 30` is `-l 30%`), and
+  **`join-pane -f` / `move-pane -f`**, the pane spanning the whole window as
+  `split-window -f` does.
 - **`confirm-before -c`, `-y`, `-b` and `-t`**, as tmux's: `-c` picks the key
   that confirms (the prompt shows it), `-y` makes Enter confirm, `-t` names the
   client to ask, and `-b` is accepted (tmxr's prompt never holds up the commands
@@ -161,6 +164,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`split-window -f`** was accepted and ignored; the new pane now spans the
+  whole window (full width or height, sized against it), first or last in the
+  pane list, as tmux's.
 - **`confirm-before` from a script** (a command client) asks the attached client
   used most recently instead of failing with "no current client", and its prompt
   shows at once rather than at the next status-line redraw.

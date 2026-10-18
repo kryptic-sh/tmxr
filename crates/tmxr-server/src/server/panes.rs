@@ -212,14 +212,16 @@ impl Server {
     }
 
     /// Split `target` and start a new pane. `horizontal` is tmux's `-h`
-    /// (side by side); `before` is `-b`; `size` is the new pane's cells;
-    /// `env` is added to its environment (`-e`).
+    /// (side by side); `before` is `-b`; `full` is `-f` (the whole window
+    /// splits, not the target); `size` is the new pane's cells; `env` is
+    /// added to its environment (`-e`).
     #[allow(clippy::too_many_arguments)]
     pub fn split(
         &mut self,
         target: PaneId,
         horizontal: bool,
         before: bool,
+        full: bool,
         size: Option<SplitSize>,
         cwd: PathBuf,
         argv: Vec<String>,
@@ -230,7 +232,7 @@ impl Server {
         let session = self.session_of_window(wid).ok_or("window has no session")?;
         let argv = self.new_pane_argv(session, argv);
         let new = self.next_pane;
-        self.insert_leaf(target, new, horizontal, before, size)?;
+        self.insert_leaf(target, new, horizontal, before, full, size)?;
         let win = self.windows.get_mut(&wid).ok_or("no such window")?;
         let rects = crate::layout::pane_rects(&win.layout, win.cols, win.rows);
         let r = rects
@@ -253,12 +255,17 @@ impl Server {
 
     /// Split `target`'s cell in its window's layout and put `new` in the new
     /// half (the layout half of `split-window`, shared with `join-pane`).
+    ///
+    /// With `full` (tmux's `-f`, `SPAWN_FULLSIZE`) the whole window splits:
+    /// the new pane spans it, sized against its width or height, and goes
+    /// first or last in the pane list.
     pub fn insert_leaf(
         &mut self,
         target: PaneId,
         new: PaneId,
         horizontal: bool,
         before: bool,
+        full: bool,
         size: Option<SplitSize>,
     ) -> Result<(), String> {
         let wid = self.panes.get(&target).ok_or("no such pane")?.window;
@@ -270,10 +277,11 @@ impl Server {
             SplitDir::Horizontal
         };
         let target_rect = self.panes.get(&target).map(|p| p.rect).unwrap_or_default();
-        let len = if horizontal {
-            target_rect.w
-        } else {
-            target_rect.h
+        let len = match (full, horizontal) {
+            (true, true) => win.cols,
+            (true, false) => win.rows,
+            (false, true) => target_rect.w,
+            (false, false) => target_rect.h,
         };
         if len < 3 {
             return Err("pane too small".into());
@@ -300,17 +308,32 @@ impl Server {
         let ratio = f32::from(first + 1) / f32::from(len);
         let t = target as usize;
         let n = new as usize;
-        win.layout.replace_leaf(t, move |id| {
+        let pair = move |old: LayoutTree| {
             let (a, b) = if before {
-                (LayoutTree::Leaf(n), LayoutTree::Leaf(id))
+                (LayoutTree::Leaf(n), old)
             } else {
-                (LayoutTree::Leaf(id), LayoutTree::Leaf(n))
+                (old, LayoutTree::Leaf(n))
             };
             LayoutTree::split(dir, ratio, a, b)
-        });
-        // tmux's pane list: the new pane after its target, before with -b.
-        if let Some(i) = win.order.iter().position(|p| *p == target) {
-            win.order.insert(if before { i } else { i + 1 }, new);
+        };
+        if full {
+            let root = std::mem::replace(&mut win.layout, LayoutTree::Leaf(n));
+            win.layout = pair(root);
+            // tmux's pane list: first with -b, else last.
+            if !win.order.is_empty() {
+                if before {
+                    win.order.insert(0, new);
+                } else {
+                    win.order.push(new);
+                }
+            }
+        } else {
+            win.layout
+                .replace_leaf(t, move |id| pair(LayoutTree::Leaf(id)));
+            // tmux's pane list: the new pane after its target, before with -b.
+            if let Some(i) = win.order.iter().position(|p| *p == target) {
+                win.order.insert(if before { i } else { i + 1 }, new);
+            }
         }
         Ok(())
     }

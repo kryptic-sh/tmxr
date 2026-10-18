@@ -216,12 +216,14 @@ impl Server {
 
     /// Move pane `src` out of its window and split `dst` to hold it, as
     /// `split-window` would place a new pane. A window left empty is closed.
+    #[allow(clippy::too_many_arguments)]
     pub fn join_pane(
         &mut self,
         src: PaneId,
         dst: PaneId,
         horizontal: bool,
         before: bool,
+        full: bool,
         size: Option<SplitSize>,
         focus: bool,
     ) -> Result<(), String> {
@@ -231,7 +233,13 @@ impl Server {
         let from = self.panes.get(&src).ok_or("no such pane")?.window;
         let to = self.panes.get(&dst).ok_or("no such pane")?.window;
         let r = self.panes[&dst].rect;
-        if (if horizontal { r.w } else { r.h }) < 3 {
+        let len = match (full, self.windows.get(&to)) {
+            (true, Some(w)) if horizontal => w.cols,
+            (true, Some(w)) => w.rows,
+            _ if horizontal => r.w,
+            _ => r.h,
+        };
+        if len < 3 {
             return Err("pane too small".into());
         }
         if self
@@ -247,7 +255,7 @@ impl Server {
         if let Some(p) = self.panes.get_mut(&src) {
             p.window = to;
         }
-        if let Err(e) = self.insert_leaf(dst, src, horizontal, before, size) {
+        if let Err(e) = self.insert_leaf(dst, src, horizontal, before, full, size) {
             // The pane is out of its old window already: give it a window of
             // its own rather than lose it.
             let session = self.session_of_window(to).ok_or("window has no session")?;

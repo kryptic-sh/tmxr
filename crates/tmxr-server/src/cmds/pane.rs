@@ -34,6 +34,7 @@ pub(super) fn run(
                 pid,
                 a.has('h'),
                 a.has('b'),
+                a.has('f'),
                 size,
                 cwd,
                 pos.to_vec(),
@@ -244,7 +245,15 @@ pub(super) fn run(
             };
             let dst = target::pane(srv, ctx, a.value('t'))?.2;
             let size = split_size(a)?;
-            srv.join_pane(src, dst, a.has('h'), a.has('b'), size, !a.has('d'))?;
+            srv.join_pane(
+                src,
+                dst,
+                a.has('h'),
+                a.has('b'),
+                a.has('f'),
+                size,
+                !a.has('d'),
+            )?;
         }
         "rotate-window" => {
             let (_, wid, _) = target::window(srv, ctx, a.value('t'))?;
@@ -570,6 +579,15 @@ fn set_input_off(srv: &mut Server, pane: PaneId, off: bool) {
 }
 
 fn split_size(a: &Args) -> Result<Option<SplitSize>, String> {
+    // -p N, tmux's older way to say -l N%, 0 to 100.
+    if a.value('l').is_none()
+        && let Some(p) = a.value('p')
+    {
+        return match p.parse::<u16>() {
+            Ok(pc) if pc <= 100 => Ok(Some(SplitSize::Percent(pc))),
+            _ => Err(format!("size {p}")),
+        };
+    }
     let Some(l) = a.value('l') else {
         return Ok(None);
     };

@@ -241,3 +241,24 @@ steps = [
 checks = [
   { command = "list-windows -t o -F '#I #{window_zoomed_flag} #{pane_index}'", expect = "0 1 1\n1 0 1\n2 1 1\n3 1 1\n4 0 0\n5 1 0" },
 ]
+
+[[cases]]
+name = "split_window_f_spans_the_window_and_p_is_a_percentage"
+steps = [
+  { run = "split-window -h -t o:0" },
+  { run = "split-window -v -f -l 5 -t o:0.0" },
+  { run = "new-window -d -t o:1" },
+  { run = "split-window -v -t o:1" },
+  { run = "split-window -h -f -b -p 30 -t o:1.1" },
+  { run = "new-window -d -t o:2" },
+  { run = "split-window -h -p 25 -t o:2" },
+  { run = "new-window -d -t o:3" },
+  { run = "split-window -h -t o:3" },
+  { run = "split-window -h -f -t o:3.0" },
+]
+checks = [
+  { command = "list-panes -t o:0 -F '#{pane_index} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'" },
+  { command = "list-panes -t o:1 -F '#{pane_index} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'" },
+  { command = "list-panes -t o:2 -F '#{pane_index} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'" },
+  { command = "list-panes -t o:3 -F '#{pane_index} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'" },
+]

@@ -194,10 +194,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "join-pane",
         Some("joinp"),
-        "bdhl:s:t:v",
+        "bdfhl:s:t:v",
         0,
         0,
-        "[-bdhv] [-l size] [-s src-pane] [-t dst-pane]"
+        "[-bdfhv] [-l size] [-s src-pane] [-t dst-pane]"
     ),
     cmd!(
         "kill-pane",
@@ -325,10 +325,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "move-pane",
         Some("movep"),
-        "bdhl:s:t:v",
+        "bdfhl:s:t:v",
         0,
         0,
-        "[-bdhv] [-l size] [-s src-pane] [-t dst-pane]"
+        "[-bdfhv] [-l size] [-s src-pane] [-t dst-pane]"
     ),
     cmd!(
         "move-window",
@@ -612,10 +612,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "split-window",
         Some("splitw"),
-        "bc:de:F:fhl:Pt:vZ",
+        "bc:de:F:fhl:p:Pt:vZ",
         0,
         ANY,
-        "[-bdfhPvZ] [-c start-directory] [-e environment] [-F format] [-l size] [-t target-pane] [command]"
+        "[-bdfhPvZ] [-c start-directory] [-e environment] [-F format] [-l size] [-p percentage] [-t target-pane] [command]"
     ),
     cmd!("start-server", Some("start"), "", 0, 0, ""),
     cmd!(

@@ -465,7 +465,7 @@ table. What has been verified, and how:
     `history-file`, `editor`. `escape-time` is kept but never read.
   - Commands: `capture-pane -e -a -C -T -q` (and `-J` keeping spaces a program
     wrote at a line's end, which the history snapshot cannot tell from blank
-    cells); `split-window -p -I`; layout strings (`#{window_layout}`,
+    cells); `split-window -I`; layout strings (`#{window_layout}`,
     `select-layout '<checksum>,…'`, `-o`); `display-message -a -v -I -N -C`;
     `choose-*` templates and `-F -f -K -O -r -N -y`, tagging and sort keys;
     `command-prompt` with several `-p` and `%1`…`%9`, `-1 -N -b -F -l`,
@@ -474,8 +474,9 @@ table. What has been verified, and how:
     smaller flags: `send-keys -R -K -c` (`-R` is tmux's `input_reset`, more than
     a vt100 `ESC c`), `display-panes -d -b -N`, `set-buffer -t`, `copy-mode -s`,
     `detach-client -E`, `run-shell -E`, `list-keys -a -P` (see `list-keys -N`
-    below), `join-pane -f -p`, `source-file -n -v -F` and globs; `source-file`
-    of a tmux command file (`%if`, `%hidden`).
+    below), `join-pane -p` (tmux 3.6's reads `-l` instead, so it fails without
+    `-l`), `source-file -n -v -F` and globs; `source-file` of a tmux command
+    file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `pane-set-clipboard`,
     `client-active`, `command-error`, `client-light-theme` / `-dark-theme`. Copy
     mode lacks `next-prompt` / `previous-prompt`, `copy-line`, `copy-pipe-line`,
