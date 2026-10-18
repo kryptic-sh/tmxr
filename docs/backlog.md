@@ -436,18 +436,17 @@ table. What has been verified, and how:
     large into an error (`conn.rs`).
 - **tmux 3.6 features tmxr lacks** (the same review; compared against tmux's
   `cmd-*.c`, `options-table.c` and `format.c`, not run):
-  - Formats: `#(shell)` and strftime in status formats (tmux's default
-    `status-right` uses both); loops `S:` `W:` `P:` `L:`; modifiers `w:` (it
-    needs a display-width measure `tmxr-command` does not have, unicode-width
-    being a new dependency), `c:` `C:` `R:` `t:`, and `N:` (whether a window or
-    session name exists: the format `Context` has only `get`, so it needs a way
-    to ask the server), and `E` / `T` / `q` / `m` chained with others by `;` (an
-    unknown modifier expands to nothing); many of tmux's format variables
-    (`session_created`, `pane_start_command`, `client_pid`, `start_time`,
-    `window_linked_sessions` ...; compare tmux's `format_table` with `vars.rs`
-    for the list); styles `align=` `fill=` `list=` `range=` `push-default` /
-    `pop-default`, strikethrough, blink, overline, curly and coloured
-    underlines.
+  - Formats: `#(shell)` in status formats (tmux's default `status-right` uses
+    it); loops `S:` `W:` `P:` `L:`; modifiers `w:` (it needs a display-width
+    measure `tmxr-command` does not have, unicode-width being a new dependency),
+    `c:` `C:` `R:`, and `N:` (whether a window or session name exists: the
+    format `Context` has only `get`, so it needs a way to ask the server), and
+    `E` / `T` / `q` / `m` chained with others by `;` (an unknown modifier
+    expands to nothing); many of tmux's format variables (`session_created`,
+    `pane_start_command`, `client_pid`, `start_time`, `window_linked_sessions`
+    ...; compare tmux's `format_table` with `vars.rs` for the list); styles
+    `align=` `fill=` `list=` `range=` `push-default` / `pop-default`,
+    strikethrough, blink, overline, curly and coloured underlines.
   - Options: the status line is one row at the bottom (`STATUS_ROWS`): no
     `status off` / `2`–`5`, `status-position`, `status-format`; no
     `window-status-activity-style` / `-bell-style` (tmux's default `reverse`
@@ -456,10 +455,10 @@ table. What has been verified, and how:
     `-indicators`, `window-style` / `window-active-style`; session
     `status-keys`, `assume-paste-time`, `default-size`; window
     `aggressive-resize`, `alternate-screen`, `remain-on-exit-format` (its
-    default needs the `t:` modifier and `#{pane_dead_time}` /
-    `#{pane_dead_signal}`, none of which tmxr has; the dead-pane line is a fixed
-    `Pane is dead (status N)` in `render.rs`); server `focus-events`,
-    `history-file`, `editor`. `escape-time` is kept but never read.
+    default needs `#{pane_dead_time}` and `#{pane_dead_signal}`, which tmxr does
+    not have; the dead-pane line is a fixed `Pane is dead (status N)` in
+    `render.rs`); server `focus-events`, `history-file`, `editor`. `escape-time`
+    is kept but never read.
   - Commands: `capture-pane -e -a -C -T -q` (and `-J` keeping spaces a program
     wrote at a line's end, which the history snapshot cannot tell from blank
     cells); `split-window -I`; `display-message -a -v -I -N -C`; `choose-*`
@@ -522,6 +521,15 @@ table. What has been verified, and how:
   signalling a process group the session belongs to (`detach-client -P` sends
   SIGHUP to client parents). Workaround: log to a file in `$HOME` and read it
   from a new session.
+- **Time expansion is not carried into everything tmux carries it into**:
+  `format::expand_time` fills in strftime sequences at each level of a format
+  (nested parts, `E:` values, modifier arguments) as tmux's `FORMAT_EXPAND_TIME`
+  does, and the status line, the terminal title and `display-message` use it.
+  Not checked against tmux: menus, popups' titles and `pane-border-format` (tmxr
+  has none yet), and `#()` jobs (tmux turns time expansion off for them; tmxr
+  has no jobs in formats). strftime covers the C locale's common conversions
+  (`format::strftime`); `%Z`, `%z`, `%U`, `%V`, `%W`, `%G`, `%g` and `%x` / `%X`
+  are kept as written.
 - **tmux's `link-window` and `move-window` drop the mark** of a pane in the
   window they place (2026-10-18, tmux 3.6): `server_link_window` moves
   `marked_pane.wl` to the new link but keeps `marked_pane.s`, so the mark no

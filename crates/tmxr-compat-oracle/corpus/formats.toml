@@ -104,3 +104,41 @@ checks = [
   { command = "display -p -t o:1 '#{e|>|:#{window_activity},1700000000}'", expect = "1" },
   { format = "#{e|<=|:#{start_time},#{session_created}}", expect = "1" },
 ]
+
+[[cases]]
+name = "t_modifier_and_strftime_in_display_message_are_tmuxs"
+steps = [
+  { run = "set -g @t 1700000000" },
+  # Twelve hours on: one of the two is in the afternoon in any zone.
+  { run = "set -g @t12 1700043200" },
+  { run = "set -g @zero 0" },
+  { run = "set -g @word hello" },
+]
+checks = [
+  { command = "display -p '#{t:@t}'" },
+  { command = "display -p '#{t/f/%%a %%A %%b %%B %%C %%d %%D %%e %%F %%h %%H %%I %%j %%k %%l %%m %%M %%p %%r %%R %%s %%S %%T %%u %%w %%y %%Y %%%%:@t}'" },
+  { command = "display -p '#{t/p:@t}'" },
+  # Not time-expanded: t/f formats @t itself, each conversion as glibc's.
+  { command = "list-windows -t o -F '#{t/f/%a %A %b %B %C %d %D %e %F %h %H %I %j %k %l %m %M %p %r %R %s %S %T %u %w %y %Y %%:@t}'" },
+  { command = "list-windows -t o -F '#{t/f/%c|%P|%Q:@t}'" },
+  { command = "list-windows -t o -F '#{t/f/%H %I %k %l %p %P %r:@t12}'" },
+  { command = "display -p '[#{t:@zero}][#{t:@word}]'", expect = "[][]" },
+  { command = "display -p '%Y %%'" },
+  { command = "display -p -l '%Y'", expect = "%Y" },
+]
+
+[[cases]]
+name = "strftime_sequences_fill_in_the_status_line"
+attach = true
+unix_only = true
+steps = [
+  { run = "set -g status-right 'Y=%Y|%%'" },
+  { run = "set -g window-status-current-format 'W=%m'" },
+  { sleep = 0.5 },
+]
+checks = [
+  { screen_contains = "Y=%Y", expect = false },
+  { screen_contains = "Y=20", expect = true },
+  { screen_contains = "|%", expect = true },
+  { screen_contains = "W=%m", expect = false },
+]

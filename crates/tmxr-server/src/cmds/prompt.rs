@@ -4,7 +4,7 @@ use std::fmt::Write as _;
 
 use tmxr_command::Parsed;
 
-use super::{Ctx, Outcome, Res, attached_client, expand_for, expand_with, join_args};
+use super::{Ctx, Outcome, Res, attached_client, expand_for, join_args};
 use crate::model::{ClientId, PaneId};
 use crate::overlay::Overlay;
 use crate::server::Server;
@@ -270,11 +270,12 @@ pub(super) fn run(
             if let Some((sid, _, _)) = target {
                 vars.session = Some(sid);
             }
-            // -l: the text as given, not expanded.
+            // -l: the text as given, not expanded; else with its strftime
+            // sequences filled in first, as tmux's.
             let msg = if a.has('l') {
                 fmt.to_owned()
             } else {
-                expand_with(srv, ctx, &vars, fmt)
+                super::expand_by(srv, ctx, &vars, fmt, tmxr_command::format::expand_time)
             };
             // -c: the client the message shows on, else the command's.
             let client = match a.value('c') {

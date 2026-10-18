@@ -28,15 +28,215 @@ impl<F: Fn(&str) -> Option<String>> Context for F {
 /// recurse forever.
 const MAX_DEPTH: usize = 10;
 
-/// Expand a format string.
-pub fn expand(fmt: &str, ctx: &dyn Context) -> String {
-    expand_depth(fmt, ctx, 0)
+/// `fmt` with its `strftime` sequences (`%H:%M`) as the time now, as tmux
+/// fills them in before expanding the status line, the terminal title and
+/// `display-message` (`format_expand_time`).
+fn time_now(fmt: &str) -> String {
+    match crate::localtime::now() {
+        Some(now) if fmt.contains('%') => strftime(fmt, &now),
+        _ => fmt.to_owned(),
+    }
 }
 
-fn expand_depth(fmt: &str, ctx: &dyn Context, depth: usize) -> String {
-    if depth > MAX_DEPTH {
+/// [`expand`] with time expansion on, as tmux's `format_expand_time`: each
+/// format expanded, nested ones and modifiers' arguments too, has its
+/// strftime sequences filled in first ([`time_now`]).
+pub fn expand_time(fmt: &str, ctx: &dyn Context) -> String {
+    expand_depth(
+        fmt,
+        ctx,
+        Pass {
+            depth: 0,
+            time: true,
+        },
+    )
+}
+
+/// How deep an expansion is, and whether it fills in strftime sequences.
+#[derive(Debug, Clone, Copy)]
+struct Pass {
+    depth: usize,
+    time: bool,
+}
+
+impl Pass {
+    const fn deeper(self) -> Self {
+        Self {
+            depth: self.depth + 1,
+            ..self
+        }
+    }
+}
+
+const DAYS: [&str; 7] = [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+];
+const MONTHS: [&str; 12] = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+];
+
+/// `fmt` with C's `strftime` conversions filled in from `t`, in the C
+/// locale: `%a %A %b %B %c %C %d %D %e %F %h %H %I %j %k %l %m %M %n %p %P %r
+/// %R %s %S %t %T %u %w %y %Y %%`. Any other `%` sequence is kept as it is.
+pub fn strftime(fmt: &str, t: &crate::localtime::LocalTime) -> String {
+    let day = DAYS[usize::from(t.weekday % 7)];
+    let month = MONTHS[usize::from(t.month.clamp(1, 12) - 1)];
+    let hour12 = match t.hour % 12 {
+        0 => 12,
+        h => h,
+    };
+    let mut out = String::new();
+    let mut chars = fmt.chars();
+    while let Some(c) = chars.next() {
+        if c != '%' {
+            out.push(c);
+            continue;
+        }
+        let Some(spec) = chars.next() else {
+            out.push('%');
+            break;
+        };
+        let piece = match spec {
+            'a' => day[..3].to_owned(),
+            'A' => day.to_owned(),
+            'b' | 'h' => month[..3].to_owned(),
+            'B' => month.to_owned(),
+            'c' => format!(
+                "{} {} {:>2} {:02}:{:02}:{:02} {}",
+                &day[..3],
+                &month[..3],
+                t.day,
+                t.hour,
+                t.minute,
+                t.second,
+                t.year
+            ),
+            'C' => format!("{:02}", t.year.div_euclid(100)),
+            'd' => format!("{:02}", t.day),
+            'D' => format!("{:02}/{:02}/{:02}", t.month, t.day, t.year.rem_euclid(100)),
+            'e' => format!("{:>2}", t.day),
+            'F' => format!("{}-{:02}-{:02}", t.year, t.month, t.day),
+            'H' => format!("{:02}", t.hour),
+            'I' => format!("{hour12:02}"),
+            'j' => format!("{:03}", t.yearday + 1),
+            'k' => format!("{:>2}", t.hour),
+            'l' => format!("{hour12:>2}"),
+            'm' => format!("{:02}", t.month),
+            'M' => format!("{:02}", t.minute),
+            'n' => "\n".to_owned(),
+            'p' => if t.hour < 12 { "AM" } else { "PM" }.to_owned(),
+            'P' => if t.hour < 12 { "am" } else { "pm" }.to_owned(),
+            'r' => format!(
+                "{hour12:02}:{:02}:{:02} {}",
+                t.minute,
+                t.second,
+                if t.hour < 12 { "AM" } else { "PM" }
+            ),
+            'R' => format!("{:02}:{:02}", t.hour, t.minute),
+            's' => t.epoch.to_string(),
+            'S' => format!("{:02}", t.second),
+            't' => "\t".to_owned(),
+            'T' => format!("{:02}:{:02}:{:02}", t.hour, t.minute, t.second),
+            'u' => match t.weekday {
+                0 => 7,
+                d => d,
+            }
+            .to_string(),
+            'w' => t.weekday.to_string(),
+            'y' => format!("{:02}", t.year.rem_euclid(100)),
+            'Y' => t.year.to_string(),
+            '%' => "%".to_owned(),
+            other => format!("%{other}"),
+        };
+        out.push_str(&piece);
+    }
+    out
+}
+
+/// tmux's `format_pretty_time`: a time as short as its age allows (`%H:%M`
+/// within a day, `%a%d` within the month or 28 days, `%d%b` within a year,
+/// else `%b%y`).
+fn pretty_time(t: &crate::localtime::LocalTime, now: &crate::localtime::LocalTime) -> String {
+    let age = (now.epoch - t.epoch).max(0);
+    let fmt = if age < 24 * 3600 {
+        "%H:%M"
+    } else if (t.year == now.year && t.month == now.month) || age < 28 * 24 * 3600 {
+        "%a%d"
+    } else if (t.year == now.year && t.month < now.month)
+        || (t.year == now.year - 1 && t.month > now.month)
+    {
+        "%d%b"
+    } else {
+        "%h%y"
+    };
+    strftime(fmt, t)
+}
+
+/// tmux's `format_strip`: `#` escapes taken out of a modifier's argument,
+/// except inside a nested `#{…}`.
+fn strip_escapes(s: &str) -> String {
+    let mut out = String::new();
+    let mut brackets = 0usize;
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        let next = chars.peek().copied();
+        if c == '#' && next == Some('{') {
+            brackets += 1;
+        }
+        if c == '#' && next.is_some_and(|n| ",#{}:".contains(n)) {
+            if brackets != 0 {
+                out.push(c);
+            }
+            continue;
+        }
+        if c == '}' {
+            brackets = brackets.saturating_sub(1);
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// Expand a format string.
+pub fn expand(fmt: &str, ctx: &dyn Context) -> String {
+    expand_depth(
+        fmt,
+        ctx,
+        Pass {
+            depth: 0,
+            time: false,
+        },
+    )
+}
+
+fn expand_depth(fmt: &str, ctx: &dyn Context, pass: Pass) -> String {
+    if pass.depth > MAX_DEPTH {
         return String::new();
     }
+    let timed;
+    let fmt = if pass.time {
+        timed = time_now(fmt);
+        timed.as_str()
+    } else {
+        fmt
+    };
     let mut out = String::with_capacity(fmt.len());
     let mut rest = fmt;
     while let Some(at) = rest.find('#') {
@@ -46,7 +246,7 @@ fn expand_depth(fmt: &str, ctx: &dyn Context, depth: usize) -> String {
         match chars.next() {
             Some('{') => match matching_brace(&after[1..]) {
                 Some(end) => {
-                    out.push_str(&expand_item(&after[1..1 + end], ctx, depth));
+                    out.push_str(&expand_item(&after[1..1 + end], ctx, pass));
                     rest = &after[1 + end + 1..];
                     continue;
                 }
@@ -143,8 +343,8 @@ fn truthy(s: &str) -> bool {
     !s.is_empty() && s != "0"
 }
 
-fn expand_item(body: &str, ctx: &dyn Context, depth: usize) -> String {
-    let ex = |s: &str| expand_depth(s, ctx, depth + 1);
+fn expand_item(body: &str, ctx: &dyn Context, pass: Pass) -> String {
+    let ex = |s: &str| expand_depth(s, ctx, pass.deeper());
     if let Some(cond) = body.strip_prefix('?') {
         // `#{?c1,v1,c2,v2,…,else}`: the value of the first true condition,
         // else the last unpaired part, else nothing, as tmux's.
@@ -183,6 +383,39 @@ fn expand_item(body: &str, ctx: &dyn Context, depth: usize) -> String {
             return if f(&a, &b) { "1" } else { "0" }.to_owned();
         }
     }
+    // t: a time in seconds as ctime writes it; t/p as short as its age
+    // allows; t/f/FORMAT by strftime; nothing when the value is not a time,
+    // as tmux's.
+    if let Some((args, name)) =
+        body.strip_prefix('t')
+            .and_then(|rest| match rest.strip_prefix(':') {
+                Some(name) => Some((Vec::new(), name)),
+                None => expression_args(rest),
+            })
+    {
+        let value = if name.contains("#{") {
+            ex(name)
+        } else {
+            ctx.get(name).unwrap_or_default()
+        };
+        let Some(t) = value
+            .parse::<i64>()
+            .ok()
+            .filter(|n| *n > 0)
+            .and_then(crate::localtime::at)
+        else {
+            return String::new();
+        };
+        return match args.as_slice() {
+            [flags, ..] if flags.contains('p') => {
+                crate::localtime::now().map_or_else(String::new, |now| pretty_time(&t, &now))
+            }
+            // The format is expanded first, as tmux's modifier arguments
+            // are, so under time expansion its own %s are filled in too.
+            [flags, format, ..] if flags.contains('f') => strftime(&strip_escapes(&ex(format)), &t),
+            _ => strftime("%a %b %e %H:%M:%S %Y", &t),
+        };
+    }
     if let Some(text) = body.strip_prefix("a:") {
         // `a`: the character with that code, printable ASCII only.
         return ex(text)
@@ -198,9 +431,18 @@ fn expand_item(body: &str, ctx: &dyn Context, depth: usize) -> String {
         let right = ex(parts.get(1).copied().unwrap_or_default());
         return expression(&args, &left, &right).unwrap_or_default();
     }
-    if let Some(name) = body.strip_prefix("E:").or_else(|| body.strip_prefix("T:")) {
+    if let Some(name) = body.strip_prefix("E:") {
         let raw = ctx.get(name).unwrap_or_default();
         return ex(&raw);
+    }
+    // T: expanded with time expansion on, as tmux's.
+    if let Some(name) = body.strip_prefix("T:") {
+        let raw = ctx.get(name).unwrap_or_default();
+        let timed = Pass {
+            time: true,
+            ..pass.deeper()
+        };
+        return expand_depth(&raw, ctx, timed);
     }
     if let Some((flags, rest)) = body.strip_prefix('m').and_then(modifier_args) {
         let parts = split_top(rest);
@@ -214,7 +456,7 @@ fn expand_item(body: &str, ctx: &dyn Context, depth: usize) -> String {
         .to_owned();
     }
     if let Some((flags, inner)) = body.strip_prefix('q').and_then(modifier_args) {
-        let text = expand_item(inner, ctx, depth + 1);
+        let text = expand_item(inner, ctx, pass.deeper());
         return if flags.contains('e') || flags.contains('h') {
             text.replace('#', "##")
         } else {
@@ -222,7 +464,7 @@ fn expand_item(body: &str, ctx: &dyn Context, depth: usize) -> String {
         };
     }
     if let Some((mods, inner)) = value_modifiers(body) {
-        return apply_modifiers(&mods, inner, ctx, depth);
+        return apply_modifiers(&mods, inner, ctx, pass);
     }
     if body.contains("#{") {
         return ex(body);
@@ -389,8 +631,8 @@ fn value_modifiers(body: &str) -> Option<(Vec<Mod<'_>>, &str)> {
 /// `format_replace` applies them whatever order they were written in: the
 /// value (a path's parts for a variable read directly, the text itself for
 /// `l`), then substitutions, the length limit, padding, and the length.
-fn apply_modifiers(mods: &[Mod<'_>], inner: &str, ctx: &dyn Context, depth: usize) -> String {
-    let ex = |s: &str| expand_depth(s, ctx, depth + 1);
+fn apply_modifiers(mods: &[Mod<'_>], inner: &str, ctx: &dyn Context, pass: Pass) -> String {
+    let ex = |s: &str| expand_depth(s, ctx, pass.deeper());
     let mut value = if mods.contains(&Mod::Literal) {
         inner.to_owned()
     } else if inner.contains("#{") {

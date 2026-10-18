@@ -119,6 +119,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and `cursor-down-and-cancel`**, as tmux's: whole lines copied (a count for
   more), the cursor's line taken to the top or bottom of the view when there is
   room, and copy mode left once a motion down reaches the bottom.
+- **Times in formats**, as tmux's: strftime sequences (`%H:%M`, `%d-%b-%y`) in
+  `status-left`, `status-right`, the window entries, `set-titles-string` and
+  `display-message` show the time now, `T:` turns that on for a value, and the
+  `t:` modifier shows a time variable as a date (`#{t:session_created}`), as
+  short as its age allows (`t/p`) or by a strftime format (`t/f/%H:%M`).
 - **`status-justify`**, as tmux's: the window list after `status-left` (`left`,
   the default), centred between the two sides (`centre`), against `status-right`
   (`right`), or centred on the whole line (`absolute-centre`).

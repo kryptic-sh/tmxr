@@ -551,10 +551,12 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
         _ => {}
     }
 
-    let right = format::expand(&opts.status_right, &vars);
+    // The sides and the window entries with their strftime sequences filled
+    // in, as tmux's default status-format does through #{T:…}.
+    let right = format::expand_time(&opts.status_right, &vars);
     let right_w = runs_width(&right).min(opts.status_right_length).min(cols);
     let limit = cols - right_w;
-    let left = format::expand(&opts.status_left, &vars);
+    let left = format::expand_time(&opts.status_left, &vars);
     let left_base = base.patch(style_option(&opts.status_left_style, &vars));
     let x = draw_runs(
         buf,
@@ -601,7 +603,7 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
         {
             window_base = window_base.patch(last);
         }
-        let text = format::expand(fmt, &wvars);
+        let text = format::expand_time(fmt, &wvars);
         let sep = if n + 1 < count {
             format::expand(&options.window_status_separator, &wvars)
         } else {
@@ -757,7 +759,7 @@ pub fn title(srv: &Server, id: ClientId) -> Option<String> {
         return None;
     }
     let vars = Vars::for_pane(srv, srv.active_pane_of_session(session), Some(id));
-    let title = format::expand(&opts.set_titles_string, &vars);
+    let title = format::expand_time(&opts.set_titles_string, &vars);
     Some(title.chars().filter(|c| !c.is_control()).collect())
 }
 

@@ -217,13 +217,25 @@ fn expand_for(srv: &Server, ctx: &Ctx, pane: Option<PaneId>, s: &str) -> String 
 
 /// `s` expanded with `vars`: [`expand_for`] for variables already chosen.
 fn expand_with(srv: &Server, ctx: &Ctx, vars: &Vars<'_>, s: &str) -> String {
+    expand_by(srv, ctx, vars, s, expand)
+}
+
+/// [`expand_with`] by `expander` ([`expand`], or `expand_time` for
+/// `display-message`).
+fn expand_by(
+    srv: &Server,
+    ctx: &Ctx,
+    vars: &Vars<'_>,
+    s: &str,
+    expander: fn(&str, &dyn tmxr_command::format::Context) -> String,
+) -> String {
     match &ctx.mouse {
         // A mouse bind's commands also see what was under the mouse.
-        Some(mouse) => expand(s, &|name: &str| {
+        Some(mouse) => expander(s, &|name: &str| {
             crate::vars::mouse_var(srv, mouse, name)
                 .or_else(|| tmxr_command::format::Context::get(vars, name))
         }),
-        None => expand(s, vars),
+        None => expander(s, vars),
     }
 }
 
