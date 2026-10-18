@@ -22,12 +22,12 @@ pub(super) fn run(
     let pos = a.positional();
     match p.name() {
         "split-window" => {
-            let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
+            let (sid, _, pid) = target::pane(srv, ctx, a.value('t'))?;
             let size = split_size(a)?;
             let cwd = cwd_arg(srv, ctx, Some(pid), a)
                 .or_else(|| srv.panes.get(&pid).map(|p| p.start_cwd.clone()))
                 .unwrap_or_else(crate::util::home_dir);
-            srv.split(
+            let new = srv.split(
                 pid,
                 a.has('h'),
                 a.has('b'),
@@ -37,6 +37,7 @@ pub(super) fn run(
                 &super::env_flags(a)?,
                 !a.has('d'),
             )?;
+            super::print_new(srv, ctx, a, out, sid, Some(new), super::NEW_PANE_TEMPLATE);
         }
         "kill-pane" => {
             let (_, wid, pid) = target::pane(srv, ctx, a.value('t'))?;
@@ -263,6 +264,8 @@ pub(super) fn run(
             let name = srv.commands.get(&pid).cloned().unwrap_or_default();
             let new = srv.adopt_pane(sid, pid, name, cols, rows, !a.has('d'))?;
             srv.relayout(new);
+            let pane = srv.windows.get(&new).map(|w| w.active);
+            super::print_new(srv, ctx, a, out, sid, pane, super::NEW_PANE_TEMPLATE);
         }
         "list-panes" => {
             // -a every pane on the server, -s every pane in the session,

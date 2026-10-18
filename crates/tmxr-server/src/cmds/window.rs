@@ -42,7 +42,7 @@ pub(super) fn run(
                 .and_then(|s| s.current_window())
                 .and_then(|w| srv.windows.get(&w))
                 .map_or_else(|| client_size(srv, ctx), |w| (w.cols, w.rows));
-            srv.new_window(
+            let wid = srv.new_window(
                 sid,
                 index,
                 a.value('n').map(str::to_owned),
@@ -52,6 +52,8 @@ pub(super) fn run(
                 size,
                 !a.has('d'),
             )?;
+            let pane = srv.windows.get(&wid).map(|w| w.active);
+            super::print_new(srv, ctx, a, out, sid, pane, super::NEW_PANE_TEMPLATE);
         }
         // -r: renumber the target session's windows; nothing moves.
         "move-window" if a.has('r') => {

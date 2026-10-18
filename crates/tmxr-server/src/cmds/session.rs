@@ -63,6 +63,8 @@ pub(super) fn run(
                 pos.to_vec(),
                 size,
             )?;
+            // tmux's `NEW_SESSION_TEMPLATE`.
+            super::print_new(srv, ctx, a, out, sid, None, "#{session_name}:");
             if !a.has('d') {
                 if let Some(c) = ctx.client {
                     set_client_flags(srv, c, &flags);

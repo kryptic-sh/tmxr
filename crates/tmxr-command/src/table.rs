@@ -53,10 +53,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "break-pane",
         Some("breakp"),
-        "dt:",
+        "dF:Pt:",
         0,
         0,
-        "[-d] [-t target-pane]"
+        "[-dP] [-F format] [-t target-pane]"
     ),
     cmd!(
         "capture-pane",
@@ -342,18 +342,18 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "new-session",
         Some("new"),
-        "Ac:dDe:Ef:n:s:Xx:y:",
+        "Ac:dDe:EF:f:n:Ps:Xx:y:",
         0,
         ANY,
-        "[-AdDEX] [-c start-directory] [-e environment] [-f flags] [-n window-name] [-s session-name] [-x width] [-y height] [command]"
+        "[-AdDEPX] [-c start-directory] [-e environment] [-F format] [-f flags] [-n window-name] [-s session-name] [-x width] [-y height] [command]"
     ),
     cmd!(
         "new-window",
         Some("neww"),
-        "abdc:e:n:t:",
+        "abdc:e:F:n:Pt:",
         0,
         ANY,
-        "[-abd] [-c start-directory] [-n window-name] [-t target-window] [command]"
+        "[-abdP] [-c start-directory] [-e environment] [-F format] [-n window-name] [-t target-window] [command]"
     ),
     cmd!(
         "next-layout",
@@ -605,10 +605,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "split-window",
         Some("splitw"),
-        "bc:de:fhl:t:v",
+        "bc:de:F:fhl:Pt:v",
         0,
         ANY,
-        "[-bdfhv] [-c start-directory] [-l size] [-t target-pane] [command]"
+        "[-bdfhPv] [-c start-directory] [-e environment] [-F format] [-l size] [-t target-pane] [command]"
     ),
     cmd!("start-server", Some("start"), "", 0, 0, ""),
     cmd!(

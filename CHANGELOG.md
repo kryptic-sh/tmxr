@@ -83,6 +83,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`window-size largest` and `smallest`**, as tmux's: a window as wide and as
   tall as the session's widest and tallest clients, or its narrowest and
   shortest, each way.
+- **`-P` and `-F` on `new-window`, `split-window`, `new-session` and
+  `break-pane`**, as tmux's: print the new window or pane
+  (`#{session_name}:#{window_index}.#{pane_index}`) or session
+  (`#{session_name}:`), or `-F`'s format for it.
 - **Cursor shapes**: a program's `CSI Ps SP q` (vim's bar cursor in insert mode,
   say) reaches the client's terminal for the active pane instead of being
   dropped, and **`cursor-style`**, as tmux's, gives the shape for a pane whose

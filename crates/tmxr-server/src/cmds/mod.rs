@@ -227,6 +227,44 @@ fn expand_with(srv: &Server, ctx: &Ctx, vars: &Vars<'_>, s: &str) -> String {
     }
 }
 
+/// tmux's template for what `-P` prints of a new window or pane.
+const NEW_PANE_TEMPLATE: &str = "#{session_name}:#{window_index}.#{pane_index}";
+
+/// `-P`: print the new session, window or pane by `-F`, else by `default`,
+/// as tmux's `new-window`, `split-window`, `break-pane` and `new-session`.
+/// Without a pane, the active one of the session's current window.
+fn print_new(
+    srv: &Server,
+    ctx: &Ctx,
+    a: &Args,
+    out: &mut Outcome,
+    session: SessionId,
+    pane: Option<PaneId>,
+    default: &str,
+) {
+    if !a.has('P') {
+        return;
+    }
+    let pane = pane.or_else(|| {
+        let window = srv.sessions.get(&session)?.current_window()?;
+        srv.windows.get(&window).map(|w| w.active)
+    });
+    let vars = Vars {
+        srv,
+        session: Some(session),
+        window: pane.and_then(|p| srv.panes.get(&p)).map(|p| p.window),
+        pane,
+        client: ctx.client,
+    };
+    out.stdout.push_str(&expand_with(
+        srv,
+        ctx,
+        &vars,
+        a.value('F').unwrap_or(default),
+    ));
+    out.stdout.push('\n');
+}
+
 /// One item of a list command: its `default` line, or `-F`'s format
 /// expanded with the item's variables; `None` when `-f`'s filter expands to
 /// nothing or `0` for it, as tmux's filters.

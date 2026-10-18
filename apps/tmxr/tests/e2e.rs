@@ -6856,6 +6856,58 @@ fn allow_set_title_off_keeps_programs_from_titling_panes() {
 }
 
 #[test]
+fn new_windows_panes_and_sessions_print_themselves_with_p() {
+    let t = Tmxr::new("printnew");
+    t.run(&["new-session", "-d", "-s", "p", "-x", "80", "-y", "24"]);
+    // tmux 3.6 prints the same for each (checked against it).
+    let run = |args: &[&str]| t.run(args).trim_end().to_owned();
+    assert_eq!(run(&["new-window", "-d", "-P", "-t", "p:1"]), "p:1.0");
+    assert_eq!(run(&["split-window", "-d", "-P", "-t", "p:1"]), "p:1.1");
+    // -d: the new pane, not the active one.
+    assert_eq!(
+        run(&[
+            "split-window",
+            "-d",
+            "-P",
+            "-F",
+            "#{window_panes} #{pane_active}",
+            "-t",
+            "p:1.1"
+        ]),
+        "3 0"
+    );
+    assert_eq!(run(&["new-session", "-d", "-P", "-s", "q"]), "q:");
+    assert_eq!(
+        run(&[
+            "new-session",
+            "-d",
+            "-P",
+            "-F",
+            "#{session_name}/#{window_index}",
+            "-s",
+            "r"
+        ]),
+        "r/0"
+    );
+    // break-pane prints the window the pane went to.
+    let id = run(&["display-message", "-p", "-t", "p:1.2", "#{pane_id}"]);
+    assert_eq!(
+        run(&[
+            "break-pane",
+            "-d",
+            "-P",
+            "-F",
+            "#{pane_id} #{window_panes}",
+            "-t",
+            "p:1.2"
+        ]),
+        format!("{id} 1")
+    );
+    // Without -P, nothing.
+    assert_eq!(run(&["new-window", "-d", "-t", "p"]), "");
+}
+
+#[test]
 fn window_size_largest_and_smallest_take_each_way() {
     let t = Tmxr::new("wsize");
     t.run(&["new-session", "-d", "-s", "ws"]);
