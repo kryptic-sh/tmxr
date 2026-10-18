@@ -388,21 +388,25 @@ impl Server {
     }
 
     /// Give `pane` (already removed from its old window's layout) a window of
-    /// its own in `session`.
+    /// its own in `session`, at `index` or else the first free one.
+    #[allow(clippy::too_many_arguments)]
     pub fn adopt_pane(
         &mut self,
         session: SessionId,
         pane: PaneId,
         name: String,
+        index: Option<u32>,
         cols: u16,
         rows: u16,
         select: bool,
     ) -> Result<WindowId, String> {
         let base = self.session_options(session).base_index;
         let s = self.sessions.get(&session).ok_or("no such session")?;
-        let index = (base..)
-            .find(|i| !s.windows.contains_key(i))
-            .unwrap_or(base);
+        let index = index.unwrap_or_else(|| {
+            (base..)
+                .find(|i| !s.windows.contains_key(i))
+                .unwrap_or(base)
+        });
         let wid = self.next_window;
         self.next_window += 1;
         self.windows.insert(

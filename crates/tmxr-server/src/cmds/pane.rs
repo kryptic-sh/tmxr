@@ -246,9 +246,34 @@ pub(super) fn run(
             srv.relayout(wid);
         }
         "break-pane" => {
-            let (sid, wid, pid) = target::pane(srv, ctx, a.value('t'))?;
+            // As tmux's: -s the pane, -t the window it becomes.
+            let (src, wid, pid) = target::pane(srv, ctx, a.value('s'))?;
+            let (dst, mut index) = match a.value('t') {
+                Some(t) if !t.is_empty() => target::destination(srv, ctx, t)?,
+                _ => (src, None),
+            };
+            // -a / -b: next to the target window, the later ones moving up.
+            if a.has('a') || a.has('b') {
+                index = srv.index_beside(dst, index, a.has('b'));
+            }
+            let name = a.value('n');
+            // A window's only pane: the window itself moves.
             if srv.windows[&wid].panes().len() < 2 {
-                return Err("can't break with only one pane".into());
+                srv.move_window(wid, src, dst, index, !a.has('d'))?;
+                if let Some(n) = name
+                    && let Some(w) = srv.windows.get_mut(&wid)
+                {
+                    n.clone_into(&mut w.name);
+                    w.options.automatic_rename = Some(false);
+                }
+                srv.mark_window_dirty(wid);
+                super::print_new(srv, ctx, a, out, dst, Some(pid), super::NEW_PANE_TEMPLATE);
+                return Ok(true);
+            }
+            if let Some(i) = index
+                && srv.sessions[&dst].windows.contains_key(&i)
+            {
+                return Err(format!("index in use: {i}"));
             }
             let (cols, rows) = (srv.windows[&wid].cols, srv.windows[&wid].rows);
             {
@@ -261,11 +286,19 @@ pub(super) fn run(
                 }
             }
             srv.relayout(wid);
-            let name = srv.commands.get(&pid).cloned().unwrap_or_default();
-            let new = srv.adopt_pane(sid, pid, name, cols, rows, !a.has('d'))?;
+            let title = name.map_or_else(
+                || srv.commands.get(&pid).cloned().unwrap_or_default(),
+                str::to_owned,
+            );
+            let new = srv.adopt_pane(dst, pid, title, index, cols, rows, !a.has('d'))?;
+            // -n names it for good, as rename-window does.
+            if name.is_some()
+                && let Some(w) = srv.windows.get_mut(&new)
+            {
+                w.options.automatic_rename = Some(false);
+            }
             srv.relayout(new);
-            let pane = srv.windows.get(&new).map(|w| w.active);
-            super::print_new(srv, ctx, a, out, sid, pane, super::NEW_PANE_TEMPLATE);
+            super::print_new(srv, ctx, a, out, dst, Some(pid), super::NEW_PANE_TEMPLATE);
         }
         "list-panes" => {
             // -a every pane on the server, -s every pane in the session,

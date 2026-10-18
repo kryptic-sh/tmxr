@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Breaking
+
+- **`break-pane -t` is the window the pane becomes**, as tmux's, not the pane to
+  break: that is `-s` now (the current pane without it). `-t` takes an index
+  (`-t :5`), `-a` / `-b` place it next to the target window, and `-n` names it
+  (automatic-rename off). A window's only pane no longer refuses: the window
+  moves, as tmux's.
+
 ### Added
 
 - **`refresh-client -f` / `-F`** sets a client's flags, as tmux's, and `!flag`

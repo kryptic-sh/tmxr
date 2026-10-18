@@ -172,3 +172,20 @@ checks = [
   { command = "display -p -t 'o.{previous}' '#P'", expect = "2" },
   { command = "display -p -t 'o:{next}' '#I'", expect = "1" },
 ]
+
+[[cases]]
+name = "break_pane_takes_s_for_the_pane_and_t_for_the_window"
+steps = [
+  { run = "new-session -d -s bp -n first -x 80 -y 24" },
+  { run = "split-window -t bp:0" },
+  { run = "split-window -t bp:0" },
+  { run = "split-window -t bp:0" },
+  { run = "break-pane -d -s bp:0.1 -t bp:5 -n five" },
+  { run = "break-pane -d -s bp:0.1 -b -t bp:5 -n before" },
+  { run = "new-window -d -t bp:7 -n lone" },
+  { run = "break-pane -d -s bp:7.0 -t bp:9 -n moved" },
+]
+checks = [
+  { command = "list-windows -t bp -F '#I #W #{window_panes}'", expect = "0 first 2\n5 before 1\n6 five 1\n9 moved 1" },
+  { command = "show -wv -t bp:6 automatic-rename", expect = "off" },
+]

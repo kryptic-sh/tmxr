@@ -53,10 +53,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "break-pane",
         Some("breakp"),
-        "dF:Pt:",
+        "abdF:n:Ps:t:",
         0,
         0,
-        "[-dP] [-F format] [-t target-pane]"
+        "[-abdP] [-F format] [-n window-name] [-s src-pane] [-t dst-window]"
     ),
     cmd!(
         "capture-pane",

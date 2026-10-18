@@ -6898,7 +6898,7 @@ fn new_windows_panes_and_sessions_print_themselves_with_p() {
             "-P",
             "-F",
             "#{pane_id} #{window_panes}",
-            "-t",
+            "-s",
             "p:1.2"
         ]),
         format!("{id} 1")

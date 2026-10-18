@@ -461,20 +461,18 @@ table. What has been verified, and how:
     `Pane is dead (status N)` in `render.rs`); server `focus-events`,
     `history-file`, `editor`. `escape-time` is kept but never read.
   - Commands: `capture-pane -S -E -e -b -a -C -N -T -q`; `new-window -k -S`,
-    `split-window -p -I -Z`, `break-pane -n -s -a -b` (tmxr reads `-t` as the
-    pane to break, where tmux takes `-s` for it and `-t` for the destination
-    window); layout strings (`#{window_layout}`, `select-layout '<checksum>,…'`,
-    `-o`); `display-message -a -v -I -N -C`; `choose-*` templates and
-    `-F -f -K -O -r -N -y`, tagging and sort keys; `command-prompt` with several
-    `-p` and `%1`…`%9`, `-1 -N -b -F -l`, completion; session groups
-    (`new-session -t`); `switch-client -t` / `attach -t` drop the window and
-    pane part, and `switch-client -c -r -Z`; targets `~` / `{marked}`; smaller
-    flags: `send-keys -R -H -K -c`, `display-panes -d -b -N`,
-    `select-pane -d -e`, `last-pane -d -e -Z`, `rotate-window -Z`,
-    `swap-pane -Z`, `set-buffer -t`, `copy-mode -s`, `detach-client -E`,
-    `run-shell -E`, `confirm-before -b -c -y`, `list-keys -a -P`,
-    `join-pane -f -p`, `source-file -n -v -F` and globs; `source-file` of a tmux
-    command file (`%if`, `%hidden`).
+    `split-window -p -I -Z`; layout strings (`#{window_layout}`,
+    `select-layout '<checksum>,…'`, `-o`); `display-message -a -v -I -N -C`;
+    `choose-*` templates and `-F -f -K -O -r -N -y`, tagging and sort keys;
+    `command-prompt` with several `-p` and `%1`…`%9`, `-1 -N -b -F -l`,
+    completion; session groups (`new-session -t`); `switch-client -t` /
+    `attach -t` drop the window and pane part, and `switch-client -c -r -Z`;
+    targets `~` / `{marked}`; smaller flags: `send-keys -R -H -K -c`,
+    `display-panes -d -b -N`, `select-pane -d -e`, `last-pane -d -e -Z`,
+    `rotate-window -Z`, `swap-pane -Z`, `set-buffer -t`, `copy-mode -s`,
+    `detach-client -E`, `run-shell -E`, `confirm-before -b -c -y`,
+    `list-keys -a -P`, `join-pane -f -p`, `source-file -n -v -F` and globs;
+    `source-file` of a tmux command file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `pane-set-clipboard`,
     `client-active`, `command-error`, `client-light-theme` / `-dark-theme`. Copy
     mode lacks `next-prompt` / `previous-prompt`, `copy-line`, `copy-pipe-line`,
@@ -482,6 +480,11 @@ table. What has been verified, and how:
     `selection-mode`, `scroll-top` / `-bottom`, `search-*-text` and the
     `-and-cancel` motions; `copy-selection` / `copy-pipe` ignore a buffer name.
 
+- **`word_separators_and_wrap_search_reach_copy_mode` failed once** (Windows,
+  full e2e suite, 2026-10-18) at its first `#{copy_cursor_word}` check; four
+  runs alone and the next full run passed. The failure output was not kept, so
+  the cause is unknown: a guess is ConPTY redrawing the pane after
+  `cmd /c echo`, moving the line `history-top` lands on.
 - **Oracle checks must be free of side effects**: `compare` in
   `tmxr-compat-oracle` reads a check again until both sides agree, so a check
   that creates something (`new-window -P`) runs twice on a mismatch and fails

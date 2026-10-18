@@ -217,7 +217,7 @@ impl Server {
             let session = self.session_of_window(to).ok_or("window has no session")?;
             let (cols, rows) = (self.windows[&to].cols, self.windows[&to].rows);
             let name = self.commands.get(&src).cloned().unwrap_or_default();
-            let new = self.adopt_pane(session, src, name, cols, rows, false)?;
+            let new = self.adopt_pane(session, src, name, None, cols, rows, false)?;
             self.relayout(new);
             return Err(e);
         }
