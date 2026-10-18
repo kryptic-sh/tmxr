@@ -262,3 +262,24 @@ checks = [
   { command = "list-panes -t o:2 -F '#{pane_index} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'" },
   { command = "list-panes -t o:3 -F '#{pane_index} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'" },
 ]
+
+[[cases]]
+name = "resize_pane_x_and_y_set_a_size"
+steps = [
+  { run = "split-window -h -t o:0" },
+  { run = "split-window -v -t o:0.1" },
+  { run = "resize-pane -x 30 -t o:0.0" },
+  { run = "resize-pane -y 5 -t o:0.2" },
+  { run = "new-window -d -t o:1" },
+  { run = "split-window -h -t o:1" },
+  { run = "resize-pane -x 25% -t o:1.1" },
+  { run = "new-window -d -t o:2" },
+  { run = "split-window -v -t o:2" },
+  { run = "split-window -h -t o:2.0" },
+  { run = "resize-pane -y 4 -t o:2.1" },
+]
+checks = [
+  { command = "list-panes -t o:0 -F '#{pane_index} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'" },
+  { command = "list-panes -t o:1 -F '#{pane_index} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'" },
+  { command = "list-panes -t o:2 -F '#{pane_index} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'" },
+]

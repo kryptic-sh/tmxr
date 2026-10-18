@@ -491,14 +491,13 @@ table. What has been verified, and how:
   the cause is unknown: a guess is ConPTY redrawing the pane after
   `cmd /c echo`, moving the line `history-top` lands on.
 - **Flags the command table accepts but no handler reads** (an audit of every
-  `cmd!` entry against its arm and helpers, 2026-10-18; `resize-pane`,
-  `source-file` and `select-layout` re-read by hand, the rest as the audit
-  reported): `resize-pane -x` / `-y` (absolute size), `select-layout -o` (undo),
-  `source-file -q` (and `source-file` replaces the config path and reloads
-  everything, where tmux runs the file's commands), `command-prompt -t`,
-  `set-environment -h` / `show-environment -h` (hidden variables), `-Z` on
-  `choose-buffer`, `choose-client`, `choose-tree`, `find-window` and
-  `customize-mode`, `-t` on `choose-tree` and `find-window`,
+  `cmd!` entry against its arm and helpers, 2026-10-18; `source-file` and
+  `select-layout` re-read by hand, the rest as the audit reported):
+  `select-layout -o` (undo), `source-file -q` (and `source-file` replaces the
+  config path and reloads everything, where tmux runs the file's commands),
+  `command-prompt -t`, `set-environment -h` / `show-environment -h` (hidden
+  variables), `-Z` on `choose-buffer`, `choose-client`, `choose-tree`,
+  `find-window` and `customize-mode`, `-t` on `choose-tree` and `find-window`,
   `customize-mode -a -F -N -t`, `clear-history -H` (tmxr keeps no hyperlinks).
   Harmless: `-v` on `split-window` / `join-pane` / `move-pane`,
   `rotate-window -U` and `choose-tree -s` are what happens anyway, and

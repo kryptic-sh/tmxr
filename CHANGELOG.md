@@ -167,6 +167,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`resize-pane -x` / `-y`** were accepted and ignored; they now set the pane's
+  width or height, in cells or as a percentage of the window's (`-x 25%`), as
+  tmux's `layout_resize_pane_to`.
 - **`split-window -f`** was accepted and ignored; the new pane now spans the
   whole window (full width or height, sized against it), first or last in the
   pane list, as tmux's.

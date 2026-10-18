@@ -113,6 +113,72 @@ pub fn resize(
     )
 }
 
+/// `resize-pane -x` / `-y`: make `pane`'s side of the nearest split across
+/// `horizontal` (side by side, for `-x`) `size` cells, as tmux's
+/// `layout_resize_pane_to`. Returns whether anything changed.
+pub fn resize_to(
+    tree: &mut LayoutTree,
+    pane: PaneId,
+    horizontal: bool,
+    size: u16,
+    cols: u16,
+    rows: u16,
+) -> bool {
+    let want = if horizontal {
+        SplitDir::Vertical
+    } else {
+        SplitDir::Horizontal
+    };
+    let area = rect(0, 0, cols, rows);
+    let Some((first, now)) = side_at(tree, pane as usize, want, area) else {
+        return false;
+    };
+    // The separator moves right (down) to grow the first side, left (up)
+    // to grow the second.
+    let grow = i32::from(size) - i32::from(now);
+    resize_in(
+        tree,
+        pane as usize,
+        want,
+        if first { grow } else { -grow },
+        area,
+    )
+}
+
+/// At the split [`resize_in`] would move for `id` along `want` (the
+/// deepest one across that holds it and is not fixed): whether `id` is on
+/// its first side, and that side's length.
+fn side_at(tree: &LayoutTree, id: usize, want: SplitDir, area: LayoutRect) -> Option<(bool, u16)> {
+    let LayoutTree::Split {
+        dir,
+        ratio,
+        fixed,
+        a,
+        b,
+        ..
+    } = tree
+    else {
+        return None;
+    };
+    let geo = hjkl_layout::split_geometry(area, *dir, *ratio, *fixed);
+    let (child, child_area, first) = if tree_contains(a, id) {
+        (a, geo.a, true)
+    } else if tree_contains(b, id) {
+        (b, geo.b, false)
+    } else {
+        return None;
+    };
+    side_at(child, id, want, child_area).or_else(|| {
+        (*dir == want && fixed.is_none()).then_some((
+            first,
+            match want {
+                SplitDir::Vertical => child_area.w,
+                _ => child_area.h,
+            },
+        ))
+    })
+}
+
 fn resize_in(
     tree: &mut LayoutTree,
     id: usize,

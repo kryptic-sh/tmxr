@@ -128,6 +128,27 @@ pub(super) fn run(
                 srv.relayout(wid);
                 return Ok(true);
             }
+            // -x / -y: an absolute width or height, cells or a percentage
+            // of the window's, as tmux's.
+            for (flag, horizontal) in [('x', true), ('y', false)] {
+                let Some(v) = a.value(flag) else { continue };
+                let w = srv.windows.get_mut(&wid).ok_or("no window")?;
+                let whole = if horizontal { w.cols } else { w.rows };
+                let what = if horizontal { "width" } else { "height" };
+                let size = match v.strip_suffix('%') {
+                    Some(pc) => pc
+                        .parse::<u32>()
+                        .ok()
+                        .map(|pc| u32::from(whole) * pc / 100)
+                        .and_then(|n| u16::try_from(n).ok()),
+                    None => v.parse::<u16>().ok(),
+                }
+                .ok_or_else(|| format!("{what} {v}"))?;
+                w.zoomed = false;
+                let (cols, rows) = (w.cols, w.rows);
+                crate::layout::resize_to(&mut w.layout, pid, horizontal, size, cols, rows);
+                srv.relayout(wid);
+            }
             let cells: u16 = pos
                 .first()
                 .map_or(Ok(1), |n| n.parse())
