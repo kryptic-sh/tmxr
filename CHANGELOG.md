@@ -115,10 +115,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   given, quoted as tmux quotes it), `pane_start_path`, `client_last_session`,
   `client_pid`, `session_attached_list`, `session_path`, `window_active_clients`
   and `window_active_clients_list`, `pane_last`, `session_alert` and
-  `session_alerts`, and the times `start_time`, `session_created`,
-  `session_activity`, `session_last_attached` (empty until a client attaches),
-  `window_activity`, `client_created` and `client_activity` (seconds since the
-  epoch), as tmux's.
+  `session_alerts`, the mouse modes `mouse_standard_flag`, `mouse_button_flag`,
+  `mouse_all_flag` and `mouse_sgr_flag`, and the times `start_time`,
+  `session_created`, `session_activity`, `session_last_attached` (empty until a
+  client attaches), `window_activity`, `client_created` and `client_activity`
+  (seconds since the epoch), as tmux's.
 - **Layout strings**, as tmux's: `#{window_layout}` and
   `#{window_visible_layout}` write the window's layout as tmux does (checksum
   and all), and `select-layout` takes such a string back, laying its cells over

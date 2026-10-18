@@ -420,6 +420,19 @@ impl Context for Vars<'_> {
             "mouse_any_flag" => {
                 flag(pane?.emu.screen().mouse_protocol_mode() != vt100::MouseProtocolMode::None)
             }
+            // The mouse mode the pane's program set: 1000, 1002, 1003.
+            "mouse_standard_flag" | "mouse_button_flag" | "mouse_all_flag" => {
+                use vt100::MouseProtocolMode::{AnyMotion, ButtonMotion, PressRelease};
+                let mode = pane?.emu.screen().mouse_protocol_mode();
+                flag(match name {
+                    "mouse_standard_flag" => mode == PressRelease,
+                    "mouse_button_flag" => mode == ButtonMotion,
+                    _ => mode == AnyMotion,
+                })
+            }
+            "mouse_sgr_flag" => flag(
+                pane?.emu.screen().mouse_protocol_encoding() == vt100::MouseProtocolEncoding::Sgr,
+            ),
             "pane_width" => pane?.rect.w.to_string(),
             "pane_height" => pane?.rect.h.to_string(),
             // tmux's: the pane's cells in its window, edges inclusive.

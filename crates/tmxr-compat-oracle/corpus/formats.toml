@@ -234,3 +234,30 @@ checks = [
   { command = "display -p -t p '[#{session_alert}] [#{session_alerts}]'" },
   { command = "display -p -t o '[#{session_alert}] [#{session_alerts}]'" },
 ]
+
+[[cases]]
+name = "mouse_mode_flags_follow_the_programs_modes_standard"
+program = 'printf "\033[?1000h"; exec sleep 1000'
+steps = [{ sleep = 0.5 }]
+checks = [
+  { format = "#{mouse_any_flag} #{mouse_standard_flag} #{mouse_button_flag} #{mouse_all_flag} #{mouse_sgr_flag}" },
+]
+
+
+[[cases]]
+name = "mouse_mode_flags_follow_the_programs_modes_button_sgr"
+program = 'printf "\033[?1002;1006h"; exec sleep 1000'
+steps = [{ sleep = 0.5 }]
+checks = [
+  { format = "#{mouse_any_flag} #{mouse_standard_flag} #{mouse_button_flag} #{mouse_all_flag} #{mouse_sgr_flag}" },
+]
+
+
+[[cases]]
+name = "mouse_mode_flags_follow_the_programs_modes_all"
+program = 'printf "\033[?1003h"; exec sleep 1000'
+steps = [{ sleep = 0.5 }]
+checks = [
+  { format = "#{mouse_any_flag} #{mouse_standard_flag} #{mouse_button_flag} #{mouse_all_flag} #{mouse_sgr_flag}" },
+]
+
