@@ -163,3 +163,17 @@ checks = [
   { command = "display -p -t o:3 '[#{pane_start_command}]'" },
   { command = "display -p -t o:4 '[#{pane_start_command}]'" },
 ]
+
+[[cases]]
+name = "linked_and_active_session_lists_are_tmuxs"
+steps = [
+  { run = "new-session -d -s b" },
+  { run = "new-session -d -s a" },
+  { run = "new-window -d -t a:1" },
+  { run = "link-window -s a:1 -t b:5" },
+  { run = "link-window -d -s a:1 -t o:7" },
+]
+checks = [
+  { command = "display -p -t a:1 '#{window_linked_sessions} [#{window_linked_sessions_list}] [#{window_active_sessions_list}] #{window_active_sessions}'" },
+  { command = "display -p -t a:0 '#{window_linked_sessions} [#{window_linked_sessions_list}] [#{window_active_sessions_list}]'" },
+]

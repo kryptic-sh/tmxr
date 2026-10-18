@@ -443,10 +443,10 @@ table. What has been verified, and how:
     format `Context` has only `get`, so it needs a way to ask the server), and
     `E` / `T` / `q` / `m` chained with others by `;` (an unknown modifier
     expands to nothing); many of tmux's format variables (`session_activity`,
-    `pane_start_path`, `client_pid`, `start_time`, `window_linked_sessions` ...;
-    compare tmux's `format_table` with `vars.rs` for the list); styles `align=`
-    `fill=` `list=` `range=` `push-default` / `pop-default`, strikethrough,
-    blink, overline, curly and coloured underlines.
+    `pane_start_path`, `client_pid`, ...; compare tmux's `format_table` with
+    `vars.rs` for the list); styles `align=` `fill=` `list=` `range=`
+    `push-default` / `pop-default`, strikethrough, blink, overline, curly and
+    coloured underlines.
   - Options: the status line is one row at the bottom (`STATUS_ROWS`): no
     `status off` / `2`–`5`, `status-position`, `status-format`; no
     `window-status-activity-style` / `-bell-style` (tmux's default `reverse`

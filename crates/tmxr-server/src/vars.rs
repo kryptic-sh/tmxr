@@ -100,6 +100,17 @@ fn flag(b: bool) -> String {
     if b { "1" } else { "0" }.to_owned()
 }
 
+/// The names of the sessions `keep` takes, in name order, joined by commas.
+fn session_names(srv: &Server, keep: impl Fn(&crate::model::Session) -> bool) -> String {
+    srv.sessions_by_name()
+        .iter()
+        .filter_map(|id| srv.sessions.get(id))
+        .filter(|s| keep(s))
+        .map(|s| s.name.as_str())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
 /// A time as tmux's time variables give one: seconds since the epoch.
 fn epoch(t: std::time::SystemTime) -> String {
     t.duration_since(std::time::UNIX_EPOCH)
@@ -202,7 +213,13 @@ impl Context for Vars<'_> {
             "window_end_flag" => {
                 flag(session?.windows.keys().next_back() == session?.index_of(window?.id).as_ref())
             }
-            // The sessions showing it as their current window.
+            // The sessions holding it, and those showing it as their current
+            // window, by name as tmux's lists are.
+            "window_linked_sessions" => srv.sessions_of_window(window?.id).len().to_string(),
+            "window_linked_sessions_list" => {
+                let wid = window?.id;
+                session_names(srv, |s| s.windows.values().any(|w| *w == wid))
+            }
             "window_active_sessions" => {
                 let wid = window?.id;
                 srv.sessions
@@ -210,6 +227,10 @@ impl Context for Vars<'_> {
                     .filter(|s| s.current_window() == Some(wid))
                     .count()
                     .to_string()
+            }
+            "window_active_sessions_list" => {
+                let wid = window?.id;
+                session_names(srv, |s| s.current_window() == Some(wid))
             }
             "window_marked_flag" => {
                 flag(srv.window_is_marked(window?.id) && marked_session() == Some(session?.id))
