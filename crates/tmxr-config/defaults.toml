@@ -123,6 +123,8 @@ disable-when-zoomed = false
 
 [status]
 style = "bg=#{@thm_mantle},fg=#{@thm_fg}"
+# tmux's default: the window list after status-left.
+justify = "left"
 left = ""
 right = "#{E:@status_session}#{E:@status_host}"
 # tmux's defaults; the tmux config sets neither.

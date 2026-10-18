@@ -249,3 +249,63 @@ checks = [
   { command = "show-environment -g TMXR_ORACLE_SHOWN", expect = "TMXR_ORACLE_SHOWN=plain" },
   { command = "capture-pane -p -t o:1", expect = "[][plain]" },
 ]
+
+[[cases]]
+name = "status_justify_centre_places_the_window_list"
+attach = true
+steps = [
+  { run = "set -g status-left '[L]'" },
+  { run = "set -g status-right '[R]'" },
+  { run = "set -g window-status-format 'W#I'" },
+  { run = "set -g window-status-current-format 'C#I'" },
+  { run = "set -g window-status-separator '|'" },
+  { run = "new-window -d -t o:1" },
+  { run = "set -g status-justify centre" },
+  { sleep = 0.5 },
+]
+checks = [
+  { screen_find = "[L]" },
+  { screen_find = "C0" },
+  { screen_find = "W1" },
+  { screen_find = "[R]" },
+]
+
+[[cases]]
+name = "status_justify_right_places_the_window_list"
+attach = true
+steps = [
+  { run = "set -g status-left '[L]'" },
+  { run = "set -g status-right '[R]'" },
+  { run = "set -g window-status-format 'W#I'" },
+  { run = "set -g window-status-current-format 'C#I'" },
+  { run = "set -g window-status-separator '|'" },
+  { run = "new-window -d -t o:1" },
+  { run = "set -g status-justify right" },
+  { sleep = 0.5 },
+]
+checks = [
+  { screen_find = "[L]" },
+  { screen_find = "C0" },
+  { screen_find = "W1" },
+  { screen_find = "[R]" },
+]
+
+[[cases]]
+name = "status_justify_absolute_centre_places_the_window_list"
+attach = true
+steps = [
+  { run = "set -g status-left '[L]'" },
+  { run = "set -g status-right '[R]'" },
+  { run = "set -g window-status-format 'W#I'" },
+  { run = "set -g window-status-current-format 'C#I'" },
+  { run = "set -g window-status-separator '|'" },
+  { run = "new-window -d -t o:1" },
+  { run = "set -g status-justify absolute-centre" },
+  { sleep = 0.5 },
+]
+checks = [
+  { screen_find = "[L]" },
+  { screen_find = "C0" },
+  { screen_find = "W1" },
+  { screen_find = "[R]" },
+]

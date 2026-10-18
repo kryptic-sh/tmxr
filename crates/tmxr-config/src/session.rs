@@ -3,7 +3,7 @@
 //! `show-options` under tmux's names.
 
 use crate::table::{Array, Word, options_table};
-use crate::{AlertAction, DestroyUnattached, Visual};
+use crate::{AlertAction, DestroyUnattached, StatusJustify, Visual};
 
 options_table! {
     /// The session options every session has unless it sets its own: tmux's
@@ -59,6 +59,8 @@ options_table! {
     "silence-action" => silence_action: AlertAction,
     /// Seconds between status line redraws.
     "status-interval" => status_interval: u64,
+    /// Where the window list sits: left, centre, right or absolute-centre.
+    "status-justify" => status_justify: StatusJustify,
     "status-left" => status_left: String,
     /// Most cells `status-left` may take.
     "status-left-length" => status_left_length: u16,

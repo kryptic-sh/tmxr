@@ -241,6 +241,7 @@ impl From<File> for Config {
                 status_right: s.right,
                 status_right_length: s.right_length,
                 status_right_style: s.right_style,
+                status_justify: s.justify,
                 status_style: s.style,
                 update_environment: f.update_environment.into_iter().collect(),
                 visual_activity: f.visual_activity,
@@ -289,6 +290,7 @@ pub struct Navigator {
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 struct StatusFile {
     style: String,
+    justify: StatusJustify,
     left: String,
     right: String,
     left_length: u16,
@@ -333,6 +335,44 @@ pub struct Resurrect {
 
 /// `destroy-unattached`: whether a session no client is attached to goes,
 /// as tmux's. tmxr has no session groups, so `keep-last` keeps every
+/// `status-justify`: where the window list sits on the status line, as
+/// tmux's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StatusJustify {
+    /// After `status-left`.
+    Left,
+    /// Centred between `status-left` and `status-right`.
+    Centre,
+    /// At the right edge, `status-right` before it.
+    Right,
+    /// Centred on the whole line.
+    AbsoluteCentre,
+}
+
+impl StatusJustify {
+    pub const NAMES: &str = "left, centre, right or absolute-centre";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "left" => Some(Self::Left),
+            "centre" => Some(Self::Centre),
+            "right" => Some(Self::Right),
+            "absolute-centre" => Some(Self::AbsoluteCentre),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Left => "left",
+            Self::Centre => "centre",
+            Self::Right => "right",
+            Self::AbsoluteCentre => "absolute-centre",
+        }
+    }
+}
+
 /// session and `keep-group` keeps none, as tmux's do for a session in no
 /// group.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

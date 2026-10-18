@@ -103,6 +103,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pressed longer than that after the prefix (or `switch-client -T prefix`) goes
   to the root table instead (unless it repeats a repeatable binding). 0, the
   default, waits forever.
+- **`status-justify`**, as tmux's: the window list after `status-left` (`left`,
+  the default), centred between the two sides (`centre`), against `status-right`
+  (`right`), or centred on the whole line (`absolute-centre`).
 - **Format modifiers `e|op|` and `a:`**, as tmux's: arithmetic and numeric
   comparison (`#{e|+|:#{window_index},1}`, `#{e|/|f|4:7,2}` for decimals) and
   the character for a code (`#{a:65}` is `A`).

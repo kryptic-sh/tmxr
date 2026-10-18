@@ -556,7 +556,7 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
     let limit = cols - right_w;
     let left = format::expand(&opts.status_left, &vars);
     let left_base = base.patch(style_option(&opts.status_left_style, &vars));
-    let mut x = draw_runs(
+    let x = draw_runs(
         buf,
         0,
         y,
@@ -565,7 +565,9 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
         &left,
     );
     ranges.left_end = x;
-    ranges.right_start = cols - right_w;
+    // Each window's entry and the separator after it, measured first so
+    // the list can be placed by status-justify.
+    let mut entries = Vec::new();
     let count = session.windows.len();
     for (n, (idx, wid)) in session.windows.iter().enumerate() {
         let Some(win) = srv.windows.get(wid) else {
@@ -600,19 +602,53 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
             window_base = window_base.patch(last);
         }
         let text = format::expand(fmt, &wvars);
-        let start = x;
-        x = draw_runs(buf, x, y, limit, window_base, &text);
-        ranges.windows.push((start, x, *idx));
-        if x >= limit {
+        let sep = if n + 1 < count {
+            format::expand(&options.window_status_separator, &wvars)
+        } else {
+            String::new()
+        };
+        entries.push((*idx, window_base, text, sep));
+    }
+    let list_w: u16 = entries
+        .iter()
+        .map(|(_, _, text, sep)| runs_width(text).saturating_add(runs_width(sep)))
+        .sum();
+    // Where the list goes and where status-right goes, as tmux's
+    // format_draw places a list aligned by status-justify; a list too long
+    // for its room is cut at its end.
+    let room = cols.saturating_sub(right_w).saturating_sub(x);
+    let shown = list_w.min(room);
+    let (start, end, right_x) = match opts.status_justify {
+        tmxr_config::StatusJustify::Left => (x, limit, cols - right_w),
+        tmxr_config::StatusJustify::Centre => {
+            let middle = x + (cols - right_w - x) / 2;
+            let start = middle - shown / 2;
+            (start, start + shown, cols - right_w)
+        }
+        // status-right follows the list in tmux's right-aligned part, so
+        // the list ends where it starts.
+        tmxr_config::StatusJustify::Right => {
+            let end = cols - right_w;
+            (end - shown, end, end)
+        }
+        tmxr_config::StatusJustify::AbsoluteCentre => {
+            let start = (cols - shown) / 2;
+            (start, start + shown, cols - right_w)
+        }
+    };
+    ranges.right_start = right_x;
+    let mut x = start;
+    for (idx, window_base, text, sep) in &entries {
+        let at = x;
+        x = draw_runs(buf, x, y, end, *window_base, text);
+        ranges.windows.push((at, x, *idx));
+        if x >= end {
             break;
         }
-        if n + 1 < count {
-            let sep = format::expand(&options.window_status_separator, &wvars);
-            x = draw_runs(buf, x, y, limit, base, &sep);
-        }
+        x = draw_runs(buf, x, y, end, base, sep);
     }
     let right_base = base.patch(style_option(&opts.status_right_style, &vars));
-    draw_runs(buf, cols - right_w, y, cols, right_base, &right);
+    draw_runs(buf, right_x, y, right_x + right_w, right_base, &right);
     ranges
 }
 
