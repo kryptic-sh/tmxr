@@ -32,16 +32,18 @@ fn word_separators_and_wrap_search_reach_copy_mode() {
     let search = |cmd: &str| {
         t.run(&["send-keys", "-t", "co", "-X", cmd, "."]);
     };
+    // The text form: search-forward takes `.` as a regular expression, as
+    // tmux's does.
     t.run(&["set", "-wg", "wrap-search", "off"]);
-    search("search-forward");
+    search("search-forward-text");
     let first = pos();
-    search("search-forward");
+    search("search-forward-text");
     let second = pos();
     assert_ne!(first, second);
-    search("search-forward");
+    search("search-forward-text");
     assert_eq!(pos(), second, "wrap-search off");
     t.run(&["set", "-wg", "wrap-search", "on"]);
-    search("search-forward");
+    search("search-forward-text");
     assert_eq!(pos(), first, "wrap-search on");
 }
 

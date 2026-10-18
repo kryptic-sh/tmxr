@@ -212,6 +212,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Copy mode's `search-forward` / `search-backward` take a regular
+  expression**, as tmux's: a search holding one of `^$*+()?[].\` is an extended
+  regular expression (so the `/` and `?` prompts' searches are), one without is
+  text; the new `search-forward-text` / `search-backward-text` always search for
+  the text itself, and `search-again` repeats the kind of search it follows.
 - **`tmxr_term::localtime::hour_minute` is
   `tmxr_command::localtime::hour_minute_second`**: the module moved to the
   format crate, which formats times, and the function returns the second too,

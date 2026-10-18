@@ -32,7 +32,7 @@ pub struct CopyMode {
     pub kind: SelKind,
     pub rows: u16,
     pub cols: u16,
-    pub search: Option<(String, bool)>,
+    pub search: Option<Search>,
     /// Repeat count typed before a command (`5j`), 0 for none.
     pub count: usize,
     /// An `f` / `F` / `t` / `T` waiting for the character to jump to.
@@ -60,11 +60,54 @@ pub struct CopyMode {
     rect: bool,
 }
 
+/// The last search, for `search-again` and highlighting.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Search {
+    pub needle: String,
+    pub forward: bool,
+    /// `search-forward` / `-backward` take a regular expression, the `-text`
+    /// and incremental searches the text itself, as tmux's searchregex.
+    pub regex: bool,
+}
+
 /// tmux's default `word-separators`: ASCII punctuation but `_`.
 pub const WORD_SEPARATORS: &str = "!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~";
 
 /// Columns where `needle` starts in `line`: literal, and case-insensitive
 /// unless the needle has an uppercase letter (smart case).
+/// The characters that make a search a regular expression; one without
+/// them is searched for as text, as tmux's window_copy_search decides.
+const REGEX_CHARS: &[char] = &['^', '$', '*', '+', '(', ')', '?', '[', ']', '.', '\\'];
+
+/// The `(start, end)` columns of `needle`'s matches in `line`: as an
+/// extended regular expression when `regex` asks and the needle has one of
+/// [`REGEX_CHARS`] (a pattern that does not compile matches nothing), else
+/// literally; case-insensitive unless the needle has an uppercase letter
+/// (smart case), as tmux's searches are.
+fn matches(line: &[char], needle: &str, regex: bool) -> Vec<(usize, usize)> {
+    if regex && needle.contains(REGEX_CHARS) {
+        let Ok(re) = regex::RegexBuilder::new(needle)
+            .case_insensitive(!needle.chars().any(char::is_uppercase))
+            .build()
+        else {
+            return Vec::new();
+        };
+        let text: String = line.iter().collect();
+        // Byte offsets in the text to columns of the line.
+        let column = |byte: usize| text[..byte].chars().count();
+        return re
+            .find_iter(&text)
+            .filter(|m| !m.is_empty())
+            .map(|m| (column(m.start()), column(m.end())))
+            .collect();
+    }
+    let len = needle.chars().count();
+    match_starts(line, needle)
+        .into_iter()
+        .map(|x| (x, x + len))
+        .collect()
+}
+
 fn match_starts(line: &[char], needle: &str) -> Vec<usize> {
     let needle: Vec<char> = needle.chars().collect();
     if needle.is_empty() || needle.len() > line.len() {
@@ -665,7 +708,7 @@ impl CopyMode {
         (self.cy, self.cx) = (y, x);
     }
 
-    fn find(&mut self, needle: &str, forward: bool, skip_current: bool) -> bool {
+    fn find(&mut self, needle: &str, forward: bool, regex: bool, skip_current: bool) -> bool {
         if needle.is_empty() {
             return false;
         }
@@ -686,12 +729,15 @@ impl CopyMode {
             } else {
                 (self.cy + n - step % n) % n
             };
-            let hits = match_starts(&self.lines[y].chars(), needle);
+            let hits = matches(&self.lines[y].chars(), needle, regex)
+                .into_iter()
+                .map(|(x, _)| x);
             let pick = if forward {
                 hits.into_iter()
                     .find(|x| step > 0 || *x > self.cx || (!skip_current && *x == self.cx))
             } else {
-                hits.into_iter()
+                hits.collect::<Vec<_>>()
+                    .into_iter()
                     .rev()
                     .find(|x| step > 0 || *x < self.cx || (!skip_current && *x == self.cx))
             };
@@ -706,14 +752,10 @@ impl CopyMode {
     /// Columns `(start, end)` of the last search's matches on line `y`, for
     /// highlighting.
     pub fn match_spans(&self, y: usize) -> Vec<(usize, usize)> {
-        let (Some((needle, _)), Some(line)) = (&self.search, self.lines.get(y)) else {
+        let (Some(search), Some(line)) = (&self.search, self.lines.get(y)) else {
             return Vec::new();
         };
-        let len = needle.chars().count();
-        match_starts(&line.chars(), needle)
-            .into_iter()
-            .map(|x| (x, x + len))
-            .collect()
+        matches(&line.chars(), &search.needle, search.regex)
     }
 
     /// Selected text, or `None` without a selection.
@@ -876,11 +918,19 @@ impl CopyMode {
             "scroll-bottom" if self.cy + 1 >= rows => self.top = self.cy + 1 - rows,
             "scroll-top" | "scroll-bottom" => {}
             "toggle-position" => self.hide_position = !self.hide_position,
-            "search-forward" | "search-backward" => {
-                let forward = name == "search-forward";
+            "search-forward"
+            | "search-backward"
+            | "search-forward-text"
+            | "search-backward-text" => {
+                let forward = name.starts_with("search-forward");
+                let regex = !name.ends_with("-text");
                 let needle = arg.unwrap_or_default().to_owned();
-                self.find(&needle, forward, true);
-                self.search = Some((needle, forward));
+                self.find(&needle, forward, regex, true);
+                self.search = Some(Search {
+                    needle,
+                    forward,
+                    regex,
+                });
             }
             // Run again as each character is typed: a match at the cursor
             // counts, so the cursor stays while the longer text still
@@ -888,8 +938,12 @@ impl CopyMode {
             "search-forward-incremental" | "search-backward-incremental" => {
                 let forward = name == "search-forward-incremental";
                 let needle = arg.unwrap_or_default().to_owned();
-                self.find(&needle, forward, false);
-                self.search = Some((needle, forward));
+                self.find(&needle, forward, false, false);
+                self.search = Some(Search {
+                    needle,
+                    forward,
+                    regex: false,
+                });
             }
             "jump-forward" | "jump-backward" | "jump-to-forward" | "jump-to-backward" => {
                 let jump = Jump::from_command(name).expect("matched a jump command");
@@ -934,9 +988,13 @@ impl CopyMode {
                 }
             }
             "search-again" | "search-reverse" => {
-                if let Some((needle, fwd)) = self.search.clone() {
-                    let forward = if name == "search-again" { fwd } else { !fwd };
-                    self.find(&needle, forward, true);
+                if let Some(search) = self.search.clone() {
+                    let forward = if name == "search-again" {
+                        search.forward
+                    } else {
+                        !search.forward
+                    };
+                    self.find(&search.needle, forward, search.regex, true);
                 }
             }
             _ => return false,
