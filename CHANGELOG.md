@@ -106,8 +106,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Format variables** `active_window_index`, `last_window_index`,
   `window_start_flag`, `window_end_flag`, `window_active_sessions`,
   `window_marked_flag`, `session_marked`, `session_many_attached`,
-  `server_sessions`, `history_limit`, `cursor_flag`, `keypad_flag` and
-  `keypad_cursor_flag`, as tmux's.
+  `server_sessions`, `history_limit`, `cursor_flag`, `keypad_flag`,
+  `keypad_cursor_flag`, and the times `start_time`, `session_created` and
+  `window_activity` (seconds since the epoch), as tmux's.
 - **Layout strings**, as tmux's: `#{window_layout}` and
   `#{window_visible_layout}` write the window's layout as tmux does (checksum
   and all), and `select-layout` takes such a string back, laying its cells over

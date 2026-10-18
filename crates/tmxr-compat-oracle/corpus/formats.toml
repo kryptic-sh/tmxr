@@ -95,3 +95,12 @@ checks = [
   { command = "display -p -t other '#{session_marked} #{active_window_index} #{last_window_index}'" },
   { command = "display -p -t o:3.1 '#{history_limit} #{cursor_flag} #{keypad_flag} #{keypad_cursor_flag}'" },
 ]
+
+[[cases]]
+name = "time_variables_are_seconds_since_the_epoch"
+steps = [{ run = "new-window -d -t o:1" }]
+checks = [
+  { format = "#{e|>|:#{start_time},1700000000} #{e|>|:#{session_created},1700000000}", expect = "1 1" },
+  { command = "display -p -t o:1 '#{e|>|:#{window_activity},1700000000}'", expect = "1" },
+  { format = "#{e|<=|:#{start_time},#{session_created}}", expect = "1" },
+]

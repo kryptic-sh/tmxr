@@ -135,6 +135,8 @@ pub struct Buffer {
 pub struct Server {
     pub endpoint: Endpoint,
     pub pid: u32,
+    /// When the server started (`#{start_time}`).
+    pub started: std::time::SystemTime,
     pub cfg: Config,
     pub cfg_path: Option<PathBuf>,
     pub events: Sender<Event>,
@@ -240,6 +242,7 @@ impl Server {
         let mut srv = Self {
             endpoint,
             pid: std::process::id(),
+            started: std::time::SystemTime::now(),
             cfg,
             cfg_path,
             events,

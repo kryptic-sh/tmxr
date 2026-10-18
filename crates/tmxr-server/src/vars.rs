@@ -100,6 +100,13 @@ fn flag(b: bool) -> String {
     if b { "1" } else { "0" }.to_owned()
 }
 
+/// A time as tmux's time variables give one: seconds since the epoch.
+fn epoch(t: std::time::SystemTime) -> String {
+    t.duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+        .to_string()
+}
+
 /// `#{client_flags}`: the flags tmux's `server_client_get_flags` lists that
 /// tmxr keeps, in its order.
 fn client_flags(c: &crate::server::Client) -> String {
@@ -149,6 +156,7 @@ impl Context for Vars<'_> {
             "host_short" => srv.host.split('.').next().unwrap_or(&srv.host).to_owned(),
             "pid" => srv.pid.to_string(),
             "version" => env!("CARGO_PKG_VERSION").to_owned(),
+            "start_time" => epoch(srv.started),
             "socket_path" => srv.endpoint.path().display().to_string(),
             "client_prefix" => flag(att.is_some_and(|a| a.table == "prefix")),
             "client_key_table" => att.map(|a| a.table.clone())?,
@@ -171,6 +179,7 @@ impl Context for Vars<'_> {
             "session_id" => format!("${}", session?.id),
             "session_windows" => session?.windows.len().to_string(),
             "session_attached" => attached(session?.id).to_string(),
+            "session_created" => epoch(session?.created),
             "session_many_attached" => flag(attached(session?.id) > 1),
             "session_marked" => flag(marked_session() == Some(session?.id)),
             "server_sessions" => srv.sessions.len().to_string(),
@@ -182,6 +191,11 @@ impl Context for Vars<'_> {
             "window_name" => window?.name.clone(),
             "window_panes" => window?.panes().len().to_string(),
             "window_linked" => flag(srv.sessions_of_window(window?.id).len() > 1),
+            // When one of its panes last printed, as tmux's activity_time.
+            "window_activity" => {
+                let ago = window?.last_output.elapsed();
+                epoch(std::time::SystemTime::now() - ago)
+            }
             "window_start_flag" => {
                 flag(session?.windows.keys().next() == session?.index_of(window?.id).as_ref())
             }
