@@ -222,6 +222,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Copy mode's cursor moves across lines as tmux's**: `end-of-line` puts the
+  cursor one past the last character, `cursor-right` there goes on to the next
+  line and `cursor-left` at a line's start to the previous one's end, and up,
+  down and the page moves remember the column, putting the cursor at a shorter
+  line's end and back again (tmux's `lastcx`).
 - **The `E`, `T`, `q` and `m` format modifiers chain with others** by `;`, as
   tmux's (`#{E;=5:@f}`, `#{q;=3:@x}`, `#{=1;m:a*,abc}`), where such a chain
   expanded to nothing; and `q` quotes only a variable's value, so `#{q:#{@x}}`

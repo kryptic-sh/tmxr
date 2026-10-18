@@ -138,3 +138,252 @@ checks = [
   { command = "display -p -t o:2 '#{pane_in_mode}'", expect = "1" },
   { command = "display -p -t o:3 '#{pane_in_mode}'", expect = "0" },
 ]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_1_1"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:1 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:1" },
+  { run = "send-keys -t o:1 -X history-top" },
+  { run = "send-keys -t o:1 -X end-of-line" },
+]
+checks = [
+  { command = "display -p -t o:1 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_1_2"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:1 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:1" },
+  { run = "send-keys -t o:1 -X history-top" },
+  { run = "send-keys -t o:1 -X end-of-line" },
+  { run = "send-keys -t o:1 -X cursor-right" },
+]
+checks = [
+  { command = "display -p -t o:1 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_1_3"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:1 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:1" },
+  { run = "send-keys -t o:1 -X history-top" },
+  { run = "send-keys -t o:1 -X end-of-line" },
+  { run = "send-keys -t o:1 -X cursor-right" },
+  { run = "send-keys -t o:1 -X cursor-right" },
+]
+checks = [
+  { command = "display -p -t o:1 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_2_1"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:2 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:2" },
+  { run = "send-keys -t o:2 -X history-top" },
+  { run = "send-keys -t o:2 -N 5 -X cursor-right" },
+]
+checks = [
+  { command = "display -p -t o:2 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_2_2"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:2 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:2" },
+  { run = "send-keys -t o:2 -X history-top" },
+  { run = "send-keys -t o:2 -N 5 -X cursor-right" },
+  { run = "send-keys -t o:2 -X cursor-down" },
+]
+checks = [
+  { command = "display -p -t o:2 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_2_3"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:2 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:2" },
+  { run = "send-keys -t o:2 -X history-top" },
+  { run = "send-keys -t o:2 -N 5 -X cursor-right" },
+  { run = "send-keys -t o:2 -X cursor-down" },
+  { run = "send-keys -t o:2 -X cursor-down" },
+]
+checks = [
+  { command = "display -p -t o:2 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_2_4"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:2 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:2" },
+  { run = "send-keys -t o:2 -X history-top" },
+  { run = "send-keys -t o:2 -N 5 -X cursor-right" },
+  { run = "send-keys -t o:2 -X cursor-down" },
+  { run = "send-keys -t o:2 -X cursor-down" },
+  { run = "send-keys -t o:2 -X cursor-up" },
+]
+checks = [
+  { command = "display -p -t o:2 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_3_1"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:3 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:3" },
+  { run = "send-keys -t o:3 -X history-top" },
+  { run = "send-keys -t o:3 -X end-of-line" },
+]
+checks = [
+  { command = "display -p -t o:3 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_3_2"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:3 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:3" },
+  { run = "send-keys -t o:3 -X history-top" },
+  { run = "send-keys -t o:3 -X end-of-line" },
+  { run = "send-keys -t o:3 -X cursor-down" },
+]
+checks = [
+  { command = "display -p -t o:3 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_3_3"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:3 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:3" },
+  { run = "send-keys -t o:3 -X history-top" },
+  { run = "send-keys -t o:3 -X end-of-line" },
+  { run = "send-keys -t o:3 -X cursor-down" },
+  { run = "send-keys -t o:3 -X cursor-down" },
+]
+checks = [
+  { command = "display -p -t o:3 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_4_1"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:4 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:4" },
+  { run = "send-keys -t o:4 -X history-top" },
+  { run = "send-keys -t o:4 -X cursor-down" },
+  { run = "send-keys -t o:4 -X end-of-line" },
+]
+checks = [
+  { command = "display -p -t o:4 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_4_2"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:4 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:4" },
+  { run = "send-keys -t o:4 -X history-top" },
+  { run = "send-keys -t o:4 -X cursor-down" },
+  { run = "send-keys -t o:4 -X end-of-line" },
+  { run = "send-keys -t o:4 -X cursor-down" },
+]
+checks = [
+  { command = "display -p -t o:4 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_4_3"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:4 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:4" },
+  { run = "send-keys -t o:4 -X history-top" },
+  { run = "send-keys -t o:4 -X cursor-down" },
+  { run = "send-keys -t o:4 -X end-of-line" },
+  { run = "send-keys -t o:4 -X cursor-down" },
+  { run = "send-keys -t o:4 -X cursor-left" },
+  { run = "send-keys -t o:4 -X cursor-up" },
+]
+checks = [
+  { command = "display -p -t o:4 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_over_pages_1"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:1 'for i in 1 22 333 4444 55555 666666 7777777 88888888 1 22 333 4444; do echo $i; done; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:1" },
+  { run = "send-keys -t o:1 -X history-top" },
+  { run = "send-keys -t o:1 -N 7 -X cursor-down" },
+  { run = "send-keys -t o:1 -N 5 -X cursor-right" },
+  { run = "send-keys -t o:1 -X page-down" },
+]
+checks = [
+  { command = "display -p -t o:1 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_over_pages_2"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:2 'for i in 1 22 333 4444 55555 666666 7777777 88888888 1 22 333 4444; do echo $i; done; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:2" },
+  { run = "send-keys -t o:2 -X history-top" },
+  { run = "send-keys -t o:2 -N 7 -X cursor-down" },
+  { run = "send-keys -t o:2 -N 5 -X cursor-right" },
+  { run = "send-keys -t o:2 -X page-down" },
+  { run = "send-keys -t o:2 -X page-up" },
+]
+checks = [
+  { command = "display -p -t o:2 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]

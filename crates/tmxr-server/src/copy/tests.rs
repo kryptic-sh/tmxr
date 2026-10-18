@@ -212,7 +212,7 @@ fn word_motions() {
     assert_eq!(cm.cx, 10);
     cm.apply("start-of-line", None);
     cm.apply("end-of-line", None);
-    assert_eq!(cm.cx, 15);
+    assert_eq!(cm.cx, 16, "one past the last character, as tmux's");
 }
 
 #[test]

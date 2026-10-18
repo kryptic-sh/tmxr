@@ -50,6 +50,10 @@ pub struct CopyMode {
     /// A search goes on from the other end when it reaches one
     /// (`wrap-search`).
     pub wrap_search: bool,
+    /// The column up, down and page moves return to, and the length of the
+    /// line it was taken on: tmux's lastcx and lastsx.
+    last_cx: usize,
+    last_sx: usize,
 }
 
 /// tmux's default `word-separators`: ASCII punctuation but `_`.
@@ -177,6 +181,8 @@ impl CopyMode {
             hide_position: false,
             word_separators: WORD_SEPARATORS.to_owned(),
             wrap_search: true,
+            last_cx: 0,
+            last_sx: 0,
         }
     }
 
@@ -328,6 +334,20 @@ impl CopyMode {
     /// the view reaches the top or bottom first, the cursor moves on by the
     /// page instead.
     fn page(&mut self, down: bool, half: bool) {
+        // The column is kept as for up and down, then put at the new line's
+        // end where it was at the old one's, as tmux's pageup1.
+        let ox = self.line_len(self.cy);
+        if self.cx != ox {
+            (self.last_cx, self.last_sx) = (self.cx, ox);
+        }
+        self.cx = self.last_cx;
+        self.page_lines(down, half);
+        if !self.rect_selecting() && self.past_line_end() {
+            self.end_of_line();
+        }
+    }
+
+    fn page_lines(&mut self, down: bool, half: bool) {
         let rows = usize::from(self.rows.max(1));
         let n = match rows {
             0..=2 => 1,
@@ -402,8 +422,98 @@ impl CopyMode {
         self.top = self.top.min(self.lines.len().saturating_sub(rows));
     }
 
+    /// The cursor may sit one past a full line's last cell, as tmux's.
     fn clamp_x(&mut self) {
-        self.cx = self.cx.min(usize::from(self.cols.saturating_sub(1)));
+        self.cx = self.cx.min(usize::from(self.cols));
+    }
+
+    /// A rectangle is being selected: tmux's `sel && rectflag`, under which
+    /// up and down keep the column and right goes to the screen's edge.
+    fn rect_selecting(&self) -> bool {
+        self.anchor.is_some() && self.kind == SelKind::Rect
+    }
+
+    /// The cell is the right half of a wide character (tmux's padding).
+    fn padding(&self, y: usize, x: usize) -> bool {
+        self.lines
+            .get(y)
+            .and_then(|l| l.cells.get(x))
+            .is_some_and(|c| c.symbol.is_empty())
+    }
+
+    /// Whether the column, taken back to after an up, down or page move,
+    /// belongs at the new line's end: it was at the old line's end, or the
+    /// new line is shorter, as tmux's test after those moves.
+    fn past_line_end(&self) -> bool {
+        let px = self.line_len(self.cy);
+        (self.cx >= self.last_sx && self.cx != px) || self.cx > px
+    }
+
+    /// Up or down a line (`down`), the column as tmux's
+    /// window_copy_cursor_up / _down keep it.
+    fn vertical(&mut self, down: bool) {
+        let rect = self.rect_selecting();
+        let ox = self.line_len(self.cy);
+        if !rect && self.cx != ox {
+            (self.last_cx, self.last_sx) = (self.cx, ox);
+        }
+        self.cy = if down {
+            (self.cy + 1).min(self.last_line())
+        } else {
+            self.cy.saturating_sub(1)
+        };
+        if !rect {
+            self.cx = self.last_cx;
+            if self.past_line_end() {
+                self.cx = self.line_len(self.cy);
+            }
+        }
+    }
+
+    /// To the end of the line, following its soft wraps, as tmux's
+    /// grid_reader_cursor_end_of_line with wrap: the screen's edge under a
+    /// rectangle selection, else one past the last character.
+    fn end_of_line(&mut self) {
+        while self.cy < self.last_line() && self.lines[self.cy].wrapped {
+            self.cy += 1;
+        }
+        self.cx = if self.rect_selecting() {
+            usize::from(self.cols)
+        } else {
+            self.line_len(self.cy)
+        };
+    }
+
+    /// Right a character, past a wide one's padding, and on to the next
+    /// line's start from the end, as tmux's grid_reader_cursor_right.
+    fn cursor_right(&mut self) {
+        let px = if self.rect_selecting() {
+            usize::from(self.cols)
+        } else {
+            self.line_len(self.cy)
+        };
+        if self.cx >= px && self.cy < self.last_line() {
+            (self.cy, self.cx) = (self.cy + 1, 0);
+        } else if self.cx < px {
+            self.cx += 1;
+            while self.cx < px && self.padding(self.cy, self.cx) {
+                self.cx += 1;
+            }
+        }
+    }
+
+    /// Left a character, past a wide one's padding, and on to the previous
+    /// line's end from the start, as tmux's grid_reader_cursor_left.
+    fn cursor_left(&mut self) {
+        while self.cx > 0 && self.padding(self.cy, self.cx) {
+            self.cx -= 1;
+        }
+        if self.cx == 0 && self.cy > 0 {
+            self.cy -= 1;
+            self.cx = self.line_len(self.cy);
+        } else if self.cx > 0 {
+            self.cx -= 1;
+        }
     }
 
     fn char_at(&self, y: usize, x: usize) -> char {
@@ -647,12 +757,12 @@ impl CopyMode {
         let rows = usize::from(self.rows.max(1));
         let last = self.last_line();
         match name {
-            "cursor-left" => self.cx = self.cx.saturating_sub(1),
-            "cursor-right" => self.cx += 1,
-            "cursor-up" => self.cy = self.cy.saturating_sub(1),
-            "cursor-down" => self.cy = (self.cy + 1).min(last),
+            "cursor-left" => self.cursor_left(),
+            "cursor-right" => self.cursor_right(),
+            "cursor-up" => self.vertical(false),
+            "cursor-down" => self.vertical(true),
             "start-of-line" => self.cx = 0,
-            "end-of-line" => self.cx = self.line_len(self.cy).saturating_sub(1),
+            "end-of-line" => self.end_of_line(),
             "back-to-indentation" => {
                 self.cx = self.lines[self.cy]
                     .chars()
