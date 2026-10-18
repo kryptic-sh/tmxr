@@ -234,3 +234,18 @@ checks = [
   { command = "show -g prefix2", expect = "prefix2 None" },
   { command = "show -g key-table", expect = "key-table root" },
 ]
+
+[[cases]]
+name = "hidden_environment_stays_out_of_new_panes"
+unix_only = true
+steps = [
+  { run = "set-environment -g -h TMXR_ORACLE_SECRET hush" },
+  { run = "set-environment -g TMXR_ORACLE_SHOWN plain" },
+  { run = "new-window -d -t o:1 'echo \"[$TMXR_ORACLE_SECRET][$TMXR_ORACLE_SHOWN]\"; sleep 100'" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "show-environment -g -h", expect = "TMXR_ORACLE_SECRET=hush" },
+  { command = "show-environment -g TMXR_ORACLE_SHOWN", expect = "TMXR_ORACLE_SHOWN=plain" },
+  { command = "capture-pane -p -t o:1", expect = "[][plain]" },
+]

@@ -53,15 +53,36 @@ pub struct Pane {
     pub options: tmxr_config::OwnOptions,
 }
 
-/// An environment as tmux keeps one: variables set, and names removed from
-/// new processes (`set-environment -r`, shown as `-NAME`).
+/// An environment as tmux keeps one: variables set, names removed from new
+/// processes (`set-environment -r`, shown as `-NAME`), and hidden variables
+/// (`set-environment -h`) that new processes do not get.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Environment(std::collections::BTreeMap<String, Option<String>>);
+pub struct Environment(std::collections::BTreeMap<String, EnvEntry>);
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EnvEntry {
+    value: Option<String>,
+    hidden: bool,
+}
 
 impl Environment {
     /// Set `name`, or with `None` mark it removed.
     pub fn set(&mut self, name: &str, value: Option<String>) {
-        self.0.insert(name.to_owned(), value);
+        let entry = EnvEntry {
+            value,
+            hidden: false,
+        };
+        self.0.insert(name.to_owned(), entry);
+    }
+
+    /// Set `name` hidden, as tmux's `ENVIRON_HIDDEN`: kept, and shown by
+    /// `show-environment -h`, but left out of new processes.
+    pub fn set_hidden(&mut self, name: &str, value: String) {
+        let entry = EnvEntry {
+            value: Some(value),
+            hidden: true,
+        };
+        self.0.insert(name.to_owned(), entry);
     }
 
     /// Forget `name` here, so an outer environment's value shows through.
@@ -69,9 +90,21 @@ impl Environment {
         self.0.remove(name);
     }
 
-    /// Every entry, by name: `Some(value)` set, `None` removed.
+    /// Every entry but the hidden ones, by name: `Some(value)` set, `None`
+    /// removed.
     pub fn iter(&self) -> impl Iterator<Item = (&str, Option<&str>)> {
-        self.0.iter().map(|(k, v)| (k.as_str(), v.as_deref()))
+        self.0
+            .iter()
+            .filter(|(_, e)| !e.hidden)
+            .map(|(k, e)| (k.as_str(), e.value.as_deref()))
+    }
+
+    /// The hidden variables, by name.
+    pub fn hidden(&self) -> impl Iterator<Item = (&str, Option<&str>)> {
+        self.0
+            .iter()
+            .filter(|(_, e)| e.hidden)
+            .map(|(k, e)| (k.as_str(), e.value.as_deref()))
     }
 
     /// `outer` with this environment's entries over it.
@@ -84,7 +117,17 @@ impl Environment {
 
 impl FromIterator<(String, String)> for Environment {
     fn from_iter<I: IntoIterator<Item = (String, String)>>(iter: I) -> Self {
-        Self(iter.into_iter().map(|(k, v)| (k, Some(v))).collect())
+        Self(
+            iter.into_iter()
+                .map(|(k, v)| {
+                    let entry = EnvEntry {
+                        value: Some(v),
+                        hidden: false,
+                    };
+                    (k, entry)
+                })
+                .collect(),
+        )
     }
 }
 

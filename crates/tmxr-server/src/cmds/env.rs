@@ -42,7 +42,12 @@ pub(super) fn run(
                 env.set(name, None);
             } else {
                 let value = value.ok_or_else(|| format!("no value for {name}"))?;
-                env.set(name, Some(value));
+                // -h: hidden from new processes, as tmux's.
+                if a.has('h') {
+                    env.set_hidden(name, value);
+                } else {
+                    env.set(name, Some(value));
+                }
             }
         }
         "show-environment" => {
@@ -57,7 +62,16 @@ pub(super) fn run(
             };
             let name = pos.first();
             let mut shown = 0;
-            for (k, v) in env.iter().filter(|(k, _)| name.is_none_or(|n| n == k)) {
+            // -h: the hidden variables only; without it, all but them.
+            let entries: Vec<(&str, Option<&str>)> = if a.has('h') {
+                env.hidden().collect()
+            } else {
+                env.iter().collect()
+            };
+            for (k, v) in entries
+                .into_iter()
+                .filter(|(k, _)| name.is_none_or(|n| n == k))
+            {
                 shown += 1;
                 let line = match (a.has('s'), v) {
                     (false, Some(v)) => format!("{k}={v}"),

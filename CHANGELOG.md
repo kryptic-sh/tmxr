@@ -167,6 +167,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`set-environment -h` / `show-environment -h`** were accepted and ignored;
+  `-h` now sets a hidden variable, left out of new panes and jobs and shown only
+  by `show-environment -h`, as tmux's.
 - **`select-layout -o`** was accepted and ignored; it now goes back to the
   layout before the last `select-layout`, as tmux's (its cells to the panes in
   order, the last cells dropped when there are fewer panes).
