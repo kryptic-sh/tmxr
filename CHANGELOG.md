@@ -103,6 +103,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pressed longer than that after the prefix (or `switch-client -T prefix`) goes
   to the root table instead (unless it repeats a repeatable binding). 0, the
   default, waits forever.
+- **Layout strings**, as tmux's: `#{window_layout}` and
+  `#{window_visible_layout}` write the window's layout as tmux does (checksum
+  and all), and `select-layout` takes such a string back, laying its cells over
+  the window's panes in order and sizing the window to it.
 - **Copy-mode commands `copy-line`, `copy-pipe-line` (and their `-and-cancel`),
   `scroll-top`, `scroll-bottom`, `rectangle-on`, `rectangle-off`, and
   `scroll-down-and-cancel`, `page-down-and-cancel`, `halfpage-down-and-cancel`

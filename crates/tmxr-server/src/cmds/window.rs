@@ -357,8 +357,20 @@ pub(super) fn run(
                 crate::layout::PRESETS[win.preset].to_owned()
             };
             let panes = win.panes();
-            let tree = crate::layout::preset(&name, &panes, (win.cols, win.rows), &sizes)
-                .ok_or_else(|| format!("unknown layout: {name}"))?;
+            // A layout name, else a layout string (`#{window_layout}`) laid
+            // over the panes, the window taking the string's size, as tmux's.
+            let tree = match crate::layout::preset(&name, &panes, (win.cols, win.rows), &sizes) {
+                Some(tree) => tree,
+                None => {
+                    let (old, (cols, rows)) =
+                        crate::layout::parse(&name).map_err(|e| format!("{e}: {name}"))?;
+                    let tree =
+                        crate::layout::reuse(&old, &panes).map_err(|e| format!("{e}: {name}"))?;
+                    win.cols = cols.max(1);
+                    win.rows = rows.max(1);
+                    tree
+                }
+            };
             // The panes keep their numbers, as tmux's, though a mirrored
             // layout lays the first out last.
             let laid: Vec<crate::model::PaneId> = tree

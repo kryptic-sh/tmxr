@@ -312,3 +312,23 @@ checks = [
   { command = "list-panes -t o:1 -F '#{pane_index} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'" },
   { command = "list-panes -t o:2 -F '#{pane_index} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'" },
 ]
+
+[[cases]]
+name = "window_layout_is_tmuxs_string_and_select_layout_takes_it"
+steps = [
+  { run = "split-window -h -t o:0" },
+  { run = "split-window -v -t o:0.1" },
+  { run = "split-window -h -t o:0.0" },
+  { run = "new-window -d -t o:1" },
+  { run = "split-window -v -t o:1" },
+  { run = "split-window -v -t o:1" },
+  { run = "select-layout -t o:1 'd67e,80x24,0,0{40x24,0,0,0,39x24,41,0[39x12,41,0,1,39x11,41,13,2]}'" },
+  { run = "new-window -d -t o:2" },
+  { run = "split-window -h -t o:2" },
+  { run = "resize-pane -Z -t o:2.0" },
+]
+checks = [
+  { command = "display -p -t o:0 '#{window_layout}'" },
+  { command = "list-panes -t o:1 -F '#{pane_index} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'" },
+  { command = "display -p -t o:2 '#{window_layout} #{window_visible_layout}'" },
+]

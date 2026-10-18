@@ -228,6 +228,212 @@ fn tree_contains(t: &LayoutTree, id: usize) -> bool {
     t.contains(id)
 }
 
+/// A layout cell as tmux's layout strings write one: its size and place,
+/// and a pane's id or the cells it is split into (side by side for a
+/// vertical split, `{…}`, stacked otherwise, `[…]`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Cell {
+    rect: LayoutRect,
+    kind: CellKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum CellKind {
+    Pane(usize),
+    Split(SplitDir, Vec<Cell>),
+}
+
+/// tmux's `layout_checksum` of a layout string's body.
+fn layout_checksum(body: &str) -> u16 {
+    body.bytes().fold(0u16, |csum, b| {
+        ((csum >> 1) | ((csum & 1) << 15)).wrapping_add(u16::from(b))
+    })
+}
+
+/// The cells of `tree` over `area`, a run of splits the same way written as
+/// one cell, as tmux keeps them.
+fn cell_of(tree: &LayoutTree, area: LayoutRect) -> Cell {
+    match tree {
+        LayoutTree::Split {
+            dir,
+            ratio,
+            fixed,
+            a,
+            b,
+            ..
+        } => {
+            let geo = hjkl_layout::split_geometry(area, *dir, *ratio, *fixed);
+            let mut children = Vec::new();
+            for child in [cell_of(a, geo.a), cell_of(b, geo.b)] {
+                match child.kind {
+                    CellKind::Split(d, inner) if d == *dir => children.extend(inner),
+                    _ => children.push(child),
+                }
+            }
+            Cell {
+                rect: area,
+                kind: CellKind::Split(*dir, children),
+            }
+        }
+        LayoutTree::Leaf(id) => Cell {
+            rect: area,
+            kind: CellKind::Pane(*id),
+        },
+        _ => Cell {
+            rect: area,
+            kind: CellKind::Pane(0),
+        },
+    }
+}
+
+fn write_cell(cell: &Cell, out: &mut String) {
+    use std::fmt::Write as _;
+    let r = cell.rect;
+    let _ = write!(out, "{}x{},{},{}", r.w, r.h, r.x, r.y);
+    match &cell.kind {
+        CellKind::Pane(id) => {
+            let _ = write!(out, ",{id}");
+        }
+        CellKind::Split(dir, children) => {
+            let (open, close) = if *dir == SplitDir::Vertical {
+                ('{', '}')
+            } else {
+                ('[', ']')
+            };
+            out.push(open);
+            for (i, child) in children.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                write_cell(child, out);
+            }
+            out.push(close);
+        }
+    }
+}
+
+/// `tree` over a `cols` × `rows` window as tmux's `layout_dump` writes it
+/// (`#{window_layout}`): `checksum,cell`.
+pub fn dump(tree: &LayoutTree, cols: u16, rows: u16) -> String {
+    let mut body = String::new();
+    write_cell(&cell_of(tree, rect(0, 0, cols, rows)), &mut body);
+    format!("{:04x},{body}", layout_checksum(&body))
+}
+
+/// A layout string read as tmux's `layout_parse` reads one: the checksum
+/// must match and the cells nest properly. Returns the tree, the pane ids
+/// it names kept as the leaves' (callers lay it over their panes with
+/// [`reuse`]), and the size it is for, which tmux resizes the window to.
+pub fn parse(layout: &str) -> Result<(LayoutTree, (u16, u16)), String> {
+    let invalid = || "invalid layout".to_owned();
+    let (sum, body) = layout.split_once(',').ok_or_else(invalid)?;
+    let sum = u16::from_str_radix(sum, 16).map_err(|_| invalid())?;
+    if sum != layout_checksum(body) {
+        return Err(invalid());
+    }
+    let mut rest = body;
+    let cell = parse_cell(&mut rest).ok_or_else(invalid)?;
+    if !rest.is_empty() {
+        return Err(invalid());
+    }
+    Ok((tree_of(&cell), (cell.rect.w, cell.rect.h)))
+}
+
+/// Digits at the start of `s`, taken off it.
+fn number(s: &mut &str) -> Option<u16> {
+    let end = s.find(|c: char| !c.is_ascii_digit()).unwrap_or(s.len());
+    let n = s[..end].parse().ok()?;
+    *s = &s[end..];
+    Some(n)
+}
+
+fn parse_cell(s: &mut &str) -> Option<Cell> {
+    let w = number(s)?;
+    *s = s.strip_prefix('x')?;
+    let h = number(s)?;
+    *s = s.strip_prefix(',')?;
+    let x = number(s)?;
+    *s = s.strip_prefix(',')?;
+    let y = number(s)?;
+    let rect = rect(x, y, w, h);
+    // `,ID` for a pane, unless it is the next cell's `WxH`.
+    if let Some(after) = s.strip_prefix(',') {
+        let mut probe = after;
+        if let Some(id) = number(&mut probe)
+            && !probe.starts_with('x')
+        {
+            *s = probe;
+            return Some(Cell {
+                rect,
+                kind: CellKind::Pane(usize::from(id)),
+            });
+        }
+    }
+    let (dir, close) = match s.chars().next() {
+        Some('{') => (SplitDir::Vertical, '}'),
+        Some('[') => (SplitDir::Horizontal, ']'),
+        // A cell with no id: a pane tmux numbers itself.
+        _ => {
+            return Some(Cell {
+                rect,
+                kind: CellKind::Pane(0),
+            });
+        }
+    };
+    let mut children = Vec::new();
+    loop {
+        *s = &s[1..];
+        children.push(parse_cell(s)?);
+        if !s.starts_with(',') {
+            break;
+        }
+    }
+    *s = s.strip_prefix(close)?;
+    Some(Cell {
+        rect,
+        kind: CellKind::Split(dir, children),
+    })
+}
+
+/// A cell as a tree: each run of children a chain of splits, the first
+/// child given its cells and border of the run's length.
+fn tree_of(cell: &Cell) -> LayoutTree {
+    match &cell.kind {
+        CellKind::Pane(id) => LayoutTree::Leaf(*id),
+        CellKind::Split(dir, children) => {
+            let len = if *dir == SplitDir::Vertical {
+                cell.rect.w
+            } else {
+                cell.rect.h
+            };
+            chain(*dir, children, len)
+        }
+    }
+}
+
+fn chain(dir: SplitDir, children: &[Cell], len: u16) -> LayoutTree {
+    match children {
+        [] => LayoutTree::Leaf(0),
+        [only] => tree_of(only),
+        [first, rest @ ..] => {
+            let size = if dir == SplitDir::Vertical {
+                first.rect.w
+            } else {
+                first.rect.h
+            };
+            // hjkl-layout gives the first child round(len × ratio) cells,
+            // its border among them.
+            let ratio = f32::from(size + 1) / f32::from(len.max(1));
+            LayoutTree::split(
+                dir,
+                ratio,
+                tree_of(first),
+                chain(dir, rest, len.saturating_sub(size + 1)),
+            )
+        }
+    }
+}
+
 /// `old` laid over `panes`, as tmux's `layout_parse` lays a layout over a
 /// window's panes: its cells go to them in order, after cells beyond their
 /// number go from the bottom right. More panes than cells is an error.
@@ -745,6 +951,24 @@ mod tests {
             "{widths:?}"
         );
         assert!(preset("nope", &panes, (100, 40), &MainPane::default()).is_none());
+    }
+
+    #[test]
+    fn layout_strings_round_trip_with_tmuxs_checksum() {
+        // Strings tmux 3.6 wrote for an 80x24 window (2026-10-18): pane 0
+        // on the left, 1 and 2 stacked on the right; then pane 0 split, its
+        // new pane 3 joining the same left-right cell; and one pane alone.
+        for tmux in [
+            "d67e,80x24,0,0{40x24,0,0,0,39x24,41,0[39x12,41,0,1,39x11,41,13,2]}",
+            "ff26,80x24,0,0{20x24,0,0,0,19x24,21,0,3,39x24,41,0[39x12,41,0,1,39x11,41,13,2]}",
+            "b25d,80x24,0,0,0",
+        ] {
+            let (tree, size) = parse(tmux).unwrap();
+            assert_eq!(size, (80, 24));
+            assert_eq!(dump(&tree, 80, 24), tmux);
+        }
+        assert_eq!(parse("0000,80x24,0,0,1").unwrap_err(), "invalid layout");
+        assert!(parse("d67e,80x24,0,0{40x24,0,0,0").is_err());
     }
 
     #[test]

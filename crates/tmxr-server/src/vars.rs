@@ -173,6 +173,20 @@ impl Context for Vars<'_> {
             "window_width" => window?.cols.to_string(),
             "window_height" => window?.rows.to_string(),
             "window_zoomed_flag" => flag(window?.zoomed),
+            // As tmux's: the whole layout even when zoomed, and what shows.
+            "window_layout" => {
+                let w = window?;
+                crate::layout::dump(&w.layout, w.cols, w.rows)
+            }
+            "window_visible_layout" => {
+                let w = window?;
+                if w.zoomed {
+                    let only = hjkl_layout::LayoutTree::Leaf(w.active as usize);
+                    crate::layout::dump(&only, w.cols, w.rows)
+                } else {
+                    crate::layout::dump(&w.layout, w.cols, w.rows)
+                }
+            }
             "window_bell_flag" => flag(window?.bell.contains(&session?.id)),
             "window_activity_flag" => flag(window?.activity.contains(&session?.id)),
             "window_silence_flag" => flag(window?.silence.contains(&session?.id)),

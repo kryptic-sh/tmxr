@@ -443,10 +443,9 @@ table. What has been verified, and how:
     session name exists: the format `Context` has only `get`, so it needs a way
     to ask the server), and `E` / `T` / `q` / `m` chained with others by `;` (an
     unknown modifier expands to nothing); roughly 110 of tmux's format variables
-    (`session_created`, `window_layout`, `pane_start_command`, `client_pid`,
-    `start_time`, ...); styles `align=` `fill=` `list=` `range=` `push-default`
-    / `pop-default`, strikethrough, blink, overline, curly and coloured
-    underlines.
+    (`session_created`, `pane_start_command`, `client_pid`, `start_time`, ...);
+    styles `align=` `fill=` `list=` `range=` `push-default` / `pop-default`,
+    strikethrough, blink, overline, curly and coloured underlines.
   - Options: the status line is one row at the bottom (`STATUS_ROWS`): no
     `status off` / `2`–`5`, `status-position`, `status-format`; no
     `window-status-activity-style` / `-bell-style` (tmux's default `reverse`
@@ -461,9 +460,8 @@ table. What has been verified, and how:
     `history-file`, `editor`. `escape-time` is kept but never read.
   - Commands: `capture-pane -e -a -C -T -q` (and `-J` keeping spaces a program
     wrote at a line's end, which the history snapshot cannot tell from blank
-    cells); `split-window -I`; layout strings (`#{window_layout}`,
-    `select-layout '<checksum>,…'`); `display-message -a -v -I -N -C`;
-    `choose-*` templates and `-F -f -K -O -r -N -y`, tagging and sort keys;
+    cells); `split-window -I`; `display-message -a -v -I -N -C`; `choose-*`
+    templates and `-F -f -K -O -r -N -y`, tagging and sort keys;
     `command-prompt` with several `-p` and `%1`…`%9`, `-1 -N -b -F -l`,
     completion; session groups (`new-session -t`); `switch-client -t` /
     `attach -t` drop the window and pane part, and `switch-client -r -Z`;
