@@ -385,6 +385,7 @@ impl Context for Vars<'_> {
             "keypad_cursor_flag" => flag(pane?.emu.screen().application_cursor()),
             "pane_input_off" => flag(pane?.input_off),
             "pane_dead_status" => pane?.dead.flatten()?.to_string(),
+            "pane_dead_time" => epoch(pane?.dead_time?),
             "pane_marked" => flag(srv.marked_pane() == Some(pane?.id)),
             "pane_marked_set" => flag(srv.marked_pane().is_some()),
             "pane_id" => format!("%{}", pane?.id),

@@ -63,6 +63,7 @@ impl Server {
                 spawn: started.spawn,
                 argv: argv.to_vec(),
                 dead: None,
+                dead_time: None,
                 clock: false,
                 input_off: false,
                 focused: false,
@@ -511,6 +512,7 @@ impl Server {
                 self.queue_hook(hook, ctx, crate::hooks::HookScope::default());
                 if remain && let Some(p) = self.panes.get_mut(&pid) {
                     p.dead = Some(code);
+                    p.dead_time = Some(std::time::SystemTime::now());
                     let window = p.window;
                     self.commands.remove(&pid);
                     self.mark_window_dirty(window);

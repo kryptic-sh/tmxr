@@ -121,8 +121,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `config_files` (the TOML file the config was last read from, empty for the
   defaults alone), and the times `start_time`, `session_created`,
   `session_activity`, `session_last_attached` (empty until a client attaches),
-  `window_activity`, `client_created` and `client_activity` (seconds since the
-  epoch), as tmux's.
+  `window_activity`, `client_created`, `client_activity` and `pane_dead_time`
+  (when a pane `remain-on-exit` kept died) (seconds since the epoch), as tmux's.
 - **Layout strings**, as tmux's: `#{window_layout}` and
   `#{window_visible_layout}` write the window's layout as tmux does (checksum
   and all), and `select-layout` takes such a string back, laying its cells over

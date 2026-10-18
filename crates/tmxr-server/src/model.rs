@@ -37,6 +37,8 @@ pub struct Pane {
     /// Set when the program exited and `remain-on-exit` kept the pane: the
     /// exit code, if the program had one.
     pub dead: Option<Option<u32>>,
+    /// When `dead` was set (`#{pane_dead_time}`).
+    pub dead_time: Option<std::time::SystemTime>,
     /// `clock-mode`: the pane shows a big clock until a key is pressed.
     pub clock: bool,
     /// `select-pane -d`: no keys, pastes or mouse reach the program, as

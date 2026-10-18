@@ -273,3 +273,15 @@ steps = [
   { run = "kill-session -t p" },
 ]
 checks = [{ format = "#{next_session_id} #{session_id}" }]
+
+[[cases]]
+name = "pane_dead_time_is_when_a_kept_pane_died"
+steps = [
+  { run = "set -g remain-on-exit on" },
+  { run = "new-window -d -t o:1 'exit 3'" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "display -p -t o:1 '#{e|>|:#{pane_dead_time},1700000000} #{e|>=:#{pane_dead_time},#{start_time}} #{pane_dead_status}'" },
+  { command = "display -p -t o:0 '[#{pane_dead_time}]'" },
+]
