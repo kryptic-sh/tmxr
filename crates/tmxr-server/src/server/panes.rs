@@ -361,6 +361,31 @@ impl Server {
         }
     }
 
+    /// A program's `ESC k name ESC \`, as tmux's `input_exit_rename`: a
+    /// name renames the window and stops automatic renaming; an empty one
+    /// gives automatic-rename back to the inherited value, and empties the
+    /// name if that is off.
+    fn program_rename(&mut self, wid: WindowId, name: &[u8]) {
+        let Ok(name) = std::str::from_utf8(name) else {
+            return;
+        };
+        let Some(win) = self.windows.get_mut(&wid) else {
+            return;
+        };
+        if name.is_empty() {
+            win.options.automatic_rename = None;
+            if !self.window_options(wid).automatic_rename
+                && let Some(win) = self.windows.get_mut(&wid)
+            {
+                win.name.clear();
+            }
+        } else {
+            win.options.automatic_rename = Some(false);
+            name.clone_into(&mut win.name);
+        }
+        self.mark_window_dirty(wid);
+    }
+
     pub(super) fn pty_event(&mut self, pid: PaneId, ev: PtyEvent) {
         match ev {
             PtyEvent::Output(bytes) => {
@@ -395,7 +420,13 @@ impl Server {
                 let bell = p.emu.take_bell();
                 let clips = p.emu.take_clipboard();
                 let passthrough = p.emu.take_passthrough();
+                let rename = p.emu.take_rename();
                 let wid = p.window;
+                if let Some(name) = rename
+                    && self.pane_options(pid).allow_rename
+                {
+                    self.program_rename(wid, &name);
+                }
                 if bell && self.window_options(wid).monitor_bell {
                     crate::alerts::raise(self, wid, crate::alerts::Alert::Bell);
                 }

@@ -455,7 +455,7 @@ table. What has been verified, and how:
     format), `status-fg` / `-bg`; `pane-border-status` / `-format` / `-lines` /
     `-indicators`, `window-style` / `window-active-style`; session
     `status-keys`, `assume-paste-time`, `default-size`; window
-    `aggressive-resize`, `allow-rename`, `alternate-screen`, `cursor-style`,
+    `aggressive-resize`, `alternate-screen`, `cursor-style`,
     `remain-on-exit-format`; server `focus-events`, `history-file`, `editor`,
     `prefix-timeout`. `escape-time` is kept but never read.
   - Commands: `capture-pane -S -E -e -b -a -C -N -T -q`; `-P` / `-F` on

@@ -194,6 +194,9 @@ pub struct Emulator {
     /// tmux passthrough payloads (`ESC P tmux; … ESC \`) waiting to be
     /// forwarded to the outer terminal.
     passthrough: Vec<(Vec<u8>, (u16, u16))>,
+    /// The last window name a program asked for (`ESC k … ESC \`) since
+    /// the last [`Emulator::take_rename`].
+    rename: Option<Vec<u8>>,
     /// [`passthrough_supported`], read once.
     split: bool,
     /// The history limit, for a fresh parser.
@@ -209,6 +212,7 @@ impl Emulator {
             parser: vt100::Parser::new_with_callbacks(rows, cols, scrollback, Hooks::default()),
             dcs: DcsSplitter::default(),
             passthrough: Vec::new(),
+            rename: None,
             split: passthrough_supported(),
             scrollback,
             history: 0,
@@ -268,6 +272,9 @@ impl Emulator {
                 self.passthrough.push((payload, cursor));
             }
             self.parser.process(&split.text[done..]);
+            if split.rename.is_some() {
+                self.rename = split.rename;
+            }
         } else {
             self.parser.process(bytes);
         }
@@ -344,6 +351,13 @@ impl Emulator {
     /// cursor (row, column) it was printed at.
     pub fn take_passthrough(&mut self) -> Vec<(Vec<u8>, (u16, u16))> {
         std::mem::take(&mut self.passthrough)
+    }
+
+    /// The window name a program last asked for with `ESC k … ESC \`, if
+    /// any since the last call. Only where [`passthrough_supported`]: the
+    /// same splitter finds both.
+    pub fn take_rename(&mut self) -> Option<Vec<u8>> {
+        self.rename.take()
     }
 
     /// The modes key encoding depends on.

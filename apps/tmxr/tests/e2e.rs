@@ -6685,6 +6685,71 @@ fn each_session_redraws_its_status_line_at_its_own_interval() {
 /// `attach -f ignore-size`: the client's size sizes no window while a client
 /// without the flag is attached, as tmux's; alone, it does.
 #[test]
+fn allow_rename_lets_programs_name_their_window() {
+    // The name string is found by the splitter passthrough uses, which needs
+    // Microsoft's ConPTY beside tmxr.exe on Windows (see the passthrough
+    // test); without it there is nothing to check.
+    let bin = std::path::Path::new(env!("CARGO_BIN_EXE_tmxr"));
+    if cfg!(windows) && !bin.with_file_name("conpty.dll").is_file() {
+        return;
+    }
+    let t = Tmxr::new("allowrename");
+    t.run(&["new-session", "-d", "-s", "ar", "-n", "start"]);
+    // A program that names its window once, then again after a pause.
+    #[cfg(unix)]
+    let namer = |name: &str, mark: &str| {
+        let script = format!(r"printf '\033k{name}\033\{mark}'; sleep 30");
+        vec!["/bin/sh".to_owned(), "-c".to_owned(), script]
+    };
+    #[cfg(windows)]
+    let namer = |name: &str, mark: &str| {
+        let script = format!(
+            "$e=[char]27; [Console]::Out.Write($e+'k{name}'+$e+'\'+'{mark}'); Start-Sleep 30"
+        );
+        vec![
+            "powershell.exe".to_owned(),
+            "-NoProfile".to_owned(),
+            "-Command".to_owned(),
+            script,
+        ]
+    };
+    let name = |t: &Tmxr| {
+        t.run(&["display-message", "-p", "-t", "ar:0", "#{window_name}"])
+            .trim()
+            .to_owned()
+    };
+    let respawn = |t: &Tmxr, n: &str, mark: &str| {
+        let mut args = vec![
+            "respawn-pane".to_owned(),
+            "-k".to_owned(),
+            "-t".to_owned(),
+            "ar:0".to_owned(),
+        ];
+        args.extend(namer(n, mark));
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        t.run(&args);
+        t.wait_run(&["capture-pane", "-p", "-t", "ar:0"], mark, |o| {
+            o.contains(mark)
+        });
+    };
+    // Off, tmux's default: the name stays, and the string is not printed.
+    respawn(&t, "by-prog", "mark-off");
+    assert_eq!(name(&t), "start");
+    let screen = t.run(&["capture-pane", "-p", "-t", "ar:0"]);
+    assert!(!screen.contains("by-prog"), "{screen}");
+    // On: the program names the window, and automatic renaming stops.
+    t.run(&["set", "-g", "allow-rename", "on"]);
+    respawn(&t, "by-prog", "mark-on");
+    assert_eq!(name(&t), "by-prog");
+    let auto = t.run(&["show", "-wv", "-t", "ar:0", "automatic-rename"]);
+    assert_eq!(auto.trim(), "off");
+    // An empty name gives automatic-rename back to the global value.
+    t.run(&["set", "-wg", "automatic-rename", "off"]);
+    respawn(&t, "", "mark-empty");
+    assert_eq!(name(&t), "");
+}
+
+#[test]
 fn allow_set_title_off_keeps_programs_from_titling_panes() {
     let t = Tmxr::new("settitle");
     t.run(&["new-session", "-d", "-s", "st"]);

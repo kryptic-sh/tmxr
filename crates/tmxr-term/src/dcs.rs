@@ -1,5 +1,5 @@
 //! Take DCS strings (`ESC P … ESC \`) out of a pane's output before `vt100`
-//! sees it.
+//! sees it, and screen's window-name strings (`ESC k … ESC \`) with them.
 //!
 //! vt100 has no DCS hook, and its parser ends a DCS at the first `ESC`. tmux's
 //! passthrough (`ESC P tmux; …`, with every `ESC` inside doubled) would then
@@ -23,7 +23,7 @@ enum State {
     Ground,
     /// Saw `ESC` outside a DCS.
     Esc,
-    /// Inside a DCS string.
+    /// Inside a DCS string, or a name string when `name` is set.
     Dcs,
     /// Saw `ESC` inside a DCS string.
     DcsEsc,
@@ -40,12 +40,17 @@ pub struct Split {
     /// Payloads of completed `ESC P tmux; … ESC \` strings, each with how
     /// much of `text` came before it: where in the output it was printed.
     pub passthrough: Vec<(usize, Vec<u8>)>,
+    /// The last completed `ESC k … ESC \` window name, as tmux's
+    /// `input_exit_rename` takes it.
+    pub rename: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Default)]
 pub struct DcsSplitter {
     state: State,
     dcs: Vec<u8>,
+    /// The string being collected is an `ESC k` name, not a DCS.
+    name: bool,
 }
 
 impl DcsSplitter {
@@ -53,6 +58,7 @@ impl DcsSplitter {
         let mut out = Split {
             text: Vec::with_capacity(bytes.len()),
             passthrough: Vec::new(),
+            rename: None,
         };
         for &b in bytes {
             self.state = match (self.state, b) {
@@ -61,8 +67,9 @@ impl DcsSplitter {
                     out.text.push(b);
                     State::Ground
                 }
-                (State::Esc, b'P') => {
+                (State::Esc, b'P' | b'k') => {
                     self.dcs.clear();
+                    self.name = b == b'k';
                     State::Dcs
                 }
                 (State::Esc, ESC) => {
@@ -77,7 +84,9 @@ impl DcsSplitter {
                 (State::Dcs, _) => self.keep(&[b]),
                 // ESC \ (ST) ends the string.
                 (State::DcsEsc, b'\\') => {
-                    if let Some(payload) = self.dcs.strip_prefix(PASSTHROUGH) {
+                    if self.name {
+                        out.rename = Some(std::mem::take(&mut self.dcs));
+                    } else if let Some(payload) = self.dcs.strip_prefix(PASSTHROUGH) {
                         out.passthrough.push((out.text.len(), payload.to_vec()));
                     }
                     self.dcs.clear();
@@ -88,8 +97,9 @@ impl DcsSplitter {
                 // Any other ESC ends the string unfinished, as terminal
                 // parsers do, and starts a sequence of its own; a passthrough
                 // never contains one, since its ESCs are all doubled.
-                (State::DcsEsc, b'P') => {
+                (State::DcsEsc, b'P' | b'k') => {
                     self.dcs.clear();
+                    self.name = b == b'k';
                     State::Dcs
                 }
                 (State::DcsEsc, _) => {
@@ -130,6 +140,9 @@ mod tests {
             all.text.extend(part.text);
             all.passthrough
                 .extend(part.passthrough.into_iter().map(|(at, p)| (before + at, p)));
+            if part.rename.is_some() {
+                all.rename = part.rename;
+            }
         }
         all
     }
@@ -167,6 +180,23 @@ mod tests {
     fn a_lone_escape_ends_an_unterminated_dcs() {
         let out = split_all(&[b"\x1bPtmux;half\x1b[31mred"]);
         assert_eq!(out.text, b"\x1b[31mred");
+        assert!(out.passthrough.is_empty());
+    }
+
+    #[test]
+    fn window_names_are_taken_out() {
+        let out = split_all(&[b"a\x1bkvim\x1b\\b"]);
+        assert_eq!(out.text, b"ab");
+        assert_eq!(out.rename.as_deref(), Some(&b"vim"[..]));
+        // Across reads, and the empty name too.
+        let out = split_all(&[b"\x1bkfirst\x1b", b"\\\x1bk", b"\x1b\\"]);
+        assert!(out.text.is_empty());
+        let mut s = DcsSplitter::default();
+        assert_eq!(s.split(b"\x1bkfirst\x1b").rename, None);
+        assert_eq!(s.split(b"\\").rename.as_deref(), Some(&b"first"[..]));
+        assert_eq!(s.split(b"\x1bk\x1b\\").rename.as_deref(), Some(&b""[..]));
+        // A name is never a passthrough, whatever it starts with.
+        let out = split_all(&[b"\x1bktmux;x\x1b\\"]);
         assert!(out.passthrough.is_empty());
     }
 

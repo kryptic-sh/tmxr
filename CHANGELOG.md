@@ -83,6 +83,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`window-size largest` and `smallest`**, as tmux's: a window as wide and as
   tall as the session's widest and tallest clients, or its narrowest and
   shortest, each way.
+- **`allow-rename`**, as tmux's: on, a program names its window with
+  `ESC k name ESC \` (and stops automatic renaming; an empty name gives it
+  back). Off by default; either way the string is no longer printed. On Windows
+  this needs the bundled ConPTY, as passthrough does.
 - **`allow-set-title`**, as tmux's: off, a program's OSC 0 / 2 no longer titles
   its pane (`select-pane -T` still does); on by default.
 - **`#{client_flags}` and `#{client_readonly}`**: the client's `attached`,
