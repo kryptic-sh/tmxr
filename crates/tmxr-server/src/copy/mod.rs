@@ -54,6 +54,10 @@ pub struct CopyMode {
     /// line it was taken on: tmux's lastcx and lastsx.
     last_cx: usize,
     last_sx: usize,
+    /// Selections are rectangles (tmux's rectflag): the mode's, not one
+    /// selection's, so it lasts until toggled off or a line or word is
+    /// selected.
+    rect: bool,
 }
 
 /// tmux's default `word-separators`: ASCII punctuation but `_`.
@@ -183,6 +187,7 @@ impl CopyMode {
             wrap_search: true,
             last_cx: 0,
             last_sx: 0,
+            rect: false,
         }
     }
 
@@ -431,6 +436,15 @@ impl CopyMode {
     /// up and down keep the column and right goes to the screen's edge.
     fn rect_selecting(&self) -> bool {
         self.anchor.is_some() && self.kind == SelKind::Rect
+    }
+
+    /// Turn rectangle selection on or off, for the selection there is and
+    /// the ones after it, the cursor kept within its line, as tmux's
+    /// window_copy_rectangle_set.
+    fn set_rect(&mut self, on: bool) {
+        self.rect = on;
+        self.kind = if on { SelKind::Rect } else { SelKind::Char };
+        self.cx = self.cx.min(self.line_len(self.cy));
     }
 
     /// The cell is the right half of a wide character (tmux's padding).
@@ -797,15 +811,24 @@ impl CopyMode {
             }
             "begin-selection" => {
                 self.anchor = Some((self.cy, self.cx));
-                self.kind = SelKind::Char;
+                self.kind = if self.rect {
+                    SelKind::Rect
+                } else {
+                    SelKind::Char
+                };
             }
+            // From the line's start to its end, the cursor at the end, as
+            // tmux's window_copy_cmd_select_line.
             "select-line" => {
+                self.rect = false;
                 self.anchor = Some((self.cy, 0));
                 self.kind = SelKind::Line;
+                self.end_of_line();
             }
             "select-word" => {
                 // The run of same-class cells (word, punctuation or blank)
-                // under the cursor, on its line.
+                // under the cursor, on its line; not a rectangle.
+                self.rect = false;
                 let class = self.class(self.cy, self.cx, false);
                 let len = self.line_len(self.cy).max(self.cx + 1);
                 let start = (0..self.cx)
@@ -821,16 +844,13 @@ impl CopyMode {
                 self.kind = SelKind::Char;
                 self.cx = end;
             }
-            "rectangle-toggle" => {
-                self.kind = if self.kind == SelKind::Rect {
-                    SelKind::Char
-                } else {
-                    SelKind::Rect
-                };
+            "rectangle-toggle" => self.set_rect(!self.rect),
+            "rectangle-on" => self.set_rect(true),
+            "rectangle-off" => self.set_rect(false),
+            "clear-selection" => {
+                self.anchor = None;
+                self.cx = self.cx.min(self.line_len(self.cy));
             }
-            "rectangle-on" => self.kind = SelKind::Rect,
-            "rectangle-off" => self.kind = SelKind::Char,
-            "clear-selection" => self.anchor = None,
             // tmux's: the cursor goes to the selection's other end, which is
             // where the selection is now held from. A count swaps that many
             // times.

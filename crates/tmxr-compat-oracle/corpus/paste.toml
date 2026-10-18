@@ -387,3 +387,67 @@ steps = [
 checks = [
   { command = "display -p -t o:2 '#{copy_cursor_y},#{copy_cursor_x}'" },
 ]
+
+[[cases]]
+name = "copy_mode_rectangle_is_kept_into_a_new_selection"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:1 'echo abcdef; echo ghijkl; echo mnopqr; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:1" },
+  { run = "send-keys -t o:1 -X history-top" },
+  { run = "send-keys -t o:1 -X cursor-right" },
+  { run = "send-keys -t o:1 -X rectangle-toggle" },
+  { run = "send-keys -t o:1 -X begin-selection" },
+  { run = "send-keys -t o:1 -X cursor-down" },
+  { run = "send-keys -t o:1 -N 2 -X cursor-right" },
+  { run = "send-keys -t o:1 -X copy-selection" },
+]
+checks = [
+  { command = "show-buffer" },
+]
+
+[[cases]]
+name = "copy_mode_rectangle_is_kept_past_clear_selection"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:2 'echo abcdef; echo ghijkl; echo mnopqr; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:2" },
+  { run = "send-keys -t o:2 -X history-top" },
+  { run = "send-keys -t o:2 -X cursor-right" },
+  { run = "send-keys -t o:2 -X rectangle-toggle" },
+  { run = "send-keys -t o:2 -X begin-selection" },
+  { run = "send-keys -t o:2 -X clear-selection" },
+  { run = "send-keys -t o:2 -X begin-selection" },
+  { run = "send-keys -t o:2 -X cursor-down" },
+  { run = "send-keys -t o:2 -N 2 -X cursor-right" },
+  { run = "send-keys -t o:2 -X copy-selection" },
+]
+checks = [
+  { command = "show-buffer" },
+]
+
+[[cases]]
+name = "copy_mode_rectangle_is_cleared_by_select_line"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:3 'echo abcdef; echo ghijkl; echo mnopqr; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:3" },
+  { run = "send-keys -t o:3 -X history-top" },
+  { run = "send-keys -t o:3 -X cursor-right" },
+  { run = "send-keys -t o:3 -X rectangle-toggle" },
+  { run = "send-keys -t o:3 -X select-line" },
+  { run = "send-keys -t o:3 -X clear-selection" },
+  { run = "send-keys -t o:3 -X begin-selection" },
+  { run = "send-keys -t o:3 -X cursor-down" },
+  { run = "send-keys -t o:3 -N 2 -X cursor-right" },
+  { run = "send-keys -t o:3 -X copy-selection" },
+]
+checks = [
+  { command = "show-buffer" },
+]

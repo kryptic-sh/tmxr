@@ -480,11 +480,9 @@ table. What has been verified, and how:
     mode lacks `next-prompt` / `previous-prompt`, `pipe*`, `*-no-clear`,
     `stop-selection` (it needs a selection end apart from the cursor, which
     `CopyMode` does not keep), `selection-mode` and `search-*-text`;
-    `copy-selection` / `copy-pipe` ignore a buffer name. Seen against tmux 3.6
-    while adding the rest (2026-10-18), not fixed: `begin-selection` keeps a
-    rectangle in tmux but starts a character selection in tmxr. Not compared
-    with tmux: the cursor motions under `select-line` (tmux's `lineflag` moves
-    the cursor to a line's end or start on up / down), and on lines holding wide
+    `copy-selection` / `copy-pipe` ignore a buffer name. Not compared with tmux:
+    the cursor motions under `select-line` (tmux's `lineflag` moves the cursor
+    to a line's end or start on up / down), and on lines holding wide
     characters.
 
 - **`word_separators_and_wrap_search_reach_copy_mode` failed once** (Windows,
