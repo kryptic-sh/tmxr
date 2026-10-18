@@ -186,16 +186,24 @@ impl ModeKeys {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum WindowSize {
+    /// The size of the client that used the session last.
     Latest,
+    /// The widest and the tallest of the session's clients.
+    Largest,
+    /// The narrowest and the shortest of the session's clients.
+    Smallest,
+    /// Only `resize-window` sizes the window.
     Manual,
 }
 
 impl WindowSize {
-    pub const NAMES: &str = "latest or manual";
+    pub const NAMES: &str = "largest, smallest, manual or latest";
 
     pub fn parse(s: &str) -> Option<Self> {
         match s {
             "latest" => Some(Self::Latest),
+            "largest" => Some(Self::Largest),
+            "smallest" => Some(Self::Smallest),
             "manual" => Some(Self::Manual),
             _ => None,
         }
@@ -204,6 +212,8 @@ impl WindowSize {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Latest => "latest",
+            Self::Largest => "largest",
+            Self::Smallest => "smallest",
             Self::Manual => "manual",
         }
     }

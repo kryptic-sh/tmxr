@@ -56,8 +56,9 @@ wrap-search = true
 # tmux's default: a 24-hour clock without seconds.
 clock-mode-style = "24"
 word-separators = '''!"#$%&'()*+,-./:;<=>?@[\]^`{|}~'''
-# How windows are sized: "latest" (by the client that used it last) or
-# "manual" (only by resize-window).
+# How windows are sized: "latest" (by the client that used it last),
+# "largest" or "smallest" (of the session's clients, each way), or "manual"
+# (only by resize-window).
 window-size = "latest"
 # tmux's defaults: no activity or silence alerts.
 monitor-activity = false

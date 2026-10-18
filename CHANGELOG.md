@@ -80,6 +80,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`clock-mode-style`**, as tmux's: `12`, `24` (the default), `12-with-seconds`
   or `24-with-seconds`, the 12-hour clock with `AM` / `PM` in tmux's big
   letters.
+- **`window-size largest` and `smallest`**, as tmux's: a window as wide and as
+  tall as the session's widest and tallest clients, or its narrowest and
+  shortest, each way.
 - **`#{client_flags}` and `#{client_readonly}`**: the client's `attached`,
   `focused`, `ignore-size` and `read-only` flags, in tmux's order, and whether
   it is read-only. A client is focused from attaching until its terminal reports

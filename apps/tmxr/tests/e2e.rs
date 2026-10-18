@@ -4407,7 +4407,7 @@ fn resize_window_fixes_the_size_until_window_size_latest() {
     assert_eq!(size(&t), "70x19");
     assert_ne!(auto, "70x19", "the client resize took effect");
     assert!(
-        !t.output(&["set-window-option", "-t", "rw", "window-size", "largest"])
+        !t.output(&["set-window-option", "-t", "rw", "window-size", "biggest"])
             .status
             .success()
     );
@@ -6684,6 +6684,49 @@ fn each_session_redraws_its_status_line_at_its_own_interval() {
 
 /// `attach -f ignore-size`: the client's size sizes no window while a client
 /// without the flag is attached, as tmux's; alone, it does.
+#[test]
+fn window_size_largest_and_smallest_take_each_way() {
+    let t = Tmxr::new("wsize");
+    t.run(&["new-session", "-d", "-s", "ws"]);
+    let size = |t: &Tmxr| {
+        t.run(&[
+            "display-message",
+            "-p",
+            "-t",
+            "ws",
+            "#{window_width}x#{window_height}",
+        ])
+        .trim()
+        .to_owned()
+    };
+    let a = t.attach(&["attach", "-t", "ws"]);
+    a.wait_for("the first client", |text| text.contains("ws"));
+    let b = t.attach(&["attach", "-t", "ws"]);
+    b.wait_for("the second client", |text| text.contains("ws"));
+    // Narrower but taller than the first, so largest and smallest each
+    // take a different client's width and height. A resize just after
+    // attaching can go unseen (docs/backlog.md), so again until it lands.
+    let deadline = Instant::now() + TIMEOUT;
+    loop {
+        b.resize(ROWS + 1, 61);
+        b.resize(ROWS + 6, 60);
+        std::thread::sleep(Duration::from_millis(300));
+        let clients = t.run(&["list-clients", "-F", "#{client_width}x#{client_height}"]);
+        if clients.lines().any(|l| l == format!("60x{}", ROWS + 6)) {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the resize never landed: {clients}"
+        );
+    }
+    t.run(&["set", "-wg", "window-size", "largest"]);
+    assert_eq!(size(&t), format!("{COLS}x{}", ROWS + 5));
+    t.run(&["set", "-wg", "window-size", "smallest"]);
+    assert_eq!(size(&t), format!("60x{}", ROWS - 1));
+    drop(a);
+}
+
 #[test]
 fn an_ignore_size_client_sizes_windows_only_alone() {
     let t = Tmxr::new("ignoresize");

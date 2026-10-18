@@ -237,23 +237,41 @@ impl Server {
     pub fn size_session(&mut self, session: SessionId) {
         let attached = || self.clients.values().filter(|c| c.att.is_some());
         let all_ignore = attached().all(|c| c.ignore_size);
-        let size = attached()
+        // Each client's size for the windows, and when it was last used.
+        let clients: Vec<((u16, u16), Instant)> = attached()
             .filter(|c| all_ignore || !c.ignore_size)
             .filter_map(|c| c.att.as_ref())
             .filter(|a| a.session == session)
-            .max_by_key(|a| a.last_input)
-            .map(|a| (a.cols, a.rows.saturating_sub(STATUS_ROWS).max(1)));
-        let Some((cols, rows)) = size else {
+            .map(|a| {
+                (
+                    (a.cols, a.rows.saturating_sub(STATUS_ROWS).max(1)),
+                    a.last_input,
+                )
+            })
+            .collect();
+        let Some(&(latest, _)) = clients.iter().max_by_key(|(_, used)| *used) else {
             return;
         };
+        // `largest` and `smallest` each way, as tmux's
+        // `clients_calculate_size`.
+        let sizes = clients.iter().map(|(size, _)| *size);
+        let largest = sizes
+            .clone()
+            .fold((0, 0), |(c, r), (x, y)| (c.max(x), r.max(y)));
+        let smallest = sizes.fold((u16::MAX, u16::MAX), |(c, r), (x, y)| (c.min(x), r.min(y)));
         let windows: Vec<WindowId> = self
             .sessions
             .get(&session)
             .map(|s| s.windows.values().copied().collect())
             .unwrap_or_default();
         for w in windows {
-            if self.window_options(w).window_size == tmxr_config::WindowSize::Latest
-                && let Some(win) = self.windows.get_mut(&w)
+            let (cols, rows) = match self.window_options(w).window_size {
+                tmxr_config::WindowSize::Latest => latest,
+                tmxr_config::WindowSize::Largest => largest,
+                tmxr_config::WindowSize::Smallest => smallest,
+                tmxr_config::WindowSize::Manual => continue,
+            };
+            if let Some(win) = self.windows.get_mut(&w)
                 && (win.cols, win.rows) != (cols, rows)
             {
                 win.cols = cols;
