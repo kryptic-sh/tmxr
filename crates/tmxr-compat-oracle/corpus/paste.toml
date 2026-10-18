@@ -69,3 +69,72 @@ steps = [
 checks = [
   { command = "list-buffers -F '#{buffer_name}=#{buffer_sample}'", expect = "renamed=xc\nb=xa" },
 ]
+
+[[cases]]
+name = "copy_line_copies_whole_lines_and_keeps_the_cursor"
+unix_only = true
+size = [20, 6]
+program = "seq 1 60; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X cursor-up" },
+  { run = "send-keys -t o -X copy-line" },
+  { run = "send-keys -t o -X cursor-up" },
+  { run = "send-keys -t o -N 2 -X copy-line" },
+]
+checks = [
+  { command = "show-buffer -b buffer0", expect = "60" },
+  { command = "show-buffer -b buffer1", expect = "59\n60" },
+  { format = "#{pane_in_mode} #{copy_cursor_y}" },
+]
+
+[[cases]]
+name = "scroll_top_and_bottom_move_the_view_only_when_they_can"
+unix_only = true
+size = [20, 6]
+program = "seq 1 60; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X scroll-bottom" },
+  { run = "send-keys -t o -N 7 -X cursor-down" },
+  { run = "send-keys -t o -X scroll-top" },
+]
+checks = [
+  { format = "#{scroll_position} #{copy_cursor_y}" },
+]
+
+[[cases]]
+name = "and_cancel_motions_leave_copy_mode_at_the_bottom"
+unix_only = true
+size = [20, 6]
+program = "seq 1 60; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:0" },
+  { run = "send-keys -t o:0 -X cursor-up" },
+  { run = "send-keys -t o:0 -X scroll-down-and-cancel" },
+  { run = "new-window -d -t o:1 'seq 1 60; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:1" },
+  { run = "send-keys -t o:1 -X page-up" },
+  { run = "send-keys -t o:1 -X page-up" },
+  { run = "send-keys -t o:1 -X page-down-and-cancel" },
+  { run = "new-window -d -t o:2 'seq 1 60; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:2" },
+  { run = "send-keys -t o:2 -X cursor-up" },
+  { run = "send-keys -t o:2 -X cursor-down-and-cancel" },
+  { run = "new-window -d -t o:3 'seq 1 60; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:3" },
+  { run = "send-keys -t o:3 -X cursor-down-and-cancel" },
+]
+checks = [
+  { command = "display -p -t o:0 '#{pane_in_mode}'", expect = "0" },
+  { command = "display -p -t o:1 '#{pane_in_mode} #{scroll_position}'" },
+  { command = "display -p -t o:2 '#{pane_in_mode}'", expect = "1" },
+  { command = "display -p -t o:3 '#{pane_in_mode}'", expect = "0" },
+]

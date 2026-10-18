@@ -96,8 +96,35 @@ pub fn command(
         | "copy-end-of-line"
         | "copy-end-of-line-and-cancel"
         | "copy-pipe-end-of-line"
-        | "copy-pipe-end-of-line-and-cancel" => {
-            let text = if name.contains("end-of-line") {
+        | "copy-pipe-end-of-line-and-cancel"
+        | "copy-line"
+        | "copy-line-and-cancel"
+        | "copy-pipe-line"
+        | "copy-pipe-line-and-cancel" => {
+            let whole_lines = matches!(
+                name,
+                "copy-line"
+                    | "copy-line-and-cancel"
+                    | "copy-pipe-line"
+                    | "copy-pipe-line-and-cancel"
+            );
+            let text = if whole_lines {
+                // The cursor's line, and the count's lines below it, whole,
+                // leaving the cursor and any selection as they were, as
+                // tmux's window_copy_do_copy_line.
+                let (cursor, anchor, kind) = ((cm.cy, cm.cx), cm.anchor, cm.kind);
+                let lines = std::mem::take(&mut cm.count).max(1);
+                cm.cx = 0;
+                cm.anchor = Some((cm.cy, 0));
+                cm.kind = SelKind::Char;
+                for _ in 1..lines {
+                    cm.apply("cursor-down", None);
+                }
+                cm.apply("end-of-line", None);
+                let text = cm.selection_text();
+                ((cm.cy, cm.cx), cm.anchor, cm.kind) = (cursor, anchor, kind);
+                text
+            } else if name.contains("end-of-line") {
                 // From the cursor to the end of its line, leaving the
                 // cursor and any selection as they were.
                 let (cursor, anchor, kind) = ((cm.cy, cm.cx), cm.anchor, cm.kind);
@@ -132,6 +159,22 @@ pub fn command(
                 leave(srv, pane);
             } else if let Some(cm) = srv.panes.get_mut(&pane).and_then(|p| p.copy.as_mut()) {
                 cm.anchor = None;
+            }
+        }
+        // A motion down that leaves copy mode once it is at the bottom, as
+        // tmux's: the scrolls when the view reaches the bottom, the cursor
+        // when it could not move there.
+        "scroll-down-and-cancel"
+        | "page-down-and-cancel"
+        | "halfpage-down-and-cancel"
+        | "cursor-down-and-cancel" => {
+            let motion = name.trim_end_matches("-and-cancel");
+            let before = cm.cy;
+            cm.apply_counted(motion, None);
+            let bottom = cm.position().0 == 0;
+            let stuck = motion != "cursor-down" || cm.cy == before;
+            if bottom && stuck {
+                leave(srv, pane);
             }
         }
         other => {

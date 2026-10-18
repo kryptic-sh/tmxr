@@ -475,10 +475,15 @@ table. What has been verified, and how:
     file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `pane-set-clipboard`,
     `client-active`, `command-error`, `client-light-theme` / `-dark-theme`. Copy
-    mode lacks `next-prompt` / `previous-prompt`, `copy-line`, `copy-pipe-line`,
-    `pipe*`, `*-no-clear`, `rectangle-on` / `-off`, `stop-selection`,
-    `selection-mode`, `scroll-top` / `-bottom`, `search-*-text` and the
-    `-and-cancel` motions; `copy-selection` / `copy-pipe` ignore a buffer name.
+    mode lacks `next-prompt` / `previous-prompt`, `pipe*`, `*-no-clear`,
+    `stop-selection` (it needs a selection end apart from the cursor, which
+    `CopyMode` does not keep), `selection-mode` and `search-*-text`;
+    `copy-selection` / `copy-pipe` ignore a buffer name. Seen against tmux 3.6
+    while adding the rest (2026-10-18), not fixed: `cursor-right` at a line's
+    end goes on to the next line in tmux and stays in tmxr; tmux remembers the
+    column across up / down / page moves (`lastcx`) and puts the cursor at a
+    shorter line's end, tmxr keeps `cx` as it is; and `begin-selection` keeps a
+    rectangle in tmux but starts a character selection in tmxr.
 
 - **`word_separators_and_wrap_search_reach_copy_mode` failed once** (Windows,
   full e2e suite, 2026-10-18) at its first `#{copy_cursor_word}` check; four

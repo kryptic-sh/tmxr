@@ -322,6 +322,37 @@ impl CopyMode {
         }
     }
 
+    /// A page (or half a page) up or down, as tmux's window_copy_pageup1
+    /// and window_copy_pagedown1: the view moves `rows - 2` lines (half the
+    /// rows for half a page), the cursor keeping its row on screen; where
+    /// the view reaches the top or bottom first, the cursor moves on by the
+    /// page instead.
+    fn page(&mut self, down: bool, half: bool) {
+        let rows = usize::from(self.rows.max(1));
+        let n = match rows {
+            0..=2 => 1,
+            _ if half => rows / 2,
+            _ => rows - 2,
+        };
+        let max_top = self.lines.len().saturating_sub(rows);
+        let row = self.cy.saturating_sub(self.top);
+        if down {
+            if max_top - self.top.min(max_top) < n {
+                self.top = max_top;
+                self.cy = (max_top + (row + n).min(rows - 1)).min(self.last_line());
+            } else {
+                self.top += n;
+                self.cy += n;
+            }
+        } else if self.top < n {
+            self.top = 0;
+            self.cy = row.saturating_sub(n);
+        } else {
+            self.top -= n;
+            self.cy -= n;
+        }
+    }
+
     pub fn resize(&mut self, cols: u16, rows: u16) {
         self.cols = cols;
         self.rows = rows;
@@ -640,22 +671,10 @@ impl CopyMode {
             "top-line" => self.cy = self.top,
             "middle-line" => self.cy = (self.top + rows / 2).min(last),
             "bottom-line" => self.cy = (self.top + rows - 1).min(last),
-            "halfpage-up" => {
-                self.top = self.top.saturating_sub(rows / 2);
-                self.cy = self.cy.saturating_sub(rows / 2);
-            }
-            "halfpage-down" => {
-                self.top = (self.top + rows / 2).min(self.lines.len().saturating_sub(rows));
-                self.cy = (self.cy + rows / 2).min(last);
-            }
-            "page-up" => {
-                self.top = self.top.saturating_sub(rows);
-                self.cy = self.cy.saturating_sub(rows);
-            }
-            "page-down" => {
-                self.top = (self.top + rows).min(self.lines.len().saturating_sub(rows));
-                self.cy = (self.cy + rows).min(last);
-            }
+            "halfpage-up" => self.page(false, true),
+            "halfpage-down" => self.page(true, true),
+            "page-up" => self.page(false, false),
+            "page-down" => self.page(true, false),
             "scroll-up" => {
                 self.top = self.top.saturating_sub(1);
                 if self.cy >= self.top + rows {
@@ -699,6 +718,8 @@ impl CopyMode {
                     SelKind::Rect
                 };
             }
+            "rectangle-on" => self.kind = SelKind::Rect,
+            "rectangle-off" => self.kind = SelKind::Char,
             "clear-selection" => self.anchor = None,
             // tmux's: the cursor goes to the selection's other end, which is
             // where the selection is now held from. A count swaps that many
@@ -718,6 +739,12 @@ impl CopyMode {
                     .saturating_sub((rows - 1) / 2)
                     .min(self.lines.len().saturating_sub(rows));
             }
+            // The cursor's line to the top or bottom of the view, only when
+            // there is room to scroll all the way, as tmux's
+            // window_copy_cmd_scroll_to.
+            "scroll-top" if self.cy <= self.lines.len().saturating_sub(rows) => self.top = self.cy,
+            "scroll-bottom" if self.cy + 1 >= rows => self.top = self.cy + 1 - rows,
+            "scroll-top" | "scroll-bottom" => {}
             "toggle-position" => self.hide_position = !self.hide_position,
             "search-forward" | "search-backward" => {
                 let forward = name == "search-forward";

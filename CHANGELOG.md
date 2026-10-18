@@ -103,6 +103,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pressed longer than that after the prefix (or `switch-client -T prefix`) goes
   to the root table instead (unless it repeats a repeatable binding). 0, the
   default, waits forever.
+- **Copy-mode commands `copy-line`, `copy-pipe-line` (and their `-and-cancel`),
+  `scroll-top`, `scroll-bottom`, `rectangle-on`, `rectangle-off`, and
+  `scroll-down-and-cancel`, `page-down-and-cancel`, `halfpage-down-and-cancel`
+  and `cursor-down-and-cancel`**, as tmux's: whole lines copied (a count for
+  more), the cursor's line taken to the top or bottom of the view when there is
+  room, and copy mode left once a motion down reaches the bottom.
 - **`status-justify`**, as tmux's: the window list after `status-left` (`left`,
   the default), centred between the two sides (`centre`), against `status-right`
   (`right`), or centred on the whole line (`absolute-centre`).
@@ -170,6 +176,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Copy mode's `page-up` / `page-down`** move `rows - 2` lines, as tmux's, not
+  a whole screen, and at the top or bottom of the history they move the cursor
+  on by the page as tmux's do.
 - **A program that reads nothing no longer freezes the server.** Input for a
   pane (keys, pastes) was written on the server's own thread, so pasting into a
   raw-mode program that was not reading stopped every session and command (seen

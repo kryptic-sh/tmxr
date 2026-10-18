@@ -231,6 +231,21 @@ fn selections_copy_char_line_and_rectangle_text() {
 }
 
 #[test]
+fn rectangle_on_and_off_set_the_shape_whatever_it_was() {
+    let mut cm = mode("abcdef\r\nghijkl");
+    (cm.cy, cm.cx) = (0, 2);
+    cm.apply("begin-selection", None);
+    (cm.cy, cm.cx) = (1, 1);
+    // On twice stays on, where toggling would turn it off again.
+    cm.apply("rectangle-on", None);
+    cm.apply("rectangle-on", None);
+    assert_eq!(cm.selection_text().unwrap(), "bc\nhi");
+    cm.apply("rectangle-off", None);
+    cm.apply("rectangle-off", None);
+    assert_eq!(cm.selection_text().unwrap(), "cdef\ngh");
+}
+
+#[test]
 fn search_finds_forward_backward_and_wraps() {
     let mut cm = mode("one\r\ntwo\r\none two");
     (cm.cy, cm.cx) = (0, 0);
