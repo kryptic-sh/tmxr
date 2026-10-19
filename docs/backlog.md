@@ -220,6 +220,11 @@ table. What has been verified, and how:
   on 2026-10-10: `pipe`, `custom`, `linkw`, `popup`, `resizew` and `lockc`
   resolve, and `displ` is ambiguous as in tmux.
 - **Differences from tmux kept on purpose** (considered and declined):
+  - `join-pane -p` (and `move-pane -p`) is not taken: tmux 3.6's reads its value
+    from `-l` (`cmd_join_pane_exec` calls
+    `args_strtonum_and_expand(args, 'l', ...)` under `-p`), so `-p` alone fails
+    there and with `-l` it is `-l`. tmxr takes `-l` (`30%` for a percentage),
+    and `split-window -p` works.
   - A window cannot be linked twice into the same session (tmux allows it).
     Windows are found in a session by id in many places (`Session::index_of`,
     unlinking, the status line's current window); a second index for the same
@@ -475,8 +480,7 @@ table. What has been verified, and how:
     completion; session groups (`new-session -t`); smaller flags: `send-keys -R`
     (tmux's `input_reset`, more than a vt100 `ESC c`), `set-buffer -t`,
     `copy-mode -s`, `detach-client -E`, `list-keys -a -P` (see `list-keys -N`
-    below), `join-pane -p` (tmux 3.6's reads `-l` instead, so it fails without
-    `-l`), `source-file -n -v -F` and globs; `source-file` of a tmux command
+    below), `source-file -n -v -F` and globs; `source-file` of a tmux command
     file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `pane-set-clipboard`,
     `client-active`, `client-light-theme` / `-dark-theme`. Copy mode lacks
