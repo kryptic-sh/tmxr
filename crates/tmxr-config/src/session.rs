@@ -62,6 +62,12 @@ options_table! {
     /// Whether the status line is drawn; off gives its row to the panes.
     /// (tmux's 2 to 5 rows are not taken.)
     "status" => status: bool,
+    /// The status line's background over `status-style`'s, unless
+    /// `default`. (Deprecated in tmux for `status-style`.)
+    "status-bg" => status_bg: Word,
+    /// The status line's foreground over `status-style`'s, unless
+    /// `default`. (Deprecated in tmux for `status-style`.)
+    "status-fg" => status_fg: Word,
     /// Seconds between status line redraws.
     "status-interval" => status_interval: u64,
     /// Where the window list sits: left, centre, right or absolute-centre.

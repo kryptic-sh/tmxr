@@ -469,8 +469,11 @@ table. What has been verified, and how:
     under a top status line or in a panned view, which now measure from the
     mouse's window cell, `MouseTarget::col` / `row`, not its client cell); no
     `window-status-activity-style` / `-bell-style` (tmux's default `reverse`
-    would change tmxr's theme, which shows flags in its window format),
-    `status-fg` / `-bg`; `pane-border-status` / `-format` / `-lines` /
+    would change tmxr's theme, which shows flags in its window format); colour
+    options (`status-fg` / `-bg`, `display-panes-colour`, `clock-mode-colour`
+    and the rest, all `Word`) keep any text as typed, where tmux 3.6 (seen
+    2026-10-20) refuses `nocolour` or `colour300` with `bad colour` and shows
+    `#ABCDEF` as `#abcdef`; `pane-border-status` / `-format` / `-lines` /
     `-indicators`, `window-style` / `window-active-style`; session
     `status-keys`, `assume-paste-time` (and `default-size` set per session by
     `new-session -x` / `-y`, which tmux keeps and tmxr does not); window

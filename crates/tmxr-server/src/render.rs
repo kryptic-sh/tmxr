@@ -1,5 +1,7 @@
 //! Compose one client's frame: panes, borders, status line, overlays.
 
+use std::fmt::Write as _;
+
 use ratatui::Terminal;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
@@ -528,7 +530,15 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
     let active = srv.active_pane_of_session(session.id);
     let vars = Vars::for_pane(srv, active, Some(id));
     let opts = srv.session_options(session.id);
-    let base = style_option(&opts.status_style, &vars);
+    // status-fg / status-bg over status-style unless `default`, as tmux's
+    // status_redraw.
+    let mut spec = opts.status_style.clone();
+    for (side, colour) in [("fg", &opts.status_fg), ("bg", &opts.status_bg)] {
+        if &**colour != "default" {
+            let _ = write!(spec, ",{side}={colour}");
+        }
+    }
+    let base = style_option(&spec, &vars);
     buf.set_style(Rect::new(0, y, cols, 1), base);
     for x in 0..cols {
         if let Some(c) = buf.cell_mut((x, y)) {

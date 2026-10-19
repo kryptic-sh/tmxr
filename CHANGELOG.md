@@ -22,6 +22,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The `status-fg` and `status-bg` options**, as tmux's: a colour other than
+  `default` replaces that side of `status-style` (`fg` / `bg` under `[status]`
+  in the config).
 - **The `status-position` option**, as tmux's: `top` puts the status line, and
   messages and prompts, on the client's first row and the windows under it;
   mouse clicks, `display-panes` labels, pickers and the `S` / `W` places of

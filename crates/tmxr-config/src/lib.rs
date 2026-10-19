@@ -224,6 +224,8 @@ impl From<File> for Config {
                 display_panes_time: f.display_panes_time,
                 display_time: f.display_time,
                 status: s.status,
+                status_bg: Word(s.bg),
+                status_fg: Word(s.fg),
                 history_limit: f.history_limit,
                 lock_after_time: f.lock_after_time,
                 lock_command: f.lock_command,
@@ -295,6 +297,8 @@ pub struct Navigator {
 struct StatusFile {
     status: bool,
     style: String,
+    fg: String,
+    bg: String,
     justify: StatusJustify,
     position: StatusPosition,
     left: String,

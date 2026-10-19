@@ -359,3 +359,12 @@ checks = [{ screen_find = "qzmsg", expect = "0,0" }]
 [[cases]]
 name = "display_message_with_no_client_shows_nowhere"
 checks = [{ command = "display-message qzmsg", expect = "" }]
+
+[[cases]]
+name = "status_fg_and_bg_default_and_set"
+steps = [{ run = "set -g status-bg red" }]
+checks = [
+  { command = "show -gv status-fg" },
+  { command = "show -gv status-bg" },
+  { command = "show -g status-bg" },
+]

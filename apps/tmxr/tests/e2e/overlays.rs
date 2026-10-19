@@ -171,6 +171,32 @@ fn status_off_gives_its_row_to_the_window() {
 }
 
 #[test]
+fn status_fg_and_bg_colour_the_status_line_over_its_style() {
+    let t = Tmxr::new("statusfgbg");
+    let s = t.attach(&["new", "-s", "fgb"]);
+    s.wait_for("status line", |text| text.contains("fgb"));
+    assert_eq!(t.run(&["show", "-gv", "status-bg"]).trim(), "default");
+    assert_eq!(t.run(&["show", "-gv", "status-fg"]).trim(), "default");
+    let coloured = |s: &Screen, fg: &str, bg: &str| {
+        let cells = s.status_cells();
+        cells.iter().any(|(_, f, _)| f == fg) && cells.iter().any(|(_, _, b)| b == bg)
+    };
+    assert!(!coloured(&s, "Idx(2)", "Idx(1)"), "{:?}", s.status_cells());
+    // Not default: over status-style's colours, where the line's own style
+    // shows (the theme's window entries set theirs).
+    t.run(&["set", "-g", "status-bg", "red"]);
+    t.run(&["set", "-g", "status-fg", "green"]);
+    s.wait_for_cells("a green on red status line", |s| {
+        coloured(s, "Idx(2)", "Idx(1)")
+    });
+    // Back to default: status-style's again.
+    t.run(&["set", "-g", "status-bg", "default"]);
+    s.wait_for_cells("the style's background back", |s| {
+        s.status_cells().iter().all(|(_, _, bg)| bg != "Idx(1)")
+    });
+}
+
+#[test]
 fn command_prompt_asks_each_prompt_and_fills_the_template() {
     let t = Tmxr::new("cprompts");
     let s = t.attach(&["new", "-s", "cp"]);

@@ -127,6 +127,9 @@ disable-when-zoomed = false
 # tmux's default: the status line is drawn.
 status = true
 style = "bg=#{@thm_mantle},fg=#{@thm_fg}"
+# tmux's defaults: status-style's colours, not these.
+fg = "default"
+bg = "default"
 # tmux's default: the window list after status-left.
 justify = "left"
 # tmux's default: the status line is the bottom row.
