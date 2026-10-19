@@ -474,3 +474,16 @@ checks = [
   { command = "show -t dsxy default-size" },
   { command = "show -t dsnone default-size" },
 ]
+
+[[cases]]
+name = "a_window_made_from_a_shell_has_the_best_client_as_latest"
+attach = true
+unix_only = true
+steps = [
+  { run = "set-hook -g client-active 'set -ga @ca x'" },
+  { run = "new-window -t o" },
+  { sleep = 0.3 },
+  { keys = "a" },
+  { sleep = 0.5 },
+]
+checks = [{ format = "[#{@ca}]" }]
