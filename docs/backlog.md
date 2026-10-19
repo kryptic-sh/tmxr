@@ -564,6 +564,13 @@ table. What has been verified, and how:
   click is timed from the key before it. Not compared with tmux. The e2e harness
   sets `assume-paste-time = 0`, as its tests type whole key sequences in one
   write.
+- **A dead pane's line waits for quiet output, not unread bytes**: tmux writes
+  `remain-on-exit-format` once the pane's terminal has no unread bytes
+  (`window_pane_destroy_ready`, `FIONREAD`); tmxr's exit and output come from
+  different threads, so it writes the line once output has been quiet for
+  `DEAD_LINE_QUIET` or ended (`PtyEvent::Eof`). Not tested: that a pane reads
+  nothing after the line, as tmux closes its terminal there; on Linux the
+  shell's exit hangs the terminal up, so no output came after it in any attempt.
 - **Time expansion is not carried into everything tmux carries it into**:
   `format::expand_time` fills in strftime sequences at each level of a format
   (nested parts, `E:` values, modifier arguments) as tmux's `FORMAT_EXPAND_TIME`

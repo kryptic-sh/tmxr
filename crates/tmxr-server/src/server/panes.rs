@@ -2,12 +2,18 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use hjkl_layout::{LayoutTree, SplitDir};
 use tmxr_term::{Emulator, Pty, PtyEvent, SpawnSpec};
 use tracing::debug;
 
 use super::{ChildEnv, Event, Server, SplitSize};
+
+/// How long a dead pane's output must be quiet before its
+/// `remain-on-exit-format` line is written, where no end of output tells
+/// sooner (ConPTY ends it only when the console closes).
+const DEAD_LINE_QUIET: Duration = Duration::from_millis(100);
 use crate::model::{Pane, PaneId, SessionId, WindowId};
 
 /// A program [`Server::start_pty`] started.
@@ -65,6 +71,7 @@ impl Server {
                 dead: None,
                 dead_time: None,
                 dead_signal: None,
+                dead_line_at: None,
                 clock: false,
                 input_off: false,
                 focused: false,
@@ -178,6 +185,14 @@ impl Server {
     /// at the pane's width, its cursor then hidden. An empty format writes
     /// nothing.
     fn write_dead_line(&mut self, pid: PaneId) {
+        let Some(p) = self.panes.get_mut(&pid) else {
+            return;
+        };
+        if p.dead_line_at.take().is_none() {
+            return;
+        }
+        let window = p.window;
+        self.mark_window_dirty(window);
         let format = self.pane_options(pid).remain_on_exit_format.clone();
         if format.is_empty() {
             return;
@@ -459,6 +474,25 @@ impl Server {
         self.mark_window_dirty(wid);
     }
 
+    /// Write the dead lines whose programs' output has gone quiet.
+    pub(super) fn write_due_dead_lines(&mut self) {
+        let now = Instant::now();
+        let due: Vec<PaneId> = self
+            .panes
+            .values()
+            .filter(|p| p.dead_line_at.is_some_and(|t| t <= now))
+            .map(|p| p.id)
+            .collect();
+        for pid in due {
+            self.write_dead_line(pid);
+        }
+    }
+
+    /// The soonest a dead line is due, for the server loop to wake.
+    pub(super) fn next_dead_line(&self) -> Option<Instant> {
+        self.panes.values().filter_map(|p| p.dead_line_at).min()
+    }
+
     pub(super) fn pty_event(&mut self, pid: PaneId, ev: PtyEvent) {
         match ev {
             PtyEvent::Output(bytes) => {
@@ -466,6 +500,14 @@ impl Server {
                 let Some(p) = self.panes.get_mut(&pid) else {
                     return;
                 };
+                // Output after the exit puts the dead line off again; once
+                // it is written, tmux has closed the pane's terminal
+                // (server_destroy_pane), so nothing more is read.
+                match p.dead_line_at.as_mut() {
+                    Some(at) => *at = Instant::now() + DEAD_LINE_QUIET,
+                    None if p.dead.is_some() => return,
+                    None => {}
+                }
                 let alternate = p.emu.screen().alternate_screen();
                 let title = p.emu.title().map(str::to_owned);
                 let replies = p.emu.process(&bytes);
@@ -537,9 +579,11 @@ impl Server {
                     p.dead = Some(code);
                     p.dead_time = Some(std::time::SystemTime::now());
                     p.dead_signal = signal;
+                    // The line waits for output still on its way, as tmux's
+                    // window_pane_destroy_ready waits for unread bytes.
+                    p.dead_line_at = Some(Instant::now() + DEAD_LINE_QUIET);
                     let window = p.window;
                     self.commands.remove(&pid);
-                    self.write_dead_line(pid);
                     self.mark_window_dirty(window);
                 } else if self.panes.contains_key(&pid) {
                     self.panes.remove(&pid);
@@ -554,7 +598,16 @@ impl Server {
                     }
                 }
             }
-            PtyEvent::Eof => {}
+            // Every output event came before it: the line can go now.
+            PtyEvent::Eof => {
+                if self
+                    .panes
+                    .get(&pid)
+                    .is_some_and(|p| p.dead_line_at.is_some())
+                {
+                    self.write_dead_line(pid);
+                }
+            }
         }
     }
 }

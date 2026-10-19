@@ -54,7 +54,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pane `remain-on-exit` keeps gets the format's line written into its screen
   after a linefeed at the bottom (tmux's default reads
   `Pane is dead (status 3, <time>)`), and a pane a signal ended shows its number
-  in `#{pane_dead_signal}`. An empty format writes nothing.
+  in `#{pane_dead_signal}`. The line is written once the program's output is
+  done, and the pane reads nothing after it; an empty format writes nothing.
 - **The `status-fg` and `status-bg` options**, as tmux's: a colour other than
   `default` replaces that side of `status-style` (`fg` / `bg` under `[status]`
   in the config).

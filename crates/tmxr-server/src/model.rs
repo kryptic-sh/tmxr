@@ -41,6 +41,9 @@ pub struct Pane {
     pub dead_time: Option<std::time::SystemTime>,
     /// The signal that ended a pane kept dead (`#{pane_dead_signal}`).
     pub dead_signal: Option<i32>,
+    /// When the dead pane's `remain-on-exit-format` line is written: once
+    /// its program's output has gone quiet, or on its end of output.
+    pub dead_line_at: Option<std::time::Instant>,
     /// `clock-mode`: the pane shows a big clock until a key is pressed.
     pub clock: bool,
     /// `select-pane -d`: no keys, pastes or mouse reach the program, as

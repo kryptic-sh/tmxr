@@ -319,6 +319,7 @@ impl Server {
             let due = crate::mouse::next_double_click(&self)
                 .into_iter()
                 .chain(self.copy_line.map(|c| c.due()))
+                .chain(self.next_dead_line())
                 .min();
             let wait = due.map_or(tick, |due| {
                 due.saturating_duration_since(Instant::now()).min(tick)
@@ -880,6 +881,7 @@ impl Server {
     fn tick(&mut self) {
         crate::mouse::fire_double_clicks(self);
         self.advance_copy_line();
+        self.write_due_dead_lines();
         self.lock_idle_clients();
         let now = Instant::now();
         // The table a client goes back to once a repeat ends.
