@@ -285,3 +285,13 @@ checks = [
   { screen_contains = "+-Title---+", expect = true },
   { command = "show-options -gv menu-border-lines", expect = "simple" },
 ]
+
+[[cases]]
+name = "menu_s_under_a_status_line_at_the_top"
+attach = true
+unix_only = true
+steps = [
+  { run = "set -g status-position top" },
+  { spawn = "display-menu -T t -x 3 -y S aaa a '' bbb b ''" },
+]
+checks = [{ screen_find = "┌", expect = "3,1" }]

@@ -129,6 +129,8 @@ status = true
 style = "bg=#{@thm_mantle},fg=#{@thm_fg}"
 # tmux's default: the window list after status-left.
 justify = "left"
+# tmux's default: the status line is the bottom row.
+position = "bottom"
 left = ""
 right = "#{E:@status_session}#{E:@status_host}"
 # tmux's defaults; the tmux config sets neither.

@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use crate::{
     AlertAction, BoxLines, ClockModeStyle, CursorStyle, DestroyUnattached, ModeKeys,
-    ScrollbarPosition, Scrollbars, StatusJustify, Visual, WindowSize,
+    ScrollbarPosition, Scrollbars, StatusJustify, StatusPosition, Visual, WindowSize,
 };
 
 /// An option's value: how `set-option` reads it and `show-options` prints
@@ -247,6 +247,7 @@ macro_rules! choice {
 
 choice!(
     StatusJustify,
+    StatusPosition,
     ClockModeStyle,
     CursorStyle,
     DestroyUnattached,

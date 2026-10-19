@@ -3,7 +3,7 @@
 //! `show-options` under tmux's names.
 
 use crate::table::{Array, Word, options_table};
-use crate::{AlertAction, DestroyUnattached, StatusJustify, Visual};
+use crate::{AlertAction, DestroyUnattached, StatusJustify, StatusPosition, Visual};
 
 options_table! {
     /// The session options every session has unless it sets its own: tmux's
@@ -71,6 +71,8 @@ options_table! {
     "status-left-length" => status_left_length: u16,
     /// The style `status-left` is drawn over, on the status line's.
     "status-left-style" => status_left_style: String,
+    /// Whether the status line is the client's top row or its bottom.
+    "status-position" => status_position: StatusPosition,
     "status-right" => status_right: String,
     /// Most cells `status-right` may take; a longer right side is cut at
     /// its end so the window list keeps its room.

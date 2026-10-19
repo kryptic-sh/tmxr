@@ -326,3 +326,21 @@ checks = [
   { command = "display -p -t dsd '#{window_width}x#{window_height}'" },
   { command = "show -gv default-size" },
 ]
+
+[[cases]]
+name = "status_position_top_moves_the_window_down"
+attach = true
+unix_only = true
+program = "printf 'alpha beta gamma\n'; exec sleep 1000"
+steps = [
+  { wait_text = "alpha beta gamma" },
+  { run = "set -g status-position top" },
+  { sleep = 0.5 },
+  { mouse = { action = "double-click", at = { text = "beta" } } },
+  { sleep = 1.0 },
+]
+checks = [
+  { screen_find = "alpha", expect = "0,1" },
+  { command = "show-buffer", expect = "beta" },
+  { command = "show -gv status-position", expect = "top" },
+]

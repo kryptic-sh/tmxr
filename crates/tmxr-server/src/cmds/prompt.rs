@@ -610,23 +610,27 @@ fn client_size(srv: &Server, c: ClientId) -> Result<(u16, u16), String> {
 fn places(srv: &Server, ctx: &Ctx, c: ClientId, pane: Option<PaneId>) -> Places {
     // Panes and pane clicks are in window cells; a box is placed in the
     // client's, which differ while the view is panned.
-    let (ox, oy) = srv
+    // The window starts below a status line at the top.
+    let (ox, oy, top) = srv
         .clients
         .get(&c)
         .and_then(|c| c.att.as_ref())
-        .map_or((0, 0), |a| crate::render::window_offset(srv, a));
+        .map_or((0, 0, 0), |a| {
+            let (ox, oy) = crate::render::window_offset(srv, a);
+            (ox, oy, srv.window_top(a.session))
+        });
     Places {
         pane: pane.and_then(|p| srv.panes.get(&p)).map(|p| {
             ratatui::layout::Rect::new(
                 p.rect.x.saturating_sub(ox),
-                p.rect.y.saturating_sub(oy),
+                top + p.rect.y.saturating_sub(oy),
                 p.rect.w,
                 p.rect.h,
             )
         }),
         mouse: ctx.mouse.map(|m| match m.location {
             tmxr_command::MouseLocation::Pane | tmxr_command::MouseLocation::Border => {
-                (m.col.saturating_sub(ox), m.row.saturating_sub(oy))
+                (m.col.saturating_sub(ox), top + m.row.saturating_sub(oy))
             }
             _ => (m.col, m.row),
         }),
@@ -640,6 +644,7 @@ fn places(srv: &Server, ctx: &Ctx, c: ClientId, pane: Option<PaneId>) -> Places 
                 ranges.iter().find(|r| r.2 == current).map(|r| r.0)
             }),
         status_lines: srv.client_status_rows(c),
+        status_top: srv.client_session(c).is_some_and(|s| srv.status_at_top(s)),
     }
 }
 
@@ -655,6 +660,8 @@ struct Places {
     window: Option<u16>,
     /// The rows the client's status line takes.
     status_lines: u16,
+    /// Whether that line is the client's top row.
+    status_top: bool,
 }
 
 /// A popup's size in a `cols` x `rows` client: `-w` / `-h` in cells or
@@ -699,13 +706,23 @@ fn place(
         ("popup_width", w),
         ("popup_height", h),
         ("popup_centre_x", ((sx - 1) / 2 - w / 2).max(0)),
-        ("popup_status_line_y", sy - lines),
     ];
+    // As tmux's cmd_display_menu_get_pos: below a status line at the top,
+    // above one at the bottom.
+    vars.push((
+        "popup_status_line_y",
+        if places.status_top {
+            lines + h
+        } else {
+            sy - lines
+        },
+    ));
     let n = (sy - 1) / 2 + h / 2;
     vars.push(("popup_centre_y", if n >= sy { sy - h } else { n }));
     if let Some(x) = places.window {
         vars.push(("popup_window_status_line_x", i64::from(x)));
-        vars.push(("popup_window_status_line_y", sy - lines));
+        let y = if places.status_top { 1 + h } else { sy - lines };
+        vars.push(("popup_window_status_line_y", y));
     }
     if let Some((mx, my)) = places.mouse {
         let (mx, my) = (i64::from(mx), i64::from(my));

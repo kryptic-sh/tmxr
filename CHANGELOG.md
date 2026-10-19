@@ -22,6 +22,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The `status-position` option**, as tmux's: `top` puts the status line, and
+  messages and prompts, on the client's first row and the windows under it;
+  mouse clicks, `display-panes` labels, pickers and the `S` / `W` places of
+  `display-menu` and `display-popup` follow it.
 - **The `default-size` option**, as tmux's: the size a detached `new-session`
   makes its windows (`80x24` by default), `-x` or `-y` taking either side.
 - **The `status` option**, as tmux's: `set -g status off` drops the status line
@@ -253,6 +257,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **A menu may cover the status line**, as tmux's: `display-menu` is kept inside
+  the whole client, not the rows above the status line.
 - **A detached `new-session` is sized as tmux's**: `default-size` (80x24), not
   the terminal it was typed in, with `-x` and `-y` each taking one side (`-` the
   terminal's); an attaching one takes its terminal's size, `-x` / `-y` aside.
@@ -278,6 +284,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`send-keys -M` in a panned view** sent the mouse's place in the client, not
+  in the window, to a program in a window larger than its client.
 - **Templates are filled as tmux's** (`command-prompt`, `display-panes`): an
   answer goes into every `%N` of its number and only the next `%%`, and a `%`
   after either (`%1%`, `%%%`) escapes `"`, `\`, `$`, `;` and `~` in it.

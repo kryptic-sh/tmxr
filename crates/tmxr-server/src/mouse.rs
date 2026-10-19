@@ -286,7 +286,14 @@ fn locate(
         grab: 0,
     };
     let sess = srv.sessions.get(&session)?;
-    if srv.status_rows(session) > 0 && row >= att.rows.saturating_sub(srv.status_rows(session)) {
+    let lines = srv.status_rows(session);
+    let top = srv.window_top(session);
+    let on_status = if srv.status_at_top(session) {
+        row < lines
+    } else {
+        row >= att.rows.saturating_sub(lines)
+    };
+    if lines > 0 && on_status {
         let (location, idx) = att.status_ranges.at(col);
         t.location = location;
         t.window = idx.and_then(|i| Some((i, *sess.windows.get(&i)?)));
@@ -296,7 +303,7 @@ fn locate(
     t.window = Some((sess.current, wid));
     // In window cells: the view may be panned across a larger window.
     let (ox, oy) = crate::render::window_offset(srv, att);
-    let (col, row) = (col + ox, row + oy);
+    let (col, row) = (col + ox, row - top + oy);
     (t.col, t.row) = (col, row);
     let rects = srv.windows.get(&wid)?.visible_rects();
     if let Some((pane, _)) = rects
@@ -335,12 +342,15 @@ fn follow_drag(srv: &mut Server, id: ClientId, m: MouseEvent) -> bool {
     };
     // In window cells, as the drag's start was found: the view may be
     // panned across a larger window.
-    let (ox, oy) = srv
+    let (ox, oy, top) = srv
         .clients
         .get(&id)
         .and_then(|c| c.att.as_ref())
-        .map_or((0, 0), |a| crate::render::window_offset(srv, a));
-    let (col, row) = (m.column + ox, m.row + oy);
+        .map_or((0, 0, 0), |a| {
+            let (ox, oy) = crate::render::window_offset(srv, a);
+            (ox, oy, srv.window_top(a.session))
+        });
+    let (col, row) = (m.column + ox, m.row.saturating_sub(top) + oy);
     match (drag, m.kind) {
         (Drag::Border { pane, vertical, at }, MouseEventKind::Drag(MouseButton::Left)) => {
             let now = if vertical { col } else { row };
@@ -439,13 +449,10 @@ pub fn forward(srv: &mut Server, ctx: &Ctx) -> Result<(), String> {
     if p.input_off {
         return Ok(());
     }
+    // In window cells, as the pane's rect.
     let r = p.rect;
-    let col = t
-        .event
-        .column
-        .saturating_sub(r.x)
-        .min(r.w.saturating_sub(1));
-    let row = t.event.row.saturating_sub(r.y).min(r.h.saturating_sub(1));
+    let col = t.col.saturating_sub(r.x).min(r.w.saturating_sub(1));
+    let row = t.row.saturating_sub(r.y).min(r.h.saturating_sub(1));
     let s = p.emu.screen();
     let bytes = tmxr_term::encode::encode_mouse(
         &t.event,
@@ -477,18 +484,29 @@ pub fn slider_drag(srv: &mut Server, ctx: &Ctx, exit: bool) -> Result<(), String
     let t = ctx.mouse.ok_or("copy-mode -S needs a mouse event")?;
     let pane = t.pane.ok_or("no pane under the mouse")?;
     let id = ctx.client.ok_or("no client")?;
-    let (_, oy) = srv
+    let (oy, top) = srv
         .clients
         .get(&id)
         .and_then(|c| c.att.as_ref())
-        .map_or((0, 0), |a| crate::render::window_offset(srv, a));
+        .map_or((0, 0), |a| {
+            (
+                crate::render::window_offset(srv, a).1,
+                srv.window_top(a.session),
+            )
+        });
     crate::copy::enter(srv, pane, false);
     if let Some(cm) = srv.panes.get_mut(&pane).and_then(|p| p.copy.as_mut())
         && exit
     {
         cm.scroll_exit = true;
     }
-    scroll_to_slider(srv, pane, t.grab, t.event.row + oy, exit);
+    scroll_to_slider(
+        srv,
+        pane,
+        t.grab,
+        t.event.row.saturating_sub(top) + oy,
+        exit,
+    );
     set_drag(srv, id, Some(Drag::Slider { pane, grab: t.grab }));
     Ok(())
 }

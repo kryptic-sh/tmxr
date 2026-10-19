@@ -34,6 +34,22 @@ impl Server {
         u16::from(self.session_options(session).status)
     }
 
+    /// Whether `session`'s status line is its clients' top row
+    /// (`status-position top`).
+    pub fn status_at_top(&self, session: SessionId) -> bool {
+        self.session_options(session).status_position == tmxr_config::StatusPosition::Top
+    }
+
+    /// The client row `session`'s windows start on: below a status line at
+    /// the top, else the first.
+    pub fn window_top(&self, session: SessionId) -> u16 {
+        if self.status_at_top(session) {
+            self.status_rows(session)
+        } else {
+            0
+        }
+    }
+
     /// The rows client `client`'s status line takes, by its session's (the
     /// global) `status`.
     pub fn client_status_rows(&self, client: ClientId) -> u16 {

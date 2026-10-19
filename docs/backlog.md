@@ -460,11 +460,17 @@ table. What has been verified, and how:
     not expose); styles `align=` `fill=` `list=` `range=` `push-default` /
     `pop-default`, strikethrough, blink, overline, curly and coloured
     underlines.
-  - Options: the status line is one row at the bottom, or none with `status off`
-    (`Server::status_rows`): no `status` `2`–`5`, `status-position`,
-    `status-format`; no `window-status-activity-style` / `-bell-style` (tmux's
-    default `reverse` would change tmxr's theme, which shows flags in its window
-    format), `status-fg` / `-bg`; `pane-border-status` / `-format` / `-lines` /
+  - Options: the status line is one row, at the bottom or
+    (`status-position top`) the top, or none with `status off`
+    (`Server::status_rows`, `Server::window_top`): no `status` `2`–`5`,
+    `status-format`. With `status off` and `status-position top`, a message or
+    prompt covers the window's first row; tmux's `screen_redraw_set_context`
+    moves the window down a row for it instead; (not tested: `send-keys -M`
+    under a top status line or in a panned view, which now measure from the
+    mouse's window cell, `MouseTarget::col` / `row`, not its client cell); no
+    `window-status-activity-style` / `-bell-style` (tmux's default `reverse`
+    would change tmxr's theme, which shows flags in its window format),
+    `status-fg` / `-bg`; `pane-border-status` / `-format` / `-lines` /
     `-indicators`, `window-style` / `window-active-style`; session
     `status-keys`, `assume-paste-time` (and `default-size` set per session by
     `new-session -x` / `-y`, which tmux keeps and tmxr does not); window

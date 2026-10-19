@@ -234,19 +234,21 @@ pub fn draw(srv: &Server, id: ClientId, term: &mut Terminal<AnsiBackend>) -> Sta
     let _ = term.draw(|f| {
         let buf = f.buffer_mut();
         let pane_rows = rows.saturating_sub(srv.status_rows(att.session));
+        let top = srv.window_top(att.session);
         let mut cursor = None;
         if let Some(wid) = window {
             cursor = match srv.windows.get(&wid) {
-                // Larger than the client: drawn whole, then the part in
-                // view copied out.
-                Some(win) if win.cols > cols || win.rows > pane_rows => {
+                // Larger than the client, or below a status line at the
+                // top: drawn whole, then the part in view copied out.
+                Some(win) if win.cols > cols || win.rows > pane_rows || top > 0 => {
                     let (ox, oy) = window_offset(srv, att);
-                    let mut whole = Buffer::empty(Rect::new(0, 0, win.cols, win.rows));
-                    let at = draw_window(srv, id, wid, &mut whole, win.cols, win.rows);
-                    for y in 0..pane_rows.min(win.rows.saturating_sub(oy)) {
-                        for x in 0..cols.min(win.cols.saturating_sub(ox)) {
+                    let (w, h) = (win.cols.max(cols), win.rows.max(pane_rows));
+                    let mut whole = Buffer::empty(Rect::new(0, 0, w, h));
+                    let at = draw_window(srv, id, wid, &mut whole, w, h);
+                    for y in 0..pane_rows.min(h.saturating_sub(oy)) {
+                        for x in 0..cols.min(w.saturating_sub(ox)) {
                             if let (Some(cell), Some(out)) =
-                                (whole.cell((x + ox, y + oy)), buf.cell_mut((x, y)))
+                                (whole.cell((x + ox, y + oy)), buf.cell_mut((x, y + top)))
                             {
                                 *out = cell.clone();
                             }
@@ -254,7 +256,7 @@ pub fn draw(srv: &Server, id: ClientId, term: &mut Terminal<AnsiBackend>) -> Sta
                     }
                     at.and_then(|c| {
                         let (x, y) = (c.x.checked_sub(ox)?, c.y.checked_sub(oy)?);
-                        (x < cols && y < pane_rows).then_some(Position::new(x, y))
+                        (x < cols && y < pane_rows).then_some(Position::new(x, y + top))
                     })
                 }
                 _ => draw_window(srv, id, wid, buf, cols, pane_rows),
@@ -519,7 +521,7 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
     if lines == 0 || rows < lines + 1 {
         return ranges;
     }
-    let y = rows - lines;
+    let y = status_row(srv, att, rows);
     let Some(session) = srv.sessions.get(&att.session) else {
         return ranges;
     };
@@ -675,6 +677,17 @@ fn drawn_status_rows(srv: &Server, att: &crate::server::Attached) -> u16 {
     }
 }
 
+/// The client row `att`'s status line, message or prompt is drawn on: the
+/// first with `status-position top`, else the first of the bottom rows it
+/// takes.
+fn status_row(srv: &Server, att: &crate::server::Attached, rows: u16) -> u16 {
+    if srv.status_at_top(att.session) {
+        0
+    } else {
+        rows.saturating_sub(drawn_status_rows(srv, att))
+    }
+}
+
 /// Draw the open overlay. Returns a cursor position if it wants one.
 fn draw_overlay(
     srv: &Server,
@@ -688,7 +701,9 @@ fn draw_overlay(
     let opts = srv.client_window_options(id);
     let mode_style = style_option(&opts.mode_style, &vars);
     let border = style_option(&opts.pane_active_border_style, &vars);
-    let y = rows.saturating_sub(srv.status_rows(att.session));
+    // The window's rows, top..y.
+    let top = srv.window_top(att.session);
+    let y = top + rows.saturating_sub(srv.status_rows(att.session));
     // A menu's or popup's own style (-s, -S, -H), else the option's.
     let look = |spec: &Option<String>, option: &str| {
         style_option(spec.as_deref().unwrap_or(option), &vars)
@@ -697,7 +712,7 @@ fn draw_overlay(
         Overlay::Prompt(p) => {
             let before: String = p.input[..p.cursor].iter().collect();
             let x = Line::raw(format!("{}{before}", p.prompt)).width() as u16;
-            let y = rows.saturating_sub(drawn_status_rows(srv, att));
+            let y = status_row(srv, att, rows);
             Some(Position::new(x.min(cols.saturating_sub(1)), y))
         }
         Overlay::Confirm { .. } => None,
@@ -721,7 +736,7 @@ fn draw_overlay(
                 let text = format!(" {label} ");
                 let w = text.len() as u16;
                 let x = r.x + r.w.saturating_sub(w) / 2;
-                let row = r.y + r.h / 2;
+                let row = top + r.y + r.h / 2;
                 if row < y {
                     let style = if pid == win.active { active } else { other };
                     buf.set_stringn(x, row, &text, usize::from(r.w), style);
@@ -729,27 +744,28 @@ fn draw_overlay(
             }
             None
         }
-        Overlay::Text { lines, top } => {
-            let area = Rect::new(0, 0, cols, y);
+        Overlay::Text { lines, top: first } => {
+            let area = Rect::new(0, top, cols, y - top);
             Clear.render(area, buf);
-            for (i, line) in lines.iter().skip(*top).take(usize::from(y)).enumerate() {
-                buf.set_stringn(0, i as u16, line, usize::from(cols), Style::default());
+            let shown = lines.iter().skip(*first).take(usize::from(y - top));
+            for (i, line) in shown.enumerate() {
+                buf.set_stringn(0, top + i as u16, line, usize::from(cols), Style::default());
             }
-            let tag = format!("[{}/{}]", top + 1, lines.len());
+            let tag = format!("[{}/{}]", first + 1, lines.len());
             let tw = tag.len() as u16;
             if tw < cols {
-                buf.set_string(cols - tw, 0, &tag, mode_style);
+                buf.set_string(cols - tw, top, &tag, mode_style);
             }
             None
         }
-        Overlay::Picker(p) => draw_picker(srv, p, buf, cols, y, border, mode_style),
+        Overlay::Picker(p) => draw_picker(srv, p, buf, cols, (top, y), border, mode_style),
         Overlay::Menu(m) => {
             let styles = (
                 look(&m.look.style, &opts.menu_style),
                 look(&m.look.border_style, &opts.menu_border_style),
                 look(&m.look.selected_style, &opts.menu_selected_style),
             );
-            m.draw(buf, cols, y, styles);
+            m.draw(buf, cols, rows, styles);
             None
         }
         Overlay::Popup(p) => {
@@ -789,14 +805,14 @@ pub fn title(srv: &Server, id: ClientId) -> Option<String> {
 const PREVIEW_MIN_ROWS: u16 = 3;
 
 /// The picker overlay: query row, matches, and for sessions and windows a
-/// preview of the highlighted entry's active pane. `y` is the first row
-/// below the window area. Returns the query cursor while typing.
+/// preview of the highlighted entry's active pane, centred in the window's
+/// rows `top..y`. Returns the query cursor while typing.
 fn draw_picker(
     srv: &Server,
     p: &PickerOverlay,
     buf: &mut Buffer,
     cols: u16,
-    y: u16,
+    (top, y): (u16, u16),
     border: Style,
     mode_style: Style,
 ) -> Option<Position> {
@@ -813,7 +829,7 @@ fn draw_picker(
         .clamp(10, if preview_pane.is_some() { 100 } else { 70 });
     let list_rows = (picker.matched() as u16).clamp(1, PICKER_LIST_ROWS);
     let list_h = list_rows + 3;
-    let room = y.saturating_sub(2);
+    let room = y.saturating_sub(top).saturating_sub(2);
     let preview_rows = match preview_pane {
         Some(_) => room.saturating_sub(list_h + 1),
         None => 0,
@@ -832,7 +848,7 @@ fn draw_picker(
     .max(4);
     let area = Rect::new(
         (cols.saturating_sub(w)) / 2,
-        y.saturating_sub(h) / 2,
+        top + y.saturating_sub(top).saturating_sub(h) / 2,
         w.min(cols),
         h,
     );
