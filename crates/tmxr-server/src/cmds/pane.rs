@@ -508,7 +508,7 @@ pub(super) fn run(
                 };
                 for _ in 0..repeat {
                     for key in &keys {
-                        srv.client_key(client, KeyEvent::new(key.code, key.mods));
+                        srv.client_key(client, KeyEvent::new(key.code, key.mods), true);
                     }
                 }
                 srv.update_latest(client);

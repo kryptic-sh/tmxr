@@ -108,6 +108,10 @@ pub struct Attached {
     /// Running the lock command (`lock-client`) until it reports back.
     pub locked: bool,
     pub last_input: Instant,
+    /// When the last key reached the key tables (not an overlay), and
+    /// whether keys are being taken as pasted (`assume-paste-time`).
+    pub key_at: Option<Instant>,
+    pub assume_pasting: bool,
     pub drag: Option<crate::mouse::Drag>,
     /// The mouse button being held, if any.
     pub press: Option<crate::mouse::Press>,

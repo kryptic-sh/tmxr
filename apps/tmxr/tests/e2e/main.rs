@@ -40,9 +40,11 @@ impl Tmxr {
         let shell = if cfg!(windows) { "cmd.exe" } else { "/bin/sh" };
         let config = dir.path().join("config.toml");
         // No clipboard: copying in a test must not overwrite the desktop's.
+        // No assume-paste-time: a test types a whole key sequence in one
+        // write, which tmux's would take as pasted text.
         std::fs::write(
             &config,
-            format!("default-shell = {shell:?}\nset-clipboard = \"off\"\n[resurrect]\nrestore-on-start = false\nauto-save-minutes = 0\n"),
+            format!("default-shell = {shell:?}\nset-clipboard = \"off\"\nassume-paste-time = 0\n[resurrect]\nrestore-on-start = false\nauto-save-minutes = 0\n"),
         )
         .unwrap();
         Self { dir, label, config }

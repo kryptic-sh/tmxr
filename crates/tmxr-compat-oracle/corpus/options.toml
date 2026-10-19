@@ -436,3 +436,28 @@ steps = [
   { sleep = 0.5 },
 ]
 checks = [{ format = "[#{@fi}] [#{@fo}]" }]
+
+[[cases]]
+name = "assume_paste_time_pastes_the_third_fast_key"
+attach = true
+unix_only = true
+steps = [
+  { run = "bind -n z set -g @hit y" },
+  { sleep = 0.3 },
+  { keys = "xyz" },
+  { sleep = 0.5 },
+]
+checks = [{ format = "[#{@hit}]" }, { command = "show -gv assume-paste-time" }]
+
+[[cases]]
+name = "assume_paste_time_zero_runs_every_bind"
+attach = true
+unix_only = true
+steps = [
+  { run = "set -g assume-paste-time 0" },
+  { run = "bind -n z set -g @hit y" },
+  { sleep = 0.3 },
+  { keys = "xyz" },
+  { sleep = 0.5 },
+]
+checks = [{ format = "[#{@hit}]" }]

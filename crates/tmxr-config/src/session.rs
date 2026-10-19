@@ -14,6 +14,9 @@ options_table! {
     own OwnSessionOptions;
     /// Which windows' activity alerts act, relative to the current one.
     "activity-action" => activity_action: AlertAction,
+    /// Milliseconds within which a key after a fast one is taken as pasted
+    /// text, past the binds; 0, never.
+    "assume-paste-time" => assume_paste_time: u64,
     /// The index a new session's first window gets, and the first free
     /// one looked for.
     "base-index" => base_index: u32,

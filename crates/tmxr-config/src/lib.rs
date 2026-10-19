@@ -134,6 +134,7 @@ struct File {
     monitor_silence: u64,
     bell_action: AlertAction,
     activity_action: AlertAction,
+    assume_paste_time: u64,
     silence_action: AlertAction,
     visual_bell: Visual,
     visual_activity: Visual,
@@ -219,6 +220,7 @@ impl From<File> for Config {
             },
             session: SessionOptions {
                 activity_action: f.activity_action,
+                assume_paste_time: f.assume_paste_time,
                 base_index: f.base_index,
                 bell_action: f.bell_action,
                 default_command: f.default_command,

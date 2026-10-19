@@ -82,6 +82,8 @@ monitor-silence = 0
 bell-action = "any"
 activity-action = "other"
 silence-action = "other"
+# tmux's default: keys a millisecond apart are pasted text.
+assume-paste-time = 1
 visual-bell = "off"
 visual-activity = "off"
 visual-silence = "off"

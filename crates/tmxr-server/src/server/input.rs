@@ -31,7 +31,7 @@ impl Server {
                 })
         );
         match ev {
-            TermEvent::Key(k) if k.kind != KeyEventKind::Release => self.client_key(id, k),
+            TermEvent::Key(k) if k.kind != KeyEventKind::Release => self.client_key(id, k, false),
             TermEvent::Key(_) => {}
             TermEvent::Paste(text) => {
                 if let Some(ov) = self
@@ -216,7 +216,8 @@ impl Server {
 
     /// A key from client `id`, through its overlay and key tables;
     /// `send-keys -K` gives keys here too.
-    pub(crate) fn client_key(&mut self, id: ClientId, ev: KeyEvent) {
+    /// A key from client `id`'s terminal, or (`sent`) `send-keys -K`.
+    pub(crate) fn client_key(&mut self, id: ClientId, ev: KeyEvent, sent: bool) {
         // A key is activity in the client's session, as tmux's
         // session_update_activity.
         if let Some(s) = self
@@ -297,6 +298,14 @@ impl Server {
         let key = Key::from_event(&ev);
         let session = att.session;
         let now = Instant::now();
+        let since = att.key_at.replace(now).map(|t| now.duration_since(t));
+        if !sent && self.assume_paste(id, session, since) {
+            self.paste_key(id, session, &ev);
+            return;
+        }
+        let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
+            return;
+        };
         let repeating = att.repeat_until.is_some_and(|t| t > now);
         // prefix-timeout: a prefix table waited on too long gives the key
         // to the root table, unless it repeats a repeatable binding, as
@@ -433,6 +442,46 @@ impl Server {
             }
         }
         self.mark_client_dirty(id);
+    }
+
+    /// Whether a key `since` the last one is pasted text, as tmux's
+    /// server_client_is_assume_paste: the first key within
+    /// `assume-paste-time` of the one before starts assuming a paste and is
+    /// still a key, each one after it is pasted, and a slower key ends it.
+    fn assume_paste(&mut self, id: ClientId, session: SessionId, since: Option<Duration>) -> bool {
+        let t = self.session_options(session).assume_paste_time;
+        let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
+            return false;
+        };
+        if t == 0 {
+            return false;
+        }
+        if since.is_some_and(|d| d < Duration::from_millis(t)) {
+            std::mem::replace(&mut att.assume_pasting, true)
+        } else {
+            att.assume_pasting = false;
+            false
+        }
+    }
+
+    /// A key taken as pasted text, as tmux's paste_key: to the session's
+    /// active pane (and its synchronized siblings) as it is, unless the
+    /// client is read-only or the pane is in a mode or takes no input.
+    fn paste_key(&mut self, id: ClientId, session: SessionId, ev: &KeyEvent) {
+        if self.client_read_only(id) {
+            return;
+        }
+        let Some(pane) = self.active_pane_of_session(session) else {
+            return;
+        };
+        if self
+            .panes
+            .get(&pane)
+            .is_none_or(|p| p.copy.is_some() || p.clock || p.input_off || p.dead.is_some())
+        {
+            return;
+        }
+        self.send_key_to_pane(pane, ev);
     }
 
     /// Encode a key for a pane (and, with synchronize-panes, its siblings).

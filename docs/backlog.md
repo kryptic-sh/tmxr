@@ -481,10 +481,10 @@ table. What has been verified, and how:
     (`display-panes-colour = "#{@thm_blue}"`), which tmux's check would refuse,
     so it needs those expanded first or the theme moved; `pane-border-status` /
     `-format` / `-lines` / `-indicators`, `window-style` /
-    `window-active-style`; session `status-keys`, `assume-paste-time` (and
-    `default-size` set per session by `new-session -x` / `-y`, which tmux keeps
-    and tmxr does not); window `aggressive-resize`, `alternate-screen`; server
-    `history-file`, `editor`. `escape-time` is kept but never read.
+    `window-active-style`; session `status-keys` (and `default-size` set per
+    session by `new-session -x` / `-y`, which tmux keeps and tmxr does not);
+    window `aggressive-resize`, `alternate-screen`; server `history-file`,
+    `editor`. `escape-time` is kept but never read.
   - Commands: `capture-pane -e -a -T` (`-e` needs tmux's own SGR output, `-a`
     the saved normal screen, which `vt100` does not expose). `-T`, `-N` and `-J`
     all need written cells told from never-written ones, which `copy::snapshot`
@@ -566,6 +566,12 @@ table. What has been verified, and how:
   tmxr reads the signal itself on Unix (`wait_exit` in `tmxr-term/src/pty.rs`,
   `waitpid`), which no dynamic-analysis tool covers: CI runs none, and Miri
   cannot run the call.
+- **`assume-paste-time` times keys only**: tmux takes the gap from every input
+  event that reaches its key handler, mouse events included, where tmxr's
+  `Attached::key_at` is set by keys alone (`client_key`), so a key right after a
+  click is timed from the key before it. Not compared with tmux. The e2e harness
+  sets `assume-paste-time = 0`, as its tests type whole key sequences in one
+  write.
 - **Time expansion is not carried into everything tmux carries it into**:
   `format::expand_time` fills in strftime sequences at each level of a format
   (nested parts, `E:` values, modifier arguments) as tmux's `FORMAT_EXPAND_TIME`

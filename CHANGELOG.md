@@ -22,6 +22,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The `assume-paste-time` session option**, as tmux's (1 millisecond by
+  default): once a key comes that soon after the one before, each further fast
+  key is pasted to the pane as it is, past the binds and the prefix, so text
+  pasted into a terminal without bracketed paste does not run binds. A pane in a
+  mode drops them; 0 turns it off.
 - **The `focus-events` server option**, as tmux's, on by default as
   tmux-sensible sets it: off, the client's terminal is not asked for focus
   reports, and a pane made active or a window made current is not told of focus
