@@ -480,8 +480,9 @@ table. What has been verified, and how:
     completion; session groups (`new-session -t`); smaller flags: `send-keys -R`
     (tmux's `input_reset`, more than a vt100 `ESC c`), `set-buffer -t`,
     `copy-mode -s`, `detach-client -E`, `list-keys -a -P` (see `list-keys -N`
-    below), `source-file -n -v -F` and globs; `source-file` of a tmux command
-    file (`%if`, `%hidden`).
+    below), `source-file -v`, several paths and globs (each load replaces the
+    whole TOML config, so several files have no clear meaning yet);
+    `source-file` of a tmux command file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `pane-set-clipboard`,
     `client-active`, `client-light-theme` / `-dark-theme`. Copy mode lacks
     `next-prompt` / `previous-prompt` (they need a prompt mark on every history

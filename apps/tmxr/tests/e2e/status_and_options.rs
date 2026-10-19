@@ -556,6 +556,24 @@ fn source_file_q_and_a_missing_file_leave_the_config_alone() {
     std::fs::write(&other, "").unwrap();
     t.run(&["source-file", other.to_str().unwrap()]);
     assert_eq!(config_files().trim(), other.display().to_string());
+
+    // -n only checks a file loads: a broken one fails, a good one is not
+    // taken up.
+    let broken = t.dir.path().join("broken.toml");
+    std::fs::write(&broken, "this is = = not toml").unwrap();
+    assert!(
+        !t.output(&["source-file", "-n", broken.to_str().unwrap()])
+            .status
+            .success()
+    );
+    t.run(&["source-file", "-n", t.config.to_str().unwrap()]);
+    assert_eq!(config_files().trim(), other.display().to_string());
+
+    // -F expands the path as a format.
+    t.run(&["set", "-g", "@dir", t.dir.path().to_str().unwrap()]);
+    let sep = std::path::MAIN_SEPARATOR;
+    t.run(&["source-file", "-F", &format!("#{{@dir}}{sep}config.toml")]);
+    assert_eq!(config_files().trim(), t.config.display().to_string());
 }
 
 #[test]

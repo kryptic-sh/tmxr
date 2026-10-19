@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use tmxr_command::Parsed;
 use tmxr_config::{SessionOptions, WindowOptions};
 
-use super::{Ctx, Outcome, Res, attached_client, scoped};
+use super::{Ctx, Outcome, Res, attached_client, expand_for, scoped};
 use crate::server::Server;
 use crate::target;
 
@@ -49,12 +49,26 @@ pub(super) fn run(
             }
         }
         "source-file" => {
-            if let Some(path) = pos.first() {
-                let path = PathBuf::from(path);
-                // -q: a file that is not there is no error, as tmux's.
-                if a.has('q') && !path.exists() {
-                    return Ok(true);
-                }
+            // -F: the path is a format, expanded first.
+            let path = pos.first().map(|p| {
+                PathBuf::from(if a.has('F') {
+                    expand_for(srv, ctx, ctx.pane, p)
+                } else {
+                    p.clone()
+                })
+            });
+            // -q: a file that is not there is no error, as tmux's.
+            if a.has('q') && path.as_ref().is_some_and(|p| !p.exists()) {
+                return Ok(true);
+            }
+            // -n: only check that the file loads (else the config's own),
+            // changing nothing, as tmux's parse-only source-file.
+            if a.has('n') {
+                let check = path.as_deref().or(srv.cfg_path.as_deref());
+                tmxr_config::load(check).map_err(|e| e.to_string())?;
+                return Ok(true);
+            }
+            if let Some(path) = path {
                 // One that does not load changes nothing, the config path
                 // included, so the next reload still finds the old file.
                 tmxr_config::load(Some(&path)).map_err(|e| e.to_string())?;

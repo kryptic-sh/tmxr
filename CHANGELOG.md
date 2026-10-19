@@ -19,6 +19,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`source-file -n` and `-F`**, as tmux's: `-n` only checks that the file (else
+  the config's own) loads, changing nothing, and `-F` expands the path as a
+  format.
 - **`send-keys -K` and `-c`**, as tmux's: the keys go to a client (`-c`, else
   the best one) as if typed there, so its prefix and binds act on them.
 - **`display-panes -d`, `-N`, `-b` and a template**, as tmux's: `-d` sets how
