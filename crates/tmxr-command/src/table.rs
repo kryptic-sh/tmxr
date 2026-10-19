@@ -113,10 +113,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "copy-mode",
         None,
-        "deHMqSut:",
+        "deHMqSs:t:u",
         0,
         0,
-        "[-deHMqSu] [-t target-pane]"
+        "[-deHMqSu] [-s src-pane] [-t target-pane]"
     ),
     cmd!(
         "customize-mode",

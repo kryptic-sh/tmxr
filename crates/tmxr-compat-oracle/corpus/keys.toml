@@ -90,3 +90,16 @@ checks = [
   { command = "capture-pane -p -t o" },
   { format = "#{cursor_x},#{cursor_y} #{cursor_flag} #{keypad_cursor_flag}" },
 ]
+
+[[cases]]
+name = "copy_mode_s_shows_another_panes_screen"
+steps = [
+  { run = "split-window -d -t o 'printf \"srcmarker\n\"; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o.0 -s o.1" },
+  { run = "send-keys -t o.0 -X search-backward srcmarker" },
+]
+checks = [
+  { command = "display -p -t o.0 '#{pane_in_mode} #{copy_cursor_x},#{copy_cursor_y}'" },
+  { command = "display -p -t o.1 '#{pane_in_mode}'" },
+]

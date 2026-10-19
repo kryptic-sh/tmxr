@@ -10,7 +10,7 @@ mod model;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-pub use commands::{command, enter};
+pub use commands::{command, enter, enter_from};
 pub use model::{Cell, Line, cell_style, colour, snapshot};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,6 +22,9 @@ pub enum SelKind {
 
 #[derive(Debug, Clone)]
 pub struct CopyMode {
+    /// The pane whose screen and history this shows, when not its own
+    /// (`copy-mode -s`): what `refresh-from-pane` reads again.
+    pub source: Option<crate::model::PaneId>,
     pub lines: Vec<Line>,
     /// First line shown.
     pub top: usize,
@@ -236,6 +239,7 @@ impl CopyMode {
             last_cx: 0,
             last_sx: 0,
             rect: false,
+            source: None,
         }
     }
 
@@ -254,6 +258,7 @@ impl CopyMode {
         self.last_jump = old.last_jump;
         self.scroll_exit = old.scroll_exit;
         self.hide_position = old.hide_position;
+        self.source = old.source;
         self.scroll_to_cursor();
     }
 

@@ -40,7 +40,12 @@ pub(super) fn run(
                 return Ok(true);
             }
             let entering = srv.panes.get(&pid).is_some_and(|p| p.copy.is_none());
-            crate::copy::enter(srv, pid, a.has('u'));
+            // -s: the source pane's screen and history, shown in the target.
+            let source = match a.value('s') {
+                Some(s) => target::pane(srv, ctx, Some(s))?.2,
+                None => pid,
+            };
+            crate::copy::enter_from(srv, pid, source, a.has('u'));
             if let Some(cm) = srv.panes.get_mut(&pid).and_then(|p| p.copy.as_mut()) {
                 if a.has('e') {
                     cm.scroll_exit = true;

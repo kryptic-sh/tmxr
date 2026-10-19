@@ -24,6 +24,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`copy-mode -s src-pane`**, as tmux's: the target pane enters copy mode
+  showing another pane's screen and history, which `refresh-from-pane` reads
+  again.
 - **`send-keys -R`**, as tmux's: the pane's terminal is reset before any keys
   go: a sequence half received is dropped, the modes and scroll region go back
   to the defaults, and the screen is cleared with the cursor at the top; the

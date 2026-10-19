@@ -20,12 +20,30 @@ fn take_options(srv: &mut Server, pane: PaneId) {
 
 /// Enter copy mode in `pane` (no-op if already in it).
 pub fn enter(srv: &mut Server, pane: PaneId, page_up: bool) {
-    let Some(p) = srv.panes.get_mut(&pane) else {
-        return;
-    };
-    let entered = p.copy.is_none();
+    enter_from(srv, pane, pane, page_up);
+}
+
+/// A snapshot of `source`'s screen and history, sized to `pane`'s view.
+fn snapshot_for(srv: &mut Server, pane: PaneId, source: PaneId) -> Option<CopyMode> {
+    let (rows, cols) = srv.panes.get(&pane)?.emu.screen().size();
+    let mut cm = CopyMode::new(srv.panes.get_mut(&source)?.emu.screen_mut());
+    if source != pane {
+        cm.source = Some(source);
+        cm.resize(cols, rows);
+    }
+    Some(cm)
+}
+
+/// Enter copy mode in `pane` showing `source`'s screen and history
+/// (`copy-mode -s`, as tmux's window_copy_init with a source pane); no-op
+/// if already in it.
+pub fn enter_from(srv: &mut Server, pane: PaneId, source: PaneId, page_up: bool) {
+    let entered = srv.panes.get(&pane).is_some_and(|p| p.copy.is_none());
     if entered {
-        p.copy = Some(CopyMode::new(p.emu.screen_mut()));
+        let cm = snapshot_for(srv, pane, source);
+        if let Some(p) = srv.panes.get_mut(&pane) {
+            p.copy = cm;
+        }
     }
     take_options(srv, pane);
     let Some(p) = srv.panes.get_mut(&pane) else {
@@ -107,11 +125,17 @@ pub fn command(
     args: &[String],
 ) -> Result<(), String> {
     if name == "refresh-from-pane" {
-        // A fresh snapshot of the live pane, keeping where the user was.
+        // A fresh snapshot of the live pane (or the one `copy-mode -s`
+        // showed, while it lasts), keeping where the user was.
         let p = srv.panes.get_mut(&pane).ok_or("no such pane")?;
         let old = p.copy.take().ok_or("not in a mode")?;
-        let mut fresh = CopyMode::new(p.emu.screen_mut());
+        let source = old
+            .source
+            .filter(|s| srv.panes.contains_key(s))
+            .unwrap_or(pane);
+        let mut fresh = snapshot_for(srv, pane, source).ok_or("no such pane")?;
         fresh.carry_over(&old);
+        let p = srv.panes.get_mut(&pane).ok_or("no such pane")?;
         p.copy = Some(fresh);
         let window = p.window;
         take_options(srv, pane);
