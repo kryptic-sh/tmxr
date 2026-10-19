@@ -24,6 +24,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Copy mode's word and line selection, and `selection-mode`**, as tmux's:
+  after `select-word` or `select-line` (or `selection-mode word` / `line`),
+  moving the cursor grows the selection by whole words or lines, keeping the
+  first one on whichever side the cursor is not.
 - **The `pane-border-status` and `pane-border-format` options**, as tmux's: each
   pane gets a status line on its top or bottom border, two cells in, in the
   border style (the active pane's in `pane-active-border-style`), and a pane on

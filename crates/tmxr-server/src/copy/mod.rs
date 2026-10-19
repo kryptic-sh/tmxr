@@ -13,6 +13,15 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 pub use commands::{command, enter, enter_from};
 pub use model::{Cell, Line, cell_style, colour, snapshot};
 
+/// How the selection's moving end goes as the cursor moves, as tmux's
+/// selflag: by characters, or snapped to words or lines.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelFlag {
+    Char,
+    Word,
+    Line,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelKind {
     Char,
@@ -65,6 +74,15 @@ pub struct CopyMode {
     /// selection's, so it lasts until toggled off or a line or word is
     /// selected.
     rect: bool,
+    /// tmux's selflag: in word or line mode the selection keeps its first
+    /// word or line (`sel_reset`, tmux's selrx / endselrx) and grows by
+    /// words or lines from where it was made (`sel_origin`, tmux's dx, dy).
+    selflag: SelFlag,
+    sel_reset: ((usize, usize), (usize, usize)),
+    sel_origin: (usize, usize),
+    /// Where `select-word` / `select-line` left the cursor: until it moves
+    /// from there the selection is as made, as tmux makes it with no_reset.
+    sel_made_at: (usize, usize),
 }
 
 /// The last search, for `search-again` and highlighting.
@@ -240,6 +258,10 @@ impl CopyMode {
             last_sx: 0,
             rect: false,
             source: None,
+            selflag: SelFlag::Char,
+            sel_reset: ((0, 0), (0, 0)),
+            sel_origin: (0, 0),
+            sel_made_at: (0, 0),
         }
     }
 
@@ -678,7 +700,12 @@ impl CopyMode {
     }
 
     fn word_end(&mut self, big: bool) {
-        let (mut y, mut x) = (self.cy, self.cx);
+        (self.cy, self.cx) = self.word_end_pos((self.cy, self.cx), big);
+    }
+
+    /// Where `next-word-end` from `(y, x)` lands.
+    fn word_end_pos(&self, (y, x): (usize, usize), big: bool) -> (usize, usize) {
+        let (mut y, mut x) = (y, x);
         if let Some(p) = self.next_pos(y, x) {
             (y, x) = p;
         }
@@ -695,11 +722,31 @@ impl CopyMode {
             }
             (y, x) = (ny, nx);
         }
-        (self.cy, self.cx) = (y, x);
+        (y, x)
     }
 
     fn prev_word(&mut self, big: bool) {
-        let (mut y, mut x) = (self.cy, self.cx);
+        (self.cy, self.cx) = self.prev_word_pos((self.cy, self.cx), big);
+    }
+
+    /// The start of the word at `(y, x)`, or on a blank the previous word's,
+    /// as tmux's grid_reader_cursor_previous_word without `already` (what
+    /// word selection snaps back to). It keeps to the line.
+    fn word_start_pos(&self, (y, x): (usize, usize)) -> (usize, usize) {
+        let class = self.class(y, x, false);
+        if class == 0 {
+            return self.prev_word_pos((y, x), false);
+        }
+        let mut x = x;
+        while x > 0 && self.class(y, x - 1, false) == class {
+            x -= 1;
+        }
+        (y, x)
+    }
+
+    /// Where `previous-word` from `(y, x)` lands.
+    fn prev_word_pos(&self, (y, x): (usize, usize), big: bool) -> (usize, usize) {
+        let (mut y, mut x) = (y, x);
         if let Some(p) = self.prev_pos(y, x) {
             (y, x) = p;
         }
@@ -716,7 +763,7 @@ impl CopyMode {
             }
             (y, x) = (py, px);
         }
-        (self.cy, self.cx) = (y, x);
+        (y, x)
     }
 
     fn find(&mut self, needle: &str, forward: bool, regex: bool, skip_current: bool) -> bool {
@@ -775,10 +822,40 @@ impl CopyMode {
         self.sel_end.unwrap_or((self.cy, self.cx))
     }
 
+    /// The selection's two ends, its anchor first: in word or line mode
+    /// snapped as tmux's window_copy_synchronize_cursor_end, the first word
+    /// or line kept on whichever side the cursor is not.
+    fn selection_ends(&self) -> Option<((usize, usize), (usize, usize))> {
+        let anchor = self.anchor?;
+        let cursor = self.selection_end();
+        if self.sel_end.is_some() || cursor == self.sel_made_at {
+            return Some((anchor, cursor));
+        }
+        let (start, end) = self.sel_reset;
+        let backwards = self.sel_origin > cursor;
+        Some(match self.selflag {
+            SelFlag::Char => (anchor, cursor),
+            SelFlag::Word if backwards => (end, self.word_start_pos(cursor)),
+            SelFlag::Word => {
+                let (y, x) = cursor;
+                let snapped = if x >= self.line_len(y) || self.class(y, x + 1, false) != 0 {
+                    self.word_end_pos(cursor, false)
+                } else {
+                    cursor
+                };
+                (start, snapped)
+            }
+            SelFlag::Line if self.sel_origin.0 > cursor.0 => (end, (cursor.0, 0)),
+            SelFlag::Line => {
+                let y = cursor.0.max(end.0);
+                (start, (y, self.line_len(y)))
+            }
+        })
+    }
+
     /// Selected text, or `None` without a selection.
     pub fn selection_text(&self) -> Option<String> {
-        let (ay, ax) = self.anchor?;
-        let end = self.selection_end();
+        let ((ay, ax), end) = self.selection_ends()?;
         let ((sy, sx), (ey, ex)) = if (ay, ax) <= end {
             ((ay, ax), end)
         } else {
@@ -810,10 +887,9 @@ impl CopyMode {
 
     /// Whether `(y, x)` is inside the selection, for drawing.
     pub fn selected(&self, y: usize, x: usize) -> bool {
-        let Some((ay, ax)) = self.anchor else {
+        let Some(((ay, ax), end)) = self.selection_ends() else {
             return false;
         };
-        let end = self.selection_end();
         let (s, e) = if (ay, ax) <= end {
             ((ay, ax), end)
         } else {
@@ -871,6 +947,7 @@ impl CopyMode {
                 self.cy = self.cy.max(self.top);
             }
             "begin-selection" => {
+                self.selflag = SelFlag::Char;
                 self.anchor = Some((self.cy, self.cx));
                 self.sel_end = None;
                 self.kind = if self.rect {
@@ -883,10 +960,14 @@ impl CopyMode {
             // tmux's window_copy_cmd_select_line.
             "select-line" => {
                 self.rect = false;
+                self.selflag = SelFlag::Line;
+                self.sel_origin = (self.cy, self.cx);
                 self.anchor = Some((self.cy, 0));
                 self.sel_end = None;
                 self.kind = SelKind::Line;
                 self.end_of_line();
+                self.sel_reset = ((self.cy, 0), (self.cy, self.line_len(self.cy)));
+                self.sel_made_at = (self.cy, self.cx);
             }
             "select-word" => {
                 // The run of same-class cells (word, punctuation or blank)
@@ -903,15 +984,32 @@ impl CopyMode {
                     .take_while(|&x| self.class(self.cy, x, false) == class)
                     .last()
                     .unwrap_or(self.cx);
+                self.selflag = SelFlag::Word;
+                let origin = (self.cy, self.cx);
                 self.anchor = Some((self.cy, start));
                 self.sel_end = None;
                 self.kind = SelKind::Char;
                 self.cx = end;
+                self.sel_reset = ((self.cy, start), (self.cy, end));
+                self.sel_made_at = (self.cy, self.cx);
+                // As tmux's: where it was made, kept within the word.
+                self.sel_origin = origin.min((self.cy, end));
+            }
+            // How the selection grows as the cursor moves, as tmux's
+            // window_copy_cmd_selection_mode.
+            "selection-mode" => {
+                self.selflag = match arg.map(str::to_ascii_lowercase).as_deref() {
+                    None | Some("char" | "c") => SelFlag::Char,
+                    Some("word" | "w") => SelFlag::Word,
+                    Some("line" | "l") => SelFlag::Line,
+                    Some(_) => self.selflag,
+                };
             }
             "rectangle-toggle" => self.set_rect(!self.rect),
             "rectangle-on" => self.set_rect(true),
             "rectangle-off" => self.set_rect(false),
             "clear-selection" => {
+                self.selflag = SelFlag::Char;
                 self.anchor = None;
                 self.sel_end = None;
                 self.cx = self.cx.min(self.line_len(self.cy));
@@ -920,6 +1018,7 @@ impl CopyMode {
             // where the selection is now held from. A count swaps that many
             // times.
             "other-end" => {
+                self.selflag = SelFlag::Char;
                 // After stop-selection the cursor goes to the selection's
                 // end, which follows it again, as tmux's cursordrag none
                 // becomes endsel.
@@ -933,6 +1032,7 @@ impl CopyMode {
             // The selection stays where it is and the cursor moves alone,
             // as tmux's window_copy_cmd_stop_selection.
             "stop-selection" => {
+                self.selflag = SelFlag::Char;
                 if self.anchor.is_some() && self.sel_end.is_none() {
                     self.sel_end = Some((self.cy, self.cx));
                 }

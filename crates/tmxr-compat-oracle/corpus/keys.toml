@@ -161,3 +161,62 @@ steps = [
   { run = "bind -T mytab c splitw -h -c '#{pane_current_path}'" },
 ]
 checks = [{ command = "list-keys -T mytab" }, { command = "list-keys -aN -T mytab" }]
+
+[[cases]]
+name = "select_word_then_moving_grows_by_words"
+program = "printf 'alpha beta gamma delta\nsecond line here\nthird line\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "copy-mode -t o" },
+  { run = "send -t o -X history-top" },
+  { run = "send -t o -X -N 12 cursor-right" },
+  { run = "send -t o -X select-word" },
+  { run = "send -t o -X cursor-right" },
+  { run = "send -t o -X next-word" },
+  { run = "send -t o -X copy-selection" },
+]
+checks = [{ command = "show-buffer" }]
+
+[[cases]]
+name = "select_word_then_moving_back_grows_by_words"
+program = "printf 'alpha beta gamma delta\nsecond line here\nthird line\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "copy-mode -t o" },
+  { run = "send -t o -X history-top" },
+  { run = "send -t o -X -N 12 cursor-right" },
+  { run = "send -t o -X select-word" },
+  { run = "send -t o -X previous-word" },
+  { run = "send -t o -X previous-word" },
+  { run = "send -t o -X copy-selection" },
+]
+checks = [{ command = "show-buffer" }]
+
+[[cases]]
+name = "select_line_then_moving_grows_by_lines"
+program = "printf 'alpha beta gamma delta\nsecond line here\nthird line\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "copy-mode -t o" },
+  { run = "send -t o -X history-top" },
+  { run = "send -t o -X cursor-right" },
+  { run = "send -t o -X select-line" },
+  { run = "send -t o -X cursor-down" },
+  { run = "send -t o -X copy-selection" },
+]
+checks = [{ command = "show-buffer" }]
+
+[[cases]]
+name = "selection_mode_line_snaps_a_selection_to_lines"
+program = "printf 'alpha beta gamma delta\nsecond line here\nthird line\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "copy-mode -t o" },
+  { run = "send -t o -X history-top" },
+  { run = "send -t o -X -N 3 cursor-right" },
+  { run = "send -t o -X begin-selection" },
+  { run = "send -t o -X selection-mode line" },
+  { run = "send -t o -X cursor-down" },
+  { run = "send -t o -X copy-selection" },
+]
+checks = [{ command = "show-buffer" }]
