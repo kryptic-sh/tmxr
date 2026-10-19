@@ -473,7 +473,13 @@ pub(super) fn run(
                 .map(|v| super::expand_for(srv, ctx, Some(pid), v));
             let pane = srv.panes.get_mut(&pid).ok_or("no such pane")?;
             let range = (start.as_deref(), end.as_deref());
-            let text = capture(pane.emu.screen_mut(), range, a.has('J'), a.has('N'));
+            let mut text = capture(pane.emu.screen_mut(), range, a.has('J'), a.has('N'));
+            // -C: escaped as tmux's GRID_STRING_ESCAPE_SEQUENCES does
+            // plain text, its backslashes doubled. (-q only quiets -a,
+            // which tmxr does not have.)
+            if a.has('C') {
+                text = text.replace('\\', "\\\\");
+            }
             if a.has('p') {
                 out.stdout.push_str(&text);
             } else {

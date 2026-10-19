@@ -652,3 +652,15 @@ checks = [
   { command = "show-buffer" },
   { command = "display -p -t o:2 '#{pane_in_mode} #{selection_present} #{copy_cursor_y},#{copy_cursor_x}'" },
 ]
+
+[[cases]]
+name = "capture_pane_c_doubles_backslashes"
+unix_only = true
+size = [20, 6]
+program = "printf 'back\\134slash\\n'; exec sleep 1000"
+steps = [{ sleep = 0.5 }]
+checks = [
+  { command = "capture-pane -p -C -S 0 -E 0" },
+  { command = "capture-pane -p -S 0 -E 0" },
+  { command = "capture-pane -p -q -S 0 -E 0" },
+]

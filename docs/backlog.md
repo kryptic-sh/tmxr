@@ -472,11 +472,12 @@ table. What has been verified, and how:
     not have; the dead-pane line is a fixed `Pane is dead (status N)` in
     `render.rs`); server `focus-events`, `history-file`, `editor`. `escape-time`
     is kept but never read.
-  - Commands: `capture-pane -e -a -C -T -q` (and `-J` keeping spaces a program
-    wrote at a line's end, which the history snapshot cannot tell from blank
-    cells); `split-window -I`; `display-message -a -v -I` (`-a` lists every
-    variable, which needs `vars.rs` to enumerate its names); `choose-*`
-    templates and `-F -f -K -O -r -N -y`, tagging and sort keys;
+  - Commands: `capture-pane -e -a -T` (`-e` needs tmux's own SGR output, `-a`
+    the saved normal screen, which `vt100` does not expose) (and `-J` keeping
+    spaces a program wrote at a line's end, which the history snapshot cannot
+    tell from blank cells); `split-window -I`; `display-message -a -v -I` (`-a`
+    lists every variable, which needs `vars.rs` to enumerate its names);
+    `choose-*` templates and `-F -f -K -O -r -N -y`, tagging and sort keys;
     `command-prompt` with several `-p` and `%1`…`%9`, `-1 -N -b -F -l`,
     completion; session groups (`new-session -t`); smaller flags: `send-keys -R`
     (tmux's `input_reset`, more than a vt100 `ESC c`), `set-buffer -t`,

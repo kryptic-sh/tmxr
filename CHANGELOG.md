@@ -19,6 +19,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`capture-pane -C` and `-q`**, as tmux's: `-C` doubles the backslashes in the
+  text; `-q` is accepted (in tmux it only quiets `-a`).
 - **`display-message -N` and `-C`**, as tmux's: with `-N` a key leaves the
   message up until its time is out; `-C` is accepted, as tmxr never freezes the
   panes behind a message.
