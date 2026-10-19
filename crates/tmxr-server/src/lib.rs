@@ -100,6 +100,8 @@ pub fn run(endpoint: Endpoint, config: Option<PathBuf>) -> std::io::Result<()> {
         srv.log_message(message.clone());
         srv.config_error = Some(message);
     }
+    // After the config, as tmux's cfg_done.
+    srv.load_prompt_history();
     if srv.cfg.resurrect.restore_on_start
         && let Err(e) = resurrect::restore_on_start(&mut srv)
     {

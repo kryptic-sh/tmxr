@@ -1,6 +1,7 @@
 //! The server: one thread owns all state and processes [`Event`]s in order.
 
 mod attach;
+mod history;
 mod input;
 mod options;
 mod panes;
@@ -352,6 +353,7 @@ impl Server {
         if let Err(e) = crate::resurrect::save_if_changed(&mut self) {
             warn!("resurrect save on exit failed: {e}");
         }
+        self.save_prompt_history();
         signals::mark_saved();
         for c in self.clients.values() {
             let _ = c.tx.try_send(ServerMsg::Detached {

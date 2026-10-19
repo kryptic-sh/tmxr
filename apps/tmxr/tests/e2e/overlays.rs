@@ -626,6 +626,51 @@ fn prompt_history_is_kept_recalled_and_cleared() {
 }
 
 #[test]
+fn history_file_is_read_at_start_and_written_at_exit() {
+    let t = Tmxr::new("histfile");
+    let file = t.dir.path().join("history");
+    // tmux's format: `type:entry`; a type it does not know is a command.
+    std::fs::write(
+        &file,
+        "search:foo\ncommand:display -p hi\nno type here\nwindow-target:2\n",
+    )
+    .unwrap();
+    let config = std::fs::read_to_string(&t.config).unwrap();
+    std::fs::write(
+        &t.config,
+        config.replace(
+            "[resurrect]",
+            &format!("history-file = {file:?}\n[resurrect]"),
+        ),
+    )
+    .unwrap();
+    t.run(&["new-session", "-d", "-s", "hf"]);
+    let shown = t.run(&["show-prompt-history", "-T", "command"]);
+    assert!(
+        shown.contains("1: display -p hi") && shown.contains("2: no type here"),
+        "{shown}"
+    );
+    assert!(
+        t.run(&["show-prompt-history", "-T", "search"])
+            .contains("1: foo")
+    );
+    t.run(&["clear-prompt-history", "-T", "window-target"]);
+    // At exit, each type in tmux's order.
+    t.run(&["kill-server"]);
+    t.wait_run(&["ls"], "server gone", str::is_empty);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let want = "command:display -p hi\ncommand:no type here\nsearch:foo\n";
+    while std::fs::read_to_string(&file).unwrap() != want {
+        assert!(
+            Instant::now() < deadline,
+            "{:?}",
+            std::fs::read_to_string(&file)
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+#[test]
 fn display_message_d_sets_how_long_and_c_where() {
     let t = Tmxr::new("dispd");
     let s = t.attach(&["new", "-s", "dd"]);

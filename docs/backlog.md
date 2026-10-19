@@ -483,8 +483,8 @@ table. What has been verified, and how:
     `-format` / `-lines` / `-indicators`, `window-style` /
     `window-active-style`; session `status-keys` (and `default-size` set per
     session by `new-session -x` / `-y`, which tmux keeps and tmxr does not);
-    window `aggressive-resize`, `alternate-screen`; server `history-file`,
-    `editor`. `escape-time` is kept but never read.
+    window `aggressive-resize`, `alternate-screen`; server `editor`.
+    `escape-time` is kept but never read.
   - Commands: `capture-pane -e -a -T` (`-e` needs tmux's own SGR output, `-a`
     the saved normal screen, which `vt100` does not expose). `-T`, `-N` and `-J`
     all need written cells told from never-written ones, which `copy::snapshot`

@@ -144,6 +144,7 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed) -> Res {
             }
         },
         "copy-command" => need()?.clone_into(&mut c.copy_command),
+        "history-file" => need()?.clone_into(&mut c.history_file),
         "socket-access" => {
             return Err(
                 "socket-access is read when the server starts: set it in the config file".into(),
@@ -169,6 +170,7 @@ const SERVER_OPTIONS: &[&str] = &[
     "exit-unattached",
     "extended-keys",
     "focus-events",
+    "history-file",
     "message-limit",
     "prefix-timeout",
     "prompt-history-limit",
@@ -199,6 +201,7 @@ fn server_option_lines(srv: &Server) -> Vec<String> {
                 "exit-unattached" => on_off(c.exit_unattached).to_owned(),
                 "extended-keys" => c.extended_keys.clone(),
                 "focus-events" => on_off(c.focus_events).to_owned(),
+                "history-file" => quoted(&c.history_file),
                 "message-limit" => c.message_limit.to_string(),
                 "prefix-timeout" => c.prefix_timeout.to_string(),
                 "prompt-history-limit" => c.prompt_history_limit.to_string(),

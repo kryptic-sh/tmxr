@@ -59,6 +59,9 @@ pub struct Config {
     pub rgb_colour: String,
     /// Shell command `copy-pipe` sends the copied text to when it names none.
     pub copy_command: String,
+    /// `history-file`: where the prompts' history is read from when the
+    /// server starts and written when it exits; empty, nowhere.
+    pub history_file: String,
     /// `owner` or `users`: who may open the server's endpoint, read when
     /// the server starts (`server-access` admits users by name).
     pub socket_access: String,
@@ -147,6 +150,7 @@ struct File {
     other_pane_height: String,
     other_pane_width: String,
     copy_command: String,
+    history_file: String,
     lock_command: String,
     lock_after_time: u64,
     socket_access: String,
@@ -276,6 +280,7 @@ impl From<File> for Config {
             set_clipboard: f.set_clipboard,
             rgb_colour: f.rgb_colour,
             copy_command: f.copy_command,
+            history_file: f.history_file,
             socket_access: f.socket_access,
             navigator: f.navigator,
             resurrect: f.resurrect,

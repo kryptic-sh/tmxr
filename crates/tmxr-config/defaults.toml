@@ -98,6 +98,8 @@ main-pane-width = "80"
 other-pane-height = "0"
 other-pane-width = "0"
 copy-command = ""
+# tmux's default: the prompts' history is kept in no file.
+history-file = ""
 # tmux's default; `lock-client` runs it in the client's terminal.
 lock-command = "lock -np"
 # Lock a client idle this many seconds; 0 never does (tmux's default).

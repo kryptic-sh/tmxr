@@ -22,6 +22,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The `history-file` server option**, as tmux's: the prompts' history is read
+  from it when the server starts and written to it when the server exits, one
+  `type:entry` line each. It takes an absolute path or one starting `~/`; empty,
+  the default, keeps no file.
 - **The `assume-paste-time` session option**, as tmux's (1 millisecond by
   default): once a key comes that soon after the one before, each further fast
   key is pasted to the pane as it is, past the binds and the prefix, so text
