@@ -473,17 +473,23 @@ table. What has been verified, and how:
     `render.rs`); server `focus-events`, `history-file`, `editor`. `escape-time`
     is kept but never read.
   - Commands: `capture-pane -e -a -T` (`-e` needs tmux's own SGR output, `-a`
-    the saved normal screen, which `vt100` does not expose) (and `-J` keeping
-    spaces a program wrote at a line's end, which the history snapshot cannot
-    tell from blank cells); `split-window -I`; `display-message -a -v -I` (`-a`
-    lists every variable, which needs `vars.rs` to enumerate its names);
-    `choose-*` templates and `-F -f -K -O -r -N -y`, tagging and sort keys;
-    `command-prompt` with several `-p` and `%1`…`%9`, `-1 -N -b -F -l`,
-    completion; session groups (`new-session -t`); smaller flags: `send-keys -R`
-    (tmux's `input_reset`, more than a vt100 `ESC c`), `set-buffer -t`,
-    `copy-mode -s`, `detach-client -E`, `list-keys -a -P` (see `list-keys -N`
-    below), `source-file -v`, several paths and globs (each load replaces the
-    whole TOML config, so several files have no clear meaning yet);
+    the saved normal screen, which `vt100` does not expose). `-T`, `-N` and `-J`
+    all need written cells told from never-written ones, which `copy::snapshot`
+    (what `capture` reads) turns into the same space. Seen against tmux 3.6
+    (2026-10-19, a line `ab` plus two written spaces): `-N` printed `ab` and
+    three spaces, one past the written ones, where tmxr pads to the pane's
+    width; `-N -T` printed exactly the written `ab` and two spaces. The oracle
+    cannot catch the difference on a capture's last line, as it trims the
+    output's end. tmux also keeps a tab as the tab character, where `vt100`
+    keeps the spaces it moved over; `split-window -I`;
+    `display-message -a -v -I` (`-a` lists every variable, which needs `vars.rs`
+    to enumerate its names); `choose-*` templates and `-F -f -K -O -r -N -y`,
+    tagging and sort keys; `command-prompt` with several `-p` and `%1`…`%9`,
+    `-1 -N -b -F -l`, completion; session groups (`new-session -t`); smaller
+    flags: `send-keys -R` (tmux's `input_reset`, more than a vt100 `ESC c`),
+    `set-buffer -t`, `copy-mode -s`, `detach-client -E`, `list-keys -a -P` (see
+    `list-keys -N` below), `source-file -v`, several paths and globs (each load
+    replaces the whole TOML config, so several files have no clear meaning yet);
     `source-file` of a tmux command file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `pane-set-clipboard`,
     `client-active`, `client-light-theme` / `-dark-theme`. Copy mode lacks
