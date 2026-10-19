@@ -330,6 +330,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`list-keys` prints commands as tmux does**: full command names, flags
+  grouped and quoted as tmux's, commands joined by `\;`.
 - **`window-size` is `smallest` by default**, so every client sees the whole
   window; it was `latest`.
 - **`C-u` clears the whole command prompt**, as tmux's, not only what is before
@@ -385,6 +387,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`\;` on the command line**: an argument ending in `\;` is a literal `;`, and
+  one ending in a bare `;` ends its command, as tmux's
+  `cmd_parse_from_arguments`; `bind-key x cmd1 \; cmd2` binds both commands,
+  where tmxr bound one broken command.
 - **`send-keys -M` in a panned view** sent the mouse's place in the client, not
   in the window, to a program in a window larger than its client.
 - **Templates are filled as tmux's** (`command-prompt`, `display-panes`): an

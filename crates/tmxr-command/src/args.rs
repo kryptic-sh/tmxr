@@ -95,6 +95,40 @@ impl Args {
     pub fn positional(&self) -> &[String] {
         &self.positional
     }
+
+    /// The flags as tmux's args_print gives them: those taking no value,
+    /// in flag order, each as often as it was given, then each value of
+    /// those that take one.
+    pub fn print(&self) -> String {
+        let mut out = String::new();
+        for (&flag, &count) in &self.counts {
+            if self.values.contains_key(&flag) {
+                continue;
+            }
+            if out.is_empty() {
+                out.push('-');
+            }
+            out.extend(std::iter::repeat_n(flag, count));
+        }
+        for (&flag, values) in &self.values {
+            for value in values {
+                if !out.is_empty() {
+                    out.push(' ');
+                }
+                out.push('-');
+                out.push(flag);
+                out.push(' ');
+                out.push_str(&crate::escape_arg(value));
+            }
+        }
+        for word in &self.positional {
+            if !out.is_empty() {
+                out.push(' ');
+            }
+            out.push_str(&crate::escape_arg(word));
+        }
+        out
+    }
 }
 
 #[cfg(test)]

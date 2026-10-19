@@ -746,6 +746,55 @@ pub fn reads_stdin(argv: &[String]) -> bool {
     })
 }
 
+/// Arguments already split into words, separated into commands as tmux's
+/// cmd_parse_from_arguments: a word ending in `;` ends its command (the
+/// `;` dropped, and the word too if nothing is left), unless the `;` follows
+/// a backslash, which makes the word end in a literal `;` instead.
+pub fn split_arguments(words: &[String]) -> Vec<Vec<String>> {
+    let mut commands = Vec::new();
+    let mut command = Vec::new();
+    for word in words {
+        let Some(rest) = word.strip_suffix(';') else {
+            command.push(word.clone());
+            continue;
+        };
+        if let Some(literal) = rest.strip_suffix('\\') {
+            command.push(format!("{literal};"));
+            continue;
+        }
+        if !rest.is_empty() {
+            command.push(rest.to_owned());
+        }
+        commands.push(std::mem::take(&mut command));
+    }
+    commands.push(command);
+    commands.retain(|c| !c.is_empty());
+    commands
+}
+
+/// `line` as tmux's cmd_list_print gives a command list back, escaped:
+/// each command by its full name and its arguments (args_print), joined by
+/// ` \; `. `$VAR` is kept as written (tmux has expanded it already), and a
+/// `{ … }` block is printed as the string tmxr keeps it as. `None` when the
+/// line does not parse.
+pub fn print_command_list(line: &str) -> Option<String> {
+    let keep = |name: &str| Some(format!("${{{name}}}"));
+    let commands = crate::tokenize(line, &keep).ok()?;
+    let printed: Option<Vec<String>> = commands
+        .iter()
+        .map(|words| {
+            let p = parse(words).ok()?;
+            let args = p.args.print();
+            Some(if args.is_empty() {
+                p.name().to_owned()
+            } else {
+                format!("{} {args}", p.name())
+            })
+        })
+        .collect();
+    Some(printed?.join(" \\; "))
+}
+
 /// Resolve `argv[0]` and parse the rest against its flag spec.
 pub fn parse(argv: &[String]) -> Result<Parsed, CommandError> {
     let (name, rest) = argv
@@ -769,6 +818,45 @@ pub fn parse(argv: &[String]) -> Result<Parsed, CommandError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn arguments_split_into_commands_as_tmux() {
+        let w = |s: &[&str]| s.iter().map(|x| (*x).to_owned()).collect::<Vec<_>>();
+        let split = |s: &[&str]| split_arguments(&w(s));
+        assert_eq!(split(&["a", "b"]), vec![w(&["a", "b"])]);
+        assert_eq!(split(&["a", ";", "b"]), vec![w(&["a"]), w(&["b"])]);
+        assert_eq!(split(&["a;", "b"]), vec![w(&["a"]), w(&["b"])]);
+        // An escaped `;` stays, as the literal word `;` or a word's end.
+        assert_eq!(
+            split(&["bind", "x", "A", "\\;", "B"]),
+            vec![w(&["bind", "x", "A", ";", "B"])]
+        );
+        assert_eq!(split(&["say", "hi\\;"]), vec![w(&["say", "hi;"])]);
+        assert_eq!(split(&[";", ";"]), Vec::<Vec<String>>::new());
+    }
+
+    #[test]
+    fn command_lists_print_back_as_tmux_prints_them() {
+        // tmux 3.6's list-keys for its own copy-mode binds (WSL, 2026-10-20).
+        for (given, printed) in [
+            (
+                "send -FX search-backward -- '#{copy_cursor_word}'",
+                "send-keys -FX search-backward -- \"#{copy_cursor_word}\"",
+            ),
+            (
+                "select-pane; send -X -N 5 scroll-up",
+                r"select-pane \; send-keys -X -N 5 scroll-up",
+            ),
+            ("send -X cancel", "send-keys -X cancel"),
+        ] {
+            assert_eq!(
+                print_command_list(given).as_deref(),
+                Some(printed),
+                "{given}"
+            );
+        }
+        assert_eq!(print_command_list("no-such-command"), None);
+    }
 
     fn v(args: &[&str]) -> Vec<String> {
         args.iter().map(|s| (*s).to_owned()).collect()

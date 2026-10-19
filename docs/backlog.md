@@ -534,13 +534,13 @@ table. What has been verified, and how:
   its pane modes; tmxr's pickers are full-screen overlays). Separately,
   `source-file` replaces the config path and reloads everything, where tmux runs
   the file's commands.
-- **`list-keys` prints a bind's command as it was given**, where tmux prints it
-  re-parsed (`cmd_list_print`): full command names, its own quoting, `{ }` for
-  nested command lists, so `bind x display hi` lists as `display hi` in tmxr and
-  `display-message hi` in tmux. tmxr's own default binds and their notes also
-  differ from tmux's, so only binds made in a test compare (the oracle's
-  `list_keys_in_tmuxs_order_and_layout`). The order (`BindKey::tmux_code`, from
-  tmux 3.6's `tmux.h`) and the layout follow tmux's.
+- **`list-keys` prints a `{ … }` block as a quoted string**: tmux prints a
+  bind's commands re-parsed (`cmd_list_print`), as tmxr now does
+  (`print_command_list`), but tmxr's tokenizer turns a `{ … }` block into one
+  string word, so a command-prompt template given in braces prints quoted where
+  tmux prints `{ … }`; and `$VAR` prints as written, where tmux expanded it when
+  the bind was made. tmxr's own default binds and their notes also differ from
+  tmux's, so only binds made in a test compare.
 - **The full e2e suite kills its `wsl.exe` session** (2026-10-18): run as
   `wsl.exe -e bash -lc 'cargo test -p tmxr-cli --test e2e …'`, output stops and
   nothing after the run prints, though a log file shows every test finished.

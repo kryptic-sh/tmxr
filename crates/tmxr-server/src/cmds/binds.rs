@@ -26,10 +26,16 @@ pub(super) fn run(
             let key: BindKey = pos[0]
                 .parse()
                 .map_err(|e: tmxr_command::keys::UnknownKey| e.to_string())?;
+            // A lone `;` word (`\;` in a command line) separates the bound
+            // list's commands, as tmux's.
             let cmd = if pos.len() == 2 && pos[1].contains(' ') {
                 pos[1].clone()
             } else {
-                join_args(&pos[1..])
+                tmxr_command::split_arguments(&pos[1..])
+                    .iter()
+                    .map(|c| join_args(c))
+                    .collect::<Vec<_>>()
+                    .join(" ; ")
             };
             if cmd.is_empty() {
                 // `bind -N note key` with no command only changes the note.
@@ -117,6 +123,8 @@ fn list_keys(
         return Err(format!("table {t} doesn't exist"));
     }
     let width = |s: &str| ratatui::text::Line::raw(s).width();
+    // A bind's commands as tmux prints them back.
+    let shown = |cmd: &str| tmxr_command::print_command_list(cmd).unwrap_or_else(|| cmd.to_owned());
     let pad = |s: &str, w: usize| format!("{s}{}", " ".repeat(w.saturating_sub(width(s))));
     let listed: Vec<(String, BindKey, BindSpec)> = all
         .into_iter()
@@ -147,7 +155,7 @@ fn list_keys(
                 let note = if noted(b) {
                     b.note.clone().unwrap_or_default()
                 } else {
-                    b.cmd.clone()
+                    shown(&b.cmd)
                 };
                 lines.push(format!(
                     "{start}{}{note}",
@@ -206,7 +214,7 @@ fn list_keys(
                 "bind-key {r}-T {} {} {}",
                 pad(t, tablewidth),
                 pad(&escaped(key), keywidth),
-                b.cmd
+                shown(&b.cmd)
             ));
         }
     }

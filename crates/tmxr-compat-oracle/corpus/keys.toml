@@ -152,3 +152,12 @@ steps = [
   { sleep = 0.3 },
 ]
 checks = [{ format = "[#{@r}]" }, { command = "show -gv status-keys" }]
+
+[[cases]]
+name = "list_keys_prints_commands_as_tmux"
+steps = [
+  { run = "bind -T mytab a display hi" },
+  { run = "bind -T mytab b set -g @x 1 \\; display 'a b'" },
+  { run = "bind -T mytab c splitw -h -c '#{pane_current_path}'" },
+]
+checks = [{ command = "list-keys -T mytab" }, { command = "list-keys -aN -T mytab" }]

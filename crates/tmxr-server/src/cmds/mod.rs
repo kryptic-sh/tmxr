@@ -111,14 +111,10 @@ pub fn run_detached(srv: &mut Server, ctx: &Ctx, cmds: &[Vec<String>]) -> Outcom
     out
 }
 
-/// Run an argv from the command line, where a `;` word separates commands.
+/// Run an argv from the command line, separated into commands as tmux's
+/// cmd_parse_from_arguments ([`tmxr_command::split_arguments`]).
 pub fn run_argv_list(srv: &mut Server, ctx: &Ctx, argv: &[String]) -> Outcome {
-    let cmds: Vec<Vec<String>> = argv
-        .split(|w| w == ";")
-        .filter(|c| !c.is_empty())
-        .map(<[String]>::to_vec)
-        .collect();
-    run_list(srv, ctx, &cmds)
+    run_list(srv, ctx, &tmxr_command::split_arguments(argv))
 }
 
 /// Run commands in order, stopping at the first error.
