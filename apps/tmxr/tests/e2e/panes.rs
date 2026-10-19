@@ -673,10 +673,11 @@ fn allow_set_title_off_keeps_programs_from_titling_panes() {
             .trim()
             .to_owned()
     };
+    // Off before the program starts, so its title cannot come first.
+    t.run(&["set", "-g", "allow-set-title", "off"]);
     let mut new = vec!["new-window", "-d", "-t", "st:1"];
     new.extend(titler);
     t.run(&new);
-    t.run(&["set", "-g", "allow-set-title", "off"]);
     t.wait_run(
         &["capture-pane", "-p", "-t", "st:1"],
         "the program ran",
