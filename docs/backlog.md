@@ -475,10 +475,9 @@ table. What has been verified, and how:
     completion; session groups (`new-session -t`); smaller flags:
     `send-keys -R -K -c` (`-R` is tmux's `input_reset`, more than a vt100
     `ESC c`), `set-buffer -t`, `copy-mode -s`, `detach-client -E`,
-    `run-shell -E`, `list-keys -a -P` (see `list-keys -N` below), `join-pane -p`
-    (tmux 3.6's reads `-l` instead, so it fails without `-l`),
-    `source-file -n -v -F` and globs; `source-file` of a tmux command file
-    (`%if`, `%hidden`).
+    `list-keys -a -P` (see `list-keys -N` below), `join-pane -p` (tmux 3.6's
+    reads `-l` instead, so it fails without `-l`), `source-file -n -v -F` and
+    globs; `source-file` of a tmux command file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `pane-set-clipboard`,
     `client-active`, `client-light-theme` / `-dark-theme`. Copy mode lacks
     `next-prompt` / `previous-prompt` (they need a prompt mark on every history

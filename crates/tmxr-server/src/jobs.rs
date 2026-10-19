@@ -12,8 +12,13 @@ use crate::server::{Event, Server};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Work {
-    /// A shell command line, run in `cwd` (the server's own when `None`).
-    Shell { line: String, cwd: Option<PathBuf> },
+    /// A shell command line, run in `cwd` (the server's own when `None`);
+    /// its error output is shown with its output when `stderr` (`-E`).
+    Shell {
+        line: String,
+        cwd: Option<PathBuf>,
+        stderr: bool,
+    },
     /// A tmux command line (`run-shell -C`), run on the server thread.
     Command(String),
     /// `if-shell`: run `line`, then `then` if it succeeded, else
@@ -48,12 +53,13 @@ pub struct Then {
     pub reply: Option<(ClientId, Outcome)>,
 }
 
-/// A finished job, with its shell command's output and whether it
-/// succeeded.
+/// A finished job, with its shell command's output, whether it succeeded,
+/// and its return code (a command client's exit status, as tmux's).
 pub struct Done {
     pub job: Job,
     pub output: String,
     pub ok: bool,
+    pub status: i32,
     pub then: Then,
 }
 
@@ -67,6 +73,7 @@ impl Server {
                 job,
                 output: String::new(),
                 ok: true,
+                status: 0,
                 then,
             };
             self.waits.enqueue(done, &wait);
@@ -82,21 +89,29 @@ impl Server {
             .name("tmxr-run-shell".into())
             .spawn(move || {
                 std::thread::sleep(job.delay);
-                let (output, ok) = match &job.work {
-                    Work::Shell { line, cwd } => (
-                        crate::server::shell_text(line, cwd.as_deref(), shell.as_deref(), &env),
-                        true,
-                    ),
+                let (output, ok, status) = match &job.work {
+                    Work::Shell { line, cwd, stderr } => {
+                        let (output, status) = crate::server::shell_text(
+                            line,
+                            cwd.as_deref(),
+                            shell.as_deref(),
+                            &env,
+                            *stderr,
+                        );
+                        (output, true, status)
+                    }
                     Work::If { line, .. } => (
                         String::new(),
                         crate::server::shell_succeeds(line, shell.as_deref(), &env),
+                        0,
                     ),
-                    Work::Command(_) | Work::Wait | Work::Channel(_) => (String::new(), true),
+                    Work::Command(_) | Work::Wait | Work::Channel(_) => (String::new(), true, 0),
                 };
                 let done = Done {
                     job,
                     output,
                     ok,
+                    status,
                     then,
                 };
                 let _ = events.send(Event::JobDone(Box::new(done)));
@@ -113,6 +128,7 @@ impl Server {
             job,
             output,
             ok,
+            status,
             then,
         }: Done,
     ) {
@@ -129,6 +145,7 @@ impl Server {
             },
             Work::Shell { .. } | Work::Wait | Work::Channel(_) => Outcome {
                 stdout: output,
+                status,
                 ..Outcome::default()
             },
         };

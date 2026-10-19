@@ -617,6 +617,32 @@ fn environment_commands_set_show_and_reach_new_panes() {
     );
 }
 
+/// Unix only: it needs a shell that can kill itself with a signal.
+#[cfg(unix)]
+#[test]
+fn run_shell_reports_how_a_command_failed_and_exits_with_its_code() {
+    let t = Tmxr::new("runshell");
+    t.run(&["new-session", "-d", "-s", "rs"]);
+    // As tmux 3.6 printed them.
+    let failed = t.output(&["run-shell", "echo out; exit 3"]);
+    assert_eq!(failed.status.code(), Some(3));
+    assert_eq!(
+        String::from_utf8_lossy(&failed.stdout),
+        "out\n'echo out; exit 3' returned 3\n"
+    );
+    let killed = t.output(&["run-shell", "kill -9 $$"]);
+    assert_eq!(killed.status.code(), Some(128 + 9));
+    assert_eq!(
+        String::from_utf8_lossy(&killed.stdout),
+        "'kill -9 $$' terminated by signal 9\n"
+    );
+    let quiet = t.output(&["run-shell", "echo err >&2; exit 3"]);
+    assert_eq!(
+        String::from_utf8_lossy(&quiet.stdout),
+        "'echo err >&2; exit 3' returned 3\n"
+    );
+}
+
 #[test]
 fn command_error_runs_once_for_each_command_that_fails() {
     let t = Tmxr::new("cmderror");

@@ -241,6 +241,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`run-shell` shows a command's output as tmux's**: its error output only with
+  the new `-E`, a line saying how it failed (`'cmd' returned 3`,
+  `'cmd' terminated by signal 9`) whenever it did, not only when it printed
+  nothing, and a command client exits with the command's code (128 and the
+  signal for a signal).
 - **Copy mode's cursor moves across lines as tmux's**: `end-of-line` puts the
   cursor one past the last character, `cursor-right` there goes on to the next
   line and `cursor-left` at a line's start to the previous one's end, and up,

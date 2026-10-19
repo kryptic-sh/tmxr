@@ -368,3 +368,11 @@ checks = [
   { command = "display -p -t o:0 '#{P:#{pane_index} }|#{P:#{pane_index} ,*#{pane_index} }|#{P/r:#{pane_index} }|#{loop_last_flag}'" },
   { command = "display -p -t o:0 '#{W:#{session_name}#{window_index}#{loop_last_flag} }|#{S:#{session_name}#{W:#{window_index}}|}|#{W/x:#{window_index}}'" },
 ]
+
+[[cases]]
+name = "run_shell_shows_error_output_only_with_e"
+unix_only = true
+checks = [
+  { command = "run-shell 'echo out; echo err >&2'" },
+  { command = "run-shell -E 'echo out; echo err >&2'" },
+]

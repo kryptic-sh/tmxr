@@ -385,6 +385,7 @@ pub(super) fn run(
                 Some(cmd) if a.has('C') => Work::Command(cmd.clone()),
                 Some(cmd) => Work::Shell {
                     line: expand_for(srv, ctx, pane, cmd),
+                    stderr: a.has('E'),
                     cwd: a
                         .value('c')
                         .map(|c| std::path::PathBuf::from(expand_for(srv, ctx, pane, c))),

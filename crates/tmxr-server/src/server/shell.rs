@@ -1,5 +1,6 @@
 //! Shell commands run off the state thread (`run-shell`, `if-shell`).
 
+use std::fmt::Write as _;
 use std::path::Path;
 use std::process::Command;
 
@@ -24,20 +25,54 @@ impl ChildEnv {
     }
 }
 
-/// `run-shell`'s output: what `line` printed (standard output, then error),
-/// or a line saying it failed, as tmux reports a command that printed
-/// nothing. Run on the calling thread, in `cwd` when given, with `env`.
-pub fn shell_text(line: &str, cwd: Option<&Path>, shell: Option<&str>, env: &ChildEnv) -> String {
+/// `run-shell`'s output and return code: what `line` printed on standard
+/// output (and error output too with `stderr`, tmux's -E), then for a
+/// command that failed a line saying how, as tmux's cmd_run_shell_callback;
+/// the code is the exit status, or 128 and the signal that ended it. Run on
+/// the calling thread, in `cwd` when given, with `env`.
+pub fn shell_text(
+    line: &str,
+    cwd: Option<&Path>,
+    shell: Option<&str>,
+    env: &ChildEnv,
+    stderr: bool,
+) -> (String, i32) {
     match shell_output(line, cwd, shell, env) {
         Ok(o) => {
             let mut t = String::from_utf8_lossy(&o.stdout).into_owned();
-            t.push_str(&String::from_utf8_lossy(&o.stderr));
-            if !o.status.success() && t.is_empty() {
-                t = format!("'{line}' returned {}\n", o.status.code().unwrap_or(-1));
+            if stderr {
+                t.push_str(&String::from_utf8_lossy(&o.stderr));
             }
-            t
+            let (how, code) = match (o.status.code(), signal(&o.status)) {
+                (Some(0), _) => (None, 0),
+                (Some(code), _) => (Some(format!("returned {code}")), code),
+                (None, Some(sig)) => (Some(format!("terminated by signal {sig}")), 128 + sig),
+                (None, None) => (None, 0),
+            };
+            if let Some(how) = how {
+                if !t.is_empty() && !t.ends_with('\n') {
+                    t.push('\n');
+                }
+                let _ = writeln!(t, "'{line}' {how}");
+            }
+            (t, code)
         }
-        Err(e) => format!("'{line}' failed: {e}\n"),
+        Err(e) => (format!("'{line}' failed: {e}\n"), 1),
+    }
+}
+
+/// The signal that ended a process, where the platform has signals.
+fn signal(status: &std::process::ExitStatus) -> Option<i32> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt as _;
+        status.signal()
+    }
+    // Windows reports every ending as an exit code.
+    #[cfg(windows)]
+    {
+        let _ = status;
+        None
     }
 }
 
