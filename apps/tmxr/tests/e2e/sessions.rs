@@ -953,6 +953,23 @@ fn kill_session_c_clears_alerts_and_unbind_q_is_quiet() {
 }
 
 #[test]
+fn detach_client_e_runs_a_command_in_the_clients_place() {
+    let t = Tmxr::new("detexec");
+    let mut s = t.attach(&["new", "-s", "de"]);
+    s.wait_for("status line", |text| text.contains("de"));
+    let name = t.run(&["list-clients", "-F", "#{client_name}"]);
+    // An empty command does nothing, as tmux's.
+    t.run(&["detach-client", "-E", "", "-t", name.trim()]);
+    assert_eq!(t.run(&["list-clients"]).lines().count(), 1);
+    // The command runs in the client's terminal, with no detach message.
+    t.run(&["detach-client", "-E", "echo zqexec", "-t", name.trim()]);
+    s.wait_for("the command's output", |text| text.contains("zqexec"));
+    s.wait_exit();
+    assert!(!s.text().contains("[detached"), "{}", s.text());
+    assert_eq!(t.run(&["list-clients"]).trim(), "");
+}
+
+#[test]
 fn read_only_clients_look_but_do_not_touch() {
     let t = Tmxr::new("readonly");
     t.run(&["new-session", "-d", "-s", "ro"]);

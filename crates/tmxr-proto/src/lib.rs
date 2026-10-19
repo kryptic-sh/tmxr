@@ -15,7 +15,7 @@ pub use codec::{ProtoError, read_msg, write_msg};
 
 /// Bumped on any change to a type in this module. Client and server refuse to
 /// talk across a mismatch rather than mis-decode each other.
-pub const PROTOCOL_VERSION: u32 = 7;
+pub const PROTOCOL_VERSION: u32 = 8;
 
 /// First message a client sends.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -88,8 +88,14 @@ pub enum ServerMsg {
     },
     /// The attached client is detached; it should restore its terminal, print
     /// the reason and exit, first sending its parent process SIGHUP when
-    /// `hangup` is set (`detach-client -P`).
-    Detached { reason: String, hangup: bool },
+    /// `hangup` is set (`detach-client -P`). With `exec` (`detach-client -E`)
+    /// it prints nothing and runs that argv in its place, as tmux's
+    /// MSG_EXEC.
+    Detached {
+        reason: String,
+        hangup: bool,
+        exec: Option<Vec<String>>,
+    },
     /// Turn the attached client's mouse capture on or off (the `mouse`
     /// option); with it off, the terminal's own selection works unshifted.
     Mouse(bool),

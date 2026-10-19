@@ -359,6 +359,7 @@ impl Server {
             let _ = c.tx.try_send(ServerMsg::Detached {
                 reason: "server exited".into(),
                 hangup: false,
+                exec: None,
             });
         }
         for p in self.panes.values_mut() {

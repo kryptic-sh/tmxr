@@ -137,10 +137,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "detach-client",
         Some("detach"),
-        "aPs:t:",
+        "aE:Ps:t:",
         0,
         0,
-        "[-aP] [-s target-session] [-t target-client]"
+        "[-aP] [-E shell-command] [-s target-session] [-t target-client]"
     ),
     cmd!(
         "display-menu",

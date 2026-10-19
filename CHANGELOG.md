@@ -11,9 +11,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`customize-mode` refuses `-a` and `-F`**, which it accepted and ignored:
   tmux's has no `-a`, and its `-F` formats tree lines tmxr's picker does not
   have.
-- **The client-server protocol is now 6** (the client sends its process id, for
-  `#{client_pid}`): after upgrading, a running server must be restarted
-  (`tmxr kill-server`); the client says so if it meets one.
+- **The client-server protocol is now 8** (the client sends its process id, for
+  `#{client_pid}`; the server tells it whether to ask for focus reports,
+  `focus-events`, and what to run in its place, `detach-client -E`): after
+  upgrading, a running server must be restarted (`tmxr kill-server`); the client
+  says so if it meets one.
 - **`break-pane -t` is the window the pane becomes**, as tmux's, not the pane to
   break: that is `-s` now (the current pane without it). `-t` takes an index
   (`-t :5`), `-a` / `-b` place it next to the target window, and `-n` names it
@@ -22,6 +24,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`detach-client -E shell-command`**, as tmux's: each client it detaches runs
+  the command, with its session's `default-shell`, in its place and prints no
+  `[detached]` line. On Unix the client becomes the command; Windows cannot
+  replace a running process, so there the client runs it and exits with its
+  status.
 - **`set-buffer -t` and `load-buffer -t`**, as tmux's: the client whose
   clipboard `-w` sets; one that does not exist is no error.
 - **The `history-file` server option**, as tmux's: the prompts' history is read
@@ -37,9 +44,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   tmux-sensible sets it: off, the client's terminal is not asked for focus
   reports, and a pane made active or a window made current is not told of focus
   (`CSI I` / `CSI O`, `pane-focus-in` / `-out`); attaching, a popup or menu
-  opening or closing, and a focus report still are. The client and server
-  protocol is now version 7: a client and server of different versions refuse
-  each other.
+  opening or closing, and a focus report still are.
 - **The `remain-on-exit-format` option and `#{pane_dead_signal}`**, as tmux's: a
   pane `remain-on-exit` keeps gets the format's line written into its screen
   after a linefeed at the bottom (tmux's default reads

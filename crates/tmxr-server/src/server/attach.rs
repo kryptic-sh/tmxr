@@ -81,16 +81,28 @@ impl Server {
     }
 
     pub fn detach(&mut self, id: ClientId, reason: &str) {
-        self.detach_as(id, reason, false);
+        self.detach_as(id, reason, false, None);
+    }
+
+    /// Detach client `id` and have it run the shell command `line` in its
+    /// place (`detach-client -E`), with its session's `default-shell`, as
+    /// tmux's server_client_exec. An empty line does nothing.
+    pub fn detach_and_exec(&mut self, id: ClientId, line: &str) {
+        if line.is_empty() {
+            return;
+        }
+        let shell = self.client_session_options(id).default_shell.clone();
+        let argv = crate::util::shell_command(line, shell.as_deref());
+        self.detach_as(id, "detached", false, Some(argv));
     }
 
     /// Detach client `id` and have it send its parent process SIGHUP, which
     /// usually closes the terminal it ran in (`detach-client -P`).
     pub fn detach_and_hang_up(&mut self, id: ClientId) {
-        self.detach_as(id, "detached and SIGHUP", true);
+        self.detach_as(id, "detached and SIGHUP", true, None);
     }
 
-    fn detach_as(&mut self, id: ClientId, reason: &str, hangup: bool) {
+    fn detach_as(&mut self, id: ClientId, reason: &str, hangup: bool, exec: Option<Vec<String>>) {
         let Some(c) = self.clients.get_mut(&id) else {
             return;
         };
@@ -109,7 +121,14 @@ impl Server {
         };
         // Leave the alternate screen state as the client found it; the client
         // restores its own terminal modes on receiving this.
-        self.send(id, ServerMsg::Detached { reason, hangup });
+        self.send(
+            id,
+            ServerMsg::Detached {
+                reason,
+                hangup,
+                exec,
+            },
+        );
         self.clients.remove(&id);
         let ctx = Ctx {
             pane: self.active_pane_of_session(att.session),

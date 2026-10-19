@@ -199,7 +199,13 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                 }
                 return Ok(status);
             }
-            ServerMsg::Detached { reason, hangup } => {
+            ServerMsg::Detached {
+                exec: Some(argv), ..
+            } => {
+                drop(term.take());
+                return terminal::exec(&argv);
+            }
+            ServerMsg::Detached { reason, hangup, .. } => {
                 drop(term.take());
                 println!("[{reason}]");
                 if hangup {

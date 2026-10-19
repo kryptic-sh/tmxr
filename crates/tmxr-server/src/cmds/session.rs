@@ -93,8 +93,13 @@ pub(super) fn run(
             } else {
                 attached_client(srv, ctx).into_iter().collect()
             };
-            // -P: their parent shells get SIGHUP too, as tmux's.
-            if a.has('P') {
+            // -E: each runs a shell command in its place, before -P, as
+            // tmux's. -P: their parent shells get SIGHUP too.
+            if let Some(line) = a.value('E') {
+                for c in targets {
+                    srv.detach_and_exec(c, line);
+                }
+            } else if a.has('P') {
                 hang_up(srv, &targets)?;
             } else {
                 for c in targets {

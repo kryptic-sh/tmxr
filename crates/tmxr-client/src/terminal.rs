@@ -244,6 +244,36 @@ pub fn hang_up_parent() -> io::Result<()> {
     Ok(())
 }
 
+/// Run `argv` in this client's place (`detach-client -E`), its shell as
+/// `SHELL`, as tmux's client_exec: the process becomes it, so this returns
+/// only when that fails.
+#[cfg(unix)]
+pub fn exec(argv: &[String]) -> io::Result<i32> {
+    use std::os::unix::process::CommandExt as _;
+    let (shell, args) = argv
+        .split_first()
+        .ok_or_else(|| io::Error::other("empty command"))?;
+    Err(tmxr_term::child::command(shell)
+        .args(args)
+        .env("SHELL", shell)
+        .exec())
+}
+
+/// Run `argv` for this client (`detach-client -E`), its shell as `SHELL`,
+/// and exit with its status: Windows cannot replace a running process, as
+/// tmux's client_exec does.
+#[cfg(windows)]
+pub fn exec(argv: &[String]) -> io::Result<i32> {
+    let (shell, args) = argv
+        .split_first()
+        .ok_or_else(|| io::Error::other("empty command"))?;
+    let status = tmxr_term::child::command(shell)
+        .args(args)
+        .env("SHELL", shell)
+        .status()?;
+    Ok(status.code().unwrap_or(1))
+}
+
 /// Windows has no SIGHUP; the server does not ask a client without job
 /// control, so reaching this is a protocol error.
 #[cfg(windows)]
