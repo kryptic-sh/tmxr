@@ -33,7 +33,7 @@ pub(super) fn run(
                 return Ok(true);
             }
             let flags = client_flags(a.value('f'))?;
-            let size = new_session_size(srv, ctx, a)?;
+            let (size, own_size) = new_session_size(srv, ctx, a)?;
             let cwd = cwd_arg(srv, ctx, None, a)
                 .or_else(|| ctx.cwd.clone())
                 .unwrap_or_else(crate::util::home_dir);
@@ -55,6 +55,19 @@ pub(super) fn run(
                 pos.to_vec(),
                 size,
             )?;
+            // -x / -y: the session keeps its size as its own default-size,
+            // as tmux's.
+            if let Some((w, h)) = own_size {
+                let inherited = srv.cfg.session.clone();
+                if let Some(session) = srv.sessions.get_mut(&sid) {
+                    session.options.set(
+                        "default-size",
+                        Some(&format!("{w}x{h}")),
+                        false,
+                        &inherited,
+                    )?;
+                }
+            }
             // tmux's `NEW_SESSION_TEMPLATE`.
             super::print_new(srv, ctx, a, out, sid, None, "#{session_name}:");
             if !a.has('d') {
@@ -372,11 +385,16 @@ pub(super) fn target_client(srv: &Server, spec: &str) -> Result<ClientId, String
         .ok_or_else(|| format!("can't find client: {spec}"))
 }
 
+/// Columns and rows.
+type Size = (u16, u16);
+
 /// A new session's window size, as tmux's cmd_new_session: attached, the
 /// client's terminal less its status row; detached, the global
 /// `default-size` (80x24 if it does not parse), with -x / -y taking each
 /// side (`-` the client's terminal's), no status row coming out of them.
-fn new_session_size(srv: &Server, ctx: &Ctx, a: &Args) -> Result<(u16, u16), String> {
+/// With -x or -y, also the session's own `default-size`: each given side,
+/// the other the size it got.
+fn new_session_size(srv: &Server, ctx: &Ctx, a: &Args) -> Result<(Size, Option<Size>), String> {
     let terminal = || {
         ctx.client.and_then(|c| srv.clients.get(&c)).and_then(|c| {
             c.hello
@@ -397,13 +415,20 @@ fn new_session_size(srv: &Server, ctx: &Ctx, a: &Args) -> Result<(u16, u16), Str
         None => Ok(fallback),
     };
     let (dx, dy) = (side('x', 80, |t| t.0)?, side('y', 24, |t| t.1)?);
-    if !a.has('d') && terminal().is_some() {
-        return Ok(client_size(srv, ctx));
-    }
-    let (sx, sy) = srv.default_size().unwrap_or((dx, dy));
-    let sx = if a.value('x').is_some() { dx } else { sx };
-    let sy = if a.value('y').is_some() { dy } else { sy };
-    Ok((sx.max(1), sy.max(1)))
+    let (has_x, has_y) = (a.value('x').is_some(), a.value('y').is_some());
+    let size = if !a.has('d') && terminal().is_some() {
+        client_size(srv, ctx)
+    } else {
+        let (sx, sy) = srv.default_size().unwrap_or((dx, dy));
+        let sx = if has_x { dx } else { sx };
+        let sy = if has_y { dy } else { sy };
+        (sx.max(1), sy.max(1))
+    };
+    let own = (has_x || has_y).then_some((
+        if has_x { dx } else { size.0 },
+        if has_y { dy } else { size.1 },
+    ));
+    Ok((size, own))
 }
 
 /// Attach the command's client to `sid` (or switch it there), as

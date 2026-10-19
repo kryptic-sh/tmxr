@@ -461,3 +461,16 @@ steps = [
   { sleep = 0.5 },
 ]
 checks = [{ format = "[#{@hit}]" }]
+
+[[cases]]
+name = "new_session_x_y_keeps_its_own_default_size"
+steps = [
+  { run = "new-session -d -s dsx -x 90" },
+  { run = "new-session -d -s dsxy -x 70 -y 20" },
+  { run = "new-session -d -s dsnone" },
+]
+checks = [
+  { command = "show -t dsx default-size" },
+  { command = "show -t dsxy default-size" },
+  { command = "show -t dsnone default-size" },
+]

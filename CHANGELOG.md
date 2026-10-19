@@ -361,7 +361,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the whole client, not the rows above the status line.
 - **A detached `new-session` is sized as tmux's**: `default-size` (80x24), not
   the terminal it was typed in, with `-x` and `-y` each taking one side (`-` the
-  terminal's); an attaching one takes its terminal's size, `-x` / `-y` aside.
+  terminal's); an attaching one takes its terminal's size, `-x` / `-y` aside,
+  and with `-x` or `-y` the session keeps its size as its own `default-size`.
   Sessions `resurrect` restores get `default-size` too.
 - **Copy mode's `search-forward` / `search-backward` take a regular
   expression**, as tmux's: a search holding one of `^$*+()?[].\` is an extended
