@@ -151,8 +151,8 @@ impl Server {
             return;
         };
         // A message lasts display-time or until a key is pressed, as in tmux;
-        // otherwise it would hide a prompt being typed into.
-        if att.message.take().is_some() {
+        // otherwise it would hide a prompt being typed into. -N keeps it.
+        if !att.message_keep && att.message.take().is_some() {
             att.dirty = true;
         }
         if let Some(mut ov) = att.overlay.take() {

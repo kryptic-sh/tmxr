@@ -42,6 +42,7 @@ impl Server {
             repeat_until: None,
             overlay: None,
             message: None,
+            message_keep: false,
             last_session: None,
             dirty: true,
             full_redraw: true,

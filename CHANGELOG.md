@@ -19,6 +19,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`display-message -N` and `-C`**, as tmux's: with `-N` a key leaves the
+  message up until its time is out; `-C` is accepted, as tmxr never freezes the
+  panes behind a message.
 - **`source-file -n` and `-F`**, as tmux's: `-n` only checks that the file (else
   the config's own) loads, changing nothing, and `-F` expands the path as a
   format.

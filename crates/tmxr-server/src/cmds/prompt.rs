@@ -283,7 +283,7 @@ pub(super) fn run(
                 None => attached_client(srv, ctx),
             };
             match client {
-                Some(c) if !a.has('p') => srv.show_message_for(c, msg, delay),
+                Some(c) if !a.has('p') => srv.show_message_for(c, msg, delay, a.has('N')),
                 _ => {
                     out.stdout.push_str(&msg);
                     out.stdout.push('\n');

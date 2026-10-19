@@ -474,7 +474,8 @@ table. What has been verified, and how:
     is kept but never read.
   - Commands: `capture-pane -e -a -C -T -q` (and `-J` keeping spaces a program
     wrote at a line's end, which the history snapshot cannot tell from blank
-    cells); `split-window -I`; `display-message -a -v -I -N -C`; `choose-*`
+    cells); `split-window -I`; `display-message -a -v -I` (`-a` lists every
+    variable, which needs `vars.rs` to enumerate its names); `choose-*`
     templates and `-F -f -K -O -r -N -y`, tagging and sort keys;
     `command-prompt` with several `-p` and `%1`…`%9`, `-1 -N -b -F -l`,
     completion; session groups (`new-session -t`); smaller flags: `send-keys -R`

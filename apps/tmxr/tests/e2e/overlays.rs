@@ -120,6 +120,44 @@ fn display_panes_runs_its_template_and_n_passes_keys_on() {
 }
 
 #[test]
+fn display_message_n_stays_up_through_keys() {
+    let t = Tmxr::new("dmsgn");
+    let s = t.attach(&["new", "-s", "dm"]);
+    s.wait_for("status line", |text| text.contains("dm"));
+    // From a shell the message prints; -c shows it on the client.
+    let client = t
+        .run(&["list-clients", "-F", "#{client_name}"])
+        .trim()
+        .to_owned();
+    // -N: a key leaves the message up until its time is out.
+    t.run(&[
+        "display-message",
+        "-c",
+        &client,
+        "-N",
+        "-d",
+        "20000",
+        "held-message",
+    ]);
+    s.wait_for("the message", |text| text.contains("held-message"));
+    s.send(b"x");
+    std::thread::sleep(Duration::from_millis(500));
+    assert!(s.text().contains("held-message"), "{}", s.text());
+    // Without it, the next key takes it down.
+    t.run(&[
+        "display-message",
+        "-c",
+        &client,
+        "-d",
+        "20000",
+        "brief-message",
+    ]);
+    s.wait_for("the second message", |text| text.contains("brief-message"));
+    s.send(b"y");
+    s.wait_for("the message gone", |text| !text.contains("brief-message"));
+}
+
+#[test]
 fn send_keys_k_types_into_the_client_and_its_binds() {
     let t = Tmxr::new("sendk");
     let s = t.attach(&["new", "-s", "sk"]);
