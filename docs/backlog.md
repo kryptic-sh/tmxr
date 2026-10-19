@@ -481,9 +481,14 @@ table. What has been verified, and how:
     (`display-panes-colour = "#{@thm_blue}"`), which tmux's check would refuse,
     so it needs those expanded first or the theme moved; server `editor`.
     `escape-time` is kept but never read.
-  - Commands: `capture-pane -e -a -T` (`-e` needs tmux's own SGR output, `-a`
-    the saved normal screen, which `vt100` does not expose). `-T`, `-N` and `-J`
-    all need written cells told from never-written ones, which `copy::snapshot`
+  - Commands: `capture-pane -a -T` (`-a` needs the saved normal screen, which
+    `vt100` does not expose). `-e` writes only the attributes `vt100` keeps
+    (bold, dim, italics, underline, reverse; not blink, hidden, strikethrough,
+    overline or the underline styles and colour), and `38;5;n` for n below 16 as
+    the plain or bright code, as `vt100` stores both alike; it takes one default
+    cell past a line's content to stand for tmux's rounded-up line, where tmux's
+    actual count of them depends on the line's history. `-T`, `-N` and `-J` all
+    need written cells told from never-written ones, which `copy::snapshot`
     (what `capture` reads) turns into the same space. Seen against tmux 3.6
     (2026-10-19, a line `ab` plus two written spaces): `-N` printed `ab` and
     three spaces, one past the written ones, where tmxr pads to the pane's
@@ -494,10 +499,9 @@ table. What has been verified, and how:
     `display-message -a -v -I` (`-a` lists every variable, which needs `vars.rs`
     to enumerate its names); `choose-*` `-F -f -K -O -r` (`-r` needs each picker
     built reversed, and the session picker's opening on the previous session
-    turned round with it) (their templates run as tmux's; `find-window` takes
-    none, its argument being the match), tagging and sort keys; `command-prompt`
-    completion (Tab) and incremental search's `C-r` / `C-s` direction keys
-    (tmux's `PROMPT_INCREMENTAL` prefixes `-`, `+`, `=`); session groups
+    turned round with it), tagging and sort keys; `command-prompt` completion
+    (Tab) and incremental search's `C-r` / `C-s` direction keys (tmux's
+    `PROMPT_INCREMENTAL` prefixes `-`, `+`, `=`); session groups
     (`new-session -t`); smaller flags: `source-file -v`, several paths and globs
     (each load replaces the whole TOML config, so several files have no clear
     meaning yet); `source-file` of a tmux command file (`%if`, `%hidden`).

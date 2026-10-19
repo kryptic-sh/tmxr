@@ -417,3 +417,13 @@ checks = [
   { format = "#{alternate_on}" },
   { command = "show -gv alternate-screen" },
 ]
+
+[[cases]]
+name = "capture_pane_e_writes_colours_and_attributes_as_tmux"
+program = 'printf "\033[31mred\033[0m plain \033[1;4mbold\033[22m under\033[0m\n\033[38;5;200mpink\033[48;2;1;2;3mrgb\033[0m\n\033[92;104mbright\033[0m\nx\033[41m  \033[0m\n\033[2;3;7mdim\033[0m\n"; exec sleep 1000'
+steps = [{ sleep = 1.0 }]
+checks = [
+  { command = "capture-pane -p -e -C" },
+  { command = "capture-pane -p -e" },
+  { command = "capture-pane -p -e -C -S 1 -E 2" },
+]

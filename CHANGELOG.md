@@ -24,6 +24,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`capture-pane -e`**, as tmux's: each change of colour or attribute in the
+  capture is written as the SGR escape tmux writes for it (with `-C`, as ``).
 - **`choose-tree`, `choose-client` and `choose-buffer` `-N` and `-y`**, as
   tmux's: `-N` opens the picker without its preview, `-y` kills a session with
   `C-x` without asking first.

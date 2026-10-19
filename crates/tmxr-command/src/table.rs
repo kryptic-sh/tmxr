@@ -61,10 +61,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "capture-pane",
         Some("capturep"),
-        "b:CE:JNpqS:t:",
+        "b:CeE:JNpqS:t:",
         0,
         0,
-        "[-CJNpq] [-b buffer-name] [-E end-line] [-S start-line] [-t target-pane]"
+        "[-CeJNpq] [-b buffer-name] [-E end-line] [-S start-line] [-t target-pane]"
     ),
     cmd!("choose-buffer", None, "NyZ", 0, 1, "[-NyZ] [template]"),
     cmd!("choose-client", None, "NyZ", 0, 1, "[-NyZ] [template]"),

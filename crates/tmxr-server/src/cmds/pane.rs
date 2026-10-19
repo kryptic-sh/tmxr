@@ -3,6 +3,7 @@
 use std::fmt::Write as _;
 
 use crossterm::event::KeyEvent;
+use ratatui::style::{Color, Modifier, Style};
 use tmxr_command::{Args, Key, Parsed};
 
 use super::{Ctx, Outcome, Res, attached_client, cwd_arg, dir_flag, list_item};
@@ -474,12 +475,13 @@ pub(super) fn run(
                 .map(|v| super::expand_for(srv, ctx, Some(pid), v));
             let pane = srv.panes.get_mut(&pid).ok_or("no such pane")?;
             let range = (start.as_deref(), end.as_deref());
-            let mut text = capture(pane.emu.screen_mut(), range, a.has('J'), a.has('N'));
+            let flags = (a.has('J'), a.has('N'), a.has('e'));
+            let mut text = capture(pane.emu.screen_mut(), range, flags);
             // -C: escaped as tmux's GRID_STRING_ESCAPE_SEQUENCES does
-            // plain text, its backslashes doubled. (-q only quiets -a,
-            // which tmxr does not have.)
+            // plain text, its backslashes doubled, and -e's escapes written
+            // as `\033`. (-q only quiets -a, which tmxr does not have.)
             if a.has('C') {
-                text = text.replace('\\', "\\\\");
+                text = text.replace('\\', "\\\\").replace('\x1b', "\\033");
             }
             if a.has('p') {
                 out.stdout.push_str(&text);
@@ -605,11 +607,13 @@ pub(super) fn run(
 /// blanks go unless `keep_blanks` (`-N`); `join` (`-J`) runs a wrapped line
 /// into the next. (tmux's `-J` keeps spaces a program wrote at a line's end,
 /// which the history snapshot cannot tell from blank cells.)
+/// The lines `start..=end` of a pane as text: `join` wrapped lines joined
+/// (-J), `keep_blanks` their trailing blanks kept (-N), and `escapes` each
+/// change of colour or attribute written as tmux's -e writes it.
 fn capture(
     screen: &mut vt100::Screen,
     (start, end): (Option<&str>, Option<&str>),
-    join: bool,
-    keep_blanks: bool,
+    (join, keep_blanks, escapes): (bool, bool, bool),
 ) -> String {
     let lines = crate::copy::snapshot(screen);
     let rows = usize::from(screen.size().0);
@@ -627,8 +631,30 @@ fn capture(
     let bottom = line(end, last, last);
     let (top, bottom) = (top.min(bottom), top.max(bottom));
     let mut out = String::new();
+    // As tmux's, the last cell's style carries over from line to line.
+    let mut last = Style::default();
     for l in lines.get(top..=bottom).unwrap_or_default() {
-        let text: String = l.cells.iter().map(|c| c.symbol.as_str()).collect();
+        let text: String = if escapes {
+            // Blank default cells at the end stand for tmux's never-written
+            // ones. tmux's grid_expand_line rounds a line's cells up past
+            // what was written, so one of those follows a line that is not
+            // full, and takes the escapes back to the default.
+            let blank = Style::default().fg(Color::Reset).bg(Color::Reset);
+            let used = l
+                .cells
+                .iter()
+                .rposition(|c| c.symbol != " " || c.style != blank)
+                .map_or(0, |i| (i + 2).min(l.cells.len()));
+            let mut text = String::new();
+            for c in l.cells[..used].iter().filter(|c| !c.symbol.is_empty()) {
+                text.push_str(&sgr_change(last, c.style));
+                text.push_str(&c.symbol);
+                last = c.style;
+            }
+            text
+        } else {
+            l.cells.iter().map(|c| c.symbol.as_str()).collect()
+        };
         if keep_blanks {
             out.push_str(&text);
         } else {
@@ -642,6 +668,69 @@ fn capture(
         out.push('\n');
     }
     out
+}
+
+/// The attributes tmux's -e writes, with their SGR codes, in its order
+/// (grid_string_cells_code; the rest `vt100` does not keep).
+const SGR_ATTRS: [(Modifier, u8); 5] = [
+    (Modifier::BOLD, 1),
+    (Modifier::DIM, 2),
+    (Modifier::ITALIC, 3),
+    (Modifier::UNDERLINED, 4),
+    (Modifier::REVERSED, 7),
+];
+
+/// The escapes taking a capture from cells styled `last` to `cell`, as
+/// tmux's grid_string_cells_code: any attribute dropped resets all first,
+/// then the attributes added, then each colour that changed (or, after a
+/// reset, that is not the default).
+fn sgr_change(last: Style, cell: Style) -> String {
+    let (mut was, is) = (last.add_modifier, cell.add_modifier);
+    let mut codes = Vec::new();
+    if SGR_ATTRS
+        .iter()
+        .any(|&(m, _)| was.contains(m) && !is.contains(m))
+    {
+        codes.push(0);
+        was = Modifier::empty();
+    }
+    codes.extend(
+        SGR_ATTRS
+            .iter()
+            .filter(|&&(m, _)| is.contains(m) && !was.contains(m))
+            .map(|&(_, code)| code),
+    );
+    let reset = codes.first() == Some(&0);
+    let mut out = String::new();
+    if !codes.is_empty() {
+        out = sgr(&codes);
+    }
+    for (new, old, base) in [(cell.fg, last.fg, 30), (cell.bg, last.bg, 40)] {
+        let new = sgr_colour(new.unwrap_or(Color::Reset), base);
+        let old = sgr_colour(old.unwrap_or(Color::Reset), base);
+        if (!reset && new == old) || (reset && new == [base + 9]) {
+            continue;
+        }
+        out.push_str(&sgr(&new));
+    }
+    out
+}
+
+/// One colour's SGR parameters, as tmux's grid_string_cells_fg / _bg:
+/// `base` is 30 for the foreground and 40 for the background.
+fn sgr_colour(c: Color, base: u8) -> Vec<u8> {
+    match c {
+        Color::Indexed(i @ 0..=7) => vec![base + i],
+        Color::Indexed(i @ 8..=15) => vec![base + 60 + i - 8],
+        Color::Indexed(i) => vec![base + 8, 5, i],
+        Color::Rgb(r, g, b) => vec![base + 8, 2, r, g, b],
+        _ => vec![base + 9],
+    }
+}
+
+fn sgr(params: &[u8]) -> String {
+    let params: Vec<String> = params.iter().map(u8::to_string).collect();
+    format!("\x1b[{}m", params.join(";"))
 }
 
 /// `select-pane -d` / `-e`: turn `pane`'s input off or back on.
