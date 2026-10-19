@@ -27,7 +27,21 @@ pub(super) fn run(
                 Some(spec) => super::session::target_client(srv, spec)?,
                 None => super::display_client(srv, ctx).ok_or("no current client")?,
             };
-            let template = pos.first().cloned();
+            // Formats (-F's template, -I's inputs) are expanded for the
+            // caller's pane, else that of the client the prompt shows on,
+            // as tmux's command target is the current session from a shell.
+            let pane = ctx.pane.or_else(|| {
+                let session = srv.clients.get(&c)?.att.as_ref()?.session;
+                srv.active_pane_of_session(session)
+            });
+            // -F: the template is a format, expanded first.
+            let template = pos.first().map(|t| {
+                if a.has('F') {
+                    expand_for(srv, ctx, pane, t)
+                } else {
+                    t.clone()
+                }
+            });
             // -p's prompts and -I's inputs, by comma (one each with -l),
             // each prompt followed by a space; without -p the template's
             // command in brackets, or ":" with none, as tmux's.
@@ -41,10 +55,10 @@ pub(super) fn run(
                 ],
             };
             let inputs: Vec<String> = match a.value('I') {
-                Some(i) if a.has('l') => vec![expand_for(srv, ctx, None, i)],
+                Some(i) if a.has('l') => vec![expand_for(srv, ctx, pane, i)],
                 Some(i) => i
                     .split(',')
-                    .map(|i| expand_for(srv, ctx, None, i))
+                    .map(|i| expand_for(srv, ctx, pane, i))
                     .collect(),
                 None => Vec::new(),
             };
@@ -60,6 +74,8 @@ pub(super) fn run(
             };
             if let Overlay::Prompt(p) = &mut overlay {
                 p.pending = queue.collect();
+                p.single = a.has('1');
+                p.numeric = a.has('N') && !p.single;
                 p.incremental = a.has('i');
                 a.value('T').unwrap_or("command").clone_into(&mut p.kind);
                 p.history = srv.prompt_history.get(&p.kind).cloned().unwrap_or_default();

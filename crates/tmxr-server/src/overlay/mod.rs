@@ -84,6 +84,8 @@ impl Overlay {
             answers: Vec::new(),
             key: false,
             incremental: false,
+            single: false,
+            numeric: false,
             kind: "command".into(),
             history: Vec::new(),
             recall: None,
@@ -101,6 +103,8 @@ impl Overlay {
             answers: Vec::new(),
             key: true,
             incremental: false,
+            single: false,
+            numeric: false,
             kind: "command".into(),
             history: Vec::new(),
             recall: None,
@@ -410,6 +414,55 @@ mod tests {
                 target: Target::Session(i as u32, (*n).to_owned()),
             })
             .collect()
+    }
+
+    #[test]
+    fn single_and_numeric_prompts_answer_as_tmuxs() {
+        let prompt = |initial: &str, single: bool, numeric: bool| {
+            let mut o = Overlay::prompt("? ".into(), initial.into(), Some("set @k '%%'".into()));
+            if let Overlay::Prompt(p) = &mut o {
+                p.single = single;
+                p.numeric = numeric;
+            }
+            o
+        };
+        let ctrl = |c| KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL);
+        // -1: one character is the answer; Ctrl gives its control character.
+        assert_eq!(
+            prompt("", true, false).key(&k(KeyCode::Char('y'))),
+            OverlayAction::Run("set @k 'y'".into())
+        );
+        assert_eq!(
+            prompt("", true, false).key(&ctrl('a')),
+            OverlayAction::Run("set @k '\x01'".into())
+        );
+        assert_eq!(
+            prompt("", true, false).key(&k(KeyCode::Left)),
+            OverlayAction::Keep
+        );
+        assert_eq!(
+            prompt("x", true, false).key(&k(KeyCode::Char('y'))),
+            OverlayAction::Close
+        );
+        // -N: digits are typed; anything else answers.
+        let mut n = prompt("", false, true);
+        assert_eq!(n.key(&k(KeyCode::Char('4'))), OverlayAction::Keep);
+        assert_eq!(n.key(&k(KeyCode::Char('2'))), OverlayAction::Keep);
+        assert_eq!(
+            n.key(&k(KeyCode::Char('x'))),
+            OverlayAction::Run("set @k '42'".into())
+        );
+        // With prompts to come, the answer moves on to the next.
+        let mut two = prompt("", false, true);
+        if let Overlay::Prompt(p) = &mut two {
+            p.pending.push_back(("then ".into(), "7".into()));
+        }
+        assert_eq!(two.key(&k(KeyCode::Char('1'))), OverlayAction::Keep);
+        assert_eq!(two.key(&k(KeyCode::Enter)), OverlayAction::Keep);
+        assert_eq!(
+            two.key(&k(KeyCode::Tab)),
+            OverlayAction::Run("set @k '1'".into())
+        );
     }
 
     #[test]

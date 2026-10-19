@@ -25,7 +25,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`command-prompt` asks several prompts**, as tmux's: `-p` and `-I` take
   comma-separated lists (`-l` keeps one prompt, commas and all), each answer
   fills `%1` … `%9` and the next `%%`, and with no `-p` the template, in
-  brackets, is the prompt.
+  brackets, is the prompt. `-1` takes one character as the answer, `-N` only
+  digits (any other key answers), `-F` expands the template as a format first,
+  and `-b` is accepted, as tmxr never waits for a prompt.
 - **`customize-mode -t`**, as tmux's: the target's session, window and pane
   options are listed first, each edited back at its own scope.
 - **The `client-active` hook**, as tmux's: it runs when a client becomes its

@@ -24,6 +24,10 @@ pub struct Prompt {
     /// `command-prompt -i`: the template runs again after every edit, for
     /// incremental search.
     pub incremental: bool,
+    /// `command-prompt -1`: the first character typed is the answer.
+    pub single: bool,
+    /// `command-prompt -N`: digits are typed, any other key answers.
+    pub numeric: bool,
     /// The prompt type (`command-prompt -T`) its history is kept under.
     pub kind: String,
     /// Earlier entries of this type, oldest first, for Up / Down.
@@ -89,6 +93,23 @@ impl Prompt {
         self.cursor = self.input.len();
     }
 
+    /// The input answered: the next prompt, if any, takes over with its own
+    /// input; after the last, the template runs.
+    fn submit(&mut self) -> OverlayAction {
+        if let Some((prompt, input)) = self.pending.pop_front() {
+            self.answers.push(self.text());
+            self.prompt = prompt;
+            self.input = input.chars().collect();
+            self.cursor = self.input.len();
+            self.recall = None;
+            return OverlayAction::Keep;
+        }
+        if self.input.is_empty() && self.template.is_none() {
+            return OverlayAction::Close;
+        }
+        OverlayAction::Run(self.command())
+    }
+
     /// The text typed, for the history once the prompt is submitted.
     pub fn text(&self) -> String {
         self.input.iter().collect()
@@ -101,24 +122,38 @@ impl Prompt {
             return OverlayAction::Run(tmxr_command::fill_template(template, &[name]));
         }
         let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
+        // -N: a digit is typed; anything else answers with what is there.
+        if self.numeric {
+            return match ev.code {
+                KeyCode::Char(c @ '0'..='9') if !ctrl => {
+                    self.input.insert(self.cursor, c);
+                    self.cursor += 1;
+                    OverlayAction::Keep
+                }
+                _ => self.submit(),
+            };
+        }
+        // -1: the character typed (a control one with Ctrl) is the whole
+        // answer; with something there already, the prompt goes, as tmux's.
+        if self.single {
+            let typed = match ev.code {
+                KeyCode::Char(c) if ctrl && c.is_ascii() => char::from(c as u8 & 0x1f),
+                KeyCode::Char(c) => c,
+                KeyCode::Backspace => '\x7f',
+                _ => return OverlayAction::Keep,
+            };
+            self.input.insert(self.cursor, typed);
+            self.cursor += 1;
+            return if self.input.len() == 1 {
+                self.submit()
+            } else {
+                OverlayAction::Close
+            };
+        }
         match ev.code {
             KeyCode::Esc => return OverlayAction::Close,
             KeyCode::Char('c' | 'g') if ctrl => return OverlayAction::Close,
-            KeyCode::Enter => {
-                // The next prompt, if any, takes over with its own input.
-                if let Some((prompt, input)) = self.pending.pop_front() {
-                    self.answers.push(self.text());
-                    self.prompt = prompt;
-                    self.input = input.chars().collect();
-                    self.cursor = self.input.len();
-                    self.recall = None;
-                    return OverlayAction::Keep;
-                }
-                if self.input.is_empty() && self.template.is_none() {
-                    return OverlayAction::Close;
-                }
-                return OverlayAction::Run(self.command());
-            }
+            KeyCode::Enter => return self.submit(),
             KeyCode::Backspace | KeyCode::Char('h') if ctrl || ev.code == KeyCode::Backspace => {
                 if self.cursor > 0 {
                     self.cursor -= 1;

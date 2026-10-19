@@ -96,10 +96,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "command-prompt",
         None,
-        "iI:klp:t:T:",
+        "1bFiI:klNp:t:T:",
         0,
         1,
-        "[-ikl] [-I inputs] [-p prompts] [-T prompt-type] [template]"
+        "[-1bFiklN] [-I inputs] [-p prompts] [-T prompt-type] [template]"
     ),
     cmd!(
         "confirm-before",

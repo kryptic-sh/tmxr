@@ -164,6 +164,19 @@ fn command_prompt_asks_each_prompt_and_fills_the_template() {
         o.trim() == "x,y"
     });
     assert_eq!(r(), "x,y");
+    // -F: the template is expanded as a format first.
+    t.run(&[
+        "command-prompt",
+        "-F",
+        "-p",
+        "f",
+        "set -g @r '#{session_name}-%%'",
+    ]);
+    s.wait_for("the -F prompt", |text| text.contains("f "));
+    s.send(b"q\r");
+    t.wait_run(&["show", "-gv", "@r"], "the expanded template", |o| {
+        o.trim() == "cp-q"
+    });
 }
 
 #[test]
