@@ -24,6 +24,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`send-keys -R`**, as tmux's: the pane's terminal is reset before any keys
+  go: a sequence half received is dropped, the modes and scroll region go back
+  to the defaults, and the screen is cleared with the cursor at the top; the
+  history stays.
 - **The `aggressive-resize` option**, as tmux's: a window is sized only by the
   clients showing it, not every client whose session holds it.
 - **The `alternate-screen` option**, as tmux's: off, a program's switches to the

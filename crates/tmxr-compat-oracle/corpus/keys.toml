@@ -81,3 +81,12 @@ checks = [
   { command = "list-keys -T mytab" },
   { command = "list-keys -T prefix F1" },
 ]
+
+[[cases]]
+name = "send_keys_r_resets_the_panes_terminal"
+program = 'printf "hello\nworld\033[?1h\033[?25l"; exec sleep 1000'
+steps = [{ sleep = 0.5 }, { run = "send-keys -R -t o" }, { sleep = 0.5 }]
+checks = [
+  { command = "capture-pane -p -t o" },
+  { format = "#{cursor_x},#{cursor_y} #{cursor_flag} #{keypad_cursor_flag}" },
+]

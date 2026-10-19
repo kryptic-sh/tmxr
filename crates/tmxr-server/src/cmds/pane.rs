@@ -543,6 +543,18 @@ pub(super) fn run(
                 }
                 return crate::copy::command(srv, ctx, pid, name, rest).map(|()| true);
             }
+            // -R: the pane's terminal reset first, as tmux's input_reset;
+            // with no keys, that is all.
+            if a.has('R') {
+                if let Some(p) = srv.panes.get_mut(&pid) {
+                    p.emu.reset();
+                    let window = p.window;
+                    srv.mark_window_dirty(window);
+                }
+                if pos.is_empty() {
+                    return Ok(true);
+                }
+            }
             // -N: the keys again and again, as tmux's.
             let repeat = match a.value('N') {
                 Some(n) => n

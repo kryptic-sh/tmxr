@@ -496,10 +496,9 @@ table. What has been verified, and how:
     `display-message -a -v -I` (`-a` lists every variable, which needs `vars.rs`
     to enumerate its names); `choose-*` templates and `-F -f -K -O -r -N -y`,
     tagging and sort keys; `command-prompt` completion; session groups
-    (`new-session -t`); smaller flags: `send-keys -R` (tmux's `input_reset`,
-    more than a vt100 `ESC c`), `copy-mode -s`, `source-file -v`, several paths
-    and globs (each load replaces the whole TOML config, so several files have
-    no clear meaning yet); `source-file` of a tmux command file (`%if`,
+    (`new-session -t`); smaller flags: `copy-mode -s`, `source-file -v`, several
+    paths and globs (each load replaces the whole TOML config, so several files
+    have no clear meaning yet); `source-file` of a tmux command file (`%if`,
     `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `client-light-theme` /
     `-dark-theme`. `client-active` follows tmux's latest client, but a window

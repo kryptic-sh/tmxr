@@ -197,6 +197,12 @@ fn bundled_conpty() -> bool {
         })
 }
 
+/// What [`Emulator::reset`] feeds the parser: CAN, then SGR reset, the
+/// full scroll region, application cursor keys, origin, insert, the mouse
+/// modes and bracketed paste off, the numeric keypad, the cursor shown,
+/// wrapping on, and the screen cleared with the cursor home.
+const RESET: &[u8] = b"\x18\x1b[0m\x1b[r\x1b[?1l\x1b[?6l\x1b[4l\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1005l\x1b[?1006l\x1b[?2004l\x1b>\x1b[?25h\x1b[?7h\x1b[H\x1b[2J";
+
 /// One pane's emulator.
 pub struct Emulator {
     parser: vt100::Parser<Hooks>,
@@ -273,6 +279,39 @@ impl Emulator {
         let mut fresh = vt100::Parser::new_with_callbacks(rows, cols, self.scrollback, hooks);
         fresh.process(&state);
         self.parser = fresh;
+        self.count_history();
+    }
+
+    /// Reset the terminal as tmux's input_reset and screen_write_reset
+    /// (`send-keys -R`): any sequence half received is dropped, the cell
+    /// attributes, scroll region and modes go back to the defaults (the
+    /// cursor shown and wrapping on, nothing else), and the screen is
+    /// cleared with the cursor at the top left. The history and the
+    /// alternate screen stay, as tmux's.
+    pub fn reset(&mut self) {
+        self.dcs = DcsSplitter::default();
+        if let Some(f) = self.alt_filter.as_mut() {
+            f.flush();
+        }
+        // CAN ends whatever sequence is in progress, but vte acts on an OSC
+        // it cuts off: what that could change is put back, as tmux's
+        // input_clear drops the sequence.
+        let hooks = self.parser.callbacks();
+        let (title, clips, cwd, mark) = (
+            hooks.title.clone(),
+            hooks.clipboard.len(),
+            hooks.cwd.clone(),
+            hooks.input_mark,
+        );
+        self.parser.process(RESET);
+        let hooks = self.parser.callbacks_mut();
+        hooks.title = title;
+        hooks.clipboard.truncate(clips);
+        hooks.cwd = cwd;
+        hooks.input_mark = mark;
+        hooks.focus_reports = false;
+        hooks.modify_other_keys = 0;
+        hooks.kitty_flags.clear();
         self.count_history();
     }
 
@@ -464,6 +503,28 @@ fn hex(b: u8) -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reset_clears_the_screen_and_modes_but_keeps_the_history() {
+        let mut emu = Emulator::new(3, 20, 100);
+        let lines: String = (0..10).map(|i| format!("line{i}\r\n")).collect();
+        emu.process(lines.as_bytes());
+        let history = emu.history_size();
+        assert!(history > 0);
+        // Modes on, then an OSC cut off before its end.
+        emu.process(b"\x1b[?1h\x1b[?2004h\x1b[?1004h\x1b[?25l\x1b[2;3r\x1b]0;half");
+        emu.reset();
+        let s = emu.screen();
+        assert!(!s.application_cursor() && !s.bracketed_paste() && !s.hide_cursor());
+        assert!(!emu.focus_reports());
+        assert_eq!(s.cursor_position(), (0, 0));
+        assert_eq!(s.contents().trim(), "");
+        assert_eq!(emu.history_size(), history);
+        // The OSC was dropped: this text is printed, not taken as its title.
+        emu.process(b"after");
+        assert_eq!(emu.screen().contents().trim(), "after");
+        assert_eq!(emu.title(), None);
+    }
 
     #[test]
     fn clearing_history_keeps_the_screen() {
