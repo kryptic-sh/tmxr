@@ -221,6 +221,7 @@ impl From<File> for Config {
                 display_panes_colour: Word(s.display_panes_colour),
                 display_panes_time: f.display_panes_time,
                 display_time: f.display_time,
+                status: s.status,
                 history_limit: f.history_limit,
                 lock_after_time: f.lock_after_time,
                 lock_command: f.lock_command,
@@ -289,6 +290,7 @@ pub struct Navigator {
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 struct StatusFile {
+    status: bool,
     style: String,
     justify: StatusJustify,
     left: String,

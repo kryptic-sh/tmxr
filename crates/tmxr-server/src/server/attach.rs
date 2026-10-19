@@ -7,7 +7,7 @@ use ratatui::{Terminal, TerminalOptions, Viewport, layout::Rect};
 use tmxr_proto::ServerMsg;
 use tracing::debug;
 
-use super::{Attached, STATUS_ROWS, Server};
+use super::{Attached, Server};
 use crate::backend::{AnsiBackend, ColourDepth};
 use crate::model::{ClientId, SessionId, WindowId};
 
@@ -252,7 +252,10 @@ impl Server {
             .filter(|a| a.session == session)
             .map(|a| {
                 (
-                    (a.cols, a.rows.saturating_sub(STATUS_ROWS).max(1)),
+                    (
+                        a.cols,
+                        a.rows.saturating_sub(self.status_rows(a.session)).max(1),
+                    ),
                     a.last_input,
                 )
             })

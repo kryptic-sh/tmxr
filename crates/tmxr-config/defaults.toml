@@ -122,6 +122,8 @@ pattern = '(\S+/)?g?\.?(view|l?n?vim?x?|fzf|sqeel|hjkl)(diff)?(-wrapped)?'
 disable-when-zoomed = false
 
 [status]
+# tmux's default: the status line is drawn.
+status = true
 style = "bg=#{@thm_mantle},fg=#{@thm_fg}"
 # tmux's default: the window list after status-left.
 justify = "left"

@@ -7,7 +7,6 @@ use tmxr_command::Parsed;
 use super::{Ctx, Outcome, client_size, cwd_arg, dir_flag, list_item};
 use crate::layout::Dir;
 use crate::model::SessionId;
-use crate::server::STATUS_ROWS;
 use crate::server::Server;
 use crate::target;
 use crate::vars::Vars;
@@ -221,7 +220,12 @@ pub(super) fn run(
                     .values()
                     .filter_map(|c| c.att.as_ref())
                     .filter(|att| att.session == sid)
-                    .map(|att| (att.cols, att.rows.saturating_sub(STATUS_ROWS)))
+                    .map(|att| {
+                        (
+                            att.cols,
+                            att.rows.saturating_sub(srv.status_rows(att.session)),
+                        )
+                    })
                     .collect();
                 // The largest (-A) or smallest (-a) client, each way.
                 let both = if a.has('A') {

@@ -21,6 +21,18 @@ impl Server {
 
     /// The options of the session client `client` is attached to; the
     /// global ones for a client that is not.
+    /// The rows `session`'s status line takes: one, or none with `status`
+    /// off.
+    pub fn status_rows(&self, session: SessionId) -> u16 {
+        u16::from(self.session_options(session).status)
+    }
+
+    /// The rows client `client`'s status line takes, by its session's (the
+    /// global) `status`.
+    pub fn client_status_rows(&self, client: ClientId) -> u16 {
+        u16::from(self.client_session_options(client).status)
+    }
+
     pub fn client_session_options(&self, client: ClientId) -> Cow<'_, SessionOptions> {
         match self.client_session(client) {
             Some(s) => self.session_options(s),

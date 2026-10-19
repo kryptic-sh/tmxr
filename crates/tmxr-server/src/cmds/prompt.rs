@@ -368,7 +368,7 @@ pub(super) fn run(
                 let (ox, oy) = crate::render::window_offset(srv, att);
                 let view = (
                     att.cols,
-                    att.rows.saturating_sub(crate::server::STATUS_ROWS),
+                    att.rows.saturating_sub(srv.status_rows(att.session)),
                 );
                 let pan = match window {
                     _ if a.has('c') => None,
@@ -639,6 +639,7 @@ fn places(srv: &Server, ctx: &Ctx, c: ClientId, pane: Option<PaneId>) -> Places 
                 let ranges = &att.status_ranges.windows;
                 ranges.iter().find(|r| r.2 == current).map(|r| r.0)
             }),
+        status_lines: srv.client_status_rows(c),
     }
 }
 
@@ -652,6 +653,8 @@ struct Places {
     mouse: Option<(u16, u16)>,
     /// Where the current window's name starts on the status line (`W`).
     window: Option<u16>,
+    /// The rows the client's status line takes.
+    status_lines: u16,
 }
 
 /// A popup's size in a `cols` x `rows` client: `-w` / `-h` in cells or
@@ -691,7 +694,7 @@ fn place(
 ) -> Result<(u16, u16), String> {
     let (sx, sy) = (i64::from(cols), i64::from(rows));
     let (w, h) = (i64::from(w), i64::from(h));
-    let lines = i64::from(crate::server::STATUS_ROWS);
+    let lines = i64::from(places.status_lines);
     let mut vars: Vec<(&str, i64)> = vec![
         ("popup_width", w),
         ("popup_height", h),

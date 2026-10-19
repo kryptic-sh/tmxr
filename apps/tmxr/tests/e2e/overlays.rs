@@ -120,6 +120,47 @@ fn display_panes_runs_its_template_and_n_passes_keys_on() {
 }
 
 #[test]
+fn status_off_gives_its_row_to_the_window() {
+    let t = Tmxr::new("statusoff");
+    let s = t.attach(&["new", "-s", "zqx"]);
+    s.wait_for("status line", |text| text.contains("zqx"));
+    let window = || {
+        t.run(&["display-message", "-p", "-t", "zqx", "#{window_height}"])
+            .trim()
+            .to_owned()
+    };
+    let client: u16 = t
+        .run(&["list-clients", "-F", "#{client_height}"])
+        .trim()
+        .parse()
+        .unwrap();
+    assert_eq!(
+        window(),
+        (client - 1).to_string(),
+        "the status line takes a row"
+    );
+    assert_eq!(t.run(&["show", "-gv", "status"]).trim(), "on");
+    // Off: the window takes the whole client, and the line is gone.
+    t.run(&["set", "-g", "status", "off"]);
+    let all = client.to_string();
+    t.wait_run(
+        &["display-message", "-p", "-t", "zqx", "#{window_height}"],
+        "the full height",
+        |o| o.trim() == all,
+    );
+    s.wait_for("no status line", |text| !text.contains("zqx"));
+    // On again: the row goes back to the line.
+    t.run(&["set", "-g", "status", "on"]);
+    let less = (client - 1).to_string();
+    t.wait_run(
+        &["display-message", "-p", "-t", "zqx", "#{window_height}"],
+        "the status row back",
+        |o| o.trim() == less,
+    );
+    s.wait_for("the status line back", |text| text.contains("zqx"));
+}
+
+#[test]
 fn command_prompt_asks_each_prompt_and_fills_the_template() {
     let t = Tmxr::new("cprompts");
     let s = t.attach(&["new", "-s", "cp"]);

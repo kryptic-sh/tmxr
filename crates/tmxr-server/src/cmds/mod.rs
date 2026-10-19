@@ -26,7 +26,7 @@ use tmxr_command::{Args, Parsed};
 
 use crate::layout::Dir;
 use crate::model::{ClientId, PaneId, SessionId};
-use crate::server::{STATUS_ROWS, Server};
+use crate::server::Server;
 use crate::vars::Vars;
 
 /// Who is running a command and on whose behalf.
@@ -231,7 +231,11 @@ fn client_size(srv: &Server, ctx: &Ctx) -> (u16, u16) {
         })
     });
     let (cols, rows) = from_client.unwrap_or((80, 24));
-    (cols.max(2), rows.saturating_sub(STATUS_ROWS).max(2))
+    let status = ctx.client.map_or_else(
+        || u16::from(srv.cfg.session.status),
+        |c| srv.client_status_rows(c),
+    );
+    (cols.max(2), rows.saturating_sub(status).max(2))
 }
 
 pub(crate) fn expand_for(srv: &Server, ctx: &Ctx, pane: Option<PaneId>, s: &str) -> String {

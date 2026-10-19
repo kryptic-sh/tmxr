@@ -191,13 +191,11 @@ impl Server {
     /// [`crate::menu::Menu::mouse`], an item it chooses run against the
     /// menu's target.
     pub fn menu_mouse(&mut self, id: ClientId, m: crossterm::event::MouseEvent) {
+        let status = self.client_status_rows(id);
         let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
             return;
         };
-        let (cols, rows) = (
-            att.cols,
-            att.rows.saturating_sub(crate::server::STATUS_ROWS),
-        );
+        let (cols, rows) = (att.cols, att.rows.saturating_sub(status));
         let Some(Overlay::Menu(mut menu)) = att.overlay.take() else {
             return;
         };

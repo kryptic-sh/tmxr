@@ -460,11 +460,11 @@ table. What has been verified, and how:
     not expose); styles `align=` `fill=` `list=` `range=` `push-default` /
     `pop-default`, strikethrough, blink, overline, curly and coloured
     underlines.
-  - Options: the status line is one row at the bottom (`STATUS_ROWS`): no
-    `status off` / `2`–`5`, `status-position`, `status-format`; no
-    `window-status-activity-style` / `-bell-style` (tmux's default `reverse`
-    would change tmxr's theme, which shows flags in its window format),
-    `status-fg` / `-bg`; `pane-border-status` / `-format` / `-lines` /
+  - Options: the status line is one row at the bottom, or none with `status off`
+    (`Server::status_rows`): no `status` `2`–`5`, `status-position`,
+    `status-format`; no `window-status-activity-style` / `-bell-style` (tmux's
+    default `reverse` would change tmxr's theme, which shows flags in its window
+    format), `status-fg` / `-bg`; `pane-border-status` / `-format` / `-lines` /
     `-indicators`, `window-style` / `window-active-style`; session
     `status-keys`, `assume-paste-time`, `default-size`; window
     `aggressive-resize`, `alternate-screen`, `remain-on-exit-format` (its

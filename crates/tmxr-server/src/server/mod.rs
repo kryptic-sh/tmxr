@@ -224,9 +224,6 @@ pub const PASSTHROUGH_UNSUPPORTED: &str = "allow-passthrough: needs the conpty.d
 /// How long one pass of the loop handles queued events before it renders,
 /// so a pane flooding output still repaints.
 const DRAIN_BUDGET: Duration = Duration::from_millis(20);
-/// Rows the status line takes.
-pub const STATUS_ROWS: u16 = 1;
-
 impl Server {
     pub fn new(
         endpoint: Endpoint,

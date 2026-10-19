@@ -19,7 +19,7 @@ use tmxr_command::{MouseAction, MouseKey, MouseLocation};
 use crate::cmds::Ctx;
 use crate::layout::Dir;
 use crate::model::{ClientId, PaneId, SessionId, WindowId};
-use crate::server::{STATUS_ROWS, Server};
+use crate::server::Server;
 
 /// An in-progress drag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -286,7 +286,7 @@ fn locate(
         grab: 0,
     };
     let sess = srv.sessions.get(&session)?;
-    if row >= att.rows.saturating_sub(STATUS_ROWS) {
+    if srv.status_rows(session) > 0 && row >= att.rows.saturating_sub(srv.status_rows(session)) {
         let (location, idx) = att.status_ranges.at(col);
         t.location = location;
         t.window = idx.and_then(|i| Some((i, *sess.windows.get(&i)?)));

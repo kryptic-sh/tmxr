@@ -12,7 +12,7 @@ use crate::backend::AnsiBackend;
 use crate::copy::cell_style;
 use crate::model::{ClientId, PaneId, WindowId};
 use crate::overlay::{Overlay, PickerOverlay, Previewed};
-use crate::server::{STATUS_ROWS, Server};
+use crate::server::Server;
 use crate::vars::Vars;
 
 /// `(first column, end column, window index)` of each window in the status
@@ -168,7 +168,10 @@ pub fn window_offset(srv: &Server, att: &crate::server::Attached) -> (u16, u16) 
     else {
         return (0, 0);
     };
-    let (sx, sy) = (att.cols, att.rows.saturating_sub(STATUS_ROWS));
+    let (sx, sy) = (
+        att.cols,
+        att.rows.saturating_sub(srv.status_rows(att.session)),
+    );
     if sx >= win.cols && sy >= win.rows {
         return (0, 0);
     }
@@ -230,7 +233,7 @@ pub fn draw(srv: &Server, id: ClientId, term: &mut Terminal<AnsiBackend>) -> Sta
     let window = session.and_then(|s| s.current_window());
     let _ = term.draw(|f| {
         let buf = f.buffer_mut();
-        let pane_rows = rows.saturating_sub(STATUS_ROWS);
+        let pane_rows = rows.saturating_sub(srv.status_rows(att.session));
         let mut cursor = None;
         if let Some(wid) = window {
             cursor = match srv.windows.get(&wid) {
@@ -511,10 +514,12 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
     let Some(att) = srv.clients.get(&id).and_then(|c| c.att.as_ref()) else {
         return ranges;
     };
-    if rows < STATUS_ROWS + 1 {
+    // `status off`: no line, and nothing on it to click.
+    let lines = srv.status_rows(att.session);
+    if lines == 0 || rows < lines + 1 {
         return ranges;
     }
-    let y = rows - STATUS_ROWS;
+    let y = rows - lines;
     let Some(session) = srv.sessions.get(&att.session) else {
         return ranges;
     };
@@ -667,7 +672,7 @@ fn draw_overlay(
     let opts = srv.client_window_options(id);
     let mode_style = style_option(&opts.mode_style, &vars);
     let border = style_option(&opts.pane_active_border_style, &vars);
-    let y = rows.saturating_sub(STATUS_ROWS);
+    let y = rows.saturating_sub(srv.status_rows(att.session));
     // A menu's or popup's own style (-s, -S, -H), else the option's.
     let look = |spec: &Option<String>, option: &str| {
         style_option(spec.as_deref().unwrap_or(option), &vars)

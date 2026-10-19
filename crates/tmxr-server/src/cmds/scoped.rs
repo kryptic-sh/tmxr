@@ -348,7 +348,7 @@ fn changed(srv: &mut Server, scope: Scope, name: &str) {
             srv.relayout(w);
         }
     }
-    if name == "window-size" {
+    if name == "window-size" || name == "status" {
         let sessions: Vec<SessionId> = srv
             .sessions
             .values()

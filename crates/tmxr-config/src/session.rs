@@ -57,6 +57,9 @@ options_table! {
     "set-titles" => set_titles: bool,
     "set-titles-string" => set_titles_string: String,
     "silence-action" => silence_action: AlertAction,
+    /// Whether the status line is drawn; off gives its row to the panes.
+    /// (tmux's 2 to 5 rows are not taken.)
+    "status" => status: bool,
     /// Seconds between status line redraws.
     "status-interval" => status_interval: u64,
     /// Where the window list sits: left, centre, right or absolute-centre.
