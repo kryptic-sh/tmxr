@@ -344,3 +344,18 @@ checks = [
   { command = "show-buffer", expect = "beta" },
   { command = "show -gv status-position", expect = "top" },
 ]
+
+[[cases]]
+name = "status_position_top_shows_messages_on_the_first_row"
+attach = true
+unix_only = true
+steps = [
+  { run = "set -g status-position top" },
+  { run = "display-message -d 0 qzmsg" },
+  { sleep = 0.5 },
+]
+checks = [{ screen_find = "qzmsg", expect = "0,0" }]
+
+[[cases]]
+name = "display_message_with_no_client_shows_nowhere"
+checks = [{ command = "display-message qzmsg", expect = "" }]

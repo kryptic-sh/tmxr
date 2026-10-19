@@ -257,6 +257,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`display-message` from a shell shows on a client**, as tmux's: with no `-c`
+  or `-p` it takes the most recently used attached client and prints nothing,
+  and with no client attached it shows nowhere; it used to print the text.
 - **A menu may cover the status line**, as tmux's: `display-menu` is kept inside
   the whole client, not the rows above the status line.
 - **A detached `new-session` is sized as tmux's**: `default-size` (80x24), not

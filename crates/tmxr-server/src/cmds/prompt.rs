@@ -4,7 +4,7 @@ use std::fmt::Write as _;
 
 use tmxr_command::Parsed;
 
-use super::{Ctx, Outcome, Res, attached_client, expand_for, join_args};
+use super::{Ctx, Outcome, Res, expand_for, join_args};
 use crate::model::{ClientId, PaneId};
 use crate::overlay::Overlay;
 use crate::server::Server;
@@ -312,17 +312,20 @@ pub(super) fn run(
             } else {
                 super::expand_by(srv, ctx, &vars, fmt, tmxr_command::format::expand_time)
             };
-            // -c: the client the message shows on, else the command's.
+            // -c: the client the message shows on, else the command's or,
+            // from a shell, the best one, as tmux's cmd_find_current_client;
+            // with none, as tmux's, it shows nowhere.
             let client = match a.value('c') {
                 Some(c) => Some(super::session::target_client(srv, c)?),
-                None => attached_client(srv, ctx),
+                None => super::display_client(srv, ctx),
             };
             match client {
-                Some(c) if !a.has('p') => srv.show_message_for(c, msg, delay, a.has('N')),
-                _ => {
+                _ if a.has('p') => {
                     out.stdout.push_str(&msg);
                     out.stdout.push('\n');
                 }
+                Some(c) => srv.show_message_for(c, msg, delay, a.has('N')),
+                None => {}
             }
         }
         "show-messages" => {
