@@ -326,6 +326,9 @@ options_table! {
     /// The options one window or pane sets itself (`set -w`, `set -p`), over
     /// what it inherits, and its own `@name` user options.
     own OwnOptions;
+    /// Size the window only by the clients showing it, not every client
+    /// whose session holds it.
+    "aggressive-resize" => aggressive_resize: bool,
     /// Forward programs' `ESC P tmux; … ESC \` passthrough to the outer
     /// terminal (inline images and the like).
     "allow-passthrough" => allow_passthrough: bool,

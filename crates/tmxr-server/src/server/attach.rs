@@ -265,44 +265,14 @@ impl Server {
     /// `-f ignore-size` counts only while every attached client has it, as
     /// tmux's `ignore_client_size`.
     pub fn size_session(&mut self, session: SessionId) {
-        let attached = || self.clients.values().filter(|c| c.att.is_some());
-        let all_ignore = attached().all(|c| c.ignore_size);
-        // Each client's size for the windows, and when it was last used.
-        let clients: Vec<((u16, u16), Instant)> = attached()
-            .filter(|c| all_ignore || !c.ignore_size)
-            .filter_map(|c| c.att.as_ref())
-            .filter(|a| a.session == session)
-            .map(|a| {
-                (
-                    (
-                        a.cols,
-                        a.rows.saturating_sub(self.status_rows(a.session)).max(1),
-                    ),
-                    a.last_input,
-                )
-            })
-            .collect();
-        let Some(&(latest, _)) = clients.iter().max_by_key(|(_, used)| *used) else {
-            return;
-        };
-        // `largest` and `smallest` each way, as tmux's
-        // `clients_calculate_size`.
-        let sizes = clients.iter().map(|(size, _)| *size);
-        let largest = sizes
-            .clone()
-            .fold((0, 0), |(c, r), (x, y)| (c.max(x), r.max(y)));
-        let smallest = sizes.fold((u16::MAX, u16::MAX), |(c, r), (x, y)| (c.min(x), r.min(y)));
         let windows: Vec<WindowId> = self
             .sessions
             .get(&session)
             .map(|s| s.windows.values().copied().collect())
             .unwrap_or_default();
         for w in windows {
-            let (cols, rows) = match self.window_options(w).window_size {
-                tmxr_config::WindowSize::Latest => latest,
-                tmxr_config::WindowSize::Largest => largest,
-                tmxr_config::WindowSize::Smallest => smallest,
-                tmxr_config::WindowSize::Manual => continue,
+            let Some((cols, rows)) = self.window_client_size(w) else {
+                continue;
             };
             if let Some(win) = self.windows.get_mut(&w)
                 && (win.cols, win.rows) != (cols, rows)
@@ -311,6 +281,75 @@ impl Server {
                 win.rows = rows;
                 self.relayout(w);
             }
+        }
+    }
+
+    /// The size window `w` takes from its clients, as tmux's
+    /// recalculate_size and clients_calculate_size: every attached client
+    /// whose session holds it (with `aggressive-resize`, only those whose
+    /// session shows it), less its status line; by `window-size`, the
+    /// largest or smallest each way, or the window's latest client when
+    /// more than one has it. `None` keeps the size: `manual`, or no client.
+    fn window_client_size(&self, w: WindowId) -> Option<(u16, u16)> {
+        let options = self.window_options(w);
+        let attached = || {
+            self.clients
+                .values()
+                .filter_map(|c| Some((c, c.att.as_ref()?)))
+        };
+        let all_ignore = attached().all(|(c, _)| c.ignore_size);
+        let holds = |session: SessionId| {
+            self.sessions
+                .get(&session)
+                .is_some_and(|s| s.windows.values().any(|&x| x == w))
+        };
+        let shows = |session: SessionId| {
+            self.sessions
+                .get(&session)
+                .and_then(crate::model::Session::current_window)
+                == Some(w)
+        };
+        // As tmux's clients_with_window: the clients that size windows.
+        let with_window = attached()
+            .filter(|(c, a)| (all_ignore || !c.ignore_size) && holds(a.session))
+            .count();
+        let latest = self.windows.get(&w).and_then(|win| win.latest);
+        let sizes: Vec<(u16, u16)> = attached()
+            .filter(|(c, _)| all_ignore || !c.ignore_size)
+            .filter(|(_, a)| {
+                if options.aggressive_resize {
+                    shows(a.session)
+                } else {
+                    holds(a.session)
+                }
+            })
+            .filter(|(c, _)| {
+                options.window_size != tmxr_config::WindowSize::Latest
+                    || with_window <= 1
+                    || latest == Some(c.id)
+            })
+            .map(|(_, a)| {
+                (
+                    a.cols,
+                    a.rows.saturating_sub(self.status_rows(a.session)).max(1),
+                )
+            })
+            .collect();
+        if sizes.is_empty() {
+            return None;
+        }
+        match options.window_size {
+            tmxr_config::WindowSize::Largest => Some(
+                sizes
+                    .iter()
+                    .fold((0, 0), |(c, r), &(x, y)| (c.max(x), r.max(y))),
+            ),
+            tmxr_config::WindowSize::Smallest | tmxr_config::WindowSize::Latest => Some(
+                sizes
+                    .iter()
+                    .fold((u16::MAX, u16::MAX), |(c, r), &(x, y)| (c.min(x), r.min(y))),
+            ),
+            tmxr_config::WindowSize::Manual => None,
         }
     }
 

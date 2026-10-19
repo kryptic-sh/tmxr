@@ -533,6 +533,58 @@ fn window_size_largest_and_smallest_take_each_way() {
 }
 
 #[test]
+fn a_linked_window_is_sized_by_every_client_or_with_aggressive_resize_its_viewers() {
+    let t = Tmxr::new("aggr");
+    t.run(&["new-session", "-d", "-s", "aa"]);
+    t.run(&["new-session", "-d", "-s", "bb"]);
+    // aa:0 linked into bb, which shows its own window.
+    t.run(&["link-window", "-s", "aa:0", "-t", "bb:5"]);
+    t.run(&["select-window", "-t", "bb:0"]);
+    t.run(&["set", "-wg", "window-size", "smallest"]);
+    let a = t.attach(&["attach", "-t", "aa"]);
+    a.wait_for("the first client", |text| text.contains("aa"));
+    let b = t.attach(&["attach", "-t", "bb"]);
+    b.wait_for("the second client", |text| text.contains("bb"));
+    // The second client narrower: as in window_size_largest_and_smallest.
+    let deadline = Instant::now() + TIMEOUT;
+    loop {
+        b.resize(ROWS + 1, 61);
+        b.resize(ROWS, 60);
+        std::thread::sleep(Duration::from_millis(300));
+        let clients = t.run(&["list-clients", "-F", "#{client_width}"]);
+        if clients.lines().any(|l| l == "60") {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the resize never landed: {clients}"
+        );
+    }
+    let width = |t: &Tmxr| {
+        t.run(&["display-message", "-p", "-t", "aa:0", "#{window_width}"])
+            .trim()
+            .to_owned()
+    };
+    // Both sessions hold it, so both clients size it, as tmux's.
+    t.wait_run(
+        &["display-message", "-p", "-t", "aa:0", "#{window_width}"],
+        "both clients' smallest",
+        |o| o.trim() == "60",
+    );
+    // aggressive-resize: only a client showing it counts.
+    t.run(&["set", "-w", "-t", "aa:0", "aggressive-resize", "on"]);
+    t.run(&["refresh-client", "-t", "aa"]);
+    b.resize(ROWS, 59);
+    t.wait_run(
+        &["display-message", "-p", "-t", "aa:0", "#{window_width}"],
+        "the viewer's width",
+        |o| o.trim() == COLS.to_string(),
+    );
+    assert_eq!(width(&t), COLS.to_string());
+    drop(a);
+}
+
+#[test]
 fn an_equals_sign_asks_for_the_exact_name() {
     let t = Tmxr::new("exact");
     t.run(&["new-session", "-d", "-s", "foobar"]);

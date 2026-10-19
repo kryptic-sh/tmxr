@@ -24,6 +24,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The `aggressive-resize` option**, as tmux's: a window is sized only by the
+  clients showing it, not every client whose session holds it.
 - **The `alternate-screen` option**, as tmux's: off, a program's switches to the
   alternate screen (modes 47, 1047 and 1049) are ignored, so what it draws stays
   on the main screen and in the history.
@@ -297,6 +299,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **A window is sized by every client whose session holds it**, as tmux's
+  `recalculate_size`: one linked into several sessions takes all their clients
+  into account, not only one session's; `window-size latest` takes the window's
+  latest client when more than one has it.
 - **`list-keys` is laid out and ordered as tmux's**: keys in tmux's key-code
   order (characters, then special keys, then `M-`, `C-`, `C-M-` …), `bind-key`
   lines padded to the widest table and key with a `-r` column, and `-N` the root

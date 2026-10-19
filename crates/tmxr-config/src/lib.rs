@@ -127,6 +127,7 @@ struct File {
     remain_on_exit_format: String,
     synchronize_panes: bool,
     automatic_rename: bool,
+    aggressive_resize: bool,
     automatic_rename_format: String,
     monitor_bell: bool,
     wrap_search: bool,
@@ -183,6 +184,7 @@ impl From<File> for Config {
             window: WindowOptions {
                 allow_passthrough: f.allow_passthrough,
                 automatic_rename: f.automatic_rename,
+                aggressive_resize: f.aggressive_resize,
                 clock_mode_colour: Word(s.clock_mode_colour),
                 copy_mode_current_match_style: s.copy_mode_current_match_style,
                 copy_mode_match_style: s.copy_mode_match_style,

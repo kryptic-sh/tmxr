@@ -62,6 +62,9 @@ remain-on-exit-format = "Pane is dead (#{?#{!=:#{pane_dead_status},},status #{pa
 # tmux's defaults.
 synchronize-panes = false
 automatic-rename = true
+# tmux's default: a window is sized by every client whose session holds it,
+# not only those showing it.
+aggressive-resize = false
 automatic-rename-format = "#{?pane_in_mode,[tmux],#{pane_current_command}}#{?pane_dead,[dead],}"
 monitor-bell = true
 # tmux's defaults: copy-mode searches wrap, and words end at ASCII punctuation
