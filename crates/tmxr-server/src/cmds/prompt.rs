@@ -536,7 +536,7 @@ pub(super) fn run(
                     .and_then(|at| srv.sessions.get(&at.session))
                     .map(|s| (s.id, s.current)),
             };
-            let ov = match p.name() {
+            let mut ov = match p.name() {
                 "choose-buffer" if srv.buffers.is_empty() => return Err("no buffers".into()),
                 "choose-buffer" => Overlay::buffer_picker(srv),
                 "choose-client" => Overlay::client_picker(srv),
@@ -547,6 +547,12 @@ pub(super) fn run(
                 _ if a.has('w') => Overlay::window_picker(srv, current),
                 _ => Overlay::session_picker(srv, current.map(|c| c.0)),
             };
+            // A template runs for the chosen item, as tmux's.
+            if p.name() != "find-window"
+                && let (Overlay::Picker(picker), Some(t)) = (&mut ov, pos.first())
+            {
+                picker.template = Some(t.clone());
+            }
             if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
                 att.overlay = Some(ov);
             }

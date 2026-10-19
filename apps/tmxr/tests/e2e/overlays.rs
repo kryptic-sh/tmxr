@@ -619,6 +619,37 @@ fn confirm_before_c_and_y_choose_what_confirms() {
 }
 
 #[test]
+fn choose_templates_run_with_the_chosen_target() {
+    let t = Tmxr::new("choosetpl");
+    let s = t.attach(&["new", "-s", "ct"]);
+    s.wait_for("status line", |text| text.contains("ct"));
+    t.run(&["set-buffer", "-b", "mybuf", "hello"]);
+    let option = |name: &str| t.run(&["show", "-gv", name]).trim().to_owned();
+    // A buffer's target is its name.
+    t.run(&["choose-buffer", "set -g @b '%%'"]);
+    s.wait_for("the buffer picker", |text| text.contains("mybuf"));
+    s.send(b"\r");
+    t.wait_run(&["show", "-gv", "@b"], "the template run", |o| {
+        o.trim() == "mybuf"
+    });
+    // A session's, as tmux's window_tree_get_target: `=name:`.
+    t.run(&["choose-tree", "set -g @t '%%'"]);
+    s.wait_for("the session picker", |text| text.contains("sessions"));
+    s.send(b"\r");
+    t.wait_run(&["show", "-gv", "@t"], "the template run", |o| {
+        o.trim() == "=ct:"
+    });
+    // A window's: `=name:index.`.
+    t.run(&["choose-tree", "-w", "set -g @w '%%'"]);
+    s.wait_for("the window picker", |text| text.contains("windows"));
+    s.send(b"\r");
+    t.wait_run(&["show", "-gv", "@w"], "the template run", |o| {
+        o.trim() == "=ct:0."
+    });
+    assert_eq!(option("@b"), "mybuf");
+}
+
+#[test]
 fn prompt_history_is_kept_recalled_and_cleared() {
     let t = Tmxr::new("phist");
     let s = t.attach(&["new", "-s", "ph"]);

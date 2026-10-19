@@ -66,15 +66,15 @@ pub const COMMANDS: &[CommandSpec] = &[
         0,
         "[-CJNpq] [-b buffer-name] [-E end-line] [-S start-line] [-t target-pane]"
     ),
-    cmd!("choose-buffer", None, "Z", 0, 0, "[-Z]"),
-    cmd!("choose-client", None, "Z", 0, 0, "[-Z]"),
+    cmd!("choose-buffer", None, "Z", 0, 1, "[-Z] [template]"),
+    cmd!("choose-client", None, "Z", 0, 1, "[-Z] [template]"),
     cmd!(
         "choose-tree",
         None,
         "swZt:",
         0,
-        0,
-        "[-swZ] [-t target-pane]"
+        1,
+        "[-swZ] [-t target-pane] [template]"
     ),
     cmd!(
         "clear-history",

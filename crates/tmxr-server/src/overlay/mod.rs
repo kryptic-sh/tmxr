@@ -200,7 +200,7 @@ impl Overlay {
                 items.push(Item {
                     label: format!("{mark} {}:{idx} {}", s.name, w.name),
                     matches: format!("{}:{idx} {}", s.name, w.name),
-                    target: Target::Window(s.id, *idx),
+                    target: Target::Window(s.id, *idx, s.name.clone()),
                 });
             }
         }

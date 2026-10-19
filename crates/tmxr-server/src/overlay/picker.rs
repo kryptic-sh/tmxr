@@ -15,7 +15,8 @@ use crate::model::{ClientId, SessionId};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Target {
     Session(SessionId, String),
-    Window(SessionId, u32),
+    /// A window, by session, index and the session's name.
+    Window(SessionId, u32, String),
     /// A paste buffer, by name.
     Buffer(String),
     /// An attached client.
@@ -96,6 +97,9 @@ pub struct PickerOverlay {
     /// Each row's label and target, to find the highlighted row's target
     /// (the picker owns its source and exposes rows only by label).
     rows: Vec<(String, Target)>,
+    /// A command for the chosen item, its `%%` the item's target, as the
+    /// template `choose-tree`, `choose-client` and `choose-buffer` take.
+    pub template: Option<String>,
 }
 
 /// What the highlighted picker row would show, for the preview.
@@ -132,6 +136,7 @@ impl PickerOverlay {
             picker,
             rows,
             typing: false,
+            template: None,
         }
     }
 
@@ -150,7 +155,7 @@ impl PickerOverlay {
         let label = self.picker.visible_rows(sel..sel + 1).into_iter().next()?.0;
         match self.rows.iter().find(|(l, _)| *l == label)?.1 {
             Target::Session(id, _) => Some(Previewed::Session(id)),
-            Target::Window(s, i) => Some(Previewed::Window(s, i)),
+            Target::Window(s, i, _) => Some(Previewed::Window(s, i)),
             Target::Buffer(_) | Target::Client(_) | Target::Edit(_) => None,
         }
     }
@@ -167,9 +172,21 @@ impl PickerOverlay {
         }
         match self.picker.accept() {
             PickerEvent::Select(PickerAction::Custom(any)) => match any.downcast::<Target>() {
+                // A template runs with the item's target, as tmux's
+                // window_tree_get_target writes it.
+                Ok(t) if self.template.is_some() && !matches!(*t, Target::Edit(_)) => {
+                    let target = match *t {
+                        Target::Session(_, name) => format!("={name}:"),
+                        Target::Window(_, i, name) => format!("={name}:{i}."),
+                        Target::Client(id) => id.to_string(),
+                        Target::Buffer(name) | Target::Edit(name) => name,
+                    };
+                    let template = self.template.as_deref().unwrap_or_default();
+                    OverlayAction::Run(tmxr_command::fill_template(template, &[target]))
+                }
                 Ok(t) => match *t {
                     Target::Session(s, _) => OverlayAction::Switch(s),
-                    Target::Window(s, i) => OverlayAction::SwitchWindow(s, i),
+                    Target::Window(s, i, _) => OverlayAction::SwitchWindow(s, i),
                     Target::Client(id) => OverlayAction::Run(format!("detach-client -t {id}")),
                     Target::Buffer(name) => {
                         OverlayAction::Run(format!("paste-buffer -p -b {}", join_args(&[name])))

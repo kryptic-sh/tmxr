@@ -24,6 +24,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`choose-tree`, `choose-client` and `choose-buffer` templates**, as tmux's: a
+  command given after the flags runs for the chosen item, its `%%` the item's
+  target (`=session:`, `=session:index.`, the client, or the buffer's name).
 - **Copy mode's word and line selection, and `selection-mode`**, as tmux's:
   after `select-word` or `select-line` (or `selection-mode word` / `line`),
   moving the cursor grows the selection by whole words or lines, keeping the
