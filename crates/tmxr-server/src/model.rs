@@ -39,6 +39,8 @@ pub struct Pane {
     pub dead: Option<Option<u32>>,
     /// When `dead` was set (`#{pane_dead_time}`).
     pub dead_time: Option<std::time::SystemTime>,
+    /// The signal that ended a pane kept dead (`#{pane_dead_signal}`).
+    pub dead_signal: Option<i32>,
     /// `clock-mode`: the pane shows a big clock until a key is pressed.
     pub clock: bool,
     /// `select-pane -d`: no keys, pastes or mouse reach the program, as

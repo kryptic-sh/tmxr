@@ -32,8 +32,12 @@ pub enum PtyEvent {
     /// every holder of the terminal has closed it; ConPTY only ends the stream
     /// when the pseudo console itself is closed, so do not wait for it there.
     Eof,
-    /// The program exited, with its exit code when it has one.
-    Exited(Option<u32>),
+    /// The program exited: its exit code, or the signal that ended it,
+    /// when either is known.
+    Exited {
+        code: Option<u32>,
+        signal: Option<i32>,
+    },
 }
 
 /// A running program on a pseudo-terminal. Dropping it closes the terminal
@@ -129,8 +133,8 @@ impl Pty {
         std::thread::Builder::new()
             .name("tmxr-pty-wait".into())
             .spawn(move || {
-                let code = child.wait().ok().map(|s| s.exit_code());
-                sink(PtyEvent::Exited(code));
+                let (code, signal) = wait_exit(child.as_mut(), pid);
+                sink(PtyEvent::Exited { code, signal });
             })?;
 
         Ok(Self {
@@ -206,6 +210,42 @@ pub fn default_shell() -> OsString {
     }
 }
 
+/// Wait for `child` to exit: its exit code, or the signal that ended it.
+/// On Unix the child is reaped here with `waitpid`, read as tmux reads
+/// `WIFEXITED` / `WIFSIGNALED`, since portable-pty's status keeps only a
+/// signal's description; without a pid, its status is all there is.
+#[cfg(unix)]
+fn wait_exit(child: &mut dyn portable_pty::Child, pid: Option<u32>) -> (Option<u32>, Option<i32>) {
+    let Some(pid) = pid.and_then(|p| libc::pid_t::try_from(p).ok()) else {
+        return (child.wait().ok().map(|s| s.exit_code()), None);
+    };
+    let mut status: libc::c_int = 0;
+    loop {
+        // SAFETY: `status` is a live c_int, the only memory waitpid writes.
+        let reaped = unsafe { libc::waitpid(pid, &mut status, 0) };
+        if reaped == pid {
+            break;
+        }
+        if reaped == -1 && io::Error::last_os_error().kind() == io::ErrorKind::Interrupted {
+            continue;
+        }
+        return (None, None);
+    }
+    if libc::WIFEXITED(status) {
+        (u32::try_from(libc::WEXITSTATUS(status)).ok(), None)
+    } else if libc::WIFSIGNALED(status) {
+        (None, Some(libc::WTERMSIG(status)))
+    } else {
+        (None, None)
+    }
+}
+
+/// Wait for `child` to exit: its exit code. Windows has no signals.
+#[cfg(not(unix))]
+fn wait_exit(child: &mut dyn portable_pty::Child, _pid: Option<u32>) -> (Option<u32>, Option<i32>) {
+    (child.wait().ok().map(|s| s.exit_code()), None)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -266,7 +306,7 @@ mod tests {
                     }
                     output.extend(b);
                 }
-                Ok(PtyEvent::Exited(code)) => exit = Some(code),
+                Ok(PtyEvent::Exited { code, .. }) => exit = Some(code),
                 Ok(PtyEvent::Eof) => {}
                 Err(_) => panic!(
                     "timed out; exit={exit:?} output={:?}",

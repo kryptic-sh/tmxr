@@ -469,19 +469,7 @@ fn draw_pane(
         }
         return None;
     }
-    let cursor = draw_screen(pane.emu.screen(), buf, Rect::new(r.x, r.y, w, h));
-    if let Some(code) = pane.dead {
-        // tmux's remain-on-exit line, over the pane's last row.
-        let status = code.map_or_else(|| "unknown".to_owned(), |c| c.to_string());
-        let line = format!("Pane is dead (status {status})");
-        if h > 0 {
-            let row = r.y + h - 1;
-            buf.set_style(Rect::new(r.x, row, w, 1), copy.selection);
-            buf.set_stringn(r.x, row, &line, usize::from(w), copy.selection);
-        }
-        return None;
-    }
-    cursor
+    draw_screen(pane.emu.screen(), buf, Rect::new(r.x, r.y, w, h))
 }
 
 /// Draw a program's screen into `area`. Returns where its cursor is, if

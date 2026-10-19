@@ -473,15 +473,16 @@ table. What has been verified, and how:
     options (`status-fg` / `-bg`, `display-panes-colour`, `clock-mode-colour`
     and the rest, all `Word`) keep any text as typed, where tmux 3.6 (seen
     2026-10-20) refuses `nocolour` or `colour300` with `bad colour` and shows
-    `#ABCDEF` as `#abcdef`; `pane-border-status` / `-format` / `-lines` /
-    `-indicators`, `window-style` / `window-active-style`; session
-    `status-keys`, `assume-paste-time` (and `default-size` set per session by
-    `new-session -x` / `-y`, which tmux keeps and tmxr does not); window
-    `aggressive-resize`, `alternate-screen`, `remain-on-exit-format` (its
-    default needs `#{pane_dead_signal}`, which tmxr does not have,
-    `#{pane_dead_time}` it now has; the dead-pane line is a fixed
-    `Pane is dead (status N)` in `render.rs`); server `focus-events`,
-    `history-file`, `editor`. `escape-time` is kept but never read.
+    `#ABCDEF` as `#abcdef`; checking them as tmux does was considered and
+    declined for now: tmxr's own defaults put formats in colour options
+    (`display-panes-colour = "#{@thm_blue}"`), which tmux's check would refuse,
+    so it needs those expanded first or the theme moved; `pane-border-status` /
+    `-format` / `-lines` / `-indicators`, `window-style` /
+    `window-active-style`; session `status-keys`, `assume-paste-time` (and
+    `default-size` set per session by `new-session -x` / `-y`, which tmux keeps
+    and tmxr does not); window `aggressive-resize`, `alternate-screen`; server
+    `focus-events`, `history-file`, `editor`. `escape-time` is kept but never
+    read.
   - Commands: `capture-pane -e -a -T` (`-e` needs tmux's own SGR output, `-a`
     the saved normal screen, which `vt100` does not expose). `-T`, `-N` and `-J`
     all need written cells told from never-written ones, which `copy::snapshot`
@@ -557,12 +558,12 @@ table. What has been verified, and how:
   signalling a process group the session belongs to (`detach-client -P` sends
   SIGHUP to client parents). Workaround: log to a file in `$HOME` and read it
   from a new session.
-- **`remain-on-exit-format`** waits on `#{pane_dead_signal}`: portable-pty's
-  `ExitStatus` gives a signal only as `strsignal` text ("Killed"), and a
-  signalled exit as code 1 where tmux shows no status. The number needs the
-  child reaped another way (on Unix, `waitpid` and `WTERMSIG`); then the
-  format's line can be written into the pane's screen as tmux does
-  (`server_destroy_pane`), where `render.rs` draws a fixed line over it now.
+- **`#{pane_dead_signal}` is a number**, as tmux 3.6 shows it on Linux (seen
+  2026-10-20: `15` for SIGTERM, from tmux's compat `sig2name`). Where the system
+  has `sys_signame` (macOS, the BSDs) tmux may show a name instead; not checked.
+  tmxr reads the signal itself on Unix (`wait_exit` in `tmxr-term/src/pty.rs`,
+  `waitpid`), which no dynamic-analysis tool covers: CI runs none, and Miri
+  cannot run the call.
 - **Time expansion is not carried into everything tmux carries it into**:
   `format::expand_time` fills in strftime sequences at each level of a format
   (nested parts, `E:` values, modifier arguments) as tmux's `FORMAT_EXPAND_TIME`

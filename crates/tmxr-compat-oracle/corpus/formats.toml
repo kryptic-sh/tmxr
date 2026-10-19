@@ -376,3 +376,34 @@ checks = [
   { command = "run-shell 'echo out; echo err >&2'" },
   { command = "run-shell -E 'echo out; echo err >&2'" },
 ]
+
+[[cases]]
+name = "a_kept_pane_gets_its_remain_on_exit_line"
+steps = [
+  { run = "set -g remain-on-exit on" },
+  { run = "set -g remain-on-exit-format 'gone #{pane_dead_status}/#{pane_dead_signal} #[bold]end'" },
+  { run = "new-window -d -t o:1 'printf alpha; exit 3'" },
+  { run = "new-window -d -t o:2 'printf beta; kill -TERM $$; sleep 5'" },
+  { sleep = 1.0 },
+]
+checks = [
+  { command = "display -p -t o:1 '[#{pane_dead_status}] [#{pane_dead_signal}]'" },
+  { command = "display -p -t o:2 '[#{pane_dead_status}] [#{pane_dead_signal}]'" },
+  { command = "capture-pane -p -t o:1" },
+  { command = "capture-pane -p -t o:2" },
+  { command = "show -gv remain-on-exit-format" },
+]
+
+[[cases]]
+name = "an_empty_remain_on_exit_format_writes_nothing"
+steps = [
+  { run = "set -g remain-on-exit on" },
+  { run = "set -g remain-on-exit-format ''" },
+  { run = "new-window -d -t o:1 'printf alpha; exit 3'" },
+  { sleep = 1.0 },
+]
+checks = [{ command = "capture-pane -p -t o:1" }, { format = "#{pane_dead}" }]
+
+[[cases]]
+name = "remain_on_exit_format_defaults_to_tmuxs"
+checks = [{ command = "show -gv remain-on-exit-format" }]

@@ -64,6 +64,7 @@ impl Server {
                 argv: argv.to_vec(),
                 dead: None,
                 dead_time: None,
+                dead_signal: None,
                 clock: false,
                 input_off: false,
                 focused: false,
@@ -169,6 +170,28 @@ impl Server {
             spawn,
             cwd,
         })
+    }
+
+    /// tmux's `remain-on-exit-format` line for a pane kept dead
+    /// (server_destroy_pane): expanded for the pane and written into its
+    /// screen after a linefeed at the bottom, in the default style and cut
+    /// at the pane's width, its cursor then hidden. An empty format writes
+    /// nothing.
+    fn write_dead_line(&mut self, pid: PaneId) {
+        let format = self.pane_options(pid).remain_on_exit_format.clone();
+        if format.is_empty() {
+            return;
+        }
+        let vars = crate::vars::Vars::for_pane(self, Some(pid), None);
+        let text = tmxr_command::format::expand(&format, &vars);
+        let Some(p) = self.panes.get_mut(&pid) else {
+            return;
+        };
+        let (rows, cols) = p.emu.screen().size();
+        let mut bytes = format!("\x1b[r\x1b[{rows};1H\n").into_bytes();
+        bytes.extend(crate::backend::styled_bytes(&text, cols));
+        bytes.extend(b"\x1b[0m\x1b[?25l");
+        p.emu.process(&bytes);
     }
 
     /// `respawn-pane -k`: end the pane's program and start `argv` (else the
@@ -499,8 +522,8 @@ impl Server {
                 }
                 self.mark_window_dirty(wid);
             }
-            PtyEvent::Exited(code) => {
-                debug!(pane = pid, ?code, "pane exited");
+            PtyEvent::Exited { code, signal } => {
+                debug!(pane = pid, ?code, ?signal, "pane exited");
                 let ctx = crate::cmds::Ctx {
                     pane: Some(pid),
                     ..crate::cmds::Ctx::default()
@@ -513,8 +536,10 @@ impl Server {
                 if remain && let Some(p) = self.panes.get_mut(&pid) {
                     p.dead = Some(code);
                     p.dead_time = Some(std::time::SystemTime::now());
+                    p.dead_signal = signal;
                     let window = p.window;
                     self.commands.remove(&pid);
+                    self.write_dead_line(pid);
                     self.mark_window_dirty(window);
                 } else if self.panes.contains_key(&pid) {
                     self.panes.remove(&pid);

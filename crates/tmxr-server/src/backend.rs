@@ -173,6 +173,32 @@ fn sgr_colour(out: &mut String, c: Color, fg: bool, depth: ColourDepth) {
     };
 }
 
+/// The bytes that draw `text`, a format's styled runs, from the cursor in
+/// at most `cols` cells: each cell's SGR, from a reset, then its character.
+pub(crate) fn styled_bytes(text: &str, cols: u16) -> Vec<u8> {
+    let mut line = ratatui::buffer::Buffer::empty(ratatui::layout::Rect::new(0, 0, cols, 1));
+    let end = crate::render::draw_runs(
+        &mut line,
+        0,
+        0,
+        cols,
+        ratatui::style::Style::default(),
+        text,
+    );
+    let mut out = String::new();
+    let mut x = 0;
+    while x < end {
+        let Some(cell) = line.cell((x, 0)) else {
+            break;
+        };
+        out.push_str(&sgr(cell, ColourDepth::TrueColour));
+        out.push_str(cell.symbol());
+        // A wide character covers the cells after it.
+        x += (ratatui::text::Line::raw(cell.symbol()).width() as u16).max(1);
+    }
+    out.into_bytes()
+}
+
 /// A full SGR sequence (starting from a reset) for one cell's style.
 fn sgr(cell: &Cell, depth: ColourDepth) -> String {
     let mut s = String::from("\x1b[0");

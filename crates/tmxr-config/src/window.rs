@@ -203,6 +203,7 @@ pub const PANE_OPTIONS: &[&str] = &[
     "cursor-style",
     "pane-scrollbars-style",
     "remain-on-exit",
+    "remain-on-exit-format",
     "synchronize-panes",
 ];
 
@@ -377,6 +378,9 @@ options_table! {
     /// Keep a pane whose program exited, shown as dead, until it is
     /// respawned or killed: always, or only when it failed.
     "remain-on-exit" => remain_on_exit: RemainOnExit,
+    /// The line written into a pane `remain-on-exit` keeps, after a
+    /// linefeed at its bottom; empty, none.
+    "remain-on-exit-format" => remain_on_exit_format: String,
     /// Send what is typed in a pane to all of its window's panes.
     "synchronize-panes" => synchronize_panes: bool,
     "window-size" => window_size: WindowSize,

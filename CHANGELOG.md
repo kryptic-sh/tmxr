@@ -22,6 +22,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The `remain-on-exit-format` option and `#{pane_dead_signal}`**, as tmux's: a
+  pane `remain-on-exit` keeps gets the format's line written into its screen
+  after a linefeed at the bottom (tmux's default reads
+  `Pane is dead (status 3, <time>)`), and a pane a signal ended shows its number
+  in `#{pane_dead_signal}`. An empty format writes nothing.
 - **The `status-fg` and `status-bg` options**, as tmux's: a colour other than
   `default` replaces that side of `status-style` (`fg` / `bg` under `[status]`
   in the config).
@@ -260,6 +265,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **A dead pane's line is part of the pane**, as tmux's: it scrolls the pane up
+  a row and stays in its history and `capture-pane`, where it used to be drawn
+  over the last row. A pane a signal ended has an empty `#{pane_dead_status}`,
+  not `1`.
 - **`display-message` from a shell shows on a client**, as tmux's: with no `-c`
   or `-p` it takes the most recently used attached client and prints nothing,
   and with no client attached it shows nowhere; it used to print the text.

@@ -413,7 +413,7 @@ impl Server {
                 // A respawned pane's previous program can still report.
                 if self.panes.get(&pane).is_some_and(|p| p.spawn == spawn) {
                     self.pty_event(pane, ev);
-                } else if let PtyEvent::Exited(code) = ev {
+                } else if let PtyEvent::Exited { code, .. } = ev {
                     self.popup_exited(pane, spawn, code);
                 }
             }
