@@ -29,6 +29,10 @@ pub struct CopyMode {
     pub cy: usize,
     pub cx: usize,
     pub anchor: Option<(usize, usize)>,
+    /// `stop-selection`: the selection's other end, fixed where the cursor
+    /// was, so the cursor moves without it (tmux's cursordrag none); `None`
+    /// while the cursor is that end.
+    pub sel_end: Option<(usize, usize)>,
     pub kind: SelKind,
     pub rows: u16,
     pub cols: u16,
@@ -216,6 +220,7 @@ impl CopyMode {
             cx: usize::from(ccol),
             lines,
             anchor: None,
+            sel_end: None,
             kind: SelKind::Char,
             rows,
             cols,
@@ -242,6 +247,7 @@ impl CopyMode {
         (self.cy, self.cx) = clamp((old.cy, old.cx));
         self.top = old.top.min(last);
         self.anchor = old.anchor.map(clamp);
+        self.sel_end = old.sel_end.map(clamp);
         self.kind = old.kind;
         self.search.clone_from(&old.search);
         self.mark = old.mark.map(clamp);
@@ -758,13 +764,20 @@ impl CopyMode {
         matches(&line.chars(), &search.needle, search.regex)
     }
 
+    /// The selection's moving end: the cursor, unless `stop-selection`
+    /// fixed it.
+    fn selection_end(&self) -> (usize, usize) {
+        self.sel_end.unwrap_or((self.cy, self.cx))
+    }
+
     /// Selected text, or `None` without a selection.
     pub fn selection_text(&self) -> Option<String> {
         let (ay, ax) = self.anchor?;
-        let ((sy, sx), (ey, ex)) = if (ay, ax) <= (self.cy, self.cx) {
-            ((ay, ax), (self.cy, self.cx))
+        let end = self.selection_end();
+        let ((sy, sx), (ey, ex)) = if (ay, ax) <= end {
+            ((ay, ax), end)
         } else {
-            ((self.cy, self.cx), (ay, ax))
+            (end, (ay, ax))
         };
         let cols = usize::from(self.cols);
         let mut out = String::new();
@@ -772,7 +785,7 @@ impl CopyMode {
             let Some(line) = self.lines.get(y) else { break };
             let (from, to) = match self.kind {
                 SelKind::Line => (0, cols),
-                SelKind::Rect => (ax.min(self.cx), ax.max(self.cx) + 1),
+                SelKind::Rect => (ax.min(end.1), ax.max(end.1) + 1),
                 SelKind::Char => (
                     if y == sy { sx } else { 0 },
                     if y == ey { ex + 1 } else { cols },
@@ -795,14 +808,15 @@ impl CopyMode {
         let Some((ay, ax)) = self.anchor else {
             return false;
         };
-        let (s, e) = if (ay, ax) <= (self.cy, self.cx) {
-            ((ay, ax), (self.cy, self.cx))
+        let end = self.selection_end();
+        let (s, e) = if (ay, ax) <= end {
+            ((ay, ax), end)
         } else {
-            ((self.cy, self.cx), (ay, ax))
+            (end, (ay, ax))
         };
         match self.kind {
             SelKind::Line => y >= s.0 && y <= e.0,
-            SelKind::Rect => y >= s.0 && y <= e.0 && x >= ax.min(self.cx) && x <= ax.max(self.cx),
+            SelKind::Rect => y >= s.0 && y <= e.0 && x >= ax.min(end.1) && x <= ax.max(end.1),
             SelKind::Char => (y, x) >= s && (y, x) <= e,
         }
     }
@@ -853,6 +867,7 @@ impl CopyMode {
             }
             "begin-selection" => {
                 self.anchor = Some((self.cy, self.cx));
+                self.sel_end = None;
                 self.kind = if self.rect {
                     SelKind::Rect
                 } else {
@@ -864,6 +879,7 @@ impl CopyMode {
             "select-line" => {
                 self.rect = false;
                 self.anchor = Some((self.cy, 0));
+                self.sel_end = None;
                 self.kind = SelKind::Line;
                 self.end_of_line();
             }
@@ -883,6 +899,7 @@ impl CopyMode {
                     .last()
                     .unwrap_or(self.cx);
                 self.anchor = Some((self.cy, start));
+                self.sel_end = None;
                 self.kind = SelKind::Char;
                 self.cx = end;
             }
@@ -891,15 +908,28 @@ impl CopyMode {
             "rectangle-off" => self.set_rect(false),
             "clear-selection" => {
                 self.anchor = None;
+                self.sel_end = None;
                 self.cx = self.cx.min(self.line_len(self.cy));
             }
             // tmux's: the cursor goes to the selection's other end, which is
             // where the selection is now held from. A count swaps that many
             // times.
             "other-end" => {
-                if let Some(other) = self.anchor {
+                // After stop-selection the cursor goes to the selection's
+                // end, which follows it again, as tmux's cursordrag none
+                // becomes endsel.
+                if let Some(end) = self.sel_end.take() {
+                    (self.cy, self.cx) = end;
+                } else if let Some(other) = self.anchor {
                     self.anchor = Some((self.cy, self.cx));
                     (self.cy, self.cx) = other;
+                }
+            }
+            // The selection stays where it is and the cursor moves alone,
+            // as tmux's window_copy_cmd_stop_selection.
+            "stop-selection" => {
+                if self.anchor.is_some() && self.sel_end.is_none() {
+                    self.sel_end = Some((self.cy, self.cx));
                 }
             }
             "cursor-centre-vertical" => self.cy = (self.top + rows / 2).min(last),

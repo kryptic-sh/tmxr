@@ -19,6 +19,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Copy mode's `stop-selection`**, as tmux's: the selection stays where it is
+  while the cursor moves on, and `other-end` takes the cursor back to its end,
+  which follows the cursor again.
 - **Copy mode's `pipe`, `pipe-no-clear`, `pipe-and-cancel`,
   `copy-selection-no-clear` and `copy-pipe-no-clear`**, as tmux's: the `pipe`
   commands hand the selection to a command (else `copy-command`) with no buffer

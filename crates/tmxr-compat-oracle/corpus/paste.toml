@@ -608,3 +608,47 @@ checks = [
   { command = "display -p -t o:7 '#{copy_cursor_y},#{copy_cursor_x}'" },
   { command = "display -p -t o:8 '#{copy_cursor_y},#{copy_cursor_x}'" },
 ]
+
+[[cases]]
+name = "stop_selection_keeps_the_selection_where_it_was"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:1 'echo abcdef; echo ghijkl; echo mnopqr; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:1" },
+  { run = "send-keys -t o:1 -X history-top" },
+  { run = "send-keys -t o:1 -X begin-selection" },
+  { run = "send-keys -t o:1 -X cursor-right" },
+  { run = "send-keys -t o:1 -X stop-selection" },
+  { run = "send-keys -t o:1 -X cursor-down" },
+  { run = "send-keys -t o:1 -N 3 -X cursor-right" },
+  { run = "send-keys -t o:1 -X copy-selection" },
+]
+checks = [
+  { command = "show-buffer" },
+  { command = "display -p -t o:1 '#{pane_in_mode} #{selection_present} #{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "stop_selection_ends_with_other_end"
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:2 'echo abcdef; echo ghijkl; echo mnopqr; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:2" },
+  { run = "send-keys -t o:2 -X history-top" },
+  { run = "send-keys -t o:2 -X begin-selection" },
+  { run = "send-keys -t o:2 -X cursor-right" },
+  { run = "send-keys -t o:2 -X stop-selection" },
+  { run = "send-keys -t o:2 -X cursor-down" },
+  { run = "send-keys -t o:2 -N 3 -X cursor-right" },
+  { run = "send-keys -t o:2 -X other-end" },
+  { run = "send-keys -t o:2 -X cursor-right" },
+  { run = "send-keys -t o:2 -X copy-selection" },
+]
+checks = [
+  { command = "show-buffer" },
+  { command = "display -p -t o:2 '#{pane_in_mode} #{selection_present} #{copy_cursor_y},#{copy_cursor_x}'" },
+]

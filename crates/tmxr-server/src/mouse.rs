@@ -562,7 +562,7 @@ pub fn copy_command_at_mouse(srv: &mut Server, ctx: &Ctx, pane: PaneId, name: &s
         "clear-selection" => {
             move_copy_cursor(srv, pane, t.col, t.row);
             if let Some(cm) = srv.panes.get_mut(&pane).and_then(|p| p.copy.as_mut()) {
-                cm.anchor = None;
+                cm.apply("clear-selection", None);
             }
         }
         _ => return false,
