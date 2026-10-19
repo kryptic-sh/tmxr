@@ -257,9 +257,12 @@ table. What has been verified, and how:
   lists only what tmxr keeps: `attached`, `focused`, `ignore-size` and
   `read-only`, not tmux's `suspended` or `UTF-8` (tmxr does not track either). A
   client is `focused` from attaching, as tmux's, until its terminal reports
-  focus out; tmxr always asks the terminal for focus reports, where tmux asks
-  only with `focus-events on` (tmxr has no such option). Not compared with a
-  running tmux: the oracle has no attached client.
+  focus out; the terminal is asked for focus reports only with
+  `focus-events on`, as tmux's (`ServerMsg::FocusEvents`), and reports that come
+  anyway are taken, as tmux's `tty_keys_next` takes them. On Windows the console
+  hands crossterm focus events whether asked or not, and ConPTY asks its own
+  terminal for them when it starts, so `focus-events off` does not keep them out
+  there. Not compared with a running tmux: the oracle has no attached client.
 - **Pane focus** (`Server::update_pane_focus`, from tmux's
   `window_pane_update_focus`): a pane is focused while it is the active pane of
   a window a focused client shows, and a program that asked (mode 1004) gets
@@ -481,8 +484,7 @@ table. What has been verified, and how:
     `window-active-style`; session `status-keys`, `assume-paste-time` (and
     `default-size` set per session by `new-session -x` / `-y`, which tmux keeps
     and tmxr does not); window `aggressive-resize`, `alternate-screen`; server
-    `focus-events`, `history-file`, `editor`. `escape-time` is kept but never
-    read.
+    `history-file`, `editor`. `escape-time` is kept but never read.
   - Commands: `capture-pane -e -a -T` (`-e` needs tmux's own SGR output, `-a`
     the saved normal screen, which `vt100` does not expose). `-T`, `-N` and `-J`
     all need written cells told from never-written ones, which `copy::snapshot`

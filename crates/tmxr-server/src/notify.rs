@@ -58,6 +58,19 @@ struct PaneSeen {
 struct ClientSeen {
     session: SessionId,
     size: (u16, u16),
+    /// A popup or menu over its window ([`covered`]).
+    covered: bool,
+    /// Its terminal's focus, as last reported.
+    focused: bool,
+}
+
+/// Whether a popup or menu covers what `a` shows, which takes its window's
+/// focus, as tmux's `overlay_draw` (tmxr's pickers leave it).
+fn covered(a: &crate::server::Attached) -> bool {
+    matches!(
+        a.overlay,
+        Some(crate::overlay::Overlay::Popup(_) | crate::overlay::Overlay::Menu(_))
+    )
 }
 
 impl Watched {
@@ -108,6 +121,8 @@ impl Watched {
                     let seen = ClientSeen {
                         session: a.session,
                         size: (a.cols, a.rows),
+                        covered: covered(a),
+                        focused: a.focused,
                     };
                     Some((c.id, seen))
                 })
@@ -223,28 +238,32 @@ impl Server {
     /// over it. A pane that gains or loses focus is told so (`CSI I` /
     /// `CSI O`) when its program asked for focus reports, and fires
     /// `pane-focus-in` / `pane-focus-out`.
+    ///
+    /// With `focus-events off` only the windows tmux looks at again are
+    /// ([`Server::focus_checks`]), and only their active panes: a pane made
+    /// active, or a window made current, is not told.
     pub fn update_pane_focus(&mut self) {
         let shown: BTreeSet<WindowId> = self
             .clients
             .values()
             .filter_map(|c| c.att.as_ref())
-            .filter(|a| {
-                a.focused
-                    && !matches!(
-                        a.overlay,
-                        Some(crate::overlay::Overlay::Popup(_) | crate::overlay::Overlay::Menu(_))
-                    )
-            })
+            .filter(|a| a.focused && !covered(a))
             .filter_map(|a| self.sessions.get(&a.session)?.current_window())
             .collect();
+        let checked = (!self.cfg.focus_events).then(|| self.focus_checks());
         let mut changed = Vec::new();
         for p in self.panes.values_mut() {
-            let focused = p.dead.is_none()
-                && shown.contains(&p.window)
-                && self
-                    .windows
-                    .get(&p.window)
-                    .is_some_and(|w| w.active == p.id);
+            let active = self
+                .windows
+                .get(&p.window)
+                .is_some_and(|w| w.active == p.id);
+            if checked
+                .as_ref()
+                .is_some_and(|c| !active || !c.contains(&p.window))
+            {
+                continue;
+            }
+            let focused = p.dead.is_none() && shown.contains(&p.window) && active;
             if focused != p.focused {
                 p.focused = focused;
                 if p.emu.focus_reports() {
@@ -266,6 +285,40 @@ impl Server {
             };
             self.queue_hook(hook, ctx, HookScope::default());
         }
+    }
+
+    /// The windows whose focus tmux looks at again with `focus-events off`
+    /// (`window_update_focus`), as seen since the last event: a client's
+    /// old and new current window when it attached or switched session
+    /// (server_client_set_session), its current window when a popup or menu
+    /// opened or closed over it (server_client_set_overlay / _clear_overlay)
+    /// or its terminal reported focus (tty_keys_next), and a window whose
+    /// active pane went (window_lost_pane).
+    fn focus_checks(&self) -> BTreeSet<WindowId> {
+        let current = |s: SessionId| self.sessions.get(&s).and_then(|s| s.current_window());
+        let mut checked = BTreeSet::new();
+        for c in self.clients.values() {
+            let Some(a) = c.att.as_ref() else {
+                continue;
+            };
+            match self.watched.clients.get(&c.id) {
+                Some(seen) if seen.session == a.session => {
+                    if seen.covered != covered(a) || seen.focused != a.focused {
+                        checked.extend(current(a.session));
+                    }
+                }
+                seen => {
+                    checked.extend(seen.and_then(|s| current(s.session)));
+                    checked.extend(current(a.session));
+                }
+            }
+        }
+        for (wid, seen) in &self.watched.windows {
+            if self.windows.contains_key(wid) && !self.panes.contains_key(&seen.active) {
+                checked.insert(*wid);
+            }
+        }
+        checked
     }
 
     /// The pane a hook's commands run for: the scope's pane, else its

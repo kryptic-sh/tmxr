@@ -196,6 +196,30 @@ fn status_fg_and_bg_colour_the_status_line_over_its_style() {
     });
 }
 
+// Unix only: ConPTY asks its own terminal for focus reports when it starts
+// and keeps a `?1004l` to itself (seen on Windows 11), so a Windows client's
+// requests never show.
+#[cfg(unix)]
+#[test]
+fn focus_events_asks_the_terminal_for_focus_reports() {
+    let t = Tmxr::new("focusev");
+    let s = t.attach(&["new", "-s", "fev"]);
+    s.wait_for("status line", |text| text.contains("fev"));
+    let asked = |what: &str, seq: &str| {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !s.raw_text().contains(seq) {
+            assert!(Instant::now() < deadline, "{what}: no {seq:?}");
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    };
+    // On by default (tmux-sensible's): the client's terminal is asked.
+    assert_eq!(t.run(&["show", "-sv", "focus-events"]).trim(), "on");
+    asked("on", "\x1b[?1004h");
+    // Off: told to stop, as tmux asks for none.
+    t.run(&["set", "-s", "focus-events", "off"]);
+    asked("off", "\x1b[?1004l");
+}
+
 #[test]
 fn command_prompt_asks_each_prompt_and_fills_the_template() {
     let t = Tmxr::new("cprompts");

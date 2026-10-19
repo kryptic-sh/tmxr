@@ -368,3 +368,71 @@ checks = [
   { command = "show -gv status-bg" },
   { command = "show -g status-bg" },
 ]
+
+[[cases]]
+name = "focus_events_off_tells_no_pane_made_active"
+attach = true
+unix_only = true
+steps = [
+  { run = "set -g focus-events off" },
+  { run = "split-window -d -t o" },
+  { run = "set-hook -g pane-focus-in 'set -ga @fi i'" },
+  { run = "set-hook -g pane-focus-out 'set -ga @fo o'" },
+  { run = "select-pane -t o.1" },
+  { sleep = 0.5 },
+  { run = "select-pane -t o.0" },
+  { sleep = 0.5 },
+]
+checks = [{ format = "[#{@fi}] [#{@fo}]" }, { command = "show -sv focus-events" }]
+
+[[cases]]
+name = "focus_events_on_tells_each_pane_made_active"
+attach = true
+unix_only = true
+steps = [
+  { run = "set -g focus-events on" },
+  { run = "split-window -d -t o" },
+  { run = "set-hook -g pane-focus-in 'set -ga @fi i'" },
+  { run = "set-hook -g pane-focus-out 'set -ga @fo o'" },
+  { run = "select-pane -t o.1" },
+  { sleep = 0.5 },
+  { run = "select-pane -t o.0" },
+  { sleep = 0.5 },
+]
+checks = [{ format = "[#{@fi}] [#{@fo}]" }]
+
+[[cases]]
+name = "focus_events_off_looks_again_when_a_menu_closes"
+attach = true
+unix_only = true
+steps = [
+  { run = "set -g focus-events off" },
+  { run = "split-window -d -t o" },
+  { run = "set-hook -g pane-focus-in 'set -ga @fi i'" },
+  { run = "set-hook -g pane-focus-out 'set -ga @fo o'" },
+  { run = "select-pane -t o.1" },
+  { sleep = 0.5 },
+  { spawn = "display-menu -T t aaa a ''" },
+  { sleep = 0.5 },
+  { keys = "\u001b" },
+  { sleep = 0.5 },
+]
+checks = [{ format = "[#{@fi}] [#{@fo}]" }]
+
+[[cases]]
+name = "focus_events_off_looks_again_on_a_focus_report"
+attach = true
+unix_only = true
+steps = [
+  { run = "set -g focus-events off" },
+  { run = "split-window -d -t o" },
+  { run = "set-hook -g pane-focus-in 'set -ga @fi i'" },
+  { run = "set-hook -g pane-focus-out 'set -ga @fo o'" },
+  { run = "select-pane -t o.1" },
+  { sleep = 0.5 },
+  { keys = "\u001b[O" },
+  { sleep = 0.5 },
+  { keys = "\u001b[I" },
+  { sleep = 0.5 },
+]
+checks = [{ format = "[#{@fi}] [#{@fo}]" }]

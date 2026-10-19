@@ -243,6 +243,11 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                     terminal::set_mouse(on)?;
                 }
             }
+            ServerMsg::FocusEvents(on) => {
+                if term.is_some() {
+                    terminal::set_focus_events(on)?;
+                }
+            }
         }
     }
 }

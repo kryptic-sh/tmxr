@@ -48,6 +48,9 @@ pub struct Config {
     /// key before giving it to the root table; 0 waits forever.
     pub prefix_timeout: u64,
     pub escape_time: u64,
+    /// `focus-events`: whether clients' focus reports reach the server, and
+    /// a pane's focus follows the active pane and window, as tmux's.
+    pub focus_events: bool,
     pub default_terminal: String,
     pub extended_keys: String,
     pub set_clipboard: String,
@@ -100,6 +103,7 @@ struct File {
     exit_unattached: bool,
     destroy_unattached: DestroyUnattached,
     escape_time: u64,
+    focus_events: bool,
     display_time: u64,
     display_panes_time: u64,
     status_interval: u64,
@@ -264,6 +268,7 @@ impl From<File> for Config {
             prefix_timeout: f.prefix_timeout,
             exit_unattached: f.exit_unattached,
             escape_time: f.escape_time,
+            focus_events: f.focus_events,
             default_terminal: f.default_terminal,
             extended_keys: f.extended_keys,
             set_clipboard: f.set_clipboard,

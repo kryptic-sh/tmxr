@@ -116,6 +116,8 @@ pub struct Attached {
     pub status_ranges: crate::render::StatusRanges,
     /// Whether this client was last told to capture the mouse.
     pub mouse: bool,
+    /// Whether this client was last told to ask for focus reports.
+    pub focus_events: bool,
     /// When this client's status timer last fired (`status-interval`).
     pub status_at: Instant,
     /// Focused: from attaching until the terminal reports focus out, then
@@ -528,6 +530,7 @@ impl Server {
                 if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
                     a.full_redraw = true;
                     a.mouse = false;
+                    a.focus_events = false;
                     a.dirty = true;
                     a.locked = false;
                     // Unlocking is activity: lock-after-time starts again.
@@ -965,11 +968,13 @@ impl Server {
             // The `mouse` option reaches the client's terminal with its next
             // frame, after attaching or after the option changes.
             let mouse = self.client_session_options(id).mouse;
+            let focus = self.cfg.focus_events;
             let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
                 continue;
             };
             att.dirty = false;
             let tell_mouse = std::mem::replace(&mut att.mouse, mouse) != mouse;
+            let tell_focus = std::mem::replace(&mut att.focus_events, focus) != focus;
             let full = std::mem::take(&mut att.full_redraw);
             let Some(mut term) = att.term.take() else {
                 continue;
@@ -1001,6 +1006,9 @@ impl Server {
             }
             if tell_mouse {
                 self.send(id, ServerMsg::Mouse(mouse));
+            }
+            if tell_focus {
+                self.send(id, ServerMsg::FocusEvents(focus));
             }
         }
     }

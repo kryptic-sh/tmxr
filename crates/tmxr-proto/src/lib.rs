@@ -15,7 +15,7 @@ pub use codec::{ProtoError, read_msg, write_msg};
 
 /// Bumped on any change to a type in this module. Client and server refuse to
 /// talk across a mismatch rather than mis-decode each other.
-pub const PROTOCOL_VERSION: u32 = 6;
+pub const PROTOCOL_VERSION: u32 = 7;
 
 /// First message a client sends.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -93,6 +93,9 @@ pub enum ServerMsg {
     /// Turn the attached client's mouse capture on or off (the `mouse`
     /// option); with it off, the terminal's own selection works unshifted.
     Mouse(bool),
+    /// Ask the attached client's terminal for focus reports or stop (the
+    /// `focus-events` option), as tmux's tty_start_tty asks.
+    FocusEvents(bool),
     /// Stop the client process (`suspend-client`), as `C-z` stops a program.
     Suspend,
     /// Lock the client (`lock-client`): hand the terminal to this shell

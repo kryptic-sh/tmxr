@@ -22,6 +22,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The `focus-events` server option**, as tmux's, on by default as
+  tmux-sensible sets it: off, the client's terminal is not asked for focus
+  reports, and a pane made active or a window made current is not told of focus
+  (`CSI I` / `CSI O`, `pane-focus-in` / `-out`); attaching, a popup or menu
+  opening or closing, and a focus report still are. The client and server
+  protocol is now version 7: a client and server of different versions refuse
+  each other.
 - **The `remain-on-exit-format` option and `#{pane_dead_signal}`**, as tmux's: a
   pane `remain-on-exit` keeps gets the format's line written into its screen
   after a linefeed at the bottom (tmux's default reads

@@ -46,13 +46,9 @@ impl Guard {
     pub fn enter() -> io::Result<Self> {
         enable_raw_mode()?;
         let mut out = io::stdout();
-        // Mouse capture waits for the server's `Mouse` (the `mouse` option).
-        execute!(
-            out,
-            EnterAlternateScreen,
-            EnableBracketedPaste,
-            EnableFocusChange
-        )?;
+        // Mouse capture and focus reports wait for the server's `Mouse` and
+        // `FocusEvents` (the `mouse` and `focus-events` options).
+        execute!(out, EnterAlternateScreen, EnableBracketedPaste)?;
         // Unambiguous key reports (C-h vs Backspace, C-i vs Tab, Escape vs
         // Alt) where the terminal supports the kitty protocol.
         let kitty = crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false);
@@ -83,6 +79,14 @@ pub fn set_mouse(on: bool) -> io::Result<()> {
         execute!(io::stdout(), EnableMouseCapture)
     } else {
         execute!(io::stdout(), DisableMouseCapture)
+    }
+}
+
+pub fn set_focus_events(on: bool) -> io::Result<()> {
+    if on {
+        execute!(io::stdout(), EnableFocusChange)
+    } else {
+        execute!(io::stdout(), DisableFocusChange)
     }
 }
 

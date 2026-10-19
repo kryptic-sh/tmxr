@@ -30,6 +30,8 @@ exit-unattached = false
 prefix-timeout = 0
 destroy-unattached = "off"
 escape-time = 0
+# tmux-sensible's, where tmux's default is off: panes are told of focus.
+focus-events = true
 display-time = 4000
 display-panes-time = 1000
 status-interval = 5
