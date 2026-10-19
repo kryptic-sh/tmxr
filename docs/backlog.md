@@ -466,12 +466,13 @@ table. What has been verified, and how:
     default `reverse` would change tmxr's theme, which shows flags in its window
     format), `status-fg` / `-bg`; `pane-border-status` / `-format` / `-lines` /
     `-indicators`, `window-style` / `window-active-style`; session
-    `status-keys`, `assume-paste-time`, `default-size`; window
+    `status-keys`, `assume-paste-time` (and `default-size` set per session by
+    `new-session -x` / `-y`, which tmux keeps and tmxr does not); window
     `aggressive-resize`, `alternate-screen`, `remain-on-exit-format` (its
-    default needs `#{pane_dead_time}` and `#{pane_dead_signal}`, which tmxr does
-    not have; the dead-pane line is a fixed `Pane is dead (status N)` in
-    `render.rs`); server `focus-events`, `history-file`, `editor`. `escape-time`
-    is kept but never read.
+    default needs `#{pane_dead_signal}`, which tmxr does not have,
+    `#{pane_dead_time}` it now has; the dead-pane line is a fixed
+    `Pane is dead (status N)` in `render.rs`); server `focus-events`,
+    `history-file`, `editor`. `escape-time` is kept but never read.
   - Commands: `capture-pane -e -a -T` (`-e` needs tmux's own SGR output, `-a`
     the saved normal screen, which `vt100` does not expose). `-T`, `-N` and `-J`
     all need written cells told from never-written ones, which `copy::snapshot`

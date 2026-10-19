@@ -37,6 +37,8 @@ repeat-time = 500
 default-terminal = "tmux-256color"
 # tmux's default: a new pane given no command runs the shell.
 default-command = ""
+# tmux's default: the size a detached new session's windows get.
+default-size = "80x24"
 extended-keys = "always"
 set-clipboard = "on"
 # 24-bit colour on every terminal, as the tmux config's `terminal-overrides

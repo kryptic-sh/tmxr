@@ -33,15 +33,7 @@ pub(super) fn run(
                 return Ok(true);
             }
             let flags = client_flags(a.value('f'))?;
-            // -x / -y are the window's size, as tmux's: no status row comes
-            // out of them.
-            let size = match (a.value('x'), a.value('y')) {
-                (Some(x), Some(y)) => (
-                    x.parse().map_err(|_| "bad -x")?,
-                    y.parse::<u16>().map_err(|_| "bad -y")?.max(1),
-                ),
-                _ => client_size(srv, ctx),
-            };
+            let size = new_session_size(srv, ctx, a)?;
             let cwd = cwd_arg(srv, ctx, None, a)
                 .or_else(|| ctx.cwd.clone())
                 .unwrap_or_else(crate::util::home_dir);
@@ -321,7 +313,9 @@ pub(super) fn run(
             }
         }
         "resurrect-restore" => {
-            let done = crate::resurrect::restore(srv, client_size(srv, ctx))?;
+            // Restored sessions are detached: default-size, as new ones.
+            let size = srv.default_size().unwrap_or((80, 24));
+            let done = crate::resurrect::restore(srv, size)?;
             if let Some(c) = attached_client(srv, ctx) {
                 srv.show_message(c, done.message());
             }
@@ -371,6 +365,40 @@ pub(super) fn target_client(srv: &Server, spec: &str) -> Result<ClientId, String
         .ok()
         .filter(|id| srv.clients.get(id).is_some_and(|c| c.att.is_some()))
         .ok_or_else(|| format!("can't find client: {spec}"))
+}
+
+/// A new session's window size, as tmux's cmd_new_session: attached, the
+/// client's terminal less its status row; detached, the global
+/// `default-size` (80x24 if it does not parse), with -x / -y taking each
+/// side (`-` the client's terminal's), no status row coming out of them.
+fn new_session_size(srv: &Server, ctx: &Ctx, a: &Args) -> Result<(u16, u16), String> {
+    let terminal = || {
+        ctx.client.and_then(|c| srv.clients.get(&c)).and_then(|c| {
+            c.hello
+                .as_ref()?
+                .terminal
+                .as_ref()
+                .map(|t| (t.cols, t.rows))
+        })
+    };
+    let side = |flag: char, fallback: u16, of_terminal: fn((u16, u16)) -> u16| match a.value(flag) {
+        Some("-") => Ok(terminal().map_or(fallback, of_terminal)),
+        Some(v) => v.parse::<u16>().ok().filter(|n| *n > 0).ok_or_else(|| {
+            format!(
+                "{} {v} is invalid",
+                if flag == 'x' { "width" } else { "height" }
+            )
+        }),
+        None => Ok(fallback),
+    };
+    let (dx, dy) = (side('x', 80, |t| t.0)?, side('y', 24, |t| t.1)?);
+    if !a.has('d') && terminal().is_some() {
+        return Ok(client_size(srv, ctx));
+    }
+    let (sx, sy) = srv.default_size().unwrap_or((dx, dy));
+    let sx = if a.value('x').is_some() { dx } else { sx };
+    let sy = if a.value('y').is_some() { dy } else { sy };
+    Ok((sx.max(1), sy.max(1)))
 }
 
 /// Attach the command's client to `sid` (or switch it there), as

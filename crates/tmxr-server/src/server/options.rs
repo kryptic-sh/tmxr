@@ -21,6 +21,13 @@ impl Server {
 
     /// The options of the session client `client` is attached to; the
     /// global ones for a client that is not.
+    /// The global `default-size`, `WxH`, a detached session's windows get;
+    /// `None` when it does not parse.
+    pub fn default_size(&self) -> Option<(u16, u16)> {
+        let (w, h) = self.cfg.session.default_size.split_once('x')?;
+        Some((w.parse().ok()?, h.parse().ok()?))
+    }
+
     /// The rows `session`'s status line takes: one, or none with `status`
     /// off.
     pub fn status_rows(&self, session: SessionId) -> u16 {

@@ -309,3 +309,20 @@ checks = [
   { screen_find = "W1" },
   { screen_find = "[R]" },
 ]
+
+[[cases]]
+name = "default_size_sizes_detached_sessions"
+steps = [
+  { run = "set -g default-size 100x30" },
+  { run = "new-session -d -s dsa" },
+  { run = "new-session -d -s dsb -x 90" },
+  { run = "new-session -d -s dsc -y 10" },
+  { run = "new-session -d -s dsd -x 70 -y 20" },
+]
+checks = [
+  { command = "display -p -t dsa '#{window_width}x#{window_height}'" },
+  { command = "display -p -t dsb '#{window_width}x#{window_height}'" },
+  { command = "display -p -t dsc '#{window_width}x#{window_height}'" },
+  { command = "display -p -t dsd '#{window_width}x#{window_height}'" },
+  { command = "show -gv default-size" },
+]

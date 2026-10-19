@@ -24,6 +24,8 @@ options_table! {
     /// The shell new panes run; none (or empty) is the platform's default,
     /// as tmxr-term's `pty::default_shell` picks it.
     "default-shell" => default_shell: Option<String>,
+    /// The size, `WxH`, a detached `new-session` makes its windows.
+    "default-size" => default_size: String,
     /// Whether the session goes once no client is attached to it.
     "destroy-unattached" => destroy_unattached: DestroyUnattached,
     /// `display-panes` number colour for the active pane, and the others.

@@ -22,6 +22,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The `default-size` option**, as tmux's: the size a detached `new-session`
+  makes its windows (`80x24` by default), `-x` or `-y` taking either side.
 - **The `status` option**, as tmux's: `set -g status off` drops the status line
   and gives its row to the windows (`status = false` under `[status]` in the
   config). tmux's `2` to `5` rows are not taken.
@@ -250,6 +252,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **A detached `new-session` is sized as tmux's**: `default-size` (80x24), not
+  the terminal it was typed in, with `-x` and `-y` each taking one side (`-` the
+  terminal's); an attaching one takes its terminal's size, `-x` / `-y` aside.
+  Sessions `resurrect` restores get `default-size` too.
 - **Copy mode's `search-forward` / `search-backward` take a regular
   expression**, as tmux's: a search holding one of `^$*+()?[].\` is an extended
   regular expression (so the `/` and `?` prompts' searches are), one without is

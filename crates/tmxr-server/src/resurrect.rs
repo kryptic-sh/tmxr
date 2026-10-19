@@ -633,7 +633,8 @@ pub fn restore(srv: &mut Server, size: (u16, u16)) -> Result<Restored, String> {
 /// Restore when the server starts (`resurrect.restore-on-start`).
 pub fn restore_on_start(srv: &mut Server) -> Result<(), String> {
     if let Some(save) = read_last(&dir(&srv.endpoint)?)? {
-        let done = apply(srv, &save, (80, 23))?;
+        let size = srv.default_size().unwrap_or((80, 24));
+        let done = apply(srv, &save, size)?;
         if !done.missing_dirs.is_empty() {
             srv.log_message(format!("resurrect: {}", done.message()));
         }
