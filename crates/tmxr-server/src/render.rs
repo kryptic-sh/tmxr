@@ -415,6 +415,7 @@ fn draw_pane(
     let pane = srv.panes.get(&pid)?;
     let w = r.w.min(max_w.saturating_sub(r.x));
     let h = r.h.min(max_h.saturating_sub(r.y));
+    let base = pane_default_style(srv, pid);
     if pane.clock {
         draw_clock(buf, Rect::new(r.x, r.y, w, h), copy.clock, copy.clock_style);
         return None;
@@ -427,7 +428,8 @@ fn draw_pane(
             for col in 0..w {
                 let x = usize::from(col);
                 let cell = line.and_then(|l| l.cells.get(x));
-                let mut style = cell.map(|c| c.style).unwrap_or_default();
+                let mut style =
+                    with_default_colours(cell.map(|c| c.style).unwrap_or_default(), base);
                 if let Some((start, _)) = matches.iter().find(|(s, e)| (*s..*e).contains(&x)) {
                     let current = y == cm.cy && *start == cm.cx;
                     style = style.patch(if current { copy.current } else { copy.matched });
@@ -469,12 +471,61 @@ fn draw_pane(
         }
         return None;
     }
-    draw_screen(pane.emu.screen(), buf, Rect::new(r.x, r.y, w, h))
+    draw_screen(pane.emu.screen(), buf, Rect::new(r.x, r.y, w, h), base)
+}
+
+/// The colours pane `pid`'s cells take where its program set none, as
+/// tmux's tty_default_colours: `window-active-style`'s for its window's
+/// active pane, where that sets a colour, else `window-style`'s. Only the
+/// foreground and background.
+fn pane_default_style(srv: &Server, pid: PaneId) -> Style {
+    let Some(pane) = srv.panes.get(&pid) else {
+        return Style::default();
+    };
+    let options = srv.pane_options(pid);
+    let vars = Vars::for_pane(srv, Some(pid), None);
+    let inactive = style_option(&options.window_style, &vars);
+    let active = srv
+        .windows
+        .get(&pane.window)
+        .is_some_and(|w| w.active == pid)
+        .then(|| style_option(&options.window_active_style, &vars));
+    let set = |c: Option<Color>| c.filter(|c| *c != Color::Reset);
+    let fg = active.and_then(|a| set(a.fg)).or_else(|| set(inactive.fg));
+    let bg = active.and_then(|a| set(a.bg)).or_else(|| set(inactive.bg));
+    Style {
+        fg,
+        bg,
+        ..Style::default()
+    }
+}
+
+/// `style` with `base`'s colours where it has the terminal's default.
+fn with_default_colours(style: Style, base: Style) -> Style {
+    let unset = |c: Option<Color>| c.is_none_or(|c| c == Color::Reset);
+    Style {
+        fg: if unset(style.fg) {
+            base.fg.or(style.fg)
+        } else {
+            style.fg
+        },
+        bg: if unset(style.bg) {
+            base.bg.or(style.bg)
+        } else {
+            style.bg
+        },
+        ..style
+    }
 }
 
 /// Draw a program's screen into `area`. Returns where its cursor is, if
 /// shown and inside the area.
-fn draw_screen(screen: &vt100::Screen, buf: &mut Buffer, area: Rect) -> Option<Position> {
+fn draw_screen(
+    screen: &vt100::Screen,
+    buf: &mut Buffer,
+    area: Rect,
+    base: Style,
+) -> Option<Position> {
     for row in 0..area.height {
         for col in 0..area.width {
             let Some(out) = buf.cell_mut((area.x + col, area.y + row)) else {
@@ -486,10 +537,11 @@ fn draw_screen(screen: &vt100::Screen, buf: &mut Buffer, area: Rect) -> Option<P
                 }
                 Some(c) => {
                     let sym = if c.has_contents() { c.contents() } else { " " };
-                    out.set_symbol(sym).set_style(cell_style(c));
+                    out.set_symbol(sym)
+                        .set_style(with_default_colours(cell_style(c), base));
                 }
                 None => {
-                    out.set_symbol(" ").set_style(Style::default());
+                    out.set_symbol(" ").set_style(base);
                 }
             }
         }
@@ -776,7 +828,7 @@ fn draw_overlay(
                 draw_box(buf, area, lines, style, &p.title);
             }
             let inner = p.inner().intersection(area);
-            let cursor = draw_screen(p.emu.screen(), buf, inner);
+            let cursor = draw_screen(p.emu.screen(), buf, inner, Style::default());
             cursor.filter(|_| !p.exited)
         }
     }

@@ -205,6 +205,8 @@ pub const PANE_OPTIONS: &[&str] = &[
     "remain-on-exit",
     "remain-on-exit-format",
     "synchronize-panes",
+    "window-active-style",
+    "window-style",
 ];
 
 /// Copy mode's and the command prompt's key set (tmux's `mode-keys`).
@@ -383,6 +385,9 @@ options_table! {
     "remain-on-exit-format" => remain_on_exit_format: String,
     /// Send what is typed in a pane to all of its window's panes.
     "synchronize-panes" => synchronize_panes: bool,
+    /// The colours the window's active pane takes where its program sets
+    /// none, over `window-style`'s; `default`, none of its own.
+    "window-active-style" => window_active_style: String,
     "window-size" => window_size: WindowSize,
     "window-status-current-format" => window_status_current_format: String,
     /// The style the current window's entry is drawn over; `default` takes
@@ -395,6 +400,9 @@ options_table! {
     "window-status-separator" => window_status_separator: String,
     /// The style each window's entry is drawn over, on the status line's.
     "window-status-style" => window_status_style: String,
+    /// The colours a pane takes where its program sets none; `default`,
+    /// the terminal's.
+    "window-style" => window_style: String,
     /// A copy-mode search goes on from the other end when it reaches one.
     "wrap-search" => wrap_search: bool,
 }

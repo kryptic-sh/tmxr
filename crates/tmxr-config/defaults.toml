@@ -74,6 +74,9 @@ word-separators = '''!"#$%&'()*+,-./:;<=>?@[\]^`{|}~'''
 # "largest" or "smallest" (of the session's clients, each way), or "manual"
 # (only by resize-window).
 window-size = "latest"
+# tmux's defaults: panes keep the terminal's colours.
+window-style = "default"
+window-active-style = "default"
 # tmux's defaults: no activity or silence alerts.
 monitor-activity = false
 monitor-silence = 0

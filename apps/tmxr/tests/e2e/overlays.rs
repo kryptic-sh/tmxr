@@ -196,6 +196,26 @@ fn status_fg_and_bg_colour_the_status_line_over_its_style() {
     });
 }
 
+#[test]
+fn window_style_colours_panes_and_window_active_style_the_active_one() {
+    let t = Tmxr::new("winstyle");
+    let s = t.attach(&["new", "-s", "ws"]);
+    s.wait_for("status line", |text| text.contains("ws"));
+    t.run(&["split-window", "-h", "-t", "ws"]);
+    t.run(&["set", "-g", "window-style", "bg=red"]);
+    t.run(&["set", "-g", "window-active-style", "bg=green"]);
+    // The new pane, on the right, is active.
+    let bg = |s: &Screen, col: usize| s.row_cells(5)[col].2.clone();
+    s.wait_for_cells("the panes' colours", |s| {
+        bg(s, 2) == "Idx(1)" && bg(s, COLS as usize - 3) == "Idx(2)"
+    });
+    // Unset, the active pane takes window-style's too.
+    t.run(&["set", "-g", "window-active-style", "default"]);
+    s.wait_for_cells("both red", |s| {
+        bg(s, 2) == "Idx(1)" && bg(s, COLS as usize - 3) == "Idx(1)"
+    });
+}
+
 // Unix only: ConPTY asks its own terminal for focus reports when it starts
 // and keeps a `?1004l` to itself (seen on Windows 11), so a Windows client's
 // requests never show.
