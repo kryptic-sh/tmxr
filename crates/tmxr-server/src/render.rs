@@ -9,7 +9,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph, Widget};
 use tmxr_command::format::{self, Colour};
-use tmxr_config::PaneLines;
+use tmxr_config::{PaneIndicators, PaneLines};
 
 use crate::backend::AnsiBackend;
 use crate::copy::cell_style;
@@ -326,6 +326,31 @@ fn draw_window(
     };
     let rect_of = |pane: PaneId| rects.iter().find(|(p, _)| *p == pane).map(|(_, r)| *r);
     let active = rect_of(win.active);
+    // Two panes: their shared border coloured by halves (tmux's
+    // screen_redraw_two_panes), with `colour` or `both` indicators.
+    let halves = matches!(
+        options.pane_border_indicators,
+        PaneIndicators::Colour | PaneIndicators::Both
+    );
+    let splits = match rects.as_slice() {
+        [_, (_, second)] if halves => (second.x != 0, second.y != 0),
+        _ => (false, false),
+    };
+    let arrows = matches!(
+        options.pane_border_indicators,
+        PaneIndicators::Arrows | PaneIndicators::Both
+    );
+    // The pane a border cell belongs to, as tmux's screen_redraw_check_cell:
+    // the first, from the active pane on in order, whose border it is.
+    let panes = win.panes();
+    let start = panes.iter().position(|p| *p == win.active).unwrap_or(0);
+    let owner = |x: u16, y: u16| {
+        panes[start..].iter().chain(&panes[..start]).find_map(|p| {
+            rect_of(*p)
+                .filter(|r| border_side(*r, x, y, splits).is_some())
+                .map(|r| (*p, r))
+        })
+    };
     // The marked pane's border is drawn reversed, as tmux does.
     let marked = srv.marked_pane().and_then(rect_of);
     let touches = |rect: Option<hjkl_layout::LayoutRect>, x: u16, y: u16| {
@@ -368,12 +393,12 @@ fn draw_window(
                     _ => 5,
                 },
             };
+            let side = active.and_then(|a| border_side(a, x, y, splits));
             let number;
-            let ch = match options.pane_border_lines {
+            let mut ch = match options.pane_border_lines {
                 PaneLines::Number => {
-                    // The first pane whose border holds it, as tmux's
-                    // screen_redraw_check_cell, by its index.
-                    let index = win.panes().iter().position(|p| touches(rect_of(*p), x, y));
+                    // Its pane's index.
+                    let index = owner(x, y).and_then(|(p, _)| panes.iter().position(|q| *q == p));
                     number = index.map_or_else(
                         || "*".to_owned(),
                         |i| ((i as u32 + options.pane_base_index) % 10).to_string(),
@@ -382,7 +407,30 @@ fn draw_window(
                 }
                 lines => border_char(lines, cell),
             };
-            let mut style = if touches(active, x, y) && rects.len() > 1 {
+            // An arrow one cell into the pane whose border it is, pointing
+            // at the active pane, as tmux's screen_redraw_draw_borders_cell.
+            if arrows
+                && let Some(side) = side
+                && let Some((_, owner)) = owner(x, y)
+            {
+                let along = x == owner.x + 1
+                    && (cell == 1
+                        || (cell == 6 && side == Side::Bottom)
+                        || (cell == 7 && side == Side::Top));
+                let down = y == owner.y + 1
+                    && (cell == 0
+                        || (cell == 8 && side == Side::Right)
+                        || (cell == 9 && side == Side::Left));
+                if along || down {
+                    ch = match side {
+                        Side::Left => "→",
+                        Side::Right => "←",
+                        Side::Top => "↓",
+                        Side::Bottom => "↑",
+                    };
+                }
+            }
+            let mut style = if side.is_some() && rects.len() > 1 {
                 active_border
             } else {
                 border
@@ -411,6 +459,60 @@ fn draw_window(
         }
     }
     cursor
+}
+
+/// A side of a pane's border.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Side {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
+/// Which of `r`'s borders the cell (`x`, `y`) is on, as tmux's
+/// screen_redraw_pane_border without pane status lines (a scrollbar is
+/// inside the layout cell): with `splits` (two panes side by side, two
+/// stacked), only the half of the shared border nearer the pane.
+fn border_side(
+    r: hjkl_layout::LayoutRect,
+    x: u16,
+    y: u16,
+    (hsplit, vsplit): (bool, bool),
+) -> Option<Side> {
+    let (ex, ey) = (r.x + r.w, r.y + r.h);
+    if x >= r.x && x < ex && y >= r.y && y < ey {
+        return None;
+    }
+    if (r.y == 0 || y + 1 >= r.y) && y <= ey {
+        if r.x == 0 && x == r.w && (!hsplit || y <= r.h / 2) {
+            return Some(Side::Right);
+        }
+        if r.x != 0 {
+            if x + 1 == r.x && (!hsplit || y > r.h / 2) {
+                return Some(Side::Left);
+            }
+            if x == ex {
+                return Some(Side::Right);
+            }
+        }
+    }
+    if vsplit {
+        if r.y == 0 && y == r.h && x <= r.w / 2 {
+            return Some(Side::Bottom);
+        }
+        if r.y != 0 && y + 1 == r.y && x > r.w / 2 {
+            return Some(Side::Top);
+        }
+    } else if (r.x == 0 || x >= r.x) && x <= ex {
+        if r.y != 0 && y + 1 == r.y {
+            return Some(Side::Top);
+        }
+        if y == ey {
+            return Some(Side::Bottom);
+        }
+    }
+    None
 }
 
 /// The character `lines` draws a border cell of tmux's type `cell` (one

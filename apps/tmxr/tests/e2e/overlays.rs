@@ -197,6 +197,28 @@ fn status_fg_and_bg_colour_the_status_line_over_its_style() {
 }
 
 #[test]
+fn two_panes_colour_half_their_border_with_colour_indicators() {
+    let t = Tmxr::new("halves");
+    let s = t.attach(&["new", "-s", "hv"]);
+    s.wait_for("status line", |text| text.contains("hv"));
+    t.run(&["split-window", "-h", "-t", "hv"]);
+    t.run(&["set", "-g", "pane-border-style", "fg=red"]);
+    t.run(&["set", "-g", "pane-active-border-style", "fg=green"]);
+    // The border column between the panes; the new, right one is active.
+    let col = usize::from(COLS / 2);
+    let fg = |s: &Screen, row: u16| s.row_cells(row)[col].1.clone();
+    // tmux's default, colour: only the half nearer the active pane.
+    s.wait_for_cells("the lower half green", |s| {
+        fg(s, 3) == "Idx(1)" && fg(s, ROWS - 4) == "Idx(2)"
+    });
+    // off: the active pane's whole border.
+    t.run(&["set", "-g", "pane-border-indicators", "off"]);
+    s.wait_for_cells("all of it green", |s| {
+        fg(s, 3) == "Idx(2)" && fg(s, ROWS - 4) == "Idx(2)"
+    });
+}
+
+#[test]
 fn window_style_colours_panes_and_window_active_style_the_active_one() {
     let t = Tmxr::new("winstyle");
     let s = t.attach(&["new", "-s", "ws"]);

@@ -24,6 +24,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The `pane-border-indicators` option**, as tmux's: `arrows` and `both` draw
+  arrows on the active pane's borders, pointing at it.
 - **The `pane-border-lines` option**, as tmux's: pane borders in `single`,
   `double` or `heavy` lines, `simple` ASCII, `spaces`, or `number`, each border
   cell its pane's index.
@@ -309,6 +311,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Two panes colour half their shared border**, as tmux's default
+  `pane-border-indicators colour`: only the half nearer the active pane takes
+  `pane-active-border-style`. `pane-border-lines number` gives a border cell the
+  index of the pane tmux gives it, looking from the active pane.
 - **A window is sized by every client whose session holds it**, as tmux's
   `recalculate_size`: one linked into several sessions takes all their clients
   into account, not only one session's; `window-size latest` takes the window's

@@ -15,6 +15,9 @@ base-index = 0
 pane-base-index = 0
 # tmux's default: pane borders in single lines.
 pane-border-lines = "single"
+# tmux's default: the active pane's border coloured, half of it with two
+# panes.
+pane-border-indicators = "colour"
 renumber-windows = true
 mode-keys = "vi"
 # tmux-sensible values.

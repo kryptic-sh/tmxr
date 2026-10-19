@@ -290,6 +290,42 @@ pub enum BoxLines {
     None,
 }
 
+/// `pane-border-indicators`: how the active pane's border shows it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PaneIndicators {
+    Off,
+    /// In a window of two panes, only the half of the border nearer it in
+    /// `pane-active-border-style`.
+    Colour,
+    /// Arrows on its borders, pointing at it.
+    Arrows,
+    Both,
+}
+
+impl PaneIndicators {
+    pub const NAMES: &str = "off, colour, arrows or both";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "off" => Some(Self::Off),
+            "colour" => Some(Self::Colour),
+            "arrows" => Some(Self::Arrows),
+            "both" => Some(Self::Both),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Colour => "colour",
+            Self::Arrows => "arrows",
+            Self::Both => "both",
+        }
+    }
+}
+
 /// `pane-border-lines`: what tmux draws pane borders with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -416,6 +452,8 @@ options_table! {
     "other-pane-width" => other_pane_width: String,
     "pane-active-border-style" => pane_active_border_style: String,
     "pane-base-index" => pane_base_index: u32,
+    /// How the active pane's border shows it.
+    "pane-border-indicators" => pane_border_indicators: PaneIndicators,
     /// What pane borders are drawn with.
     "pane-border-lines" => pane_border_lines: PaneLines,
     "pane-border-style" => pane_border_style: String,

@@ -372,3 +372,42 @@ steps = [
   { sleep = 0.5 },
 ]
 checks = [{ screen_find = "0" }, { command = "show -gv pane-border-lines" }]
+
+[[cases]]
+name = "pane_border_indicators_arrows_side_by_side"
+attach = true
+unix_only = true
+steps = [
+  { run = "split-window -h -t o" },
+  { run = "set -g pane-border-indicators arrows" },
+  { sleep = 0.5 },
+]
+checks = [{ screen_find = "→" }, { screen_contains = "←", expect = false }]
+
+[[cases]]
+name = "pane_border_indicators_both_stacked"
+attach = true
+unix_only = true
+steps = [
+  { run = "split-window -v -t o" },
+  { run = "select-pane -t o.0" },
+  { run = "set -g pane-border-indicators both" },
+  { sleep = 0.5 },
+]
+checks = [{ screen_find = "↑" }, { screen_contains = "↓", expect = false }]
+
+[[cases]]
+name = "pane_border_indicators_arrows_three_panes"
+attach = true
+unix_only = true
+steps = [
+  { run = "split-window -h -t o" },
+  { run = "split-window -v -t o" },
+  { run = "set -g pane-border-indicators arrows" },
+  { sleep = 0.5 },
+]
+checks = [
+  { screen_find = "→" },
+  { screen_find = "↓" },
+  { command = "show -gv pane-border-indicators" },
+]
