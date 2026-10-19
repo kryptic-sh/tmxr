@@ -515,10 +515,10 @@ table. What has been verified, and how:
   runs alone and the next full run passed. The failure output was not kept, so
   the cause is unknown: a guess is ConPTY redrawing the pane after
   `cmd /c echo`, moving the line `history-top` lands on.
-- **Flags the command table accepts but no handler reads** (an audit of every
-  `cmd!` entry against its arm and helpers, 2026-10-18, as the audit reported):
-  `customize-mode -a -F -N -t`. Each should be implemented or refused, not
-  accepted silently. Harmless, as what happens anyway: `-v` on `split-window` /
+- **Flags the command table accepts that change nothing** (from an audit of
+  every `cmd!` entry against its arm and helpers, 2026-10-18; the ones that did
+  matter are implemented or refused since). Harmless, as what happens anyway:
+  `customize-mode -N` (tmxr's picker has no preview), `-v` on `split-window` /
   `join-pane` / `move-pane`, `rotate-window -U`, `choose-tree -s`,
   `set-option -s` (tmxr picks the table from the name), `clear-history -H` (tmxr
   keeps no hyperlinks), and `-Z` on `choose-buffer`, `choose-client`,

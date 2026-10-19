@@ -8,6 +8,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Breaking
 
+- **`customize-mode` refuses `-a` and `-F`**, which it accepted and ignored:
+  tmux's has no `-a`, and its `-F` formats tree lines tmxr's picker does not
+  have.
 - **The client-server protocol is now 6** (the client sends its process id, for
   `#{client_pid}`): after upgrading, a running server must be restarted
   (`tmxr kill-server`); the client says so if it meets one.
@@ -19,6 +22,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`customize-mode -t`**, as tmux's: the target's session, window and pane
+  options are listed first, each edited back at its own scope.
 - **The `client-active` hook**, as tmux's: it runs when a client becomes its
   window's latest by typing or resizing there after another client did, and when
   the latest client leaves and the window passes to another; attaching or

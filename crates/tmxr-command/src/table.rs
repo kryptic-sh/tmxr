@@ -121,10 +121,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "customize-mode",
         None,
-        "aF:f:Nt:Z",
+        "f:Nt:Z",
         0,
         0,
-        "[-aNZ] [-F format] [-f filter] [-t target-pane]"
+        "[-NZ] [-f filter] [-t target-pane]"
     ),
     cmd!(
         "delete-buffer",

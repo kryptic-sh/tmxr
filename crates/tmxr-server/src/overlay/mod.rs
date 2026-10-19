@@ -249,7 +249,14 @@ impl Overlay {
     /// `customize-mode`: every option and key bind, as the command that sets
     /// it; Enter puts that command in the prompt to change. Opens filtered
     /// by `query`.
-    pub fn customize_picker(srv: &Server, query: &str) -> Self {
+    /// The options and binds to change, `local` (a target's own options,
+    /// as `(line, setting command)`) first.
+    pub fn customize_picker(srv: &Server, query: &str, local: Vec<(String, String)>) -> Self {
+        let local = local.into_iter().map(|(line, set)| Item {
+            label: format!("option {line}"),
+            matches: line,
+            target: Target::Edit(set),
+        });
         let options = crate::cmds::option_lines(srv).into_iter().map(|l| Item {
             label: format!("option {l}"),
             matches: l.clone(),
@@ -263,7 +270,7 @@ impl Overlay {
                 target: Target::Edit(line),
             }
         });
-        let items = options.chain(binds).collect();
+        let items = local.chain(options).chain(binds).collect();
         Self::Picker(Box::new(PickerOverlay::with_query(
             "customize",
             items,

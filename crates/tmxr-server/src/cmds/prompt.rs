@@ -457,7 +457,26 @@ pub(super) fn run(
         // nothing.
         "customize-mode" => {
             let c = super::display_client(srv, ctx).ok_or("no current client")?;
-            let ov = Overlay::customize_picker(srv, a.value('f').unwrap_or(""));
+            // -t: its session's, window's and pane's own options too, as
+            // tmux's tree shows the target's, each set back at its scope.
+            let mut local = Vec::new();
+            if let Some(t) = a.value('t') {
+                let (sid, wid, pid) = target::pane(srv, ctx, Some(t))?;
+                for (flag, id) in [
+                    ("", format!("${sid}")),
+                    ("-w ", format!("@{wid}")),
+                    ("-p ", format!("%{pid}")),
+                ] {
+                    let listed = super::run_line(srv, ctx, &format!("show-options {flag}-t {id}"));
+                    for line in listed.stdout.lines() {
+                        local.push((
+                            format!("{flag}-t {id} {line}"),
+                            format!("set-option {flag}-t {id} {line}"),
+                        ));
+                    }
+                }
+            }
+            let ov = Overlay::customize_picker(srv, a.value('f').unwrap_or(""), local);
             if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
                 att.overlay = Some(ov);
             }

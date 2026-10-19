@@ -629,6 +629,33 @@ fn display_popup_runs_a_command_over_the_panes() {
 }
 
 #[test]
+fn customize_mode_t_lists_the_targets_own_options() {
+    let t = Tmxr::new("customizet");
+    let s = t.attach(&["new", "-s", "ct"]);
+    s.wait_for("status line", |text| text.contains("ct"));
+    t.run(&["set-option", "-t", "ct", "status-left", "local-left"]);
+    let sid = t
+        .run(&["display-message", "-p", "-t", "ct", "#{session_id}"])
+        .trim()
+        .to_owned();
+    // -t: the session's own setting, to be set again at its scope.
+    t.run(&["customize-mode", "-t", "ct", "-f", "local-left"]);
+    let line = format!("option -t {sid} status-left local-left");
+    s.wait_for("the session's option", |text| text.contains(&line));
+    s.send(b"\r");
+    let set = format!(":set-option -t {sid} status-left local-left");
+    s.wait_for("its set-option", |text| text.contains(&set));
+    s.send(b"\x1b");
+    // Flags tmux's customize-mode has no use for here are refused.
+    assert!(!t.output(&["customize-mode", "-a"]).status.success());
+    assert!(
+        !t.output(&["customize-mode", "-F", "#{name}"])
+            .status
+            .success()
+    );
+}
+
+#[test]
 fn customize_mode_edits_an_option_through_the_prompt() {
     let t = Tmxr::new("customize");
     let s = t.attach(&["new", "-s", "cu"]);
