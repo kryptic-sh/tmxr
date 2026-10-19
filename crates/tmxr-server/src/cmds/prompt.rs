@@ -465,16 +465,30 @@ pub(super) fn run(
         }
         "choose-tree" | "choose-buffer" | "choose-client" | "find-window" => {
             let c = super::display_client(srv, ctx).ok_or("no current client")?;
+            // The current session and window the tree starts from: -t's
+            // (tmux's target pane for the mode), else the client's.
+            let current = match a.value('t') {
+                Some(t) => {
+                    let (sid, idx, _) = target::window(srv, ctx, Some(t))?;
+                    Some((sid, idx))
+                }
+                None => srv
+                    .clients
+                    .get(&c)
+                    .and_then(|cl| cl.att.as_ref())
+                    .and_then(|at| srv.sessions.get(&at.session))
+                    .map(|s| (s.id, s.current)),
+            };
             let ov = match p.name() {
                 "choose-buffer" if srv.buffers.is_empty() => return Err("no buffers".into()),
                 "choose-buffer" => Overlay::buffer_picker(srv),
                 "choose-client" => Overlay::client_picker(srv),
                 "find-window" => {
                     let found = window_matcher(srv, a, &pos[0])?;
-                    Overlay::found_windows(srv, c, found)
+                    Overlay::found_windows(srv, current, found)
                 }
-                _ if a.has('w') => Overlay::window_picker(srv, c),
-                _ => Overlay::session_picker(srv, c),
+                _ if a.has('w') => Overlay::window_picker(srv, current),
+                _ => Overlay::session_picker(srv, current.map(|c| c.0)),
             };
             if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
                 att.overlay = Some(ov);

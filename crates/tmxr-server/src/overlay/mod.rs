@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::model::{ClientId, PaneId, SessionId};
+use crate::model::{PaneId, SessionId};
 use crate::server::Server;
 
 pub use boxes::{BoxLook, Lines};
@@ -138,12 +138,8 @@ impl Overlay {
         matches!(self, Self::Panes { until: Some(until), .. } if *until <= Instant::now())
     }
 
-    pub fn session_picker(srv: &Server, client: ClientId) -> Self {
-        let current = srv
-            .clients
-            .get(&client)
-            .and_then(|c| c.att.as_ref())
-            .map(|a| a.session);
+    /// Every session, `current` (marked) first.
+    pub fn session_picker(srv: &Server, current: Option<SessionId>) -> Self {
         let mut sessions: Vec<_> = srv.sessions.values().collect();
         sessions.sort_by_key(|s| std::cmp::Reverse(s.last_used));
         current_first(&mut sessions, |s| Some(s.id) == current);
@@ -170,23 +166,20 @@ impl Overlay {
         Self::Picker(Box::new(PickerOverlay::new("sessions", items)))
     }
 
-    /// Every session's windows, the client's session first.
-    pub fn window_picker(srv: &Server, client: ClientId) -> Self {
-        Self::found_windows(srv, client, |_| true)
+    /// Every session's windows, `current`'s session first and its window
+    /// marked.
+    pub fn window_picker(srv: &Server, current: Option<(SessionId, u32)>) -> Self {
+        Self::found_windows(srv, current, |_| true)
     }
 
     /// The windows `keep` accepts, laid out as [`Overlay::window_picker`]
     /// (`find-window`).
     pub fn found_windows(
         srv: &Server,
-        client: ClientId,
+        current: Option<(SessionId, u32)>,
         keep: impl Fn(&crate::model::Window) -> bool,
     ) -> Self {
-        let current = srv
-            .clients
-            .get(&client)
-            .and_then(|c| c.att.as_ref())
-            .map(|a| a.session);
+        let (current, current_index) = (current.map(|c| c.0), current.map(|c| c.1));
         let mut items = Vec::new();
         let mut sessions: Vec<_> = srv.sessions.values().collect();
         sessions.sort_by_key(|s| (Some(s.id) != current, s.name.clone()));
@@ -195,7 +188,7 @@ impl Overlay {
                 let Some(w) = srv.windows.get(wid).filter(|w| keep(w)) else {
                     continue;
                 };
-                let mark = if Some(s.id) == current && *idx == s.current {
+                let mark = if Some(s.id) == current && Some(*idx) == current_index {
                     "*"
                 } else {
                     " "

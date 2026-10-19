@@ -120,6 +120,25 @@ fn display_panes_runs_its_template_and_n_passes_keys_on() {
 }
 
 #[test]
+fn choose_tree_t_starts_from_its_target() {
+    let t = Tmxr::new("choosett");
+    let s = t.attach(&["new", "-s", "aa"]);
+    s.wait_for("status line", |text| text.contains("aa"));
+    t.run(&["new-session", "-d", "-s", "bb"]);
+    t.run(&["new-window", "-d", "-t", "bb:1", "-n", "second"]);
+    // The client's session is current without -t; -t's with it.
+    t.run(&["choose-tree", "-t", "bb"]);
+    s.wait_for("bb current", |text| text.contains("* bb:"));
+    s.send(b"\x1b");
+    s.wait_for("picker closed", |text| !text.contains("* bb:"));
+    t.run(&["choose-tree", "-w", "-t", "bb:1"]);
+    s.wait_for("bb:1 current", |text| text.contains("* bb:1 second"));
+    s.send(b"\x1b");
+    t.run(&["choose-tree"]);
+    s.wait_for("aa current", |text| text.contains("* aa:"));
+}
+
+#[test]
 fn client_active_runs_when_another_client_takes_the_window() {
     let t = Tmxr::new("cactive");
     t.run(&["new-session", "-d", "-s", "ca", "-x", "80", "-y", "24"]);

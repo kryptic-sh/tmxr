@@ -257,6 +257,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`choose-tree -t` and `find-window -t` start from their target**, as tmux's:
+  its session (and window) is the current one the picker marks and lists first,
+  where `-t` was accepted and ignored.
 - **A program's clipboard copy (OSC 52) is taken as tmux's**: only with
   `set-clipboard on` (`external`, tmux's default, leaves programs' copies
   alone), and it also becomes a paste buffer.

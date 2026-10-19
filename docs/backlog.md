@@ -517,15 +517,15 @@ table. What has been verified, and how:
   `cmd /c echo`, moving the line `history-top` lands on.
 - **Flags the command table accepts but no handler reads** (an audit of every
   `cmd!` entry against its arm and helpers, 2026-10-18, as the audit reported):
-  `-t` on `choose-tree` and `find-window`, `customize-mode -a -F -N -t`. Each
-  should be implemented or refused, not accepted silently. Harmless, as what
-  happens anyway: `-v` on `split-window` / `join-pane` / `move-pane`,
-  `rotate-window -U`, `choose-tree -s`, `set-option -s` (tmxr picks the table
-  from the name), `clear-history -H` (tmxr keeps no hyperlinks), and `-Z` on
-  `choose-buffer`, `choose-client`, `choose-tree`, `find-window` and
-  `customize-mode` (tmux zooms the pane under its pane modes; tmxr's pickers are
-  full-screen overlays). Separately, `source-file` replaces the config path and
-  reloads everything, where tmux runs the file's commands.
+  `customize-mode -a -F -N -t`. Each should be implemented or refused, not
+  accepted silently. Harmless, as what happens anyway: `-v` on `split-window` /
+  `join-pane` / `move-pane`, `rotate-window -U`, `choose-tree -s`,
+  `set-option -s` (tmxr picks the table from the name), `clear-history -H` (tmxr
+  keeps no hyperlinks), and `-Z` on `choose-buffer`, `choose-client`,
+  `choose-tree`, `find-window` and `customize-mode` (tmux zooms the pane under
+  its pane modes; tmxr's pickers are full-screen overlays). Separately,
+  `source-file` replaces the config path and reloads everything, where tmux runs
+  the file's commands.
 - **`list-keys -N` is laid out unlike tmux's** (compared on WSL with tmux 3.6,
   2026-10-18: tmux 87 lines, tmxr 276). tmux, without `-T`, lists only the root
   table (padded by the prefix's width) then the prefix table, each line `C-b `
