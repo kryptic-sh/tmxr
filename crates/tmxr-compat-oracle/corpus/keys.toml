@@ -103,3 +103,52 @@ checks = [
   { command = "display -p -t o.0 '#{pane_in_mode} #{copy_cursor_x},#{copy_cursor_y}'" },
   { command = "display -p -t o.1 '#{pane_in_mode}'" },
 ]
+
+[[cases]]
+name = "command_prompt_emacs_words_cut_and_paste"
+attach = true
+unix_only = true
+steps = [
+  { run = "command-prompt -b -I 'alpha beta-gamma delta' \"set -g @r '%%'\"" },
+  { sleep = 0.3 },
+  { keys = "\u0017" },
+  { sleep = 0.2 },
+  { keys = "\u001bb" },
+  { sleep = 0.2 },
+  { keys = "\u0019" },
+  { sleep = 0.2 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+]
+checks = [{ format = "[#{@r}]" }]
+
+[[cases]]
+name = "command_prompt_emacs_c_u_clears_and_c_t_transposes"
+attach = true
+unix_only = true
+steps = [
+  { run = "command-prompt -b -I 'abc def' \"set -g @r '%%'\"" },
+  { sleep = 0.3 },
+  { keys = "\u0001\u0006\u0006\u0015xy\u0014" },
+  { sleep = 0.2 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+]
+checks = [{ format = "[#{@r}]" }]
+
+[[cases]]
+name = "command_prompt_vi_keys"
+attach = true
+unix_only = true
+steps = [
+  { run = "set -g status-keys vi" },
+  { run = "command-prompt -b -I 'one two three' \"set -g @r '%%'\"" },
+  { sleep = 0.3 },
+  { keys = "\u001b" },
+  { sleep = 0.6 },
+  { keys = "bx0wiX" },
+  { sleep = 0.2 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+]
+checks = [{ format = "[#{@r}]" }, { command = "show -gv status-keys" }]

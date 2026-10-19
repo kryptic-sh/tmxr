@@ -737,9 +737,15 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
     }
     match &att.overlay {
         Some(Overlay::Prompt(p)) => {
-            buf.set_style(Rect::new(0, y, cols, 1), message_style);
+            // vi's command mode takes message-command-style, as tmux's.
+            let style = if p.command_mode {
+                style_option(&opts.message_command_style, &vars)
+            } else {
+                message_style
+            };
+            buf.set_style(Rect::new(0, y, cols, 1), style);
             let text = format!("{}{}", p.prompt, p.input.iter().collect::<String>());
-            buf.set_stringn(0, y, &text, usize::from(cols), message_style);
+            buf.set_stringn(0, y, &text, usize::from(cols), style);
             return ranges;
         }
         Some(Overlay::Confirm { prompt, .. }) => {

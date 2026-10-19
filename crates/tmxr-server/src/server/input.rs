@@ -228,6 +228,21 @@ impl Server {
         {
             s.activity = std::time::SystemTime::now();
         }
+        // A prompt's keys, word separators and newest buffer as they are
+        // now, as tmux reads them for each key.
+        let prompt_env = self
+            .clients
+            .get(&id)
+            .and_then(|c| c.att.as_ref())
+            .filter(|a| matches!(a.overlay, Some(Overlay::Prompt(_))))
+            .map(|a| {
+                let opts = self.session_options(a.session);
+                (
+                    opts.status_keys == tmxr_config::ModeKeys::Vi,
+                    opts.word_separators.clone(),
+                    self.buffers.front().map(|b| b.data.clone()),
+                )
+            });
         let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
             return;
         };
@@ -237,6 +252,9 @@ impl Server {
             att.dirty = true;
         }
         if let Some(mut ov) = att.overlay.take() {
+            if let (Overlay::Prompt(p), Some((vi, separators, paste))) = (&mut ov, prompt_env) {
+                (p.vi, p.separators, p.paste) = (vi, separators, paste);
+            }
             let action = ov.key(&ev);
             // display-panes -N: the overlay stays and the key goes on.
             if action == OverlayAction::Pass {

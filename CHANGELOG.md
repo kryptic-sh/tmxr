@@ -24,6 +24,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The `status-keys` and `message-command-style` options, and tmux's prompt
+  keys**: the command prompt takes tmux's emacs keys (`C-b` / `C-f`, `C-d`,
+  `C-p` / `C-n`, word moves on `M-b` / `M-f` and `C-Left` / `C-Right` by
+  `word-separators`, `C-w` cutting a word that `C-y` puts back before the newest
+  buffer, `C-t`, `C-v`), or with `status-keys vi` vi's insert and command modes,
+  the command mode drawn in `message-command-style`.
 - **The `pane-border-indicators` option**, as tmux's: `arrows` and `both` draw
   arrows on the active pane's borders, pointing at it.
 - **The `pane-border-lines` option**, as tmux's: pane borders in `single`,
@@ -311,6 +317,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`C-u` clears the whole command prompt**, as tmux's, not only what is before
+  the cursor.
 - **Two panes colour half their shared border**, as tmux's default
   `pane-border-indicators colour`: only the half nearer the active pane takes
   `pane-active-border-style`. `pane-border-lines number` gives a border cell the

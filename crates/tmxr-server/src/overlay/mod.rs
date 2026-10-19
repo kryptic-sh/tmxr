@@ -45,7 +45,7 @@ pub enum Overlay {
     Popup(Box<crate::popup::Popup>),
     /// `display-menu`.
     Menu(Box<crate::menu::Menu>),
-    Prompt(Prompt),
+    Prompt(Box<Prompt>),
     /// `confirm-before`: `cmd` runs on `key`, or on Enter with
     /// `default_yes` (`-y`); any other key closes it.
     Confirm {
@@ -75,7 +75,7 @@ impl Overlay {
     pub fn prompt(prompt: String, initial: String, template: Option<String>) -> Self {
         let input: Vec<char> = initial.chars().collect();
         let cursor = input.len();
-        Self::Prompt(Prompt {
+        Self::Prompt(Box::new(Prompt {
             prompt,
             input,
             cursor,
@@ -89,26 +89,22 @@ impl Overlay {
             kind: "command".into(),
             history: Vec::new(),
             recall: None,
-        })
+            vi: false,
+            command_mode: false,
+            separators: String::new(),
+            paste: None,
+            saved: None,
+            quote_next: false,
+        }))
     }
 
     /// A prompt answered by one key press (`command-prompt -k`).
     pub fn key_prompt(prompt: String, template: String) -> Self {
-        Self::Prompt(Prompt {
-            prompt,
-            input: Vec::new(),
-            cursor: 0,
-            template: Some(template),
-            pending: std::collections::VecDeque::new(),
-            answers: Vec::new(),
-            key: true,
-            incremental: false,
-            single: false,
-            numeric: false,
-            kind: "command".into(),
-            history: Vec::new(),
-            recall: None,
-        })
+        let mut o = Self::prompt(prompt, String::new(), Some(template));
+        if let Self::Prompt(p) = &mut o {
+            p.key = true;
+        }
+        o
     }
 
     pub fn confirm(prompt: String, cmd: String, key: char, default_yes: bool) -> Self {

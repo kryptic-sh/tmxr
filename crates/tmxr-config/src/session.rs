@@ -3,7 +3,7 @@
 //! `show-options` under tmux's names.
 
 use crate::table::{Array, Word, options_table};
-use crate::{AlertAction, DestroyUnattached, StatusJustify, StatusPosition, Visual};
+use crate::{AlertAction, DestroyUnattached, ModeKeys, StatusJustify, StatusPosition, Visual};
 
 options_table! {
     /// The session options every session has unless it sets its own: tmux's
@@ -47,6 +47,8 @@ options_table! {
     /// Shell command a locked client runs in its terminal; the client is
     /// unlocked when it exits.
     "lock-command" => lock_command: String,
+    /// The command prompt's style in vi's command mode (`status-keys vi`).
+    "message-command-style" => message_command_style: String,
     "message-style" => message_style: String,
     "mouse" => mouse: bool,
     /// The prefix key, by tmux key name.
@@ -75,6 +77,9 @@ options_table! {
     "status-interval" => status_interval: u64,
     /// Where the window list sits: left, centre, right or absolute-centre.
     "status-justify" => status_justify: StatusJustify,
+    /// The command prompt's keys: emacs's, or vi's with an insert and a
+    /// command mode.
+    "status-keys" => status_keys: ModeKeys,
     "status-left" => status_left: String,
     /// Most cells `status-left` may take.
     "status-left-length" => status_left_length: u16,

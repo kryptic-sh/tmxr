@@ -20,6 +20,8 @@ pane-border-lines = "single"
 pane-border-indicators = "colour"
 renumber-windows = true
 mode-keys = "vi"
+# tmux's default and tmux-sensible's: the command prompt takes emacs keys.
+status-keys = "emacs"
 # tmux-sensible values.
 history-limit = 50000
 prompt-history-limit = 100
@@ -176,6 +178,8 @@ window-separator = ""
 pane-border-style = "fg=#{@thm_surface1}"
 pane-active-border-style = "fg=#{@thm_blue}"
 message-style = "fg=#{@thm_fg},bg=#{@thm_surface0}"
+# tmux's default: the prompt in vi's command mode.
+message-command-style = "bg=black,fg=yellow"
 mode-style = "fg=#{@thm_fg},bg=#{@thm_selection}"
 # tmux colours matches cyan and the current one magenta; here the palette's
 # yellow and mauve.
