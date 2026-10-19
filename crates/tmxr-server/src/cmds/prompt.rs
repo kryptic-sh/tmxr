@@ -548,10 +548,14 @@ pub(super) fn run(
                 _ => Overlay::session_picker(srv, current.map(|c| c.0)),
             };
             // A template runs for the chosen item, as tmux's.
-            if p.name() != "find-window"
-                && let (Overlay::Picker(picker), Some(t)) = (&mut ov, pos.first())
+            // find-window's argument is its match, and its -N matches names.
+            if let Overlay::Picker(picker) = &mut ov
+                && p.name() != "find-window"
             {
-                picker.template = Some(t.clone());
+                picker.template = pos.first().cloned();
+                // -N: no preview; -y: no question before a kill.
+                picker.no_preview = a.has('N');
+                picker.no_confirm = a.has('y');
             }
             if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
                 att.overlay = Some(ov);

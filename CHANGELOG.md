@@ -24,6 +24,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`choose-tree`, `choose-client` and `choose-buffer` `-N` and `-y`**, as
+  tmux's: `-N` opens the picker without its preview, `-y` kills a session with
+  `C-x` without asking first.
 - **`choose-tree`, `choose-client` and `choose-buffer` templates**, as tmux's: a
   command given after the flags runs for the chosen item, its `%%` the item's
   target (`=session:`, `=session:index.`, the client, or the buffer's name).

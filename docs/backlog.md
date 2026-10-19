@@ -492,14 +492,15 @@ table. What has been verified, and how:
     output's end. tmux also keeps a tab as the tab character, where `vt100`
     keeps the spaces it moved over; `split-window -I`;
     `display-message -a -v -I` (`-a` lists every variable, which needs `vars.rs`
-    to enumerate its names); `choose-*` `-F -f -K -O -r -N -y` (their templates
-    run as tmux's; `find-window` takes none, its argument being the match),
-    tagging and sort keys; `command-prompt` completion (Tab) and incremental
-    search's `C-r` / `C-s` direction keys (tmux's `PROMPT_INCREMENTAL` prefixes
-    `-`, `+`, `=`); session groups (`new-session -t`); smaller flags:
-    `source-file -v`, several paths and globs (each load replaces the whole TOML
-    config, so several files have no clear meaning yet); `source-file` of a tmux
-    command file (`%if`, `%hidden`).
+    to enumerate its names); `choose-*` `-F -f -K -O -r` (`-r` needs each picker
+    built reversed, and the session picker's opening on the previous session
+    turned round with it) (their templates run as tmux's; `find-window` takes
+    none, its argument being the match), tagging and sort keys; `command-prompt`
+    completion (Tab) and incremental search's `C-r` / `C-s` direction keys
+    (tmux's `PROMPT_INCREMENTAL` prefixes `-`, `+`, `=`); session groups
+    (`new-session -t`); smaller flags: `source-file -v`, several paths and globs
+    (each load replaces the whole TOML config, so several files have no clear
+    meaning yet); `source-file` of a tmux command file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `client-light-theme` /
     `-dark-theme`. Copy mode lacks `next-prompt` / `previous-prompt` (they need
     a prompt mark on every history line, as tmux keeps per grid line; `Emulator`

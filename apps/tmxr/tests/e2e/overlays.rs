@@ -650,6 +650,40 @@ fn choose_templates_run_with_the_chosen_target() {
 }
 
 #[test]
+fn choose_tree_n_has_no_preview_and_y_kills_without_asking() {
+    let t = Tmxr::new("choosen");
+    let program = if cfg!(windows) {
+        "cmd /k echo zqpreview"
+    } else {
+        "echo zqpreview; exec sleep 100"
+    };
+    t.run(&["new-session", "-d", "-s", "pv1", program]);
+    let s = t.attach(&["new", "-s", "pv2"]);
+    s.wait_for("status line", |text| text.contains("pv2"));
+    // The previous session is highlighted, and previewed.
+    t.run(&["choose-tree"]);
+    s.wait_for("the preview", |text| text.contains("zqpreview"));
+    s.send(b"\x1b");
+    s.wait_for("the picker gone", |text| !text.contains("sessions"));
+    // -N: the list alone.
+    t.run(&["choose-tree", "-N"]);
+    s.wait_for("the picker", |text| text.contains("sessions"));
+    std::thread::sleep(Duration::from_millis(300));
+    assert!(!s.text().contains("zqpreview"), "{}", s.text());
+    s.send(b"\x1b");
+    s.wait_for("the picker gone", |text| !text.contains("sessions"));
+    // -y: C-x kills the highlighted session with no y/n.
+    t.run(&["choose-tree", "-y"]);
+    s.wait_for("the picker", |text| text.contains("sessions"));
+    s.send(b"\x18");
+    t.wait_run(
+        &["list-sessions", "-F", "#{session_name}"],
+        "pv1 gone",
+        |o| o.trim() == "pv2",
+    );
+}
+
+#[test]
 fn prompt_history_is_kept_recalled_and_cleared() {
     let t = Tmxr::new("phist");
     let s = t.attach(&["new", "-s", "ph"]);

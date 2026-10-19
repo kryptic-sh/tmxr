@@ -100,6 +100,10 @@ pub struct PickerOverlay {
     /// A command for the chosen item, its `%%` the item's target, as the
     /// template `choose-tree`, `choose-client` and `choose-buffer` take.
     pub template: Option<String>,
+    /// `-N`: no preview under the list.
+    pub no_preview: bool,
+    /// `-y`: a kill goes without asking first.
+    pub no_confirm: bool,
 }
 
 /// What the highlighted picker row would show, for the preview.
@@ -137,6 +141,8 @@ impl PickerOverlay {
             rows,
             typing: false,
             template: None,
+            no_preview: false,
+            no_confirm: false,
         }
     }
 
@@ -148,6 +154,9 @@ impl PickerOverlay {
     /// The window the highlighted row stands for, if it is a session or a
     /// window.
     pub fn previewed(&self) -> Option<Previewed> {
+        if self.no_preview {
+            return None;
+        }
         let sel = self.picker.selected;
         if sel >= self.picker.matched() {
             return None;
@@ -224,7 +233,9 @@ impl PickerOverlay {
             return OverlayAction::Keep;
         };
         let target = join_args(&[format!("${id}")]);
-        OverlayAction::Run(if kill {
+        OverlayAction::Run(if kill && self.no_confirm {
+            format!("kill-session -t {target}")
+        } else if kill {
             join_args(&[
                 "confirm-before".into(),
                 "-p".into(),
