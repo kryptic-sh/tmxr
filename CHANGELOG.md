@@ -22,6 +22,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`command-prompt` asks several prompts**, as tmux's: `-p` and `-I` take
+  comma-separated lists (`-l` keeps one prompt, commas and all), each answer
+  fills `%1` … `%9` and the next `%%`, and with no `-p` the template, in
+  brackets, is the prompt.
 - **`customize-mode -t`**, as tmux's: the target's session, window and pane
   options are listed first, each edited back at its own scope.
 - **The `client-active` hook**, as tmux's: it runs when a client becomes its
@@ -262,6 +266,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Templates are filled as tmux's** (`command-prompt`, `display-panes`): an
+  answer goes into every `%N` of its number and only the next `%%`, and a `%`
+  after either (`%1%`, `%%%`) escapes `"`, `\`, `$`, `;` and `~` in it.
 - **`choose-tree -t` and `find-window -t` start from their target**, as tmux's:
   its session (and window) is the current one the picker marks and lists first,
   where `-t` was accepted and ignored.

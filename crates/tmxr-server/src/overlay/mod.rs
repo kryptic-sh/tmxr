@@ -80,6 +80,8 @@ impl Overlay {
             input,
             cursor,
             template,
+            pending: std::collections::VecDeque::new(),
+            answers: Vec::new(),
             key: false,
             incremental: false,
             kind: "command".into(),
@@ -95,6 +97,8 @@ impl Overlay {
             input: Vec::new(),
             cursor: 0,
             template: Some(template),
+            pending: std::collections::VecDeque::new(),
+            answers: Vec::new(),
             key: true,
             incremental: false,
             kind: "command".into(),
@@ -332,8 +336,7 @@ impl Overlay {
                         .map(|(_, p)| *p)
                 });
                 pick.map_or(OverlayAction::Close, |p| {
-                    let id = format!("%{p}");
-                    OverlayAction::Run(template.replace("%%%", &id).replace("%%", &id))
+                    OverlayAction::Run(tmxr_command::fill_template(template, &[format!("%{p}")]))
                 })
             }
         }
@@ -379,17 +382,19 @@ mod tests {
             Overlay::display_panes(
                 labels.clone(),
                 Duration::ZERO,
-                "select-pane -t \"%%%\"; set -g @p %%".into(),
+                "select-pane -t \"%%%\"; set -g @p %1; set -g @q %%".into(),
                 true,
             )
         };
+        // One answer: the first %% (quoted here) and every %1 take it; a
+        // second %% waits for an answer that never comes, as tmux's.
         assert_eq!(
             o().key(&k(KeyCode::Char('b'))),
-            OverlayAction::Run("select-pane -t \"%110\"; set -g @p %110".into())
+            OverlayAction::Run("select-pane -t \"%110\"; set -g @p %110; set -g @q %%".into())
         );
         assert_eq!(
             o().key(&k(KeyCode::Char('3'))),
-            OverlayAction::Run("select-pane -t \"%30\"; set -g @p %30".into())
+            OverlayAction::Run("select-pane -t \"%30\"; set -g @p %30; set -g @q %%".into())
         );
         assert_eq!(o().key(&k(KeyCode::Char('4'))), OverlayAction::Close);
         assert!(!o().expired(), "-d 0 never times out");

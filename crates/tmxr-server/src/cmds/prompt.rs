@@ -27,20 +27,39 @@ pub(super) fn run(
                 Some(spec) => super::session::target_client(srv, spec)?,
                 None => super::display_client(srv, ctx).ok_or("no current client")?,
             };
-            let initial = a
-                .value('I')
-                .map(|i| expand_for(srv, ctx, None, i))
-                .unwrap_or_default();
-            let prompt = a
-                .value('p')
-                .map_or_else(|| ":".to_owned(), |p| format!("{p} "));
             let template = pos.first().cloned();
+            // -p's prompts and -I's inputs, by comma (one each with -l),
+            // each prompt followed by a space; without -p the template's
+            // command in brackets, or ":" with none, as tmux's.
+            let prompts: Vec<String> = match a.value('p') {
+                Some(p) if a.has('l') => vec![format!("{p} ")],
+                Some(p) => p.split(',').map(|p| format!("{p} ")).collect(),
+                None => vec![
+                    template
+                        .as_ref()
+                        .map_or_else(|| ":".to_owned(), |t| format!("({t}) ")),
+                ],
+            };
+            let inputs: Vec<String> = match a.value('I') {
+                Some(i) if a.has('l') => vec![expand_for(srv, ctx, None, i)],
+                Some(i) => i
+                    .split(',')
+                    .map(|i| expand_for(srv, ctx, None, i))
+                    .collect(),
+                None => Vec::new(),
+            };
+            let mut queue = prompts
+                .into_iter()
+                .enumerate()
+                .map(|(n, p)| (p, inputs.get(n).cloned().unwrap_or_default()));
+            let (prompt, initial) = queue.next().expect("one prompt at least");
             let mut overlay = if a.has('k') {
                 Overlay::key_prompt(prompt, template.unwrap_or_else(|| "%%".into()))
             } else {
                 Overlay::prompt(prompt, initial, template)
             };
             if let Overlay::Prompt(p) = &mut overlay {
+                p.pending = queue.collect();
                 p.incremental = a.has('i');
                 a.value('T').unwrap_or("command").clone_into(&mut p.kind);
                 p.history = srv.prompt_history.get(&p.kind).cloned().unwrap_or_default();

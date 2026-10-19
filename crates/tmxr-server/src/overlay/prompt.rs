@@ -10,9 +10,14 @@ pub struct Prompt {
     pub prompt: String,
     pub input: Vec<char>,
     pub cursor: usize,
-    /// `%%` in the template is replaced by the input; no template runs the
-    /// input itself.
+    /// The answers fill the template's `%%` and `%1` … `%9` as tmux's do;
+    /// no template runs the input itself.
     pub template: Option<String>,
+    /// The prompts still to come after this one (`command-prompt -p a,b`),
+    /// each with its starting input.
+    pub pending: std::collections::VecDeque<(String, String)>,
+    /// The answers to the prompts already done.
+    pub answers: Vec<String>,
     /// `command-prompt -k`: the next key pressed is the input, as its tmux
     /// name, quoted so any key stays one argument.
     pub key: bool,
@@ -28,12 +33,16 @@ pub struct Prompt {
 }
 
 impl Prompt {
-    /// The command the input runs: the template with `%%` (and `%1`)
-    /// replaced, or the input itself.
+    /// The command the answers run: the template with them put in, or the
+    /// input itself.
     fn command(&self) -> String {
         let input: String = self.input.iter().collect();
         match &self.template {
-            Some(t) => t.replace("%%", &input).replace("%1", &input),
+            Some(t) => {
+                let mut answers = self.answers.clone();
+                answers.push(input);
+                tmxr_command::fill_template(t, &answers)
+            }
             None => input,
         }
     }
@@ -89,13 +98,22 @@ impl Prompt {
         if self.key {
             let name = join_args(&[tmxr_command::Key::from_event(ev).to_string()]);
             let template = self.template.as_deref().unwrap_or("%%");
-            return OverlayAction::Run(template.replace("%%", &name));
+            return OverlayAction::Run(tmxr_command::fill_template(template, &[name]));
         }
         let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
         match ev.code {
             KeyCode::Esc => return OverlayAction::Close,
             KeyCode::Char('c' | 'g') if ctrl => return OverlayAction::Close,
             KeyCode::Enter => {
+                // The next prompt, if any, takes over with its own input.
+                if let Some((prompt, input)) = self.pending.pop_front() {
+                    self.answers.push(self.text());
+                    self.prompt = prompt;
+                    self.input = input.chars().collect();
+                    self.cursor = self.input.len();
+                    self.recall = None;
+                    return OverlayAction::Keep;
+                }
                 if self.input.is_empty() && self.template.is_none() {
                     return OverlayAction::Close;
                 }

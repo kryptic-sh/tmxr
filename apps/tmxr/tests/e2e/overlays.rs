@@ -120,6 +120,53 @@ fn display_panes_runs_its_template_and_n_passes_keys_on() {
 }
 
 #[test]
+fn command_prompt_asks_each_prompt_and_fills_the_template() {
+    let t = Tmxr::new("cprompts");
+    let s = t.attach(&["new", "-s", "cp"]);
+    s.wait_for("status line", |text| text.contains("cp"));
+    let r = || t.run(&["show", "-gv", "@r"]).trim().to_owned();
+    // Two prompts, their inputs given; Enter answers each in turn.
+    t.run(&[
+        "command-prompt",
+        "-p",
+        "first,second",
+        "-I",
+        "x,y",
+        "set -g @r '%1|%2'",
+    ]);
+    s.wait_for("the first prompt", |text| text.contains("first x"));
+    s.send(b"\r");
+    s.wait_for("the second prompt", |text| text.contains("second y"));
+    s.send(b"\r");
+    t.wait_run(&["show", "-gv", "@r"], "both answers", |o| {
+        o.trim() == "x|y"
+    });
+    // No -p: the template is the prompt, in brackets.
+    t.run(&["command-prompt", "set -g @r '%%'"]);
+    s.wait_for("the template prompt", |text| {
+        text.contains("(set -g @r '%%')")
+    });
+    s.send(b"z\r");
+    t.wait_run(&["show", "-gv", "@r"], "the answer", |o| o.trim() == "z");
+    // -l: one prompt, its commas kept.
+    t.run(&[
+        "command-prompt",
+        "-l",
+        "-p",
+        "a,b",
+        "-I",
+        "x,y",
+        "set -g @r '%1'",
+    ]);
+    s.wait_for("the one prompt", |text| text.contains("a,b x,y"));
+    s.send(b"\r");
+    t.wait_run(&["show", "-gv", "@r"], "the literal answer", |o| {
+        o.trim() == "x,y"
+    });
+    assert_eq!(r(), "x,y");
+}
+
+#[test]
 fn choose_tree_t_starts_from_its_target() {
     let t = Tmxr::new("choosett");
     let s = t.attach(&["new", "-s", "aa"]);
