@@ -484,10 +484,15 @@ table. What has been verified, and how:
     `next-prompt` / `previous-prompt` (they need a prompt mark on every history
     line, as tmux keeps per grid line; `Emulator` keeps only the last OSC 133
     input mark, and vt100's lines carry no flags, so the marks would have to be
-    counted alongside the history as it scrolls), and `selection-mode`. Not
-    compared with tmux: the cursor motions under `select-line` (tmux's
-    `lineflag` moves the cursor to a line's end or start on up / down), and on
-    lines holding wide characters.
+    counted alongside the history as it scrolls), and `selection-mode` (tmux's
+    selflag: in word or line mode, set by `selection-mode`, `select-word` and
+    `select-line`, every cursor move snaps the selection's end to a word or line
+    edge, `window_copy_synchronize_cursor_end`, keeping the first word or line's
+    bounds as `selrx` / `endselrx`; tmxr's `select-word` / `select-line` make a
+    fixed selection that then grows by characters, so moving after them differs
+    from tmux too). Not compared with tmux: the cursor motions under
+    `select-line` (tmux's `lineflag` moves the cursor to a line's end or start
+    on up / down), and on lines holding wide characters.
 
 - **`word_separators_and_wrap_search_reach_copy_mode` failed once** (Windows,
   full e2e suite, 2026-10-18) at its first `#{copy_cursor_word}` check; four
