@@ -200,6 +200,7 @@ pub const PANE_OPTIONS: &[&str] = &[
     "allow-passthrough",
     "allow-rename",
     "allow-set-title",
+    "alternate-screen",
     "cursor-style",
     "pane-scrollbars-style",
     "remain-on-exit",
@@ -332,6 +333,9 @@ options_table! {
     "allow-rename" => allow_rename: bool,
     /// Programs may title their pane (OSC 0 / 2).
     "allow-set-title" => allow_set_title: bool,
+    /// Programs may switch to the alternate screen; off, their switches
+    /// are ignored and what they draw stays in the history.
+    "alternate-screen" => alternate_screen: bool,
     /// Follow the active pane's command until the window is renamed.
     "automatic-rename" => automatic_rename: bool,
     /// What `automatic-rename` names the window, expanded for its active

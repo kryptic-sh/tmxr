@@ -24,6 +24,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The `alternate-screen` option**, as tmux's: off, a program's switches to the
+  alternate screen (modes 47, 1047 and 1049) are ignored, so what it draws stays
+  on the main screen and in the history.
 - **The `window-style` and `window-active-style` options**, as tmux's: the
   colours a pane's cells take where its program sets none, the window's active
   pane taking `window-active-style`'s where it sets one; in copy mode too.

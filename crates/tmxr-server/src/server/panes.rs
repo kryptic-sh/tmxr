@@ -496,10 +496,13 @@ impl Server {
     pub(super) fn pty_event(&mut self, pid: PaneId, ev: PtyEvent) {
         match ev {
             PtyEvent::Output(bytes) => {
-                let allow_title = self.pane_options(pid).allow_set_title;
+                let options = self.pane_options(pid);
+                let (allow_title, alternate_ok) =
+                    (options.allow_set_title, options.alternate_screen);
                 let Some(p) = self.panes.get_mut(&pid) else {
                     return;
                 };
+                p.emu.set_alternate_screen(alternate_ok);
                 // Output after the exit puts the dead line off again; once
                 // it is written, tmux has closed the pane's terminal
                 // (server_destroy_pane), so nothing more is read.

@@ -54,6 +54,8 @@ allow-passthrough = true
 allow-rename = false
 # tmux's default: programs may title their pane.
 allow-set-title = true
+# tmux's default: programs may use the alternate screen.
+alternate-screen = true
 remain-on-exit = false
 # tmux's default.
 remain-on-exit-format = "Pane is dead (#{?#{!=:#{pane_dead_status},},status #{pane_dead_status},}#{?#{!=:#{pane_dead_signal},},signal #{pane_dead_signal},}, #{t:pane_dead_time})"

@@ -482,8 +482,8 @@ table. What has been verified, and how:
     so it needs those expanded first or the theme moved; `pane-border-status` /
     `-format` / `-lines` / `-indicators`; session `status-keys` (and
     `default-size` set per session by `new-session -x` / `-y`, which tmux keeps
-    and tmxr does not); window `aggressive-resize`, `alternate-screen`; server
-    `editor`. `escape-time` is kept but never read.
+    and tmxr does not); window `aggressive-resize`; server `editor`.
+    `escape-time` is kept but never read.
   - Commands: `capture-pane -e -a -T` (`-e` needs tmux's own SGR output, `-a`
     the saved normal screen, which `vt100` does not expose). `-T`, `-N` and `-J`
     all need written cells told from never-written ones, which `copy::snapshot`
@@ -571,6 +571,14 @@ table. What has been verified, and how:
   `DEAD_LINE_QUIET` or ended (`PtyEvent::Eof`). Not tested: that a pane reads
   nothing after the line, as tmux closes its terminal there; on Linux the
   shell's exit hangs the terminal up, so no output came after it in any attempt.
+- **vt100 homes the cursor on `ESC [ ? 1049 h`**: tmux (and xterm) keep the
+  cursor where it was when switching to the alternate screen, so a program that
+  prints a line, then switches and prints `alt`, shows `alt` on the second row
+  in tmux 3.6 and on the first in tmxr (seen 2026-10-20 in the oracle). vt100
+  0.16 gives the alternate screen its own cursor, cleared to the top on 1049,
+  and takes 47 but not 1047 at all (a program using 1047 stays on the main
+  screen in tmxr). Not fixed: `Emulator` would have to split the output at these
+  modes and set the cursor itself (`alt_screen.rs` already finds them).
 - **Time expansion is not carried into everything tmux carries it into**:
   `format::expand_time` fills in strftime sequences at each level of a format
   (nested parts, `E:` values, modifier arguments) as tmux's `FORMAT_EXPAND_TIME`

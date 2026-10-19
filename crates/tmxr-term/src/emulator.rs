@@ -209,6 +209,9 @@ pub struct Emulator {
     rename: Option<Vec<u8>>,
     /// [`passthrough_supported`], read once.
     split: bool,
+    /// Set with `alternate-screen off`: the program's switches to the
+    /// alternate screen are dropped before the parser sees them.
+    alt_filter: Option<crate::alt_screen::AltScreenFilter>,
     /// The history limit, for a fresh parser.
     scrollback: usize,
     /// Lines of history above the screen, counted whenever they can change
@@ -224,6 +227,7 @@ impl Emulator {
             passthrough: Vec::new(),
             rename: None,
             split: passthrough_supported(),
+            alt_filter: None,
             scrollback,
             history: 0,
         }
@@ -272,6 +276,32 @@ impl Emulator {
         self.count_history();
     }
 
+    /// Whether the program may switch to the alternate screen (tmux's
+    /// `alternate-screen`). Allowed again, what the filter held is parsed.
+    pub fn set_alternate_screen(&mut self, allowed: bool) {
+        match (&mut self.alt_filter, allowed) {
+            (None, false) => self.alt_filter = Some(crate::alt_screen::AltScreenFilter::default()),
+            (Some(f), true) => {
+                let held = f.flush();
+                self.alt_filter = None;
+                self.parser.process(&held);
+            }
+            _ => {}
+        }
+    }
+
+    /// Parse program text, without its alternate screen switches when they
+    /// are not allowed.
+    fn feed(&mut self, text: &[u8]) {
+        match &mut self.alt_filter {
+            Some(f) => {
+                let kept = f.filter(text);
+                self.parser.process(&kept);
+            }
+            None => self.parser.process(text),
+        }
+    }
+
     /// Feed program output. Returns bytes that must be written back to the
     /// program (answers to queries such as cursor-position reports).
     pub fn process(&mut self, bytes: &[u8]) -> Vec<u8> {
@@ -281,17 +311,17 @@ impl Emulator {
             // before it is parsed first.
             let mut done = 0;
             for (at, payload) in split.passthrough {
-                self.parser.process(&split.text[done..at]);
+                self.feed(&split.text[done..at]);
                 done = at;
                 let cursor = self.parser.screen().cursor_position();
                 self.passthrough.push((payload, cursor));
             }
-            self.parser.process(&split.text[done..]);
+            self.feed(&split.text[done..]);
             if split.rename.is_some() {
                 self.rename = split.rename;
             }
         } else {
-            self.parser.process(bytes);
+            self.feed(bytes);
         }
         self.count_history();
         std::mem::take(&mut self.parser.callbacks_mut().replies)

@@ -407,3 +407,13 @@ checks = [{ command = "capture-pane -p -t o:1" }, { format = "#{pane_dead}" }]
 [[cases]]
 name = "remain_on_exit_format_defaults_to_tmuxs"
 checks = [{ command = "show -gv remain-on-exit-format" }]
+
+[[cases]]
+name = "alternate_screen_off_keeps_a_program_on_the_main_screen"
+program = 'sleep 0.5; printf "main\n\033[?1049halt\n"; exec sleep 1000'
+steps = [{ run = "set -g alternate-screen off" }, { sleep = 1.5 }]
+checks = [
+  { command = "capture-pane -p" },
+  { format = "#{alternate_on}" },
+  { command = "show -gv alternate-screen" },
+]
