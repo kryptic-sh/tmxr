@@ -18,6 +18,9 @@ impl Server {
             return;
         };
         att.last_input = Instant::now();
+        // Back from away, or focus changing, sizes the windows again.
+        let came_back = std::mem::take(&mut att.away);
+        let focused = att.focused;
         let session = att.session;
         // Everything but a key's release and losing focus makes the client
         // its window's latest, as tmux's server_client_key_callback and
@@ -82,6 +85,14 @@ impl Server {
         }
         if latest {
             self.update_latest(id);
+        }
+        let refocused = self
+            .clients
+            .get(&id)
+            .and_then(|c| c.att.as_ref())
+            .is_some_and(|a| a.focused != focused);
+        if came_back || refocused {
+            self.size_all_sessions();
         }
     }
 

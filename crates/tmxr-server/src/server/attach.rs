@@ -58,6 +58,7 @@ impl Server {
             focus_events: false,
             // As tmux's: focused until its terminal reports otherwise.
             focused: true,
+            away: false,
             title: None,
             pan: None,
             status_at: Instant::now(),
@@ -230,6 +231,35 @@ impl Server {
 
     /// `lock-after-time`: lock each client idle as long as its session's
     /// says (none when that is 0 or its `lock-command` is empty).
+    /// Mark the clients with no input for `client-away-time` away, and size
+    /// the windows again when one goes.
+    pub fn mark_away_clients(&mut self) {
+        let secs = self.cfg.client_away_time;
+        if secs == 0 {
+            return;
+        }
+        let limit = std::time::Duration::from_secs(secs);
+        let mut changed = false;
+        for a in self.clients.values_mut().filter_map(|c| c.att.as_mut()) {
+            if !a.away && a.last_input.elapsed() >= limit {
+                a.away = true;
+                changed = true;
+            }
+        }
+        if changed {
+            self.size_all_sessions();
+        }
+    }
+
+    /// Size every session's windows again: a client's own change (away,
+    /// back, focus) can reach a window linked into another session.
+    pub fn size_all_sessions(&mut self) {
+        let sessions: Vec<SessionId> = self.sessions.keys().copied().collect();
+        for s in sessions {
+            self.size_session(s);
+        }
+    }
+
     pub fn lock_idle_clients(&mut self) {
         let idle: Vec<ClientId> = self
             .clients
@@ -310,12 +340,21 @@ impl Server {
                 == Some(w)
         };
         // As tmux's clients_with_window: the clients that size windows.
+        // A client away or out of focus gives no size while one in use does
+        // (tmxr's: tmux counts every client).
+        let in_use = |c: &crate::server::Client, a: &crate::server::Attached| {
+            (all_ignore || !c.ignore_size) && a.focused && !a.away
+        };
+        let none_in_use = !attached().any(|(c, a)| in_use(c, a));
+        let gives_size = |c: &crate::server::Client, a: &crate::server::Attached| {
+            (all_ignore || !c.ignore_size) && (none_in_use || in_use(c, a))
+        };
         let with_window = attached()
-            .filter(|(c, a)| (all_ignore || !c.ignore_size) && holds(a.session))
+            .filter(|(c, a)| gives_size(c, a) && holds(a.session))
             .count();
         let latest = self.windows.get(&w).and_then(|win| win.latest);
         let sizes: Vec<(u16, u16)> = attached()
-            .filter(|(c, _)| all_ignore || !c.ignore_size)
+            .filter(|(c, a)| gives_size(c, a))
             .filter(|(_, a)| {
                 if options.aggressive_resize {
                     shows(a.session)

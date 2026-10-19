@@ -321,8 +321,17 @@ fn draw_window(
             .iter()
             .any(|(_, r)| x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h)
     };
+    // A window smaller than the client gets a border on its right and bottom
+    // edges, as tmux's screen_redraw_cell_border, and padding beyond.
+    let bw = if cols > win.cols { win.cols + 1 } else { w };
+    let bh = if rows > win.rows { win.rows + 1 } else { h };
+    let edge = |x: u16, y: u16| x == win.cols || y == win.rows;
     let is_border = |x: i32, y: i32| {
-        x >= 0 && y >= 0 && x < i32::from(w) && y < i32::from(h) && !covered(x as u16, y as u16)
+        x >= 0
+            && y >= 0
+            && x < i32::from(bw)
+            && y < i32::from(bh)
+            && (edge(x as u16, y as u16) || !covered(x as u16, y as u16))
     };
     let rect_of = |pane: PaneId| rects.iter().find(|(p, _)| *p == pane).map(|(_, r)| *r);
     let active = rect_of(win.active);
@@ -365,11 +374,14 @@ fn draw_window(
             x >= rx - 1 && x <= rx + rw && y >= ry - 1 && y <= ry + rh
         })
     };
-    for y in 0..h {
-        for x in 0..w {
+    for y in 0..bh {
+        for x in 0..bw {
             if covered(x, y) {
                 continue;
             }
+            // The window's own edge belongs to no pane, as tmux's
+            // screen_redraw_check_cell: pane-border-style, no indicators.
+            let on_edge = edge(x, y);
             let (xi, yi) = (i32::from(x), i32::from(y));
             let (l, r, u, d) = (
                 is_border(xi - 1, yi),
@@ -393,12 +405,15 @@ fn draw_window(
                     _ => 5,
                 },
             };
-            let side = active.and_then(|a| border_side(a, x, y, splits));
+            let side = active
+                .filter(|_| !on_edge)
+                .and_then(|a| border_side(a, x, y, splits));
+            let owned = if on_edge { None } else { owner(x, y) };
             let number;
             let mut ch = match options.pane_border_lines {
                 PaneLines::Number => {
                     // Its pane's index.
-                    let index = owner(x, y).and_then(|(p, _)| panes.iter().position(|q| *q == p));
+                    let index = owned.and_then(|(p, _)| panes.iter().position(|q| *q == p));
                     number = index.map_or_else(
                         || "*".to_owned(),
                         |i| ((i as u32 + options.pane_base_index) % 10).to_string(),
@@ -411,7 +426,7 @@ fn draw_window(
             // at the active pane, as tmux's screen_redraw_draw_borders_cell.
             if arrows
                 && let Some(side) = side
-                && let Some((_, owner)) = owner(x, y)
+                && let Some((_, owner)) = owned
             {
                 let along = x == owner.x + 1
                     && (cell == 1
@@ -435,7 +450,7 @@ fn draw_window(
             } else {
                 border
             };
-            if touches(marked, x, y) {
+            if !on_edge && touches(marked, x, y) {
                 style = style.add_modifier(Modifier::REVERSED);
             }
             if let Some(cell) = buf.cell_mut((x, y)) {
@@ -444,14 +459,19 @@ fn draw_window(
         }
     }
     // Beyond a window smaller than the client (`resize-window`), as tmux.
+    // `fill-character` when it is one character a cell wide, as tmux's
+    // window_set_fill_character; else the border lines' outside cell.
+    let fill = &options.fill_character;
+    let fill_ok = fill.chars().count() == 1 && ratatui::text::Line::raw(fill.as_str()).width() == 1;
     let outside = match options.pane_border_lines {
+        _ if fill_ok => fill.as_str(),
         PaneLines::Simple => ".",
         PaneLines::Spaces => " ",
         _ => "·",
     };
     for y in 0..rows {
         for x in 0..cols {
-            if (x >= w || y >= h)
+            if (x >= bw || y >= bh)
                 && let Some(cell) = buf.cell_mut((x, y))
             {
                 cell.set_symbol(outside).set_style(border);

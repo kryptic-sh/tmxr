@@ -431,6 +431,8 @@ options_table! {
     "copy-mode-match-style" => copy_mode_match_style: String,
     /// A pane's cursor shape until its program asks for one.
     "cursor-style" => cursor_style: CursorStyle,
+    /// What fills the client beyond a smaller window; empty, a dot.
+    "fill-character" => fill_character: String,
     /// main-horizontal / main-vertical sizes: cells or `N%`.
     "main-pane-height" => main_pane_height: String,
     "main-pane-width" => main_pane_width: String,

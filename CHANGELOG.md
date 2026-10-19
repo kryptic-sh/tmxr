@@ -24,6 +24,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A client away or out of focus stops sizing windows** (tmxr's, past tmux):
+  with several clients of different sizes, a window takes the smallest of those
+  in use, and a client whose terminal reports focus out, or that has had no
+  input for `client-away-time` seconds (a new server option, 300 by default, 0
+  never), gives it up until it is used or focused again. With none in use, all
+  count.
+- **The `fill-character` window option and a smaller window's edge**, as tmux's:
+  on a larger client, a window gets a border along its right and bottom edges
+  and the rest is padded with `fill-character` (a dot when empty).
 - **The `status-keys` and `message-command-style` options, and tmux's prompt
   keys**: the command prompt takes tmux's emacs keys (`C-b` / `C-f`, `C-d`,
   `C-p` / `C-n`, word moves on `M-b` / `M-f` and `C-Left` / `C-Right` by
@@ -317,6 +326,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`window-size` is `smallest` by default**, so every client sees the whole
+  window; it was `latest`.
 - **`C-u` clears the whole command prompt**, as tmux's, not only what is before
   the cursor.
 - **Two panes colour half their shared border**, as tmux's default

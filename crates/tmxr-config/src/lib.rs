@@ -44,6 +44,9 @@ pub struct Config {
     /// `exit-unattached`: the server exits once no client is attached,
     /// sessions or not.
     pub exit_unattached: bool,
+    /// `client-away-time`: seconds without input before a client is away
+    /// and stops sizing windows; 0, never.
+    pub client_away_time: u64,
     /// `prefix-timeout`: milliseconds the prefix table waits for its next
     /// key before giving it to the root table; 0 waits forever.
     pub prefix_timeout: u64,
@@ -107,6 +110,7 @@ struct File {
     exit_empty: bool,
     prefix_timeout: u64,
     exit_unattached: bool,
+    client_away_time: u64,
     destroy_unattached: DestroyUnattached,
     escape_time: u64,
     focus_events: bool,
@@ -140,6 +144,7 @@ struct File {
     window_size: WindowSize,
     window_style: String,
     window_active_style: String,
+    fill_character: String,
     monitor_activity: bool,
     monitor_silence: u64,
     bell_action: AlertAction,
@@ -228,6 +233,7 @@ impl From<File> for Config {
                 window_size: f.window_size,
                 window_style: f.window_style,
                 window_active_style: f.window_active_style,
+                fill_character: f.fill_character,
                 window_status_current_format: s.window_current_format,
                 window_status_current_style: s.window_current_style,
                 window_status_format: s.window_format,
@@ -288,6 +294,7 @@ impl From<File> for Config {
             exit_empty: f.exit_empty,
             prefix_timeout: f.prefix_timeout,
             exit_unattached: f.exit_unattached,
+            client_away_time: f.client_away_time,
             escape_time: f.escape_time,
             focus_events: f.focus_events,
             default_terminal: f.default_terminal,

@@ -130,6 +130,7 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed) -> Res {
         "prefix-timeout" => c.prefix_timeout = num(need()?)?,
         "exit-empty" => c.exit_empty = super::on_off(value, c.exit_empty)?,
         "exit-unattached" => c.exit_unattached = super::on_off(value, c.exit_unattached)?,
+        "client-away-time" => c.client_away_time = num(need()?)?,
         "escape-time" => c.escape_time = num(need()?)?,
         "focus-events" => c.focus_events = super::on_off(value, c.focus_events)?,
         "default-terminal" => need()?.clone_into(&mut c.default_terminal),
@@ -163,6 +164,7 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed) -> Res {
 /// them (and tmxr's `rgb-colour` and `socket-access`).
 const SERVER_OPTIONS: &[&str] = &[
     "buffer-limit",
+    "client-away-time",
     "copy-command",
     "default-terminal",
     "escape-time",
@@ -194,6 +196,7 @@ fn server_option_lines(srv: &Server) -> Vec<String> {
         .map(|&name| {
             let value = match name {
                 "buffer-limit" => c.buffer_limit.to_string(),
+                "client-away-time" => c.client_away_time.to_string(),
                 "copy-command" => quoted(&c.copy_command),
                 "default-terminal" => quoted(&c.default_terminal),
                 "escape-time" => c.escape_time.to_string(),

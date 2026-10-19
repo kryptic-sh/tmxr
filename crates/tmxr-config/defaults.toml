@@ -33,6 +33,9 @@ message-limit = 1000
 # client leaves, and a session outlives its clients.
 exit-empty = true
 exit-unattached = false
+# tmxr's: a client with no input for this many seconds is away, and windows
+# stop taking its size; 0, never.
+client-away-time = 300
 # tmux's default: the prefix waits for its next key however long it takes.
 prefix-timeout = 0
 destroy-unattached = "off"
@@ -85,10 +88,12 @@ word-separators = '''!"#$%&'()*+,-./:;<=>?@[\]^`{|}~'''
 # How windows are sized: "latest" (by the client that used it last),
 # "largest" or "smallest" (of the session's clients, each way), or "manual"
 # (only by resize-window).
-window-size = "latest"
+window-size = "smallest"
 # tmux's defaults: panes keep the terminal's colours.
 window-style = "default"
 window-active-style = "default"
+# tmux's default: the client beyond a smaller window is dotted.
+fill-character = ""
 # tmux's defaults: no activity or silence alerts.
 monitor-activity = false
 monitor-silence = 0

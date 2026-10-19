@@ -128,6 +128,8 @@ pub struct Attached {
     /// Focused: from attaching until the terminal reports focus out, then
     /// as it reports (`focused` in `#{client_flags}`).
     pub focused: bool,
+    /// No input for `client-away-time`: windows stop taking its size.
+    pub away: bool,
     /// The title last given to the terminal (`set-titles`).
     pub title: Option<String>,
     /// `refresh-client -L` / `-R` / `-U` / `-D`: the view of a window larger
@@ -882,6 +884,7 @@ impl Server {
         crate::mouse::fire_double_clicks(self);
         self.advance_copy_line();
         self.write_due_dead_lines();
+        self.mark_away_clients();
         self.lock_idle_clients();
         let now = Instant::now();
         // The table a client goes back to once a repeat ends.

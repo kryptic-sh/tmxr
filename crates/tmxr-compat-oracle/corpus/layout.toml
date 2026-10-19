@@ -411,3 +411,26 @@ checks = [
   { screen_find = "↓" },
   { command = "show -gv pane-border-indicators" },
 ]
+
+[[cases]]
+name = "a_smaller_window_gets_an_edge_and_padding"
+attach = true
+unix_only = true
+steps = [{ run = "resize-window -t o -x 40 -y 10" }, { sleep = 0.5 }]
+checks = [
+  { screen_find = "┘" },
+  { screen_find = "·" },
+  { screen_find = "─" },
+  { command = "display -p '#{window_width}x#{window_height}'" },
+]
+
+[[cases]]
+name = "fill_character_pads_a_smaller_window"
+attach = true
+unix_only = true
+steps = [
+  { run = "set -g fill-character +" },
+  { run = "resize-window -t o -x 40 -y 10" },
+  { sleep = 0.5 },
+]
+checks = [{ screen_find = "+" }, { screen_contains = "·", expect = false }]

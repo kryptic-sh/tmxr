@@ -64,21 +64,6 @@ table. What has been verified, and how:
 
 ## Known gaps and follow-ups
 
-- **Size windows by the smallest client still in use** (asked by the owner,
-  2026-10-20; next slice): every attached client sees the same view, sized to
-  the smallest of them, but a client that is AFK (no input for a while) or whose
-  terminal reports focus out stops counting, so the window grows back to the
-  next smallest; when it is used or focused again, it counts again. If every
-  client is away or unfocused, all of them count, so the window keeps a size.
-  Plan: default `window-size smallest`; a server option `client-away-time`
-  (seconds without input before a client is away, 300 by default, 0 never);
-  `window_client_size` skips away and unfocused clients as it skips
-  `ignore-size` ones; the server resizes when a client goes away, comes back, or
-  changes focus. This goes past tmux, which has no away state (its `smallest`
-  counts every client). A larger client shows the window as tmux does with
-  clients of different sizes: the area outside the window padded as tmux pads it
-  (`screen_redraw_check_cell`'s window edge and `CELL_OUTSIDE`, and the
-  `fill-character` window option).
 - **Mouse use as in the owner's tmux config** (asked for 2026-10-11). The tmux
   compatibility oracle (`crates/tmxr-compat-oracle`, `corpus/mouse.toml`) drives
   a tmux 3.6 client and a tmxr client with the same SGR mouse events in CI and

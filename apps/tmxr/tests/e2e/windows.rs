@@ -585,6 +585,64 @@ fn a_linked_window_is_sized_by_every_client_or_with_aggressive_resize_its_viewer
 }
 
 #[test]
+fn the_smallest_client_in_use_sizes_the_window() {
+    let t = Tmxr::new("inuse");
+    t.run(&["new-session", "-d", "-s", "iu"]);
+    let a = t.attach(&["attach", "-t", "iu"]);
+    a.wait_for("the first client", |text| text.contains("iu"));
+    let b = t.attach(&["attach", "-t", "iu"]);
+    b.wait_for("the second client", |text| text.contains("iu"));
+    // The second client narrower, as in window_size_largest_and_smallest.
+    let deadline = Instant::now() + TIMEOUT;
+    loop {
+        b.resize(ROWS + 1, 61);
+        b.resize(ROWS, 60);
+        std::thread::sleep(Duration::from_millis(300));
+        let clients = t.run(&["list-clients", "-F", "#{client_width}"]);
+        if clients.lines().any(|l| l == "60") {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the resize never landed: {clients}"
+        );
+    }
+    let width = |w: &str| {
+        let want = w.to_owned();
+        t.wait_run(
+            &["display-message", "-p", "-t", "iu", "#{window_width}"],
+            &format!("width {want}"),
+            move |o| o.trim() == want,
+        );
+    };
+    // smallest by default: both in use, the narrower one sizes it.
+    width("60");
+    // Out of focus, the narrower one stops counting; back, it counts again.
+    b.send(b"\x1b[O");
+    width(&COLS.to_string());
+    b.send(b"\x1b[I");
+    width("60");
+    // Away: no input for client-away-time, while the other keeps typing.
+    t.run(&["set", "-s", "client-away-time", "1"]);
+    let deadline = Instant::now() + TIMEOUT;
+    loop {
+        a.send(b"x");
+        std::thread::sleep(Duration::from_millis(300));
+        let w = t.run(&["display-message", "-p", "-t", "iu", "#{window_width}"]);
+        if w.trim() == COLS.to_string() {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the away client still sizes it: {w}"
+        );
+    }
+    // Typing again brings it back.
+    b.send(b"y");
+    width("60");
+}
+
+#[test]
 fn an_equals_sign_asks_for_the_exact_name() {
     let t = Tmxr::new("exact");
     t.run(&["new-session", "-d", "-s", "foobar"]);
