@@ -219,9 +219,66 @@ pub fn glob_regex(pattern: &str) -> regex::Regex {
         .unwrap_or_else(|_| regex::Regex::new("[^\\s\\S]").expect("empty set"))
 }
 
+/// Standard base64 decoded (RFC 4648 §4: its alphabet, `=` padding to a
+/// multiple of four), for a program's OSC 52; `None` for anything else.
+pub fn base64_decode(text: &str) -> Option<Vec<u8>> {
+    let value = |c: u8| match c {
+        b'A'..=b'Z' => Some(c - b'A'),
+        b'a'..=b'z' => Some(c - b'a' + 26),
+        b'0'..=b'9' => Some(c - b'0' + 52),
+        b'+' => Some(62),
+        b'/' => Some(63),
+        _ => None,
+    };
+    let bytes = text.as_bytes();
+    if !bytes.len().is_multiple_of(4) {
+        return None;
+    }
+    let mut out = Vec::with_capacity(bytes.len() / 4 * 3);
+    for (i, quad) in bytes.chunks(4).enumerate() {
+        let last = i + 1 == bytes.len() / 4;
+        let pad = quad.iter().rev().take_while(|&&c| c == b'=').count();
+        if pad > 2 || (pad > 0 && !last) {
+            return None;
+        }
+        let mut n = 0u32;
+        for &c in &quad[..4 - pad] {
+            n = (n << 6) | u32::from(value(c)?);
+        }
+        n <<= 6 * pad;
+        let got = [(n >> 16) as u8, (n >> 8) as u8, n as u8];
+        out.extend_from_slice(&got[..3 - pad]);
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn base64_decodes_rfc_4648s_test_vectors() {
+        // RFC 4648 §10.
+        for (plain, coded) in [
+            ("", ""),
+            ("f", "Zg=="),
+            ("fo", "Zm8="),
+            ("foo", "Zm9v"),
+            ("foob", "Zm9vYg=="),
+            ("fooba", "Zm9vYmE="),
+            ("foobar", "Zm9vYmFy"),
+        ] {
+            assert_eq!(
+                base64_decode(coded).as_deref(),
+                Some(plain.as_bytes()),
+                "{coded}"
+            );
+            assert_eq!(base64(plain.as_bytes()), coded);
+        }
+        for bad in ["?", "Zg=", "Zm9v=", "Z===", "Zg==Zg==", "Zm9!"] {
+            assert_eq!(base64_decode(bad), None, "{bad}");
+        }
+    }
 
     #[test]
     fn globs_match_as_fnmatch_does() {

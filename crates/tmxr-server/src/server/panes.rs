@@ -489,7 +489,7 @@ impl Server {
                     crate::alerts::raise(self, wid, crate::alerts::Alert::Activity);
                 }
                 for (_, data) in clips {
-                    self.forward_osc52(&data);
+                    self.program_clipboard(pid, &data);
                 }
                 // tmux drops passthrough unless it is allowed.
                 if self.pane_options(pid).allow_passthrough {

@@ -19,6 +19,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The `pane-set-clipboard` hook**, as tmux's: it runs when a program's copy is
+  taken, and when copy mode copies to the clipboard.
 - **`capture-pane -C` and `-q`**, as tmux's: `-C` doubles the backslashes in the
   text; `-q` is accepted (in tmux it only quiets `-a`).
 - **`display-message -N` and `-C`**, as tmux's: with `-N` a key leaves the
@@ -251,6 +253,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A program's clipboard copy (OSC 52) is taken as tmux's**: only with
+  `set-clipboard on` (`external`, tmux's default, leaves programs' copies
+  alone), and it also becomes a paste buffer.
 - **`run-shell` shows a command's output as tmux's**: its error output only with
   the new `-E`, a line saying how it failed (`'cmd' returned 3`,
   `'cmd' terminated by signal 9`) whenever it did, not only when it printed

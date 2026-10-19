@@ -491,13 +491,13 @@ table. What has been verified, and how:
     `list-keys -N` below), `source-file -v`, several paths and globs (each load
     replaces the whole TOML config, so several files have no clear meaning yet);
     `source-file` of a tmux command file (`%if`, `%hidden`).
-  - Hooks and modes: tmux hooks tmxr does not fire: `pane-set-clipboard`,
-    `client-active`, `client-light-theme` / `-dark-theme`. Copy mode lacks
-    `next-prompt` / `previous-prompt` (they need a prompt mark on every history
-    line, as tmux keeps per grid line; `Emulator` keeps only the last OSC 133
-    input mark, and vt100's lines carry no flags, so the marks would have to be
-    counted alongside the history as it scrolls), and `selection-mode` (tmux's
-    selflag: in word or line mode, set by `selection-mode`, `select-word` and
+  - Hooks and modes: tmux hooks tmxr does not fire: `client-active`,
+    `client-light-theme` / `-dark-theme`. Copy mode lacks `next-prompt` /
+    `previous-prompt` (they need a prompt mark on every history line, as tmux
+    keeps per grid line; `Emulator` keeps only the last OSC 133 input mark, and
+    vt100's lines carry no flags, so the marks would have to be counted
+    alongside the history as it scrolls), and `selection-mode` (tmux's selflag:
+    in word or line mode, set by `selection-mode`, `select-word` and
     `select-line`, every cursor move snaps the selection's end to a word or line
     edge, `window_copy_synchronize_cursor_end`, keeping the first word or line's
     bounds as `selrx` / `endselrx`; tmxr's `select-word` makes a character

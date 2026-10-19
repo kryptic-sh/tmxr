@@ -1,6 +1,71 @@
 use super::*;
 
 #[test]
+fn a_programs_clipboard_makes_a_buffer_and_fires_pane_set_clipboard() {
+    let t = Tmxr::new("osc52");
+    t.run(&["new-session", "-d", "-s", "cl"]);
+    t.run(&["set-hook", "-g", "pane-set-clipboard", "set -ga @clip x"]);
+    // A program that copies "hi" (base64 aGk=) after a moment.
+    #[cfg(unix)]
+    let copier = |marker: &str| {
+        vec![
+            "/bin/sh".to_owned(),
+            "-c".to_owned(),
+            format!(r"sleep 1; printf '\033]52;c;aGk=\007{marker}'; sleep 30"),
+        ]
+    };
+    #[cfg(windows)]
+    let copier = |marker: &str| {
+        vec![
+            "powershell.exe".to_owned(),
+            "-NoProfile".to_owned(),
+            "-Command".to_owned(),
+            format!(
+                "Start-Sleep 1; [Console]::Out.Write([string][char]27 + ']52;c;aGk=' + [char]7 + '{marker}'); Start-Sleep 30"
+            ),
+        ]
+    };
+    let run_copier = |window: &str, marker: &str| {
+        let mut args = vec![
+            "new-window".to_owned(),
+            "-d".to_owned(),
+            "-t".to_owned(),
+            window.to_owned(),
+        ];
+        args.extend(copier(marker));
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        t.run(&args);
+        t.wait_run(&["capture-pane", "-p", "-t", window], "the copy", |o| {
+            o.contains(marker)
+        });
+    };
+    let buffers = || t.run(&["list-buffers", "-F", "#{buffer_sample}"]);
+    // external, tmux's default: a program's copy is left alone.
+    t.run(&["set", "-g", "set-clipboard", "external"]);
+    run_copier("cl:1", "first-done");
+    assert_eq!(buffers().trim(), "");
+    assert_eq!(t.run(&["show", "-gv", "@clip"]).trim(), "");
+    // on: it is passed on, made a buffer, and the hook runs.
+    t.run(&["set", "-g", "set-clipboard", "on"]);
+    run_copier("cl:2", "second-done");
+    t.wait_run(&["show", "-gv", "@clip"], "the hook", |o| o.trim() == "x");
+    assert_eq!(buffers().trim(), "hi");
+    // A copy in copy mode fires it too.
+    t.run(&["copy-mode", "-t", "cl:2"]);
+    for cmd in [
+        "history-top",
+        "begin-selection",
+        "cursor-right",
+        "copy-selection",
+    ] {
+        t.run(&["send-keys", "-t", "cl:2", "-X", cmd]);
+    }
+    t.wait_run(&["show", "-gv", "@clip"], "the copy's hook", |o| {
+        o.trim() == "xx"
+    });
+}
+
+#[test]
 fn buffer_limit_and_message_limit_are_server_options() {
     let t = Tmxr::new("limits");
     let s = t.attach(&["new", "-s", "lm"]);

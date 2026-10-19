@@ -693,6 +693,45 @@ impl Server {
         }
     }
 
+    /// A copy from copy mode to the clipboard: [`Server::set_clipboard`],
+    /// and `pane-set-clipboard` for `pane` unless set-clipboard is off, as
+    /// tmux's window_copy_copy_buffer.
+    pub fn copy_to_clipboard(&mut self, pane: PaneId, text: &str) {
+        if self.cfg.set_clipboard == "off" {
+            return;
+        }
+        self.set_clipboard(text);
+        self.pane_set_clipboard(pane);
+    }
+
+    /// A program's OSC 52 copy: taken only with set-clipboard on (external
+    /// leaves it to tmxr's own copies), when its data decodes, then passed
+    /// on, made a buffer and `pane-set-clipboard` fired, as tmux's
+    /// input_osc_52.
+    pub fn program_clipboard(&mut self, pane: PaneId, b64: &str) {
+        if self.cfg.set_clipboard != "on" {
+            return;
+        }
+        let Some(data) = crate::util::base64_decode(b64).filter(|d| !d.is_empty()) else {
+            return;
+        };
+        self.forward_osc52(b64);
+        self.pane_set_clipboard(pane);
+        self.add_buffer(String::from_utf8_lossy(&data).into_owned(), None);
+    }
+
+    fn pane_set_clipboard(&mut self, pane: PaneId) {
+        let ctx = crate::cmds::Ctx {
+            pane: Some(pane),
+            ..crate::cmds::Ctx::default()
+        };
+        self.queue_hook(
+            "pane-set-clipboard",
+            ctx,
+            crate::hooks::HookScope::default(),
+        );
+    }
+
     /// Put text on the clipboard: OSC 52 to every attached client (works
     /// locally and over SSH), plus the local clipboard via hjkl-clipboard.
     pub fn set_clipboard(&mut self, text: &str) {

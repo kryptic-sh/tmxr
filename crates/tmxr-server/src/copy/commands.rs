@@ -129,7 +129,7 @@ pub fn command(
         // selection is cleared, or copy mode left.
         "append-selection" | "append-selection-and-cancel" => {
             if let Some(text) = cm.selection_text() {
-                srv.set_clipboard(&text);
+                srv.copy_to_clipboard(pane, &text);
                 match srv.buffers.front_mut() {
                     Some(top) => top.data.push_str(&text),
                     None => srv.add_buffer(text, None),
@@ -216,7 +216,7 @@ pub fn command(
                     crate::server::pipe_to_shell(srv, pane, cmd, text.clone());
                 }
                 if !copy.no_clipboard {
-                    srv.set_clipboard(&text);
+                    srv.copy_to_clipboard(pane, &text);
                 }
                 if !copy.no_buffer {
                     srv.add_buffer_prefixed(text, prefix.as_deref().unwrap_or("buffer"));
