@@ -19,6 +19,17 @@ impl Server {
         };
         att.last_input = Instant::now();
         let session = att.session;
+        // Everything but a key's release and losing focus makes the client
+        // its window's latest, as tmux's server_client_key_callback and
+        // its resize do.
+        let latest = !matches!(
+            ev,
+            TermEvent::FocusLost
+                | TermEvent::Key(KeyEvent {
+                    kind: KeyEventKind::Release,
+                    ..
+                })
+        );
         match ev {
             TermEvent::Key(k) if k.kind != KeyEventKind::Release => self.client_key(id, k),
             TermEvent::Key(_) => {}
@@ -67,6 +78,77 @@ impl Server {
                     "client-focus-out"
                 };
                 self.queue_hook(hook, ctx, crate::hooks::HookScope::default());
+            }
+        }
+        if latest {
+            self.update_latest(id);
+        }
+    }
+
+    /// Make client `id` its current window's latest client, running
+    /// `client-active` when that changes it, as tmux's
+    /// server_client_update_latest.
+    pub(crate) fn update_latest(&mut self, id: ClientId) {
+        if self.make_latest(id) {
+            let ctx = crate::cmds::Ctx {
+                client: Some(id),
+                ..crate::cmds::Ctx::default()
+            };
+            self.queue_hook("client-active", ctx, crate::hooks::HookScope::default());
+        }
+    }
+
+    /// Make client `id` its current window's latest client with no hook,
+    /// as attaching and switching do in tmux; whether that changed it.
+    pub(crate) fn make_latest(&mut self, id: ClientId) -> bool {
+        let Some(session) = self
+            .clients
+            .get(&id)
+            .and_then(|c| c.att.as_ref())
+            .map(|a| a.session)
+        else {
+            return false;
+        };
+        let Some(w) = self
+            .sessions
+            .get(&session)
+            .and_then(crate::model::Session::current_window)
+            .and_then(|w| self.windows.get_mut(&w))
+        else {
+            return false;
+        };
+        w.latest.replace(id) != Some(id)
+    }
+
+    /// Client `id` has gone: each window it was the latest client of goes
+    /// to the most recently active other client showing it, as tmux's
+    /// server_client_lost does.
+    pub(crate) fn latest_gone(&mut self, id: ClientId) {
+        let windows: Vec<_> = self
+            .windows
+            .values_mut()
+            .filter(|w| w.latest == Some(id))
+            .map(|w| {
+                w.latest = None;
+                w.id
+            })
+            .collect();
+        for wid in windows {
+            let next = self
+                .clients
+                .values()
+                .filter(|c| c.id != id)
+                .filter_map(|c| c.att.as_ref().map(|a| (c.id, a.session, a.last_input)))
+                .filter(|(_, s, _)| {
+                    self.sessions
+                        .get(s)
+                        .and_then(crate::model::Session::current_window)
+                        == Some(wid)
+                })
+                .max_by_key(|(_, _, t)| *t)
+                .map(|(c, _, _)| c);
+            if let Some(c) = next {
+                self.update_latest(c);
             }
         }
     }

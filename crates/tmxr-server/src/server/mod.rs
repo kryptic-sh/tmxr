@@ -407,6 +407,7 @@ impl Server {
                     && c.att.is_some()
                 {
                     debug!(client = id, "attached client went away");
+                    self.latest_gone(id);
                     self.check_unattached();
                 }
             }

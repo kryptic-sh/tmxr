@@ -22,6 +22,7 @@ pub const EVENTS: &[&str] = &[
     "alert-activity",
     "alert-bell",
     "alert-silence",
+    "client-active",
     "client-attached",
     "client-detached",
     "client-focus-in",

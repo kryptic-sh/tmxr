@@ -60,6 +60,7 @@ impl Server {
             status_at: Instant::now(),
         });
         self.send(id, ServerMsg::Attached);
+        self.make_latest(id);
         self.touch_session(session);
         self.size_session(session);
         let ctx = Ctx {
@@ -112,6 +113,7 @@ impl Server {
             ..Ctx::default()
         };
         self.queue_hook("client-detached", ctx, crate::hooks::HookScope::default());
+        self.latest_gone(id);
         self.check_unattached();
     }
 
@@ -128,6 +130,7 @@ impl Server {
         }
         att.dirty = true;
         att.full_redraw = true;
+        self.make_latest(id);
         self.touch_session(session);
         self.size_session(session);
         self.check_unattached();

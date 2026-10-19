@@ -145,6 +145,9 @@ pub struct Window {
     pub order: Vec<PaneId>,
     pub active: PaneId,
     pub last_pane: Option<PaneId>,
+    /// The client that last typed into or resized while showing it, as
+    /// tmux's `w->latest`; `client-active` runs when it changes.
+    pub latest: Option<crate::model::ClientId>,
     pub zoomed: bool,
     /// The sessions whose link to it a bell flags: tmux keeps the alert
     /// flags per winlink, so each session holding a window has its own.

@@ -19,6 +19,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The `client-active` hook**, as tmux's: it runs when a client becomes its
+  window's latest by typing or resizing there after another client did, and when
+  the latest client leaves and the window passes to another; attaching or
+  switching makes a client the latest without it.
 - **The `pane-set-clipboard` hook**, as tmux's: it runs when a program's copy is
   taken, and when copy mode copies to the clipboard.
 - **`capture-pane -C` and `-q`**, as tmux's: `-C` doubles the backslashes in the

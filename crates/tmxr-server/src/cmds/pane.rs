@@ -353,6 +353,7 @@ pub(super) fn run(
                 str::to_owned,
             );
             let new = srv.adopt_pane(dst, pid, title, index, cols, rows, !a.has('d'))?;
+            super::claim_window(srv, ctx, new);
             // -n names it for good, as rename-window does.
             if name.is_some()
                 && let Some(w) = srv.windows.get_mut(&new)
@@ -510,6 +511,7 @@ pub(super) fn run(
                         srv.client_key(client, KeyEvent::new(key.code, key.mods));
                     }
                 }
+                srv.update_latest(client);
                 return Ok(true);
             }
             let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;

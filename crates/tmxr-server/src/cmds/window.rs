@@ -87,6 +87,7 @@ pub(super) fn run(
             );
             srv.finish_replace(sid, replaced, made.is_ok());
             let wid = made?;
+            super::claim_window(srv, ctx, wid);
             let pane = srv.windows.get(&wid).map(|w| w.active);
             super::print_new(srv, ctx, a, out, sid, pane, super::NEW_PANE_TEMPLATE);
         }

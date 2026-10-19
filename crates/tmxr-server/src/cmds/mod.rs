@@ -182,6 +182,18 @@ fn hook_scope(srv: &Server, ctx: &Ctx, parsed: &Parsed) -> crate::hooks::HookSco
     })
 }
 
+/// A window a command made (`new-window`, `break-pane`) has the attached
+/// client that ran it as its latest, quietly, as tmux's spawn_window and
+/// break-pane give it their target client. (tmux's target client for a
+/// command from a shell is not followed here.)
+fn claim_window(srv: &mut Server, ctx: &Ctx, wid: crate::model::WindowId) {
+    if let Some(c) = attached_client(srv, ctx)
+        && let Some(w) = srv.windows.get_mut(&wid)
+    {
+        w.latest = Some(c);
+    }
+}
+
 fn attached_client(srv: &Server, ctx: &Ctx) -> Option<ClientId> {
     ctx.client
         .filter(|c| srv.clients.get(c).is_some_and(|c| c.att.is_some()))

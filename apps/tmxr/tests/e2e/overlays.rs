@@ -120,6 +120,44 @@ fn display_panes_runs_its_template_and_n_passes_keys_on() {
 }
 
 #[test]
+fn client_active_runs_when_another_client_takes_the_window() {
+    let t = Tmxr::new("cactive");
+    t.run(&["new-session", "-d", "-s", "ca", "-x", "80", "-y", "24"]);
+    t.run(&[
+        "set-hook",
+        "-g",
+        "client-active",
+        "set -gaF @act '#{client_name} '",
+    ]);
+    let act = || t.run(&["show", "-gv", "@act"]).trim().to_owned();
+    let a = t.attach(&["attach", "-t", "ca"]);
+    a.wait_for("first client", |text| text.contains("ca"));
+    let b = t.attach(&["attach", "-t", "ca"]);
+    b.wait_for("second client", |text| text.contains("ca"));
+    let names = t.run(&["list-clients", "-F", "#{client_name}"]);
+    let names: Vec<&str> = names.lines().collect();
+    let (na, nb) = (names[0], names[1]);
+    // Attaching makes a client its window's latest without the hook, as
+    // tmux 3.6 showed; a key from the other client runs it.
+    assert_eq!(act(), "");
+    a.send(b"a");
+    t.wait_run(&["show", "-gv", "@act"], "the first", |o| o.trim() == na);
+    b.send(b"b");
+    let both = format!("{na} {nb}");
+    t.wait_run(&["show", "-gv", "@act"], "the second", |o| o.trim() == both);
+    // Still the latest: no hook.
+    b.send(b"c");
+    std::thread::sleep(Duration::from_millis(500));
+    assert_eq!(act(), both);
+    // The latest going hands the window to the other.
+    t.run(&["detach-client", "-t", nb]);
+    let handed = format!("{na} {nb} {na}");
+    t.wait_run(&["show", "-gv", "@act"], "the hand-back", |o| {
+        o.trim() == handed
+    });
+}
+
+#[test]
 fn display_message_n_stays_up_through_keys() {
     let t = Tmxr::new("dmsgn");
     let s = t.attach(&["new", "-s", "dm"]);
