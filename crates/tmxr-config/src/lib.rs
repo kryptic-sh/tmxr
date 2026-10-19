@@ -16,8 +16,8 @@ pub use import::{Imported, from_tmux_conf};
 pub use session::{OwnSessionOptions, SessionOptions};
 pub use table::{Array, OptionValue, Word};
 pub use window::{
-    BoxLines, ClockModeStyle, CursorStyle, ModeKeys, OwnOptions, PANE_OPTIONS, RemainOnExit,
-    WindowOptions, WindowSize,
+    BoxLines, ClockModeStyle, CursorStyle, ModeKeys, OwnOptions, PANE_OPTIONS, PaneLines,
+    RemainOnExit, WindowOptions, WindowSize,
 };
 
 mod import;
@@ -93,6 +93,7 @@ struct File {
     mouse: bool,
     base_index: u32,
     pane_base_index: u32,
+    pane_border_lines: PaneLines,
     renumber_windows: bool,
     set_titles: bool,
     set_titles_string: String,
@@ -202,6 +203,7 @@ impl From<File> for Config {
                 other_pane_width: f.other_pane_width,
                 pane_active_border_style: s.pane_active_border_style,
                 pane_base_index: f.pane_base_index,
+                pane_border_lines: f.pane_border_lines,
                 pane_border_style: s.pane_border_style,
                 pane_scrollbars: f.pane_scrollbars,
                 pane_scrollbars_position: f.pane_scrollbars_position,

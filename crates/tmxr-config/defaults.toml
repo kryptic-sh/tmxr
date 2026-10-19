@@ -13,6 +13,8 @@ key-table = "root"
 mouse = true
 base-index = 0
 pane-base-index = 0
+# tmux's default: pane borders in single lines.
+pane-border-lines = "single"
 renumber-windows = true
 mode-keys = "vi"
 # tmux-sensible values.

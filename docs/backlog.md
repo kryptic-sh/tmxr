@@ -480,9 +480,9 @@ table. What has been verified, and how:
     declined for now: tmxr's own defaults put formats in colour options
     (`display-panes-colour = "#{@thm_blue}"`), which tmux's check would refuse,
     so it needs those expanded first or the theme moved; `pane-border-status` /
-    `-format` / `-lines` / `-indicators`; session `status-keys` (and
-    `default-size` set per session by `new-session -x` / `-y`, which tmux keeps
-    and tmxr does not); server `editor`. `escape-time` is kept but never read.
+    `-format` / `-indicators`; session `status-keys` (and `default-size` set per
+    session by `new-session -x` / `-y`, which tmux keeps and tmxr does not);
+    server `editor`. `escape-time` is kept but never read.
   - Commands: `capture-pane -e -a -T` (`-e` needs tmux's own SGR output, `-a`
     the saved normal screen, which `vt100` does not expose). `-T`, `-N` and `-J`
     all need written cells told from never-written ones, which `copy::snapshot`

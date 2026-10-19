@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    AlertAction, BoxLines, ClockModeStyle, CursorStyle, DestroyUnattached, ModeKeys,
+    AlertAction, BoxLines, ClockModeStyle, CursorStyle, DestroyUnattached, ModeKeys, PaneLines,
     ScrollbarPosition, Scrollbars, StatusJustify, StatusPosition, Visual, WindowSize,
 };
 
@@ -256,6 +256,7 @@ choice!(
     ModeKeys,
     WindowSize,
     BoxLines,
+    PaneLines,
     AlertAction,
     Visual
 );

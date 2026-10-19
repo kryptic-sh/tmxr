@@ -9,6 +9,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph, Widget};
 use tmxr_command::format::{self, Colour};
+use tmxr_config::PaneLines;
 
 use crate::backend::AnsiBackend;
 use crate::copy::cell_style;
@@ -351,20 +352,35 @@ fn draw_window(
                 is_border(xi, yi - 1),
                 is_border(xi, yi + 1),
             );
-            let ch = match (l || r, u || d) {
-                (true, false) => "─",
-                (false, true) | (false, false) => "│",
+            // tmux's cell types (CELL_TOPBOTTOM …, `tmux.h`), less one.
+            let cell = match (l || r, u || d) {
+                (true, false) => 1,
+                (false, true) | (false, false) => 0,
                 (true, true) => match (l, r, u, d) {
-                    (true, true, true, true) => "┼",
-                    (false, true, true, true) => "├",
-                    (true, false, true, true) => "┤",
-                    (true, true, false, true) => "┬",
-                    (true, true, true, false) => "┴",
-                    (false, true, false, true) => "┌",
-                    (true, false, false, true) => "┐",
-                    (false, true, true, false) => "└",
-                    _ => "┘",
+                    (true, true, true, true) => 10,
+                    (false, true, true, true) => 8,
+                    (true, false, true, true) => 9,
+                    (true, true, false, true) => 6,
+                    (true, true, true, false) => 7,
+                    (false, true, false, true) => 2,
+                    (true, false, false, true) => 3,
+                    (false, true, true, false) => 4,
+                    _ => 5,
                 },
+            };
+            let number;
+            let ch = match options.pane_border_lines {
+                PaneLines::Number => {
+                    // The first pane whose border holds it, as tmux's
+                    // screen_redraw_check_cell, by its index.
+                    let index = win.panes().iter().position(|p| touches(rect_of(*p), x, y));
+                    number = index.map_or_else(
+                        || "*".to_owned(),
+                        |i| ((i as u32 + options.pane_base_index) % 10).to_string(),
+                    );
+                    number.as_str()
+                }
+                lines => border_char(lines, cell),
             };
             let mut style = if touches(active, x, y) && rects.len() > 1 {
                 active_border
@@ -380,16 +396,40 @@ fn draw_window(
         }
     }
     // Beyond a window smaller than the client (`resize-window`), as tmux.
+    let outside = match options.pane_border_lines {
+        PaneLines::Simple => ".",
+        PaneLines::Spaces => " ",
+        _ => "·",
+    };
     for y in 0..rows {
         for x in 0..cols {
             if (x >= w || y >= h)
                 && let Some(cell) = buf.cell_mut((x, y))
             {
-                cell.set_symbol("·").set_style(border);
+                cell.set_symbol(outside).set_style(border);
             }
         }
     }
     cursor
+}
+
+/// The character `lines` draws a border cell of tmux's type `cell` (one
+/// less than its `CELL_TOPBOTTOM` … `CELL_JOIN`) with: tmux 3.6's
+/// `CELL_BORDERS` (as UTF-8), `tty_acs_double_borders`,
+/// `tty_acs_heavy_borders` and `SIMPLE_BORDERS`.
+fn border_char(lines: PaneLines, cell: usize) -> &'static str {
+    const SINGLE: [&str; 11] = ["│", "─", "┌", "┐", "└", "┘", "┬", "┴", "├", "┤", "┼"];
+    const DOUBLE: [&str; 11] = ["║", "═", "╔", "╗", "╚", "╝", "╦", "╩", "╠", "╣", "╬"];
+    const HEAVY: [&str; 11] = ["┃", "━", "┏", "┓", "┗", "┛", "┳", "┻", "┣", "┫", "╋"];
+    const SIMPLE: [&str; 11] = ["|", "-", "+", "+", "+", "+", "+", "+", "+", "+", "+"];
+    let set = match lines {
+        PaneLines::Double => &DOUBLE,
+        PaneLines::Heavy => &HEAVY,
+        PaneLines::Simple => &SIMPLE,
+        PaneLines::Spaces => return " ",
+        PaneLines::Single | PaneLines::Number => &SINGLE,
+    };
+    set[cell]
 }
 
 /// Draw one pane. Returns its cursor position on screen when shown.

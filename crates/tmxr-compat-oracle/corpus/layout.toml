@@ -332,3 +332,43 @@ checks = [
   { command = "list-panes -t o:1 -F '#{pane_index} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'" },
   { command = "display -p -t o:2 '#{window_layout} #{window_visible_layout}'" },
 ]
+
+[[cases]]
+name = "pane_border_lines_double"
+attach = true
+unix_only = true
+steps = [
+  { run = "split-window -h -t o" },
+  { run = "split-window -v -t o" },
+  { run = "set -g pane-border-lines double" },
+  { sleep = 0.5 },
+]
+checks = [
+  { screen_find = "║" },
+  { screen_find = "═" },
+  { screen_find = "╠" },
+  { screen_contains = "│", expect = false },
+]
+
+[[cases]]
+name = "pane_border_lines_heavy"
+attach = true
+unix_only = true
+steps = [
+  { run = "split-window -h -t o" },
+  { run = "set -g pane-border-lines heavy" },
+  { sleep = 0.5 },
+]
+checks = [{ screen_find = "┃" }]
+
+[[cases]]
+name = "pane_border_lines_number"
+attach = true
+unix_only = true
+steps = [
+  { run = "split-window -h -t o" },
+  { run = "set -g pane-border-lines number" },
+  { run = "set -g pane-active-border-style default" },
+  { sleep = 0.5 },
+]
+checks = [{ screen_find = "0" }, { command = "show -gv pane-border-lines" }]

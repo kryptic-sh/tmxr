@@ -290,6 +290,48 @@ pub enum BoxLines {
     None,
 }
 
+/// `pane-border-lines`: what tmux draws pane borders with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PaneLines {
+    Single,
+    Double,
+    Heavy,
+    /// ASCII: `|`, `-` and `+`.
+    Simple,
+    /// Each border cell the index of its pane.
+    Number,
+    /// Blank cells.
+    Spaces,
+}
+
+impl PaneLines {
+    pub const NAMES: &str = "single, double, heavy, simple, number or spaces";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "single" => Some(Self::Single),
+            "double" => Some(Self::Double),
+            "heavy" => Some(Self::Heavy),
+            "simple" => Some(Self::Simple),
+            "number" => Some(Self::Number),
+            "spaces" => Some(Self::Spaces),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Single => "single",
+            Self::Double => "double",
+            Self::Heavy => "heavy",
+            Self::Simple => "simple",
+            Self::Number => "number",
+            Self::Spaces => "spaces",
+        }
+    }
+}
+
 impl BoxLines {
     pub const NAMES: &str = "single, rounded, double, heavy, simple, padded or none";
 
@@ -374,6 +416,8 @@ options_table! {
     "other-pane-width" => other_pane_width: String,
     "pane-active-border-style" => pane_active_border_style: String,
     "pane-base-index" => pane_base_index: u32,
+    /// What pane borders are drawn with.
+    "pane-border-lines" => pane_border_lines: PaneLines,
     "pane-border-style" => pane_border_style: String,
     /// When panes show a scrollbar, on which side, and in what style (which
     /// also takes `width=N` and `pad=N`).

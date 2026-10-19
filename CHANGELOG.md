@@ -24,6 +24,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The `pane-border-lines` option**, as tmux's: pane borders in `single`,
+  `double` or `heavy` lines, `simple` ASCII, `spaces`, or `number`, each border
+  cell its pane's index.
 - **`copy-mode -s src-pane`**, as tmux's: the target pane enters copy mode
   showing another pane's screen and history, which `refresh-from-pane` reads
   again.
