@@ -305,7 +305,7 @@ fn locate(
     let (ox, oy) = crate::render::window_offset(srv, att);
     let (col, row) = (col + ox, row - top + oy);
     (t.col, t.row) = (col, row);
-    let rects = srv.windows.get(&wid)?.visible_rects();
+    let rects = srv.pane_cells(wid);
     if let Some((pane, _)) = rects
         .iter()
         .find(|(_, r)| col >= r.x && col < r.x + r.w && row >= r.y && row < r.y + r.h)

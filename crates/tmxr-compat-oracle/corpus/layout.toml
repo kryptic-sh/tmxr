@@ -434,3 +434,38 @@ steps = [
   { sleep = 0.5 },
 ]
 checks = [{ screen_find = "+" }, { screen_contains = "·", expect = false }]
+
+[[cases]]
+name = "pane_border_status_top"
+attach = true
+unix_only = true
+steps = [
+  { run = "split-window -h -t o" },
+  { run = "select-pane -t o.0 -T leftone" },
+  { run = "select-pane -t o.1 -T righttwo" },
+  { run = "set -g pane-border-status top" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "list-panes -t o -F '#{pane_index} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'" },
+  { screen_find = "leftone" },
+  { screen_find = "righttwo" },
+  { command = "show -gv pane-border-status" },
+]
+
+[[cases]]
+name = "pane_border_status_bottom_stacked"
+attach = true
+unix_only = true
+steps = [
+  { run = "split-window -v -t o" },
+  { run = "select-pane -t o.0 -T upper" },
+  { run = "select-pane -t o.1 -T lower" },
+  { run = "set -g pane-border-status bottom" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "list-panes -t o -F '#{pane_index} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'" },
+  { screen_find = "upper" },
+  { screen_find = "lower" },
+]

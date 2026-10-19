@@ -24,6 +24,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The `pane-border-status` and `pane-border-format` options**, as tmux's: each
+  pane gets a status line on its top or bottom border, two cells in, in the
+  border style (the active pane's in `pane-active-border-style`), and a pane on
+  the window's top or bottom edge gives up a row for it.
 - **A client away or out of focus stops sizing windows** (tmxr's, past tmux):
   with several clients of different sizes, a window takes the smallest of those
   in use, and a client whose terminal reports focus out, or that has had no

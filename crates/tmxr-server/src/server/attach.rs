@@ -394,12 +394,9 @@ impl Server {
 
     /// Recompute pane rects for a window and resize panes whose size changed.
     pub fn relayout(&mut self, window: WindowId) {
-        let Some(win) = self.windows.get(&window) else {
-            return;
-        };
-        // Each pane gets its layout cell less its scrollbar, if it shows one.
-        let rects: Vec<_> = win
-            .visible_rects()
+        // Each pane gets its cell less its scrollbar, if it shows one.
+        let rects: Vec<_> = self
+            .pane_cells(window)
             .into_iter()
             .map(|(pid, cell)| {
                 (

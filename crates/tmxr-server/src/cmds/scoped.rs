@@ -343,7 +343,7 @@ fn changed(srv: &mut Server, scope: Scope, name: &str) {
         Scope::Window(w) => vec![w],
         Scope::Pane(p) => srv.panes.get(&p).map(|p| p.window).into_iter().collect(),
     };
-    if name.starts_with("pane-scrollbars") {
+    if name.starts_with("pane-scrollbars") || name == "pane-border-status" {
         for &w in &windows {
             srv.relayout(w);
         }

@@ -286,7 +286,7 @@ fn draw_window(
     rows: u16,
 ) -> Option<Position> {
     let win = srv.windows.get(&wid)?;
-    let rects = win.visible_rects();
+    let rects = srv.pane_cells(wid);
     let vars = Vars::for_pane(srv, Some(win.active), Some(client));
     let options = srv.window_options(wid);
     let border = style_option(&options.pane_border_style, &vars);
@@ -455,6 +455,36 @@ fn draw_window(
             }
             if let Some(cell) = buf.cell_mut((x, y)) {
                 cell.set_symbol(ch).set_style(style);
+            }
+        }
+    }
+    // Each pane's status line on its border, as tmux's
+    // screen_redraw_make_pane_status: two cells in, its width less two.
+    let status = options.pane_border_status;
+    if status != tmxr_config::PaneStatus::Off {
+        for (pid, cell) in &rects {
+            if cell.w < 4 {
+                continue;
+            }
+            let y = match status {
+                tmxr_config::PaneStatus::Top => cell.y.checked_sub(1),
+                _ => Some(cell.y + cell.h),
+            };
+            let Some(y) = y.filter(|y| *y < h) else {
+                continue;
+            };
+            let pvars = Vars::for_pane(srv, Some(*pid), Some(client));
+            let style = if *pid == win.active {
+                active_border
+            } else {
+                border
+            };
+            let format = &srv.pane_options(*pid).pane_border_format;
+            let text = format::expand_time(format, &pvars);
+            let x = cell.x + 2;
+            let end = (cell.x + cell.w).min(w);
+            if x < end {
+                draw_runs(buf, x, y, end, style, &text);
             }
         }
     }
@@ -947,7 +977,7 @@ fn draw_overlay(
             let opts = srv.session_options(att.session);
             let other = label_style(&opts.display_panes_colour);
             let active = label_style(&opts.display_panes_active_colour);
-            for (pid, r) in win.visible_rects() {
+            for (pid, r) in srv.pane_cells(win.id) {
                 let Some((label, _)) = labels.iter().find(|(_, p)| *p == pid) else {
                     continue;
                 };

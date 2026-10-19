@@ -34,6 +34,38 @@ impl Server {
         u16::from(self.session_options(session).status)
     }
 
+    /// Each visible pane's area in window `w`: its layout cell less a row
+    /// for its status line when it is on the window's top (bottom) edge
+    /// with `pane-border-status top` (`bottom`), as tmux's
+    /// layout_fix_panes; other panes' lines go on the borders between.
+    pub fn pane_cells(
+        &self,
+        w: crate::model::WindowId,
+    ) -> Vec<(crate::model::PaneId, hjkl_layout::LayoutRect)> {
+        let Some(win) = self.windows.get(&w) else {
+            return Vec::new();
+        };
+        let mut cells = win.visible_rects();
+        match self.window_options(w).pane_border_status {
+            tmxr_config::PaneStatus::Off => {}
+            tmxr_config::PaneStatus::Top => {
+                for (_, r) in cells.iter_mut().filter(|(_, r)| r.y == 0 && r.h > 1) {
+                    r.y += 1;
+                    r.h -= 1;
+                }
+            }
+            tmxr_config::PaneStatus::Bottom => {
+                for (_, r) in cells
+                    .iter_mut()
+                    .filter(|(_, r)| r.y + r.h == win.rows && r.h > 1)
+                {
+                    r.h -= 1;
+                }
+            }
+        }
+        cells
+    }
+
     /// Whether `session`'s status line is its clients' top row
     /// (`status-position top`).
     pub fn status_at_top(&self, session: SessionId) -> bool {

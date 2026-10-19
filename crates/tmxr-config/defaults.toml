@@ -18,6 +18,9 @@ pane-border-lines = "single"
 # tmux's default: the active pane's border coloured, half of it with two
 # panes.
 pane-border-indicators = "colour"
+# tmux's defaults: no pane status lines, and what one shows.
+pane-border-status = "off"
+pane-border-format = '#{?pane_active,#[reverse],}#{pane_index}#[default] "#{pane_title}"'
 renumber-windows = true
 mode-keys = "vi"
 # tmux's default and tmux-sensible's: the command prompt takes emacs keys.

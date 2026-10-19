@@ -17,7 +17,7 @@ pub use session::{OwnSessionOptions, SessionOptions};
 pub use table::{Array, OptionValue, Word};
 pub use window::{
     BoxLines, ClockModeStyle, CursorStyle, ModeKeys, OwnOptions, PANE_OPTIONS, PaneIndicators,
-    PaneLines, RemainOnExit, WindowOptions, WindowSize,
+    PaneLines, PaneStatus, RemainOnExit, WindowOptions, WindowSize,
 };
 
 mod import;
@@ -98,6 +98,8 @@ struct File {
     pane_base_index: u32,
     pane_border_lines: PaneLines,
     pane_border_indicators: PaneIndicators,
+    pane_border_status: PaneStatus,
+    pane_border_format: String,
     renumber_windows: bool,
     set_titles: bool,
     set_titles_string: String,
@@ -212,6 +214,8 @@ impl From<File> for Config {
                 pane_base_index: f.pane_base_index,
                 pane_border_lines: f.pane_border_lines,
                 pane_border_indicators: f.pane_border_indicators,
+                pane_border_status: f.pane_border_status,
+                pane_border_format: f.pane_border_format,
                 pane_border_style: s.pane_border_style,
                 pane_scrollbars: f.pane_scrollbars,
                 pane_scrollbars_position: f.pane_scrollbars_position,

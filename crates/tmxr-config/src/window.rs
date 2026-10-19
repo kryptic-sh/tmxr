@@ -202,6 +202,7 @@ pub const PANE_OPTIONS: &[&str] = &[
     "allow-set-title",
     "alternate-screen",
     "cursor-style",
+    "pane-border-format",
     "pane-scrollbars-style",
     "remain-on-exit",
     "remain-on-exit-format",
@@ -288,6 +289,36 @@ pub enum BoxLines {
     /// Blank cells, the box keeping its size.
     Padded,
     None,
+}
+
+/// `pane-border-status`: where each pane's status line goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PaneStatus {
+    Off,
+    Top,
+    Bottom,
+}
+
+impl PaneStatus {
+    pub const NAMES: &str = "off, top or bottom";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "off" => Some(Self::Off),
+            "top" => Some(Self::Top),
+            "bottom" => Some(Self::Bottom),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Top => "top",
+            Self::Bottom => "bottom",
+        }
+    }
 }
 
 /// `pane-border-indicators`: how the active pane's border shows it.
@@ -454,10 +485,14 @@ options_table! {
     "other-pane-width" => other_pane_width: String,
     "pane-active-border-style" => pane_active_border_style: String,
     "pane-base-index" => pane_base_index: u32,
+    /// What each pane's status line shows (`pane-border-status`).
+    "pane-border-format" => pane_border_format: String,
     /// How the active pane's border shows it.
     "pane-border-indicators" => pane_border_indicators: PaneIndicators,
     /// What pane borders are drawn with.
     "pane-border-lines" => pane_border_lines: PaneLines,
+    /// A status line on each pane's top or bottom border.
+    "pane-border-status" => pane_border_status: PaneStatus,
     "pane-border-style" => pane_border_style: String,
     /// When panes show a scrollbar, on which side, and in what style (which
     /// also takes `width=N` and `pad=N`).
