@@ -35,6 +35,9 @@ pub enum OverlayAction {
     /// Close and open the command prompt holding this command line, to be
     /// edited and run (`customize-mode`).
     Edit(String),
+    /// Keep the overlay and let the key go on as if it were not there
+    /// (`display-panes -N`).
+    Pass,
 }
 
 pub enum Overlay {
@@ -59,7 +62,12 @@ pub enum Overlay {
     /// `display-panes`: each pane's number, shown until `until`.
     Panes {
         labels: Vec<(u32, PaneId)>,
-        until: Instant,
+        /// When it closes by itself; never for `-d 0`.
+        until: Option<Instant>,
+        /// The command list a chosen pane runs, `%%` its id.
+        template: String,
+        /// Keys choose a pane; with `-N` they go on as usual.
+        keys: bool,
     },
 }
 
@@ -108,17 +116,26 @@ impl Overlay {
         Self::Text { lines, top: 0 }
     }
 
-    /// Show `labels` (pane number, pane) for `time`.
-    pub fn display_panes(labels: Vec<(u32, PaneId)>, time: Duration) -> Self {
+    /// Show `labels` (pane number, pane) for `time` (until a key with
+    /// zero), a chosen pane running `template`; with `keys` off, keys go on
+    /// as usual instead, as tmux's `display-panes -N`.
+    pub fn display_panes(
+        labels: Vec<(u32, PaneId)>,
+        time: Duration,
+        template: String,
+        keys: bool,
+    ) -> Self {
         Self::Panes {
             labels,
-            until: Instant::now() + time,
+            until: (!time.is_zero()).then(|| Instant::now() + time),
+            template,
+            keys,
         }
     }
 
     /// Whether the overlay has timed out and should close by itself.
     pub fn expired(&self) -> bool {
-        matches!(self, Self::Panes { until, .. } if *until <= Instant::now())
+        matches!(self, Self::Panes { until: Some(until), .. } if *until <= Instant::now())
     }
 
     pub fn session_picker(srv: &Server, client: ClientId) -> Self {
@@ -296,19 +313,27 @@ impl Overlay {
                 OverlayAction::Keep
             }
             Self::Picker(p) => p.key(ev),
-            // A pane's number selects it; any other key just dismisses.
-            Self::Panes { labels, .. } => {
+            Self::Panes { keys: false, .. } => OverlayAction::Pass,
+            // A pane's number (0 to 9, then a to z) runs the template for
+            // it, as tmux's cmd_display_panes_key; any other key just
+            // dismisses.
+            Self::Panes {
+                labels, template, ..
+            } => {
                 let pick = match ev.code {
-                    KeyCode::Char(c) => c.to_digit(10).and_then(|d| {
-                        labels
-                            .iter()
-                            .find(|(label, _)| *label == d)
-                            .map(|(_, p)| *p)
-                    }),
+                    KeyCode::Char(c @ '0'..='9') => c.to_digit(10),
+                    KeyCode::Char(c @ 'a'..='z') => Some(10 + u32::from(c) - u32::from('a')),
                     _ => None,
-                };
+                }
+                .and_then(|n| {
+                    labels
+                        .iter()
+                        .find(|(label, _)| *label == n)
+                        .map(|(_, p)| *p)
+                });
                 pick.map_or(OverlayAction::Close, |p| {
-                    OverlayAction::Run(format!("select-pane -t %{p}"))
+                    let id = format!("%{p}");
+                    OverlayAction::Run(template.replace("%%%", &id).replace("%%", &id))
                 })
             }
         }
@@ -345,6 +370,29 @@ mod tests {
 
     fn k(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn display_panes_takes_letters_past_nine_and_fills_the_template() {
+        let labels = vec![(3, 30), (10, 100), (11, 110)];
+        let o = || {
+            Overlay::display_panes(
+                labels.clone(),
+                Duration::ZERO,
+                "select-pane -t \"%%%\"; set -g @p %%".into(),
+                true,
+            )
+        };
+        assert_eq!(
+            o().key(&k(KeyCode::Char('b'))),
+            OverlayAction::Run("select-pane -t \"%110\"; set -g @p %110".into())
+        );
+        assert_eq!(
+            o().key(&k(KeyCode::Char('3'))),
+            OverlayAction::Run("select-pane -t \"%30\"; set -g @p %30".into())
+        );
+        assert_eq!(o().key(&k(KeyCode::Char('4'))), OverlayAction::Close);
+        assert!(!o().expired(), "-d 0 never times out");
     }
 
     fn items(names: &[&str]) -> Vec<Item> {

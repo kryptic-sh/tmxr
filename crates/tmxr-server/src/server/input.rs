@@ -155,55 +155,62 @@ impl Server {
         }
         if let Some(mut ov) = att.overlay.take() {
             let action = ov.key(&ev);
-            // A menu's item runs against the menu's target, as tmux's.
-            let menu_ctx = match &ov {
-                Overlay::Menu(m) => Some(Ctx {
-                    client: Some(id),
-                    pane: m.pane,
-                    mouse: m.mouse,
-                    ..Ctx::default()
-                }),
-                _ => None,
-            };
-            if let (Overlay::Prompt(p), OverlayAction::Run(_)) = (&ov, &action)
-                && !p.key
-            {
-                self.remember_prompt(&p.kind, p.text());
+            // display-panes -N: the overlay stays and the key goes on.
+            if action == OverlayAction::Pass {
+                att.overlay = Some(ov);
+            } else {
+                // A menu's item runs against the menu's target, as tmux's.
+                let menu_ctx = match &ov {
+                    Overlay::Menu(m) => Some(Ctx {
+                        client: Some(id),
+                        pane: m.pane,
+                        mouse: m.mouse,
+                        ..Ctx::default()
+                    }),
+                    _ => None,
+                };
+                if let (Overlay::Prompt(p), OverlayAction::Run(_)) = (&ov, &action)
+                    && !p.key
+                {
+                    self.remember_prompt(&p.kind, p.text());
+                }
+                match action {
+                    OverlayAction::Keep => {
+                        if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
+                            a.overlay = Some(ov);
+                        }
+                    }
+                    OverlayAction::Close => {}
+                    // Answered before this match.
+                    OverlayAction::Pass => {}
+                    OverlayAction::Run(cmd) => match menu_ctx {
+                        Some(ctx) => self.run_bind_ctx(id, &ctx, &cmd),
+                        None => self.run_bind(id, &cmd, None),
+                    },
+                    OverlayAction::Preview(cmd) => {
+                        self.run_bind(id, &cmd, None);
+                        // The prompt stays, unless the command opened something
+                        // in its place.
+                        if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut())
+                            && a.overlay.is_none()
+                        {
+                            a.overlay = Some(ov);
+                        }
+                    }
+                    OverlayAction::Edit(line) => {
+                        if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
+                            a.overlay = Some(Overlay::prompt(":".into(), line, None));
+                        }
+                    }
+                    OverlayAction::Switch(sid) => self.switch_client(id, sid),
+                    OverlayAction::SwitchWindow(sid, idx) => {
+                        self.switch_client(id, sid);
+                        let _ = self.select_window(sid, idx);
+                    }
+                }
+                self.mark_client_dirty(id);
+                return;
             }
-            match action {
-                OverlayAction::Keep => {
-                    if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
-                        a.overlay = Some(ov);
-                    }
-                }
-                OverlayAction::Close => {}
-                OverlayAction::Run(cmd) => match menu_ctx {
-                    Some(ctx) => self.run_bind_ctx(id, &ctx, &cmd),
-                    None => self.run_bind(id, &cmd, None),
-                },
-                OverlayAction::Preview(cmd) => {
-                    self.run_bind(id, &cmd, None);
-                    // The prompt stays, unless the command opened something
-                    // in its place.
-                    if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut())
-                        && a.overlay.is_none()
-                    {
-                        a.overlay = Some(ov);
-                    }
-                }
-                OverlayAction::Edit(line) => {
-                    if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
-                        a.overlay = Some(Overlay::prompt(":".into(), line, None));
-                    }
-                }
-                OverlayAction::Switch(sid) => self.switch_client(id, sid),
-                OverlayAction::SwitchWindow(sid, idx) => {
-                    self.switch_client(id, sid);
-                    let _ = self.select_window(sid, idx);
-                }
-            }
-            self.mark_client_dirty(id);
-            return;
         }
         let key = Key::from_event(&ev);
         let session = att.session;

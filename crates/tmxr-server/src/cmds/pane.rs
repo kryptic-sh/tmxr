@@ -426,13 +426,25 @@ pub(super) fn run(
                 .collect();
             match attached_client(srv, ctx) {
                 // On a client: numbers over the panes; a number selects.
+                // -d the time (0: until a key), -N keys go on as usual,
+                // the template what a chosen pane runs. tmxr never waits on
+                // an overlay, which is tmux's -b.
                 Some(c) => {
-                    let time = std::time::Duration::from_millis(
-                        srv.client_session_options(c).display_panes_time,
-                    );
-                    if let Some(a) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
-                        a.overlay = Some(Overlay::display_panes(labels, time));
-                        a.dirty = true;
+                    let ms = match a.value('d') {
+                        Some(d) => d
+                            .parse::<u64>()
+                            .map_err(|_| format!("delay {d} is invalid"))?,
+                        None => srv.client_session_options(c).display_panes_time,
+                    };
+                    let time = std::time::Duration::from_millis(ms);
+                    let template = pos
+                        .first()
+                        .cloned()
+                        .unwrap_or_else(|| "select-pane -t \"%%%\"".to_owned());
+                    let overlay = Overlay::display_panes(labels, time, template, !a.has('N'));
+                    if let Some(at) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
+                        at.overlay = Some(overlay);
+                        at.dirty = true;
                     }
                 }
                 // For a script: the same mapping as text.

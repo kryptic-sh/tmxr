@@ -84,6 +84,42 @@ fn display_panes_selects_by_number_until_it_times_out() {
 }
 
 #[test]
+fn display_panes_runs_its_template_and_n_passes_keys_on() {
+    let t = Tmxr::new("displayp2");
+    let s = t.attach(&["new", "-s", "dq"]);
+    s.wait_for("status line", |text| text.contains("dq"));
+    t.run(&["split-window", "-h", "-t", "dq"]);
+    let pane1 = t
+        .run(&["display-message", "-p", "-t", "dq", "#{pane_id}"])
+        .trim()
+        .to_owned();
+    t.run(&["select-pane", "-t", "dq.0"]);
+
+    // -d 0 waits for a key however long; the key runs the template with the
+    // pane's id for %%.
+    t.run(&["bind", "x", "display-panes", "-d", "0", "set -g @picked %%"]);
+    s.send(PREFIX);
+    s.send(b"x");
+    std::thread::sleep(Duration::from_millis(1600));
+    s.send(b"1");
+    t.wait_run(&["show", "-gv", "@picked"], "the template ran", |o| {
+        o.trim() == pane1
+    });
+
+    // -N: the numbers show, and keys go on to the pane as typed.
+    t.run(&["bind", "y", "display-panes", "-N", "-d", "5000"]);
+    s.send(PREFIX);
+    s.send(b"y");
+    std::thread::sleep(Duration::from_millis(200));
+    s.send(b"echo passthrough-7\r");
+    t.wait_run(
+        &["capture-pane", "-p", "-t", "dq.0"],
+        "the command ran",
+        |o| o.lines().any(|l| l.trim() == "passthrough-7"),
+    );
+}
+
+#[test]
 fn choose_buffer_pastes_and_find_window_switches() {
     let t = Tmxr::new("chooseb");
     let s = t.attach(&["new", "-s", "cb", "-n", "logs"]);

@@ -19,6 +19,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`display-panes -d`, `-N`, `-b` and a template**, as tmux's: `-d` sets how
+  long the numbers show (0 until a key), `-N` lets keys go on to the pane while
+  they show, the template is the command list a chosen pane runs (`%%` its id;
+  `select-pane -t "%%%"` by default), and `a` to `z` choose panes 10 and on.
+  `-b` is accepted: tmxr never waits for the overlay.
 - **Copy mode's `stop-selection`**, as tmux's: the selection stays where it is
   while the cursor moves on, and `other-end` takes the cursor back to its end,
   which follows the cursor again.

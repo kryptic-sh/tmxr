@@ -158,7 +158,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         1,
         "[-lp] [-c target-client] [-d delay] [-F format] [-t target-pane] [message]"
     ),
-    cmd!("display-panes", Some("displayp"), "", 0, 0, ""),
+    cmd!(
+        "display-panes",
+        Some("displayp"),
+        "bd:N",
+        0,
+        1,
+        "[-bN] [-d duration] [template]"
+    ),
     cmd!(
         "display-popup",
         Some("popup"),
