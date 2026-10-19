@@ -149,6 +149,16 @@ fn status_off_gives_its_row_to_the_window() {
         |o| o.trim() == all,
     );
     s.wait_for("no status line", |text| !text.contains("zqx"));
+    // A message still shows, over the window's last row, as tmux's.
+    let name = t.run(&["list-clients", "-F", "#{client_name}"]);
+    t.run(&["display-message", "-c", name.trim(), "qzmsg"]);
+    s.wait_for_cells("the message on the last row", |s| {
+        s.status_cells()
+            .iter()
+            .map(|(c, _, _)| c.as_str())
+            .collect::<String>()
+            .contains("qzmsg")
+    });
     // On again: the row goes back to the line.
     t.run(&["set", "-g", "status", "on"]);
     let less = (client - 1).to_string();

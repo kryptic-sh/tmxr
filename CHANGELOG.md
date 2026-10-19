@@ -26,7 +26,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   makes its windows (`80x24` by default), `-x` or `-y` taking either side.
 - **The `status` option**, as tmux's: `set -g status off` drops the status line
   and gives its row to the windows (`status = false` under `[status]` in the
-  config). tmux's `2` to `5` rows are not taken.
+  config); a message or prompt still shows, over the window's last row. tmux's
+  `2` to `5` rows are not taken.
 - **`command-prompt` asks several prompts**, as tmux's: `-p` and `-I` take
   comma-separated lists (`-l` keeps one prompt, commas and all), each answer
   fills `%1` … `%9` and the next `%%`, and with no `-p` the template, in

@@ -515,7 +515,7 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
         return ranges;
     };
     // `status off`: no line, and nothing on it to click.
-    let lines = srv.status_rows(att.session);
+    let lines = drawn_status_rows(srv, att);
     if lines == 0 || rows < lines + 1 {
         return ranges;
     }
@@ -659,6 +659,22 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
     ranges
 }
 
+/// The rows the status line takes on `att`'s screen: its session's, or
+/// one over the window's last row while a message or prompt shows with
+/// `status off`, as tmux's screen_redraw_set_context.
+fn drawn_status_rows(srv: &Server, att: &crate::server::Attached) -> u16 {
+    let lines = srv.status_rows(att.session);
+    let asking = matches!(
+        att.overlay,
+        Some(Overlay::Prompt(_) | Overlay::Confirm { .. })
+    );
+    if att.message.is_some() || asking {
+        lines.max(1)
+    } else {
+        lines
+    }
+}
+
 /// Draw the open overlay. Returns a cursor position if it wants one.
 fn draw_overlay(
     srv: &Server,
@@ -681,6 +697,7 @@ fn draw_overlay(
         Overlay::Prompt(p) => {
             let before: String = p.input[..p.cursor].iter().collect();
             let x = Line::raw(format!("{}{before}", p.prompt)).width() as u16;
+            let y = rows.saturating_sub(drawn_status_rows(srv, att));
             Some(Position::new(x.min(cols.saturating_sub(1)), y))
         }
         Overlay::Confirm { .. } => None,
