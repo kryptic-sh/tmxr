@@ -200,6 +200,19 @@ fn display_client(srv: &Server, ctx: &Ctx) -> Option<ClientId> {
     })
 }
 
+/// The attached client `-c` names, else the best one ([`display_client`]).
+fn target_client(srv: &Server, ctx: &Ctx, a: &Args) -> Result<ClientId, String> {
+    match a.value('c') {
+        Some(name) => srv
+            .clients
+            .values()
+            .find(|cl| cl.att.is_some() && cl.id.to_string() == name)
+            .map(|cl| cl.id)
+            .ok_or_else(|| format!("can't find client: {name}")),
+        None => display_client(srv, ctx).ok_or_else(|| "no current client".to_owned()),
+    }
+}
+
 fn client_size(srv: &Server, ctx: &Ctx) -> (u16, u16) {
     let from_client = ctx.client.and_then(|c| srv.clients.get(&c)).and_then(|c| {
         c.att.as_ref().map(|a| (a.cols, a.rows)).or_else(|| {

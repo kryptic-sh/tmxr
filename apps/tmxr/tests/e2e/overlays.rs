@@ -120,6 +120,31 @@ fn display_panes_runs_its_template_and_n_passes_keys_on() {
 }
 
 #[test]
+fn send_keys_k_types_into_the_client_and_its_binds() {
+    let t = Tmxr::new("sendk");
+    let s = t.attach(&["new", "-s", "sk"]);
+    s.wait_for("status line", |text| text.contains("sk"));
+    let opt = |name: &str| t.run(&["show", "-gv", name]).trim().to_owned();
+    // A root bind, and a prefix bind after the prefix, as typed keys reach.
+    t.run(&["bind", "-n", "F9", "set -g @root yes"]);
+    t.run(&["bind", "z", "set -g @prefixed yes"]);
+    t.run(&["send-keys", "-K", "F9"]);
+    t.wait_run(&["show", "-gv", "@root"], "the root bind", |o| {
+        o.trim() == "yes"
+    });
+    t.run(&["send-keys", "-K", "C-b", "z"]);
+    t.wait_run(&["show", "-gv", "@prefixed"], "the prefix bind", |o| {
+        o.trim() == "yes"
+    });
+    assert_eq!(opt("@root"), "yes");
+    assert!(
+        !t.output(&["send-keys", "-K", "no-such-key"])
+            .status
+            .success()
+    );
+}
+
+#[test]
 fn choose_buffer_pastes_and_find_window_switches() {
     let t = Tmxr::new("chooseb");
     let s = t.attach(&["new", "-s", "cb", "-n", "logs"]);

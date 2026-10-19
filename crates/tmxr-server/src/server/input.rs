@@ -20,7 +20,7 @@ impl Server {
         att.last_input = Instant::now();
         let session = att.session;
         match ev {
-            TermEvent::Key(k) if k.kind != KeyEventKind::Release => self.key(id, k),
+            TermEvent::Key(k) if k.kind != KeyEventKind::Release => self.client_key(id, k),
             TermEvent::Key(_) => {}
             TermEvent::Paste(text) => {
                 if let Some(ov) = self
@@ -134,7 +134,9 @@ impl Server {
         }
     }
 
-    fn key(&mut self, id: ClientId, ev: KeyEvent) {
+    /// A key from client `id`, through its overlay and key tables;
+    /// `send-keys -K` gives keys here too.
+    pub(crate) fn client_key(&mut self, id: ClientId, ev: KeyEvent) {
         // A key is activity in the client's session, as tmux's
         // session_update_activity.
         if let Some(s) = self

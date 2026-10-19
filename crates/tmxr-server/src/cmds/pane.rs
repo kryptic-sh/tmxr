@@ -484,6 +484,28 @@ pub(super) fn run(
             if a.has('M') {
                 return crate::mouse::forward(srv, ctx).map(|()| true);
             }
+            // -K: each key to a client (-c, else the best one) as if typed
+            // there, its binds and all, as tmux's.
+            if a.has('K') {
+                let client = super::target_client(srv, ctx, a)?;
+                let keys = pos
+                    .iter()
+                    .map(|k| {
+                        k.parse::<tmxr_command::Key>()
+                            .map_err(|_| format!("unknown key: {k}"))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                let repeat = match a.value('N') {
+                    Some(n) => n.parse::<usize>().map_err(|_| format!("bad count: {n}"))?,
+                    None => 1,
+                };
+                for _ in 0..repeat {
+                    for key in &keys {
+                        srv.client_key(client, KeyEvent::new(key.code, key.mods));
+                    }
+                }
+                return Ok(true);
+            }
             let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
             // -F: each argument is a format, expanded for the target pane.
             let expanded: Vec<String>;

@@ -19,6 +19,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`send-keys -K` and `-c`**, as tmux's: the keys go to a client (`-c`, else
+  the best one) as if typed there, so its prefix and binds act on them.
 - **`display-panes -d`, `-N`, `-b` and a template**, as tmux's: `-d` sets how
   long the numbers show (0 until a key), `-N` lets keys go on to the pane while
   they show, the template is the command list a chosen pane runs (`%%` its id;

@@ -472,12 +472,12 @@ table. What has been verified, and how:
     cells); `split-window -I`; `display-message -a -v -I -N -C`; `choose-*`
     templates and `-F -f -K -O -r -N -y`, tagging and sort keys;
     `command-prompt` with several `-p` and `%1`…`%9`, `-1 -N -b -F -l`,
-    completion; session groups (`new-session -t`); smaller flags:
-    `send-keys -R -K -c` (`-R` is tmux's `input_reset`, more than a vt100
-    `ESC c`), `set-buffer -t`, `copy-mode -s`, `detach-client -E`,
-    `list-keys -a -P` (see `list-keys -N` below), `join-pane -p` (tmux 3.6's
-    reads `-l` instead, so it fails without `-l`), `source-file -n -v -F` and
-    globs; `source-file` of a tmux command file (`%if`, `%hidden`).
+    completion; session groups (`new-session -t`); smaller flags: `send-keys -R`
+    (tmux's `input_reset`, more than a vt100 `ESC c`), `set-buffer -t`,
+    `copy-mode -s`, `detach-client -E`, `list-keys -a -P` (see `list-keys -N`
+    below), `join-pane -p` (tmux 3.6's reads `-l` instead, so it fails without
+    `-l`), `source-file -n -v -F` and globs; `source-file` of a tmux command
+    file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `pane-set-clipboard`,
     `client-active`, `client-light-theme` / `-dark-theme`. Copy mode lacks
     `next-prompt` / `previous-prompt` (they need a prompt mark on every history

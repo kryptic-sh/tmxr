@@ -515,15 +515,7 @@ fn shown_on(
     ctx: &Ctx,
     a: &tmxr_command::Args,
 ) -> Result<(crate::model::ClientId, Option<crate::model::PaneId>), String> {
-    let c = match a.value('c') {
-        Some(name) => srv
-            .clients
-            .values()
-            .find(|cl| cl.att.is_some() && cl.id.to_string() == name)
-            .map(|cl| cl.id)
-            .ok_or_else(|| format!("can't find client: {name}"))?,
-        None => super::display_client(srv, ctx).ok_or("no current client")?,
-    };
+    let c = super::target_client(srv, ctx, a)?;
     let pane = a
         .value('t')
         .map(|t| target::pane(srv, ctx, Some(t)).map(|(_, _, p)| p))
