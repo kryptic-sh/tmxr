@@ -22,6 +22,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`set-buffer -t` and `load-buffer -t`**, as tmux's: the client whose
+  clipboard `-w` sets; one that does not exist is no error.
 - **The `history-file` server option**, as tmux's: the prompts' history is read
   from it when the server starts and written to it when the server exits, one
   `type:entry` line each. It takes an absolute path or one starting `~/`; empty,
@@ -281,6 +283,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`set-buffer -w` and `load-buffer -w` go to one client**, as tmux's: the OSC
+  52 copy reaches the command's client (from a shell, the most recently used
+  one) or `-t`'s, where it reached every attached client.
 - **A dead pane's line is part of the pane**, as tmux's: it scrolls the pane up
   a row and stays in its history and `capture-pane`, where it used to be drawn
   over the last row. A pane a signal ended has an empty `#{pane_dead_status}`,

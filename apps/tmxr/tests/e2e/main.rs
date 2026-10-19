@@ -59,6 +59,10 @@ impl Tmxr {
             ),
             ("TERM".to_owned(), "xterm-256color".to_owned()),
             ("TMXR".to_owned(), String::new()),
+            // Over SSH tmxr leaves the desktop's clipboard alone
+            // (`util::local_clipboard`): a test that copies must not
+            // overwrite it.
+            ("SSH_CONNECTION".to_owned(), String::new()),
         ];
         for (var, sub) in [
             ("XDG_CONFIG_HOME", "config"),

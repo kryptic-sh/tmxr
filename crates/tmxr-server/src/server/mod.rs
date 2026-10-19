@@ -750,6 +750,29 @@ impl Server {
         crate::util::local_clipboard(text);
     }
 
+    /// The clipboard of one client (`set-buffer -w`, `load-buffer -w`), as
+    /// tmux's tty_set_selection on its target client: OSC 52 to `client`
+    /// alone, and the local desktop's as every tmxr copy.
+    pub fn set_client_clipboard(&mut self, client: Option<ClientId>, text: &str) {
+        if self.cfg.set_clipboard == "off" {
+            return;
+        }
+        crate::util::local_clipboard(text);
+        let Some(id) = client else {
+            return;
+        };
+        let seq = format!("\x1b]52;c;{}\x07", crate::util::base64(text.as_bytes()));
+        if let Some(t) = self
+            .clients
+            .get_mut(&id)
+            .and_then(|c| c.att.as_mut())
+            .and_then(|a| a.term.as_mut())
+        {
+            t.backend_mut().push_raw(&seq);
+        }
+        self.mark_client_dirty(id);
+    }
+
     fn forward_osc52(&mut self, b64: &str) {
         if self.cfg.set_clipboard == "off" {
             return;

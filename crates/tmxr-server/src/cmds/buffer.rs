@@ -106,7 +106,7 @@ pub(super) fn run(
                 _ => data,
             };
             if a.has('w') {
-                srv.set_clipboard(&data);
+                srv.set_client_clipboard(clipboard_client(srv, ctx, a), &data);
             }
             srv.add_buffer(data, a.value('b').map(str::to_owned));
         }
@@ -143,7 +143,7 @@ pub(super) fn run(
             };
             let data = String::from_utf8_lossy(&bytes).into_owned();
             if a.has('w') {
-                srv.set_clipboard(&data);
+                srv.set_client_clipboard(clipboard_client(srv, ctx, a), &data);
             }
             srv.add_buffer(data, a.value('b').map(str::to_owned));
         }
@@ -181,6 +181,20 @@ pub(super) fn run(
         _ => return Ok(false),
     }
     Ok(true)
+}
+
+/// The client `-w` sets the clipboard of: `-t`, else the command's or the
+/// best one, as tmux's target client for set-buffer and load-buffer. A
+/// `-t` naming no client is none, and no error (CMD_CLIENT_CANFAIL).
+fn clipboard_client(
+    srv: &Server,
+    ctx: &Ctx,
+    a: &tmxr_command::Args,
+) -> Option<crate::model::ClientId> {
+    match a.value('t') {
+        Some(name) => super::session::target_client(srv, name).ok(),
+        None => super::display_client(srv, ctx),
+    }
 }
 
 /// The buffer named `name`, else the newest.

@@ -307,10 +307,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "load-buffer",
         Some("loadb"),
-        "b:w",
+        "b:t:w",
         1,
         1,
-        "[-w] [-b buffer-name] path"
+        "[-w] [-b buffer-name] [-t target-client] path"
     ),
     cmd!(
         "lock-client",
@@ -536,10 +536,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "set-buffer",
         Some("setb"),
-        "ab:n:w",
+        "ab:n:t:w",
         0,
         1,
-        "[-aw] [-b buffer-name] [-n new-buffer-name] [data]"
+        "[-aw] [-b buffer-name] [-n new-buffer-name] [-t target-client] [data]"
     ),
     cmd!(
         "set-environment",

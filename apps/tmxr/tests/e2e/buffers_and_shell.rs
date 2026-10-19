@@ -66,6 +66,37 @@ fn a_programs_clipboard_makes_a_buffer_and_fires_pane_set_clipboard() {
 }
 
 #[test]
+fn set_buffer_w_sets_only_its_target_clients_clipboard() {
+    let t = Tmxr::new("setbt");
+    let first = t.attach(&["new", "-s", "sb"]);
+    first.wait_for("the first client", |text| text.contains("sb"));
+    let second = t.attach(&["attach", "-t", "sb"]);
+    second.wait_for("the second client", |text| text.contains("sb"));
+    t.run(&["set", "-s", "set-clipboard", "on"]);
+    let names = t.run(&["list-clients", "-F", "#{client_name}"]);
+    let names: Vec<&str> = names.lines().collect();
+    assert_eq!(names.len(), 2, "{names:?}");
+    // The second client to attach is listed last.
+    let target = names[1];
+    // "zqpay" in base64, as OSC 52 carries it.
+    let osc = "\x1b]52;c;enFwYXk=";
+    t.run(&["set-buffer", "-w", "-t", target, "zqpay"]);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !second.raw_text().contains(osc) {
+        assert!(Instant::now() < deadline, "the target was not sent it");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert!(
+        !first.raw_text().contains(osc),
+        "the other client got it too"
+    );
+    // A -t naming no client is no error: the buffer is still set.
+    let out = t.output(&["set-buffer", "-w", "-t", "nosuch", "other"]);
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(t.run(&["show-buffer"]), "other");
+}
+
+#[test]
 fn buffer_limit_and_message_limit_are_server_options() {
     let t = Tmxr::new("limits");
     let s = t.attach(&["new", "-s", "lm"]);
@@ -355,7 +386,7 @@ fn run_shell_holds_its_command_list_and_reply() {
         "F7",
         "run-shell 'echo bound-out' ; set-option -g @bound yes",
     ]);
-    s.send(b"[18~");
+    s.send(b"\x1b[18~");
     s.wait_for("the output", |text| text.contains("bound-out"));
     t.wait_run(
         &["display-message", "-p", "#{@bound}"],

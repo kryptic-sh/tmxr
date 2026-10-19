@@ -104,3 +104,8 @@ checks = [
   { command = "list-windows -t nk -F '#I #W #{window_active}'", expect = "0 first 0\n1 uno 0\n2 fresh 1" },
   { command = "list-windows -t kc -F '#I #W #{window_active}'", expect = "0 a 0\n1 c 1" },
 ]
+
+[[cases]]
+name = "set_buffer_w_t_with_no_such_client_still_sets_the_buffer"
+steps = [{ run = "set-buffer -w -t nosuch zqbuf" }]
+checks = [{ command = "show-buffer", expect = "zqbuf" }, { command = "set-buffer -w -t nosuch again" }]
