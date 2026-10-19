@@ -275,10 +275,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "list-keys",
         Some("lsk"),
-        "1NT:",
+        "1aNP:T:",
         0,
         1,
-        "[-1N] [-T key-table] [key]"
+        "[-1aN] [-P prefix-string] [-T key-table] [key]"
     ),
     cmd!(
         "list-panes",

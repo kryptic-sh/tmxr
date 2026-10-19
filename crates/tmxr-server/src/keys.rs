@@ -70,7 +70,8 @@ impl KeyTables {
             .filter(|(name, _)| table.is_none_or(|t| t == name.as_str()))
             .flat_map(|(name, keys)| keys.iter().map(move |(k, b)| (name.clone(), *k, b.clone())))
             .collect();
-        out.sort_by(|a, b| (&a.0, a.1.to_string()).cmp(&(&b.0, b.1.to_string())));
+        // Tables by name, each in tmux's key order.
+        out.sort_by(|a, b| (&a.0, a.1.tmux_code()).cmp(&(&b.0, b.1.tmux_code())));
         out
     }
 }

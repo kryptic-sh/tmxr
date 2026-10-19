@@ -10,7 +10,7 @@ use crate::server::Server;
 
 pub(super) fn run(
     srv: &mut Server,
-    _ctx: &Ctx,
+    ctx: &Ctx,
     p: &Parsed,
     out: &mut Outcome,
 ) -> Result<bool, String> {
@@ -81,57 +81,153 @@ pub(super) fn run(
                 }
             }
         }
-        "list-keys" => {
-            let only_notes = a.has('N');
-            let table = a.value('T');
-            let key = pos
-                .first()
-                .map(|k| k.parse::<BindKey>().map_err(|e| e.to_string()))
-                .transpose()?;
-            let mut binds = srv.keys.list(table);
-            if let Some(k) = key {
-                binds.retain(|(_, bk, _)| *bk == k);
-            }
-            if a.has('1') {
-                // The bind a key press reaches first: prefix, then root, then
-                // the rest (copy mode).
-                let rank = |t: &str| match t {
-                    "prefix" => 0,
-                    "root" => 1,
-                    _ => 2,
-                };
-                binds.sort_by_key(|(t, _, _)| rank(t));
-                binds.truncate(1);
-            }
-            if binds.is_empty()
-                && let Some(k) = key
-            {
-                let _ = writeln!(out.stdout, "{k} is not bound");
-            }
-            let width = binds
-                .iter()
-                .map(|(_, k, _)| k.to_string().len())
-                .max()
-                .unwrap_or(0);
-            for (table, key, b) in binds {
-                if only_notes {
-                    let Some(note) = &b.note else { continue };
-                    let prefix = match table.as_str() {
-                        "prefix" => format!("{} ", srv.cfg.session.prefix),
-                        "root" => String::new(),
-                        t => format!("[{t}] "),
-                    };
-                    let k = format!("{prefix}{key}");
-                    let _ = writeln!(out.stdout, "{k:<w$}  {note}", w = width + 6);
-                } else {
-                    let _ = writeln!(out.stdout, "{}", bind_line(&table, &key, &b));
-                }
-            }
-        }
+        "list-keys" => list_keys(srv, ctx, a, pos, out)?,
 
         _ => return Ok(false),
     }
     Ok(true)
+}
+
+/// `list-keys`, as tmux 3.6's cmd_list_keys_exec: tables by name and each
+/// in tmux's key order, as `bind-key` lines with the table and key padded to
+/// the widest; or with -N the noted binds (with -a every one, its command
+/// for a note) and no mouse keys, without -T the root table then the prefix
+/// table, each key after the prefix key (or -P's text, or as many spaces)
+/// and padded to the widest noted key. -1 takes each table's first, shown
+/// on a client when there is one; a key no table binds is an error.
+fn list_keys(
+    srv: &mut Server,
+    ctx: &Ctx,
+    a: &tmxr_command::Args,
+    pos: &[String],
+    out: &mut Outcome,
+) -> Result<(), String> {
+    let only = pos
+        .first()
+        .map(|k| {
+            k.parse::<BindKey>()
+                .map_err(|_| format!("invalid key: {k}"))
+        })
+        .transpose()?;
+    let all = srv.keys.list(None);
+    let table = a.value('T');
+    if let Some(t) = table
+        && !all.iter().any(|(name, _, _)| name == t)
+    {
+        return Err(format!("table {t} doesn't exist"));
+    }
+    let width = |s: &str| ratatui::text::Line::raw(s).width();
+    let pad = |s: &str, w: usize| format!("{s}{}", " ".repeat(w.saturating_sub(width(s))));
+    let listed: Vec<(String, BindKey, BindSpec)> = all
+        .into_iter()
+        .filter(|(name, key, _)| table.is_none_or(|t| t == name) && only.is_none_or(|k| k == *key))
+        .collect();
+    let mut lines = Vec::new();
+    if a.has('N') {
+        let noted = |b: &BindSpec| b.note.as_deref().is_some_and(|n| !n.is_empty());
+        let in_table = |t: &str| -> Vec<&(String, BindKey, BindSpec)> {
+            listed
+                .iter()
+                .filter(|(name, key, _)| name == t && !matches!(key, BindKey::Mouse(_)))
+                .collect()
+        };
+        let key_width = |t: &str| {
+            in_table(t)
+                .into_iter()
+                .filter(|(_, _, b)| noted(b))
+                .map(|(_, k, _)| width(&k.to_string()))
+                .max()
+                .unwrap_or(0)
+        };
+        let mut notes = |t: &str, keywidth: usize, start: &str| {
+            for (_, key, b) in in_table(t)
+                .into_iter()
+                .filter(|(_, _, b)| noted(b) || a.has('a'))
+            {
+                let note = if noted(b) {
+                    b.note.clone().unwrap_or_default()
+                } else {
+                    b.cmd.clone()
+                };
+                lines.push(format!(
+                    "{start}{}{note}",
+                    pad(&key.to_string(), keywidth + 1)
+                ));
+                if a.has('1') {
+                    break;
+                }
+            }
+        };
+        if let Some(t) = table {
+            let start = a.value('P').unwrap_or_default();
+            notes(t, key_width(t), start);
+        } else {
+            let prefix = srv.cfg.session.prefix.to_string();
+            let mut with_prefix = prefix != "None";
+            let start = match a.value('P') {
+                Some(p) => p.to_owned(),
+                None if with_prefix => format!("{prefix} "),
+                None => String::new(),
+            };
+            let mut keywidth = key_width("root");
+            if with_prefix {
+                match key_width("prefix") {
+                    0 => with_prefix = false,
+                    w => keywidth = keywidth.max(w),
+                }
+            }
+            notes("root", keywidth, &" ".repeat(width(&start)));
+            if with_prefix {
+                notes("prefix", keywidth, &start);
+            }
+        }
+    } else {
+        let repeat = listed.iter().any(|(_, _, b)| b.repeat);
+        let tablewidth = listed.iter().map(|(t, _, _)| width(t)).max().unwrap_or(0);
+        let escaped = |k: &BindKey| tmxr_command::escape_arg(&k.to_string());
+        let keywidth = listed
+            .iter()
+            .map(|(_, k, _)| width(&escaped(k)))
+            .max()
+            .unwrap_or(0);
+        let mut last_table = None;
+        for (t, key, b) in &listed {
+            // -1: each table's first.
+            if a.has('1') && last_table == Some(t) {
+                continue;
+            }
+            last_table = Some(t);
+            let r = match (repeat, b.repeat) {
+                (false, _) => "",
+                (true, true) => "-r ",
+                (true, false) => "   ",
+            };
+            lines.push(format!(
+                "bind-key {r}-T {} {} {}",
+                pad(t, tablewidth),
+                pad(&escaped(key), keywidth),
+                b.cmd
+            ));
+        }
+    }
+    if let Some(k) = only
+        && lines.is_empty()
+    {
+        return Err(format!("unknown key: {k}"));
+    }
+    match super::display_client(srv, ctx).filter(|_| a.has('1')) {
+        Some(c) => {
+            for line in lines {
+                srv.show_message(c, line);
+            }
+        }
+        None => {
+            for line in lines {
+                let _ = writeln!(out.stdout, "{line}");
+            }
+        }
+    }
+    Ok(())
 }
 
 /// A bind as `list-keys` prints it: the `bind-key` command that makes it.

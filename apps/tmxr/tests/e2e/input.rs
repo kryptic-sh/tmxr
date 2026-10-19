@@ -396,9 +396,11 @@ fn mouse_keys_can_be_bound_and_unbound() {
         "clicked",
     ]);
     t.run(&["unbind-key", "-n", "WheelUpPane"]);
+    // The columns are padded as tmux's: compare the words.
     let keys = t.run(&["list-keys", "-T", "root"]);
+    let words = keys.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(
-        keys.contains("MouseDown3Pane rename-window clicked") && !keys.contains("WheelUpPane"),
+        words.contains("MouseDown3Pane rename-window clicked") && !keys.contains("WheelUpPane"),
         "{keys}"
     );
     // The unbound wheel goes to the program instead of into copy mode; the
@@ -436,7 +438,33 @@ fn describe_key_shows_a_binds_note() {
         "prompt hidden by the message for {:?}",
         start.elapsed()
     );
-    s.wait_for("unbound key", |text| text.contains("F5 is not bound"));
+    s.wait_for("unbound key", |text| text.contains("unknown key: F5"));
+}
+
+#[test]
+fn list_keys_refuses_what_tmux_refuses() {
+    let t = Tmxr::new("lskerr");
+    t.run(&["new-session", "-d", "-s", "le"]);
+    // tmux 3.6's messages, seen on WSL (2026-10-20).
+    for (args, want) in [
+        (&["list-keys", "-N", "F5"][..], "unknown key: F5"),
+        (&["list-keys", "F5"][..], "unknown key: F5"),
+        (
+            &["list-keys", "-T", "nosuch"][..],
+            "table nosuch doesn't exist",
+        ),
+        (
+            &["list-keys", "-N", "bogus-key-name"][..],
+            "invalid key: bogus-key-name",
+        ),
+    ] {
+        let out = t.output(args);
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            !out.status.success() && err.contains(want),
+            "{args:?}: {err}"
+        );
+    }
 }
 
 #[test]

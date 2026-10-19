@@ -53,3 +53,31 @@ checks = [
   { command = "display -p -t o.1 '#{pane_input_off}'", expect = "1" },
   { command = "display -p -t o '#{pane_index}'", expect = "0" },
 ]
+
+[[cases]]
+name = "list_keys_in_tmuxs_order_and_layout"
+steps = [
+  { run = "unbind -a" },
+  { run = "unbind -a -T root" },
+  { run = "bind -N 'note a' a display-message a" },
+  { run = "bind -N 'ctrl b' C-b send-prefix" },
+  { run = "bind -N 'meta x' M-x display-message mx" },
+  { run = "bind -N 'up arrow' Up display-message up" },
+  { run = "bind -N 'space bar' Space display-message sp" },
+  { run = "bind -N quote '\"' display-message q" },
+  { run = "bind -r -N 'f one' F1 display-message f1" },
+  { run = "bind -n -N 'root z' z display-message rz" },
+  { run = "bind -n M-y display-message rmy" },
+  { run = "bind -n MouseDown1Pane select-pane" },
+  { run = "bind -T mytab Enter display-message e" },
+]
+checks = [
+  { command = "list-keys -N" },
+  { command = "list-keys -aN" },
+  { command = "list-keys -N -P '>> '" },
+  { command = "list-keys -N -T root" },
+  { command = "list-keys -T prefix" },
+  { command = "list-keys -T root" },
+  { command = "list-keys -T mytab" },
+  { command = "list-keys -T prefix F1" },
+]

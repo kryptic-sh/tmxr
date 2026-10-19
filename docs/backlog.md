@@ -499,10 +499,10 @@ table. What has been verified, and how:
     to enumerate its names); `choose-*` templates and `-F -f -K -O -r -N -y`,
     tagging and sort keys; `command-prompt` completion; session groups
     (`new-session -t`); smaller flags: `send-keys -R` (tmux's `input_reset`,
-    more than a vt100 `ESC c`), `copy-mode -s`, `list-keys -a -P` (see
-    `list-keys -N` below), `source-file -v`, several paths and globs (each load
-    replaces the whole TOML config, so several files have no clear meaning yet);
-    `source-file` of a tmux command file (`%if`, `%hidden`).
+    more than a vt100 `ESC c`), `copy-mode -s`, `source-file -v`, several paths
+    and globs (each load replaces the whole TOML config, so several files have
+    no clear meaning yet); `source-file` of a tmux command file (`%if`,
+    `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `client-light-theme` /
     `-dark-theme`. `client-active` follows tmux's latest client, but a window
     `new-window` or `break-pane` makes from a shell takes no latest client,
@@ -538,19 +538,13 @@ table. What has been verified, and how:
   its pane modes; tmxr's pickers are full-screen overlays). Separately,
   `source-file` replaces the config path and reloads everything, where tmux runs
   the file's commands.
-- **`list-keys -N` is laid out unlike tmux's** (compared on WSL with tmux 3.6,
-  2026-10-18: tmux 87 lines, tmxr 276). tmux, without `-T`, lists only the root
-  table (padded by the prefix's width) then the prefix table, each line `C-b `
-  (the `prefix` key, or `-P`'s string) + the key padded to the widest noted
-  key + 1 + the note, in key-code order (`key_bindings_cmp`: `Space`, `!`, `"`,
-  `#` …). tmxr lists every table with `[table] ` prefixes and its own width and
-  order (`binds.rs`, `list-keys`). `-a` (unnoted binds too, their command as the
-  note) and `-P` belong with the rewrite. The order needs tmux's key codes:
-  characters by code point, `KEYC_META` / `KEYC_CTRL` / `KEYC_SHIFT` bits above
-  them, special keys from `KEYC_BASE` in `tmux.h`'s enum order; how `C-b` is
-  stored in 3.6 (control code or `b` with `KEYC_CTRL`) was not checked. Default
-  binds' notes would also have to match tmux's word for word for an oracle case
-  to pass.
+- **`list-keys` prints a bind's command as it was given**, where tmux prints it
+  re-parsed (`cmd_list_print`): full command names, its own quoting, `{ }` for
+  nested command lists, so `bind x display hi` lists as `display hi` in tmxr and
+  `display-message hi` in tmux. tmxr's own default binds and their notes also
+  differ from tmux's, so only binds made in a test compare (the oracle's
+  `list_keys_in_tmuxs_order_and_layout`). The order (`BindKey::tmux_code`, from
+  tmux 3.6's `tmux.h`) and the layout follow tmux's.
 - **The full e2e suite kills its `wsl.exe` session** (2026-10-18): run as
   `wsl.exe -e bash -lc 'cargo test -p tmxr-cli --test e2e …'`, output stops and
   nothing after the run prints, though a log file shows every test finished.

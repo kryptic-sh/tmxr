@@ -24,6 +24,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`list-keys -a` and `-P`**, as tmux's: with `-N`, `-a` lists unnoted binds
+  too (their command for a note) and `-P` gives the text keys follow.
 - **`detach-client -E shell-command`**, as tmux's: each client it detaches runs
   the command, with its session's `default-shell`, in its place and prints no
   `[detached]` line. On Unix the client becomes the command; Windows cannot
@@ -288,6 +290,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`list-keys` is laid out and ordered as tmux's**: keys in tmux's key-code
+  order (characters, then special keys, then `M-`, `C-`, `C-M-` …), `bind-key`
+  lines padded to the widest table and key with a `-r` column, and `-N` the root
+  table then the prefix table, each key after the prefix key. A key nothing
+  binds is an error (`unknown key: F5`), as is a table that does not exist.
 - **`set-buffer -w` and `load-buffer -w` go to one client**, as tmux's: the OSC
   52 copy reaches the command's client (from a shell, the most recently used
   one) or `-t`'s, where it reached every attached client.

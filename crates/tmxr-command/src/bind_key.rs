@@ -184,9 +184,176 @@ impl fmt::Display for BindKey {
     }
 }
 
+// tmux 3.6's key codes (`tmux.h`): a character is its code point, a special
+// key `KEYC_BASE` plus its place in the special keys' enum, and the
+// modifiers bits above both.
+const KEYC_BASE: u64 = 0x10_e000;
+const KEYC_META: u64 = 1 << 44;
+const KEYC_CTRL: u64 = 1 << 45;
+const KEYC_SHIFT: u64 = 1 << 46;
+/// The special keys before the mouse keys: focus in and out, any, the
+/// paste brackets, and the three unclassified mouse events.
+const FIRST_MOUSE: u64 = 8;
+/// Each mouse event's places, in `KEYC_MOUSE_KEY`'s order.
+const MOUSE_PLACES: u64 = 9;
+/// The mouse events `tmux.h` lists, `MouseMove` first.
+const MOUSE_EVENTS: u64 = 66;
+/// The buttons each button event comes in: 1 to 3, then 6 to 11.
+const BUTTON_SLOTS: u64 = 9;
+/// `KEYC_BSPACE`, the first special key after the mouse keys; F1 to F12,
+/// IC, DC, Home, End, NPage, PPage, BTab, Up, Down, Left and Right follow
+/// it in that order.
+const BSPACE: u64 = FIRST_MOUSE + MOUSE_EVENTS * MOUSE_PLACES;
+
+fn modifier_bits(mods: KeyModifiers) -> u64 {
+    let mut bits = 0;
+    if mods.contains(KeyModifiers::ALT) {
+        bits |= KEYC_META;
+    }
+    if mods.contains(KeyModifiers::CONTROL) {
+        bits |= KEYC_CTRL;
+    }
+    if mods.contains(KeyModifiers::SHIFT) {
+        bits |= KEYC_SHIFT;
+    }
+    bits
+}
+
+impl BindKey {
+    /// The key code tmux 3.6 stores this binding under, with its flags
+    /// masked off (key_bindings_add): what tmux lists a table's bindings in
+    /// the order of (key_bindings_cmp). A key tmux has no code for, such
+    /// as F13 and above, comes after every one it has.
+    pub fn tmux_code(&self) -> u64 {
+        match self {
+            Self::Key(k) => k.tmux_code(),
+            Self::Mouse(m) => m.tmux_code(),
+        }
+    }
+}
+
+impl MouseKey {
+    fn tmux_code(&self) -> u64 {
+        let slot = |b: u8| u64::from(b.saturating_sub(1)).min(BUTTON_SLOTS - 1);
+        let event = match self.action {
+            MouseAction::Down(b) => 1 + slot(b),
+            MouseAction::Up(b) => 1 + BUTTON_SLOTS + slot(b),
+            MouseAction::Drag(b) => 1 + 2 * BUTTON_SLOTS + slot(b),
+            MouseAction::DragEnd(b) => 1 + 3 * BUTTON_SLOTS + slot(b),
+            MouseAction::WheelUp => 1 + 4 * BUTTON_SLOTS,
+            MouseAction::WheelDown => 2 + 4 * BUTTON_SLOTS,
+            MouseAction::SecondClick(b) => 3 + 4 * BUTTON_SLOTS + slot(b),
+            MouseAction::DoubleClick(b) => 3 + 5 * BUTTON_SLOTS + slot(b),
+            MouseAction::TripleClick(b) => 3 + 6 * BUTTON_SLOTS + slot(b),
+        };
+        let place = match self.location {
+            MouseLocation::Pane => 0,
+            MouseLocation::Status => 1,
+            MouseLocation::StatusLeft => 2,
+            MouseLocation::StatusRight => 3,
+            MouseLocation::StatusDefault => 4,
+            MouseLocation::ScrollbarUp => 5,
+            MouseLocation::ScrollbarSlider => 6,
+            MouseLocation::ScrollbarDown => 7,
+            MouseLocation::Border => 8,
+        };
+        (KEYC_BASE + FIRST_MOUSE + event * MOUSE_PLACES + place) | modifier_bits(self.mods)
+    }
+}
+
+impl Key {
+    fn tmux_code(&self) -> u64 {
+        use crossterm::event::KeyCode;
+        let special = |n: u64| KEYC_BASE + BSPACE + n;
+        let code = match self.code {
+            KeyCode::Char(c) => u64::from(c),
+            KeyCode::Enter => 0x0d,
+            KeyCode::Esc => 0x1b,
+            KeyCode::Tab => 0x09,
+            KeyCode::Backspace => special(0),
+            KeyCode::F(n @ 1..=12) => special(u64::from(n)),
+            KeyCode::Insert => special(13),
+            KeyCode::Delete => special(14),
+            KeyCode::Home => special(15),
+            KeyCode::End => special(16),
+            KeyCode::PageDown => special(17),
+            KeyCode::PageUp => special(18),
+            KeyCode::BackTab => special(19),
+            KeyCode::Up => special(20),
+            KeyCode::Down => special(21),
+            KeyCode::Left => special(22),
+            KeyCode::Right => special(23),
+            KeyCode::F(n) => KEYC_META - 0x1000 + u64::from(n),
+            _ => KEYC_META - 1,
+        };
+        code | modifier_bits(self.mods)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tmux_codes_order_keys_as_tmux_lists_them() {
+        // tmux 3.6's own copy-mode-vi table as its list-keys printed it
+        // (WSL, 2026-10-20), a key from each kind in its order.
+        let listed = [
+            "Enter",
+            "Escape",
+            "Space",
+            "#",
+            "$",
+            "%",
+            "*",
+            ",",
+            "/",
+            "0",
+            ":",
+            ";",
+            "?",
+            "A",
+            "^",
+            "b",
+            "{",
+            "}",
+            "MouseDown1Pane",
+            "MouseDrag1Pane",
+            "MouseDragEnd1Pane",
+            "WheelUpPane",
+            "WheelDownPane",
+            "DoubleClick1Pane",
+            "TripleClick1Pane",
+            "BSpace",
+            "Home",
+            "End",
+            "NPage",
+            "PPage",
+            "Up",
+            "Down",
+            "Left",
+            "Right",
+            "M-x",
+            "C-b",
+            "C-Up",
+            "C-Down",
+        ];
+        let codes: Vec<u64> = listed
+            .iter()
+            .map(|k| k.parse::<BindKey>().unwrap().tmux_code())
+            .collect();
+        for (pair, keys) in codes.windows(2).zip(listed.windows(2)) {
+            assert!(pair[0] < pair[1], "{} before {}", keys[0], keys[1]);
+        }
+        // Its prefix table: F1 between a character and the arrows, M- keys
+        // before C- keys, C-M- after both.
+        let order = ["a", "F1", "Up", "M-x", "C-b", "C-M-b"];
+        let codes: Vec<u64> = order
+            .iter()
+            .map(|k| k.parse::<BindKey>().unwrap().tmux_code())
+            .collect();
+        assert!(codes.windows(2).all(|p| p[0] < p[1]), "{codes:?}");
+    }
 
     #[test]
     fn mouse_names_parse_and_print_back() {
