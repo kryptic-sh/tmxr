@@ -249,6 +249,8 @@ pub struct Emulator {
     modes: ModeSplitter,
     /// Cleared with `alternate-screen off`: the switches are dropped.
     alt_allowed: bool,
+    /// Origin mode (`CSI ? 6 h`, DECOM), which vt100 keeps to itself.
+    origin_mode: bool,
     /// The mouse encodings the program set, apart as tmux keeps them (vt100
     /// keeps one).
     mouse_utf8: bool,
@@ -270,6 +272,7 @@ impl Emulator {
             split: passthrough_supported(),
             modes: ModeSplitter::default(),
             alt_allowed: true,
+            origin_mode: false,
             mouse_utf8: false,
             mouse_sgr: false,
             scrollback,
@@ -330,6 +333,7 @@ impl Emulator {
         self.dcs = DcsSplitter::default();
         self.modes.flush();
         (self.mouse_utf8, self.mouse_sgr) = (false, false);
+        self.origin_mode = false;
         // CAN ends whatever sequence is in progress, but vte acts on an OSC
         // it cuts off: what that could change is put back, as tmux's
         // input_clear drops the sequence.
@@ -387,9 +391,19 @@ impl Emulator {
                     mode: mode @ (47 | 1047 | 1049),
                     on,
                 } => self.switch_screen(mode, on),
+                // Origin mode: kept, then given to vt100, which keeps its
+                // own to move the cursor by.
+                Piece::Mode { mode: 6, on } => {
+                    self.origin_mode = on;
+                    self.parser
+                        .process(if on { b"\x1b[?6h" } else { b"\x1b[?6l" });
+                }
                 Piece::Mode { mode, on } => self.mouse_mode(mode, on),
                 Piece::Reset => {
                     (self.mouse_utf8, self.mouse_sgr) = (false, false);
+                    self.origin_mode = false;
+                    // tmux's full reset stops the blinking, its shape kept.
+                    self.parser.callbacks_mut().cursor_blinking = false;
                     self.parser.process(b"\x1bc");
                 }
                 Piece::Repeat { ch, count } => self.repeat(ch, count),
@@ -558,6 +572,11 @@ impl Emulator {
         (hooks.insert_mode, !hooks.no_wrap)
     }
 
+    /// Whether origin mode is on (`#{origin_flag}`).
+    pub fn origin_mode(&self) -> bool {
+        self.origin_mode
+    }
+
     /// Whether the cursor blinks, as the program last set it
     /// (`#{cursor_blinking}`).
     pub fn cursor_blinking(&self) -> bool {
@@ -664,6 +683,20 @@ fn hex(b: u8) -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn origin_mode_is_kept_and_still_moves_the_cursor() {
+        let mut e = Emulator::new(5, 10, 0);
+        assert!(!e.origin_mode());
+        // A scroll region from row 2, origin mode on: row 1 is its top.
+        e.process(b"\x1b[2;4r\x1b[?6h\x1b[1;1H");
+        assert!(e.origin_mode());
+        assert_eq!(e.screen().cursor_position(), (1, 0), "vt100 still has it");
+        e.process(b"\x1b[?6l");
+        assert!(!e.origin_mode());
+        e.process(b"\x1b[?6h\x1bc");
+        assert!(!e.origin_mode(), "a full reset clears it");
+    }
 
     #[test]
     fn insert_and_wrap_modes_are_kept() {

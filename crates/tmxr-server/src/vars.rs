@@ -56,6 +56,7 @@ pub const NAMES: &[&str] = &[
     "mouse_standard_flag",
     "mouse_utf8_flag",
     "next_session_id",
+    "origin_flag",
     "pane_active",
     "pane_at_bottom",
     "pane_at_left",
@@ -865,6 +866,7 @@ impl<'a> Context for Vars<'a> {
             "cursor_blinking" => flag(pane?.emu.cursor_blinking()),
             // The modes the pane's program set, as tmux's MODE_INSERT and
             // MODE_WRAP.
+            "origin_flag" => flag(pane?.emu.origin_mode()),
             "insert_flag" => flag(pane?.emu.insert_and_wrap().0),
             "wrap_flag" => flag(pane?.emu.insert_and_wrap().1),
             // tmxr draws no sixel images.

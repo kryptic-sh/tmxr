@@ -1,15 +1,16 @@
 //! The sequences the emulator makes as tmux does rather than as vt100
 //! would, split from a program's output: the DEC private modes for the
 //! alternate screen (47, 1047 and 1049, `Emulator::switch_screen`, dropped
-//! for `alternate-screen off`) and the mouse (9, 1000 to 1003, 1005 and
-//! 1006, `Emulator::mouse_mode`), a full reset (`ESC c`), which clears what
-//! the emulator keeps of them, and the CSIs tmux's input_csi_table has and
-//! vt100 lacks: HVP (`f`) and HPA (`` ` ``) as the CUP and CHA vt100 does
-//! take, SCP and RCP (`s`, `u`) as `ESC 7` and `ESC 8`, and REP (`b`) and
-//! CBT (`Z`), which need the emulator's cursor.
+//! for `alternate-screen off`), the mouse (9, 1000 to 1003, 1005 and 1006,
+//! `Emulator::mouse_mode`) and origin (6, kept for `#{origin_flag}` and
+//! passed on), a full reset (`ESC c`), which clears what the emulator keeps
+//! of them, and the CSIs tmux's input_csi_table has and vt100 lacks: HVP
+//! (`f`) and HPA (`` ` ``) as the CUP and CHA vt100 does take, SCP and RCP
+//! (`s`, `u`) as `ESC 7` and `ESC 8`, and REP (`b`) and CBT (`Z`), which
+//! need the emulator's cursor.
 
 /// The DEC private modes split out.
-const SPLIT_MODES: [u32; 10] = [9, 47, 1000, 1001, 1002, 1003, 1005, 1006, 1047, 1049];
+const SPLIT_MODES: [u32; 11] = [6, 9, 47, 1000, 1001, 1002, 1003, 1005, 1006, 1047, 1049];
 
 /// The longest sequence held back waiting for its end; one longer is
 /// passed on as it is.

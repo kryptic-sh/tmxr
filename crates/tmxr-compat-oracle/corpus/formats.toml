@@ -914,3 +914,18 @@ checks = [
   { command = "display -p -t o:4 '#{cursor_shape} #{cursor_blinking}'" },
   { command = "display -p -t o:5 '#{cursor_shape} #{cursor_blinking}'" },
 ]
+
+[[cases]]
+name = "origin_flag_and_a_reset_as_tmux"
+steps = [
+  { run = "new-window -d -t o:1 'printf \"\\033[?6h\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:2 'printf \"\\033[?6h\\033c\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:3 'printf \"\\033[5 q\\033c\"; exec sleep 1000'" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "display -p -t o:0 '#{origin_flag}'" },
+  { command = "display -p -t o:1 '#{origin_flag}'" },
+  { command = "display -p -t o:2 '#{origin_flag}'" },
+  { command = "display -p -t o:3 '#{cursor_shape} #{cursor_blinking}'" },
+]

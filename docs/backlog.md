@@ -492,17 +492,15 @@ table. What has been verified, and how:
     its comma (`format::expand_item`), and a loop or `N:` whose lookup fails
     gives what tmux's does (compared by
     `loops_and_n_whose_lookups_fail_as_tmux`); many of tmux's format variables
-    (compare tmux's `format_table` with `vars.rs` for the list; `origin_flag`,
+    (compare tmux's `format_table` with `vars.rs` for the list;
     `scroll_region_*`, `alternate_saved_*`, `pane_tabs`, `cursor_colour` and
     `cursor_very_visible` need terminal state the `vt100` crate does not expose
-    (`cursor_shape` and `cursor_blinking` are kept from DECSCUSR and `CSI ? 12`,
-    but a full reset, `ESC c`, leaves the blinking set, where tmux clears it;
-    not fixed); `insert_flag` and `wrap_flag` are kept from the sequences vt100
-    passes on unhandled, but vt100 itself still draws as with insert off and
-    wrap on; `origin_flag` would need vt100's private origin mode, or splitting
-    `CSI ? 6` out as `modes::ModeSplitter` does the alternate screen's);
-    overline, and underline styles and colours (`double-`, `curly-`, `dotted-`
-    and `dashed-underscore` draw as the plain underline).
+    (`cursor_shape` and `cursor_blinking` are kept from DECSCUSR and `CSI ? 12`;
+    `insert_flag` and `wrap_flag` are kept from the sequences vt100 passes on
+    unhandled, but vt100 itself still draws as with insert off and wrap on;
+    `origin_flag` from `CSI ? 6`, split out by `modes::ModeSplitter` and passed
+    on to vt100); overline, and underline styles and colours (`double-`,
+    `curly-`, `dotted-` and `dashed-underscore` draw as the plain underline).
   - Options: every status row is drawn from its `status-format` item by
     `format_draw` (the first from tmux's default unless set), which takes tmux's
     `align`, `fill`, `default` / `push-default` / `pop-default`, lists (cut
