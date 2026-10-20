@@ -516,6 +516,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Resurrect restores an empty pane empty** (`split-window -I`), with no
+  program, where it came back running the shell.
 - **`list-keys` prints a bind's `{ … }` blocks in braces**, as tmux's, where it
   printed them as quoted strings; `show-hooks` prints a hook's commands joined
   by `;`, as tmux's, and takes a hook's name (or `name[i]`) to show that hook

@@ -78,6 +78,9 @@ pub struct SavedPane {
     /// Its title (`#{pane_title}`), restored until its program sets one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    /// An empty pane (`split-window -I`), with no program: restored empty.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub empty: bool,
 }
 
 /// Layout shape; leaves are positions in [`SavedWindow::panes`].
@@ -311,6 +314,7 @@ pub fn capture(srv: &Server) -> Save {
                                         .get(p)
                                         .and_then(|pane| pane.emu.title())
                                         .map(str::to_owned),
+                                    empty: srv.panes.get(p).is_some_and(|pane| pane.pty.is_empty()),
                                 }
                             })
                             .collect(),
@@ -511,18 +515,22 @@ fn restore_session(
     placed: &mut Placed,
 ) -> Result<SessionId, String> {
     let first = &s.windows[0];
+    // None for an empty pane.
     let argv = |p: &SavedPane| {
-        p.command
-            .iter()
-            .chain(p.command.is_some().then_some(&p.args).into_iter().flatten())
-            .cloned()
-            .collect::<Vec<_>>()
+        (!p.empty).then(|| {
+            p.command
+                .iter()
+                .chain(p.command.is_some().then_some(&p.args).into_iter().flatten())
+                .cloned()
+                .collect::<Vec<_>>()
+        })
     };
     let first_pane = first.panes.first().cloned().unwrap_or_else(|| SavedPane {
         cwd: s.cwd.clone(),
         command: None,
         args: Vec::new(),
         title: None,
+        empty: false,
     });
     let sid = srv.new_session(
         Some(s.name.clone()),
@@ -553,6 +561,7 @@ fn restore_session(
                 command: None,
                 args: Vec::new(),
                 title: None,
+                empty: false,
             });
             srv.new_window(
                 sid,
@@ -577,7 +586,7 @@ fn restore_session(
                 false,
                 None,
                 existing_dir(&p.cwd, missing),
-                Some(argv(p)),
+                argv(p),
                 &[],
                 false,
             )?;
@@ -677,12 +686,14 @@ mod tests {
                             command: Some("hjkl".into()),
                             args: vec!["notes.md".into()],
                             title: None,
+                            empty: false,
                         },
                         SavedPane {
                             cwd: "/tmp".into(),
                             command: None,
                             args: Vec::new(),
                             title: None,
+                            empty: true,
                         },
                     ],
                     link: None,
@@ -732,6 +743,9 @@ mod tests {
         let mut json: serde_json::Value = serde_json::to_value(sample()).unwrap();
         let panes = &mut json["sessions"][0]["windows"][0]["panes"];
         assert!(panes[1].get("args").is_none(), "empty args are not written");
+        // Only an empty pane says so, and a save from before says nothing.
+        assert_eq!(panes[1]["empty"], serde_json::Value::Bool(true));
+        assert!(panes[0].get("empty").is_none());
         assert!(panes[0].as_object_mut().unwrap().remove("args").is_some());
         let old: Save = serde_json::from_value(json).unwrap();
         assert!(old.sessions[0].windows[0].panes[0].args.is_empty());

@@ -79,7 +79,7 @@ pub(super) fn run(
                 index,
                 a.value('n').map(str::to_owned),
                 cwd,
-                pos.to_vec(),
+                Some(pos.to_vec()),
                 &super::env_flags(a)?,
                 size,
                 !a.has('d'),

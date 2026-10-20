@@ -536,8 +536,8 @@ table. What has been verified, and how:
     also keeps a tab as the tab character, where `vt100` keeps the spaces it
     moved over; `split-window -I` and `display-message -I` read the client's
     whole input before showing it, where tmux shows it as it arrives (tmxr's
-    client sends standard input ahead of the command); an empty pane is saved by
-    resurrect as a pane running the shell; `display-message -v`;
+    client sends standard input ahead of the command); an empty pane is restored
+    by resurrect empty, without what was shown in it; `display-message -v`;
     `display-message -a` lists tmxr's variables (`vars::NAMES`), fewer than
     tmux's; the `choose-*` pickers' tagging and sort keys (tmux's `t`, `T`,
     `O`), which tmxr's picker has no counterpart for; `choose-tree -F` replaces

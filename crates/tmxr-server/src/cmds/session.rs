@@ -78,7 +78,7 @@ pub(super) fn run(
                 cwd,
                 env,
                 a.value('n').map(str::to_owned),
-                pos.to_vec(),
+                Some(pos.to_vec()),
                 size,
             )?;
             // -x / -y: the session keeps its size as its own default-size,

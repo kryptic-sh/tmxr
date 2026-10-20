@@ -447,3 +447,35 @@ fn select_pane_titles_a_pane_and_resurrect_keeps_it() {
         assert_eq!(title(&t), "my-title-ti");
     }
 }
+
+/// An empty pane (`split-window -I`) is restored empty, with no program,
+/// not as a pane running the shell.
+#[test]
+fn resurrect_restores_an_empty_pane_empty() {
+    let t = Tmxr::new("resempty");
+    t.run(&["new-session", "-d", "-s", "re"]);
+    let made = t.output_with_stdin(&["split-window", "-I", "-t", "re"], b"text\n");
+    assert!(made.status.success(), "{made:?}");
+    let pids = |t: &Tmxr| t.run(&["list-panes", "-t", "re", "-F", "#{pane_pid}"]);
+    t.wait_run(
+        &["list-panes", "-t", "re", "-F", "#{pane_pid}"],
+        "two panes",
+        |o| o.lines().count() == 2,
+    );
+    assert_eq!(pids(&t).lines().nth(1), Some("0"), "the pane is empty");
+    t.run(&["resurrect-save"]);
+    t.run(&["kill-server"]);
+    t.wait_run(&["ls"], "server gone", str::is_empty);
+    let config = std::fs::read_to_string(&t.config).unwrap();
+    std::fs::write(
+        &t.config,
+        config.replace("restore-on-start = false", "restore-on-start = true"),
+    )
+    .unwrap();
+    t.run(&["new-session", "-d", "-s", "other"]);
+    let restored = pids(&t);
+    let restored: Vec<&str> = restored.lines().collect();
+    assert_eq!(restored.len(), 2, "{restored:?}");
+    assert_ne!(restored[0], "0", "the first pane runs its shell");
+    assert_eq!(restored[1], "0", "the empty pane is empty again");
+}

@@ -49,7 +49,7 @@ impl Server {
         cwd: PathBuf,
         env: Environment,
         window_name: Option<String>,
-        argv: Vec<String>,
+        argv: Option<Vec<String>>,
         size: (u16, u16),
     ) -> Result<SessionId, String> {
         let name = match name {
@@ -94,8 +94,9 @@ impl Server {
         Ok(id)
     }
 
-    /// Create a window in `session` at `index` (or the first free index);
-    /// `env` is added to its pane's environment (`-e`).
+    /// Create a window in `session` at `index` (or the first free index),
+    /// its pane running `argv` (none for an empty pane); `env` is added to
+    /// its pane's environment (`-e`).
     #[allow(clippy::too_many_arguments)]
     pub fn new_window(
         &mut self,
@@ -103,13 +104,13 @@ impl Server {
         index: Option<u32>,
         name: Option<String>,
         cwd: Option<PathBuf>,
-        argv: Vec<String>,
+        argv: Option<Vec<String>>,
         env: &[(String, String)],
         size: (u16, u16),
         select: bool,
     ) -> Result<WindowId, String> {
         let base = self.session_options(session).base_index;
-        let argv = self.new_pane_argv(session, argv);
+        let argv = argv.map(|a| self.new_pane_argv(session, a));
         let s = self.sessions.get(&session).ok_or("no such session")?;
         let index = match index {
             Some(i) if s.windows.contains_key(&i) => return Err(format!("index {i} in use")),
@@ -150,7 +151,7 @@ impl Server {
                 hooks: crate::hooks::HookTable::new(),
             },
         );
-        if let Err(e) = self.spawn_pane(pid, wid, session, Some(&argv), cwd, env, cols, rows) {
+        if let Err(e) = self.spawn_pane(pid, wid, session, argv.as_deref(), cwd, env, cols, rows) {
             self.windows.remove(&wid);
             return Err(e);
         }
@@ -158,7 +159,8 @@ impl Server {
         if self.window_options(wid).automatic_rename
             && let Some(win) = self.windows.get_mut(&wid)
         {
-            win.name = crate::util::program_name(&argv, shell.as_deref());
+            win.name =
+                crate::util::program_name(argv.as_deref().unwrap_or_default(), shell.as_deref());
         }
         let s = self.sessions.get_mut(&session).ok_or("no such session")?;
         s.windows.insert(index, wid);
