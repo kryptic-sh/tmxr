@@ -1457,3 +1457,28 @@ fn a_grouped_session_takes_no_command_and_lists_its_group() {
         "{listed}"
     );
 }
+
+/// A server whose socket file was removed binds it again on SIGUSR1, as
+/// tmux's does, its sessions kept. Unix only: a Windows pipe has no file to
+/// remove.
+#[cfg(unix)]
+#[test]
+fn sigusr1_binds_a_removed_socket_again() {
+    let t = Tmxr::new("rebind");
+    t.run(&["new-session", "-d", "-s", "rb"]);
+    let pid: libc::pid_t = t
+        .run(&["display-message", "-p", "#{pid}"])
+        .trim()
+        .parse()
+        .unwrap();
+    let socket = t.run(&["display-message", "-p", "#{socket_path}"]);
+    std::fs::remove_file(socket.trim()).unwrap();
+    assert!(!t.output(&["list-sessions"]).status.success());
+    // SAFETY: `kill` only sends a signal to the test's own server.
+    assert_eq!(unsafe { libc::kill(pid, libc::SIGUSR1) }, 0);
+    t.wait_run(
+        &["list-sessions", "-F", "#{session_name}"],
+        "the server reachable again",
+        |o| o.trim() == "rb",
+    );
+}

@@ -31,6 +31,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **SIGUSR1 binds the server's socket again** (Unix), as tmux's does: a server
+  whose socket file was removed is reached again after `kill -USR1 <pid>`, its
+  sessions kept.
 - **`#{cursor_shape}` and `#{cursor_blinking}`**, as tmux's: the cursor the
   pane's program set (`block`, `underline`, `bar` or `default`) and whether it
   blinks.

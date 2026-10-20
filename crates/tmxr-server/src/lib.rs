@@ -93,11 +93,10 @@ pub fn run(endpoint: Endpoint, config: Option<PathBuf>) -> std::io::Result<()> {
     let listener = endpoint.listen(socket_access)?;
     let owner = access::current_user()?;
     let (tx, rx) = mpsc::channel();
-    let mut srv = Server::new(endpoint, cfg, config, tx.clone());
+    let mut srv = Server::new(endpoint, cfg, config, tx);
     srv.owner.clone_from(&owner);
     srv.cfg_file = cfg_file;
     srv.socket_access = socket_access;
-    let acl = std::sync::Arc::clone(&srv.acl);
     if let Some(e) = errors {
         tracing::warn!("config: {e}");
         let message = format!("config error, using defaults: {e}");
@@ -111,11 +110,8 @@ pub fn run(endpoint: Endpoint, config: Option<PathBuf>) -> std::io::Result<()> {
     {
         srv.log_message(format!("resurrect: {e}"));
     }
-    let writers = conn::Writers::default();
-    let accepted = std::sync::Arc::clone(&writers);
-    std::thread::Builder::new()
-        .name("tmxr-accept".into())
-        .spawn(move || conn::accept_loop(listener, tx, &acl, &owner, &accepted))?;
+    srv.spawn_accept(listener)?;
+    let writers = std::sync::Arc::clone(&srv.writers);
     server::signals::install();
     // Takes the server, so its clients' queues are closed when it returns.
     srv.run(rx);

@@ -273,6 +273,8 @@ pub struct Server {
     pub clipboard: crate::clipboard::Local,
     /// The user running the server, always admitted.
     pub owner: crate::access::UserId,
+    /// The threads writing to clients, waited for as the server exits.
+    pub writers: crate::conn::Writers,
     /// Other users `server-access` admits; shared with the accept thread.
     pub acl: crate::access::SharedAcl,
     /// Who could open the endpoint when it was bound (`socket-access`).
@@ -389,6 +391,7 @@ impl Server {
             copy_line: None,
             clipboard: crate::clipboard::Local::default(),
             owner: String::new(),
+            writers: crate::conn::Writers::default(),
             acl: crate::access::SharedAcl::default(),
             socket_access: tmxr_proto::socket::Access::Owner,
             hooks,
@@ -455,6 +458,9 @@ impl Server {
                 info!("exit requested by the system");
                 self.begin_exit();
             }
+            if signals::rebind_requested() && !self.exiting {
+                self.rebind();
+            }
             if self.exiting {
                 break;
             }
@@ -481,6 +487,38 @@ impl Server {
     /// Exit once this pass of the loop is done. The endpoint goes now, before
     /// the reply to whatever asked is sent, so the asker's next command
     /// cannot reach this server on its way out.
+    /// Accept clients from `listener` on a thread of its own.
+    pub fn spawn_accept(
+        &self,
+        listener: interprocess::local_socket::Listener,
+    ) -> std::io::Result<()> {
+        let events = self.events.clone();
+        let acl = std::sync::Arc::clone(&self.acl);
+        let owner = self.owner.clone();
+        let writers = std::sync::Arc::clone(&self.writers);
+        std::thread::Builder::new()
+            .name("tmxr-accept".into())
+            .spawn(move || crate::conn::accept_loop(listener, events, &acl, &owner, &writers))
+            .map(drop)
+    }
+
+    /// Bind the socket again (SIGUSR1), as tmux's server_signal does, for a
+    /// server whose socket file was removed: whatever is at its path goes,
+    /// and a new listener there gets its own accept thread. The previous
+    /// thread keeps waiting on the old socket, which no client can reach
+    /// any more: one idle thread for each time this is asked.
+    fn rebind(&mut self) {
+        let bound = self
+            .endpoint
+            .release()
+            .and_then(|()| self.endpoint.listen(self.socket_access))
+            .and_then(|listener| self.spawn_accept(listener));
+        match bound {
+            Ok(()) => info!("socket bound again"),
+            Err(e) => warn!("could not bind the socket again: {e}"),
+        }
+    }
+
     pub fn begin_exit(&mut self) {
         if !self.exiting {
             self.exiting = true;

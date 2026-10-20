@@ -244,18 +244,19 @@ table. What has been verified, and how:
   connecting and being checked is refused. A label's socket on Unix sits in
   tmxr's private directory, unreachable by other users whatever `socket-access`
   says; `server-access -a` then says to use `-S`, as tmux documents.
-- **A server whose socket file is removed cannot be reached again**: tmux
-  re-creates its socket on SIGUSR1 (`server_create_socket` from its signal
-  handler); tmxr has no such signal, so a socket deleted under a running server
-  (`rm`) leaves it unreachable until it is killed by pid. The socket directory
-  moved out of `$XDG_RUNTIME_DIR` on 2026-10-20, as logind deletes that one at
-  the user's last logout (`socket_base`); checked with `Linger=no` on Arch,
-  where `systemd-user-runtime-dir stop` removes it. In `/tmp`, Arch's
-  systemd-tmpfiles removes a file whose newest timestamp is 10 days old, so the
-  server renews the socket's ctime each hour (`Endpoint::refresh`, from
-  `Server::tick`, as tmux's `server_update_socket` chmods it); the refresh is
-  unit-tested, the hourly call is not observed by any test. Not tried: a real
-  logout with a server running, or macOS's own cleaning of `$TMPDIR`.
+- **A removed socket is bound again on SIGUSR1** (`Server::rebind`), as tmux's
+  `server_signal` does (`sigusr1_binds_a_removed_socket_again`). Each time
+  leaves the previous accept thread waiting on the old socket, which no client
+  can reach: interprocess's `Listener` gives no way to wake its `accept`, and
+  `shutdown` would not wake it on macOS anyway. The socket directory moved out
+  of `$XDG_RUNTIME_DIR` on 2026-10-20, as logind deletes that one at the user's
+  last logout (`socket_base`); checked with `Linger=no` on Arch, where
+  `systemd-user-runtime-dir stop` removes it. In `/tmp`, Arch's systemd-tmpfiles
+  removes a file whose newest timestamp is 10 days old, so the server renews the
+  socket's ctime each hour (`Endpoint::refresh`, from `Server::tick`, as tmux's
+  `server_update_socket` chmods it); the refresh is unit-tested, the hourly call
+  is not observed by any test. Not tried: a real logout with a server running,
+  or macOS's own cleaning of `$TMPDIR`.
 - **`display-popup` / `display-menu` gaps.** Placement (`-x` / `-y`, letters,
   numbers and the `popup_*` variables) is transcribed from tmux 3.6's
   `cmd_display_menu_get_pos` and checked against a running tmux

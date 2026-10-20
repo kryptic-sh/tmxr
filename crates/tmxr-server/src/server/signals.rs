@@ -1,11 +1,13 @@
 //! Ending the server the normal way, which saves the sessions, instead of
 //! dying where it stands, when the system asks it to stop: SIGTERM and SIGHUP
 //! on Unix (logout, shutdown, `kill`), the end of the Windows session (logoff,
-//! shutdown) on Windows.
+//! shutdown) on Windows. And on Unix, SIGUSR1 asks for the socket again, as
+//! tmux's does, for a server whose socket file was removed.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
 static EXIT_REQUESTED: AtomicBool = AtomicBool::new(false);
+static REBIND_REQUESTED: AtomicBool = AtomicBool::new(false);
 /// Set once the exit save has been made, for a handler that must not return
 /// before it.
 static SAVED: AtomicBool = AtomicBool::new(false);
@@ -16,15 +18,24 @@ extern "C" fn on_signal(_: libc::c_int) {
     EXIT_REQUESTED.store(true, Ordering::SeqCst);
 }
 
+#[cfg(unix)]
+extern "C" fn on_rebind(_: libc::c_int) {
+    // Only an atomic store, which is async-signal-safe.
+    REBIND_REQUESTED.store(true, Ordering::SeqCst);
+}
+
 /// Route SIGTERM and SIGHUP (Unix), or the end of the Windows session, to
-/// [`exit_requested`].
+/// [`exit_requested`], and SIGUSR1 (Unix) to [`rebind_requested`].
 pub fn install() {
     #[cfg(unix)]
-    for sig in [libc::SIGTERM, libc::SIGHUP] {
-        // `signal` takes the handler as an address.
-        let handler: extern "C" fn(libc::c_int) = on_signal;
-        // SAFETY: `on_signal` only stores to an atomic, which a signal
-        // handler may do; `signal` itself has no other preconditions.
+    for (sig, handler) in [
+        (libc::SIGTERM, on_signal as extern "C" fn(libc::c_int)),
+        (libc::SIGHUP, on_signal),
+        (libc::SIGUSR1, on_rebind),
+    ] {
+        // SAFETY: each handler only stores to an atomic, which a signal
+        // handler may do; `signal` takes it as an address and has no other
+        // preconditions.
         unsafe {
             libc::signal(sig, handler as libc::sighandler_t);
         }
@@ -36,6 +47,12 @@ pub fn install() {
 /// Whether the system asked the server to exit.
 pub fn exit_requested() -> bool {
     EXIT_REQUESTED.load(Ordering::SeqCst)
+}
+
+/// Whether the socket was asked for again since the last call (SIGUSR1;
+/// never on Windows, whose pipe has no file to remove).
+pub fn rebind_requested() -> bool {
+    REBIND_REQUESTED.swap(false, Ordering::SeqCst)
 }
 
 /// The server has saved on its way out.
