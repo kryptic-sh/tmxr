@@ -32,6 +32,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`#{cursor_shape}` and `#{cursor_blinking}`**, as tmux's: the cursor the
   pane's program set (`block`, `underline`, `bar` or `default`) and whether it
   blinks.
+- **`#{scroll_region_upper}` and `#{scroll_region_lower}`**, as tmux's: the
+  pane's scroll region.
 - **`#{insert_flag}`, `#{wrap_flag}` and `#{origin_flag}`**, as tmux's: insert
   mode, autowrap and origin mode as the pane's program set them.
 - **`#{window_cell_width}` and `#{window_cell_height}`**, tmux's 16 and 32: the
@@ -536,6 +538,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The scroll region is kept as tmux keeps it**: inserting or deleting lines
+  (`CSI L` / `CSI M`) with the cursor outside it now moves the rows from the
+  cursor to the bottom, where it did nothing; a region set on one screen is kept
+  across a switch to the alternate screen and back; and a region of fewer than
+  two rows is ignored, where it reset the region and moved the cursor.
 - **A terminal that reports a size of 0 is taken as 80x24**, as tmux takes it,
   where tmxr made it a window of one cell (a pty nobody sized, some CI runners).
 - **A pane one row tall no longer takes the server down**: text that wrapped in

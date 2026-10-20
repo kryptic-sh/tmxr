@@ -97,6 +97,8 @@ pub const NAMES: &[&str] = &[
     "pane_width",
     "pid",
     "scroll_position",
+    "scroll_region_lower",
+    "scroll_region_upper",
     "selection_present",
     "server_sessions",
     "session_activity",
@@ -867,6 +869,8 @@ impl<'a> Context for Vars<'a> {
             // The modes the pane's program set, as tmux's MODE_INSERT and
             // MODE_WRAP.
             "origin_flag" => flag(pane?.emu.origin_mode()),
+            "scroll_region_upper" => pane?.emu.scroll_region().0.to_string(),
+            "scroll_region_lower" => pane?.emu.scroll_region().1.to_string(),
             "insert_flag" => flag(pane?.emu.insert_and_wrap().0),
             "wrap_flag" => flag(pane?.emu.insert_and_wrap().1),
             // tmxr draws no sixel images.

@@ -85,11 +85,18 @@ table. What has been verified, and how:
   which save the attributes too, as tmux's `input_save_state` does. CBT and HT
   use vt100's fixed tab stops every 8 columns: a program's own (HTS, `CSI g`)
   are not kept, where tmux keeps them. CHT (`CSI n I`) is ignored, as tmux 3.8
-  ignores it (probed the same day). Still different: IL and DL (`CSI L` /
-  `CSI M`) with the cursor outside the scroll region do nothing in vt100 0.18,
-  where tmux 3.6 inserts or deletes from the cursor to the bottom of the screen
-  (`screen_write_insertline`; probed 2026-10-20, a 2-4 region with the cursor on
-  rows 6 and 8; vt100 0.16 moved the region's rows instead, also unlike tmux).
+  ignores it (probed the same day). The scroll region is kept by the emulator as
+  tmux keeps it (`Emulator::set_region`, compared by `scroll_region_as_tmux` and
+  `scroll_region_kept_across_screens_as_tmux`): one for the terminal, where
+  vt100 keeps one per screen, so it is written into vt100's again after each
+  switch; a region of fewer than two rows is ignored, where vt100 takes the
+  whole screen; and IL / DL outside it move the rows from the cursor to the
+  bottom, through a region set for the moment (`Emulator::lines`, compared by
+  `lines_inserted_and_deleted_outside_the_region_as_tmux`), including tmux's IL
+  there of as many rows as are left changing nothing. Not compared: the region
+  with origin mode on across a screen switch (vt100 keeps origin mode per screen
+  too, so the cursor put back after the switch is placed relative to the region
+  there).
 - **Mouse use as in the owner's tmux config** (asked for 2026-10-11). The tmux
   compatibility oracle (`crates/tmxr-compat-oracle`, `corpus/mouse.toml`) drives
   a tmux 3.6 client and a tmxr client with the same SGR mouse events in CI and
@@ -528,16 +535,15 @@ table. What has been verified, and how:
     gives what tmux's does (compared by
     `loops_and_n_whose_lookups_fail_as_tmux`); many of tmux's format variables
     (compare tmux's `format_table` with `vars.rs` for the list;
-    `scroll_region_*`, `alternate_saved_*`, `pane_tabs`, `cursor_colour` and
-    `cursor_very_visible` need terminal state the `vt100` crate does not expose
-    (`cursor_shape` and `cursor_blinking` are kept from DECSCUSR and `CSI ? 12`;
-    `insert_flag` and `wrap_flag` are kept from the sequences vt100 passes on
-    unhandled, but vt100 itself still draws as with insert off and wrap on;
-    `origin_flag` from `CSI ? 6`, split out by `modes::ModeSplitter` and passed
-    on to vt100); overline, and underline styles and colours (`double-`,
-    `curly-`, `dotted-` and `dashed-underscore` draw as the plain underline;
-    vt100 0.18, re-checked 2026-10-21, still keeps one on/off underline in
-    `Attrs` and no overline).
+    `alternate_saved_*`, `pane_tabs`, `cursor_colour` and `cursor_very_visible`
+    need terminal state the `vt100` crate does not expose (`cursor_shape` and
+    `cursor_blinking` are kept from DECSCUSR and `CSI ? 12`; `insert_flag` and
+    `wrap_flag` are kept from the sequences vt100 passes on unhandled, but vt100
+    itself still draws as with insert off and wrap on; `origin_flag` from
+    `CSI ? 6`, split out by `modes::ModeSplitter` and passed on to vt100);
+    overline, and underline styles and colours (`double-`, `curly-`, `dotted-`
+    and `dashed-underscore` draw as the plain underline; vt100 0.18, re-checked
+    2026-10-21, still keeps one on/off underline in `Attrs` and no overline).
   - Options: every status row is drawn from its `status-format` item by
     `format_draw` (the first from tmux's default unless set), which takes tmux's
     `align`, `fill`, `default` / `push-default` / `pop-default`, lists (cut

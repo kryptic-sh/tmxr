@@ -7,8 +7,10 @@
 //! of them, and CSIs from tmux's input_csi_table that vt100 lacks or makes
 //! differently: SCP and RCP (`s`, `u`) as `ESC 7` and `ESC 8`, REP (`b`),
 //! which repeats only a character printed just before, CBT (`Z`), which
-//! needs the emulator's cursor, and DECSCUSR (`SP q`), whose shape and
-//! blinking the emulator keeps itself.
+//! needs the emulator's cursor, DECSCUSR (`SP q`), whose shape and
+//! blinking the emulator keeps itself, and DECSTBM (`r`), IL (`L`) and DL
+//! (`M`), as the emulator keeps the scroll region (vt100 keeps one per
+//! screen, and its IL and DL do nothing outside it).
 
 /// The DEC private modes split out.
 const SPLIT_MODES: [u32; 11] = [6, 9, 47, 1000, 1001, 1002, 1003, 1005, 1006, 1047, 1049];
@@ -41,6 +43,13 @@ pub enum Piece {
     BackTab(u32),
     /// DECSCUSR: the cursor shape `Ps` asks for.
     CursorStyle(u32),
+    /// DECSTBM: the scroll region's top and bottom rows as written,
+    /// counted from 1; `None` where one is missing.
+    ScrollRegion(Option<u32>, Option<u32>),
+    /// IL: `count` blank lines inserted at the cursor.
+    InsertLines(u32),
+    /// DL: `count` lines deleted at the cursor.
+    DeleteLines(u32),
 }
 
 /// Splits the split modes out of DEC private mode sets and resets
@@ -147,6 +156,17 @@ fn value(params: &[u8]) -> Option<u32> {
         return Some(0);
     }
     std::str::from_utf8(first).ok()?.parse().ok()
+}
+
+/// DECSTBM's two parameters, each `None` if it is missing; `None` (the
+/// sequence is ignored) if either is not a number, as tmux's input_get.
+fn region(params: &[u8]) -> Option<(Option<u32>, Option<u32>)> {
+    let mut parts = params.split(|&b| b == b';');
+    let mut next = || match parts.next() {
+        None | Some([]) => Some(None),
+        Some(p) => std::str::from_utf8(p).ok()?.parse().ok().map(Some),
+    };
+    Some((next()?, next()?))
 }
 
 /// The character `tail` ends with, unless it ends with a control or a
@@ -261,6 +281,21 @@ impl ModeSplitter {
                                 pieces.push(Piece::CursorStyle(ps));
                             }
                         }
+                        (None, [], b'r') => {
+                            if let Some((top, bottom)) = region(&params) {
+                                pieces.push(Piece::ScrollRegion(top, bottom));
+                            }
+                        }
+                        (None, [], b'L') => {
+                            if let Some(count) = count(&params) {
+                                pieces.push(Piece::InsertLines(count));
+                            }
+                        }
+                        (None, [], b'M') => {
+                            if let Some(count) = count(&params) {
+                                pieces.push(Piece::DeleteLines(count));
+                            }
+                        }
                         _ => push_text(&mut pieces, seq),
                     }
                     len
@@ -300,7 +335,10 @@ mod tests {
                 | Piece::Reset
                 | Piece::Repeat { .. }
                 | Piece::BackTab(_)
-                | Piece::CursorStyle(_) => None,
+                | Piece::CursorStyle(_)
+                | Piece::ScrollRegion(..)
+                | Piece::InsertLines(_)
+                | Piece::DeleteLines(_) => None,
             })
             .flatten()
             .collect()
@@ -415,6 +453,23 @@ mod tests {
         );
         // A count that is not a number is ignored, as tmux's input_get.
         assert_eq!(f.split(b"\x1b[1:2Z"), vec![]);
+        assert_eq!(
+            f.split(b"\x1b[3;5r\x1b[r\x1b[;7r\x1b[2r\x1b[1:2;5r"),
+            vec![
+                Piece::ScrollRegion(Some(3), Some(5)),
+                Piece::ScrollRegion(None, None),
+                Piece::ScrollRegion(None, Some(7)),
+                Piece::ScrollRegion(Some(2), None),
+            ]
+        );
+        assert_eq!(
+            f.split(b"\x1b[L\x1b[3M\x1b[?5r"),
+            vec![
+                Piece::InsertLines(1),
+                Piece::DeleteLines(3),
+                Piece::Text(b"\x1b[?5r".to_vec()),
+            ]
+        );
     }
 
     #[test]

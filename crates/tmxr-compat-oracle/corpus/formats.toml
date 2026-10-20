@@ -929,3 +929,89 @@ checks = [
   { command = "display -p -t o:2 '#{origin_flag}'" },
   { command = "display -p -t o:3 '#{cursor_shape} #{cursor_blinking}'" },
 ]
+
+[[cases]]
+name = "scroll_region_as_tmux"
+size = [20, 10]
+steps = [
+  { run = "new-window -d -t o:1 'printf \"\\033[3;5r\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:2 'printf \"\\033[5;3r\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:3 'printf \"\\033[3;5r\\033[5;3r\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:4 'printf \"\\033[8;9H\\033[5;3r\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:5 'printf \"\\033[3;50r\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:6 'printf \"\\033[3;5r\\033[?1049h\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:7 'printf \"\\033[3;5r\\033[?1049h\\033[2;4r\\033[?1049l\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:8 'printf \"\\033[3;5r\\033c\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:9 'printf \"\\033[3;5r\\033[?6h\\033[1;1H\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:10 'printf \"\\033[3;5r\\033[?47h\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:11 'printf \"\\033[3;5r\\033[r\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:12 'printf \"\\033[8;9H\\033[3;5r\\033[8;9H\\033[4;4r\"; exec sleep 1000'" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "display -p -t o:0 '#{scroll_region_upper} #{scroll_region_lower} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:1 '#{scroll_region_upper} #{scroll_region_lower} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:2 '#{scroll_region_upper} #{scroll_region_lower} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:3 '#{scroll_region_upper} #{scroll_region_lower} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:4 '#{scroll_region_upper} #{scroll_region_lower} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:5 '#{scroll_region_upper} #{scroll_region_lower} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:6 '#{scroll_region_upper} #{scroll_region_lower} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:7 '#{scroll_region_upper} #{scroll_region_lower} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:8 '#{scroll_region_upper} #{scroll_region_lower} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:9 '#{scroll_region_upper} #{scroll_region_lower} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:10 '#{scroll_region_upper} #{scroll_region_lower} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:11 '#{scroll_region_upper} #{scroll_region_lower} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:12 '#{scroll_region_upper} #{scroll_region_lower} #{cursor_x},#{cursor_y}'" },
+]
+
+[[cases]]
+name = "lines_inserted_and_deleted_outside_the_region_as_tmux"
+size = [20, 10]
+steps = [
+  { run = "new-window -d -t o:1 'printf \"\\033[H1\r\n2\r\n3\r\n4\r\n5\r\n6\r\n7\r\n8\r\n9\r\nA\\033[2;4r\\033[6;3H\\033[2L\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:2 'printf \"\\033[H1\r\n2\r\n3\r\n4\r\n5\r\n6\r\n7\r\n8\r\n9\r\nA\\033[2;4r\\033[8;3H\\033[1M\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:3 'printf \"\\033[H1\r\n2\r\n3\r\n4\r\n5\r\n6\r\n7\r\n8\r\n9\r\nA\\033[2;4r\\033[1;3H\\033[1L\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:4 'printf \"\\033[H1\r\n2\r\n3\r\n4\r\n5\r\n6\r\n7\r\n8\r\n9\r\nA\\033[2;4r\\033[3;3H\\033[1L\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:5 'printf \"\\033[H1\r\n2\r\n3\r\n4\r\n5\r\n6\r\n7\r\n8\r\n9\r\nA\\033[2;4r\\033[10;3H\\033[1L\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:6 'printf \"\\033[H1\r\n2\r\n3\r\n4\r\n5\r\n6\r\n7\r\n8\r\n9\r\nA\\033[2;4r\\033[?6h\\033[8;9H\\033[2L\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:7 'printf \"\\033[H1\r\n2\r\n3\r\n4\r\n5\r\n6\r\n7\r\n8\r\n9\r\nA\\033[2;4r\\033[10;3H\\033[3L\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:8 'printf \"\\033[H1\r\n2\r\n3\r\n4\r\n5\r\n6\r\n7\r\n8\r\n9\r\nA\\033[2;4r\\033[9;3H\\033[1L\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:9 'printf \"\\033[H1\r\n2\r\n3\r\n4\r\n5\r\n6\r\n7\r\n8\r\n9\r\nA\\033[2;4r\\033[9;3H\\033[5L\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:10 'printf \"\\033[H1\r\n2\r\n3\r\n4\r\n5\r\n6\r\n7\r\n8\r\n9\r\nA\\033[2;4r\\033[10;3H\\033[1M\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:11 'printf \"\\033[H1\r\n2\r\n3\r\n4\r\n5\r\n6\r\n7\r\n8\r\n9\r\nA\\033[2;4r\\033[9;3H\\033[5M\"; exec sleep 1000'" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "capture-pane -p -t o:1" },
+  { command = "display -p -t o:1 '#{scroll_region_upper} #{scroll_region_lower} #{cursor_x},#{cursor_y}'" },
+  { command = "capture-pane -p -t o:2" },
+  { command = "display -p -t o:2 '#{scroll_region_upper} #{scroll_region_lower} #{cursor_x},#{cursor_y}'" },
+  { command = "capture-pane -p -t o:3" },
+  { command = "display -p -t o:3 '#{scroll_region_upper} #{scroll_region_lower} #{cursor_x},#{cursor_y}'" },
+  { command = "capture-pane -p -t o:4" },
+  { command = "display -p -t o:4 '#{scroll_region_upper} #{scroll_region_lower} #{cursor_x},#{cursor_y}'" },
+  { command = "capture-pane -p -t o:5" },
+  { command = "display -p -t o:5 '#{scroll_region_upper} #{scroll_region_lower} #{cursor_x},#{cursor_y}'" },
+  { command = "capture-pane -p -t o:6" },
+  { command = "display -p -t o:6 '#{scroll_region_upper} #{scroll_region_lower} #{cursor_x},#{cursor_y}'" },
+  { command = "capture-pane -p -t o:7" },
+  { command = "capture-pane -p -t o:8" },
+  { command = "capture-pane -p -t o:9" },
+  { command = "capture-pane -p -t o:10" },
+  { command = "capture-pane -p -t o:11" },
+]
+
+[[cases]]
+name = "scroll_region_kept_across_screens_as_tmux"
+size = [20, 10]
+steps = [
+  { run = "new-window -d -t o:1 'printf \"\\033[3;5r\\033[?1049h\\033[3;1Ha\\033[4;1Hb\\033[5;1Hc\\033[5;1H\n\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:2 'printf \"\\033[3;5r\\033[?1049h\\033[2;4r\\033[?1049l\\033[2;1Ha\\033[3;1Hb\\033[4;1Hc\\033[4;1H\n\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:3 'printf \"\\033[3;5r\\033[?47h\\033[3;1Ha\\033[4;1Hb\\033[5;1Hc\\033[5;1H\n\"; exec sleep 1000'" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "capture-pane -p -t o:1" },
+  { command = "capture-pane -p -t o:2" },
+  { command = "capture-pane -p -t o:3" },
+]

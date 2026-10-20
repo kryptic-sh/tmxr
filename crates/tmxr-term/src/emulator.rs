@@ -267,6 +267,10 @@ pub struct Emulator {
     alt_allowed: bool,
     /// Origin mode (`CSI ? 6 h`, DECOM), which vt100 keeps to itself.
     origin_mode: bool,
+    /// The scroll region's top and bottom rows, `None` for the whole
+    /// screen. tmux keeps one for the terminal; vt100 keeps one per screen,
+    /// so it is written into vt100's again after each switch.
+    region: Option<(u16, u16)>,
     /// The mouse encodings the program set, apart as tmux keeps them (vt100
     /// keeps one).
     mouse_utf8: bool,
@@ -294,6 +298,7 @@ impl Emulator {
             modes: ModeSplitter::default(),
             alt_allowed: true,
             origin_mode: false,
+            region: None,
             mouse_utf8: false,
             mouse_sgr: false,
             scrollback,
@@ -348,6 +353,7 @@ impl Emulator {
         self.modes.flush();
         (self.mouse_utf8, self.mouse_sgr) = (false, false);
         self.origin_mode = false;
+        self.region = None;
         // CAN ends whatever sequence is in progress, but vte acts on an OSC
         // it cuts off: what that could change is put back, as tmux's
         // input_clear drops the sequence.
@@ -416,6 +422,7 @@ impl Emulator {
                 Piece::Reset => {
                     (self.mouse_utf8, self.mouse_sgr) = (false, false);
                     self.origin_mode = false;
+                    self.region = None;
                     // tmux's full reset stops the blinking, its shape kept.
                     self.parser.callbacks_mut().cursor_blinking = false;
                     self.parser.process(b"\x1bc");
@@ -423,6 +430,9 @@ impl Emulator {
                 Piece::Repeat { ch, count } => self.repeat(ch, count),
                 Piece::BackTab(count) => self.back_tab(count),
                 Piece::CursorStyle(ps) => self.parser.callbacks_mut().set_cursor_style(ps),
+                Piece::ScrollRegion(top, bottom) => self.set_region(top, bottom),
+                Piece::InsertLines(count) => self.lines(count, 'L'),
+                Piece::DeleteLines(count) => self.lines(count, 'M'),
             }
         }
     }
@@ -453,6 +463,80 @@ impl Emulator {
             col -= col % TAB_WIDTH;
         }
         self.parser.process(format!("\x1b[{}G", col + 1).as_bytes());
+    }
+
+    /// DECSTBM as tmux's screen_write_scrollregion: rows past the screen
+    /// are its last, a region of fewer than two rows is ignored (vt100 would
+    /// take the whole screen), and the cursor goes home.
+    fn set_region(&mut self, top: Option<u32>, bottom: Option<u32>) {
+        let rows = self.parser.screen().size().0.get();
+        let row = |n: Option<u32>, missing: u32| {
+            u16::try_from(n.unwrap_or(missing).max(1) - 1).map_or(rows - 1, |r| r.min(rows - 1))
+        };
+        let (top, bottom) = (row(top, 1), row(bottom, rows.into()));
+        if top >= bottom {
+            return;
+        }
+        self.region = Some((top, bottom));
+        self.parser
+            .process(format!("\x1b[{};{}r\x1b[H", top + 1, bottom + 1).as_bytes());
+    }
+
+    /// The scroll region written into vt100's screen, after a switch to a
+    /// screen whose own region vt100 kept apart, the cursor left where it
+    /// was.
+    fn sync_region(&mut self) {
+        let screen = self.parser.screen();
+        let (rows, (row, col)) = (screen.size().0.get(), screen.cursor_position());
+        let (top, bottom) = self.region.unwrap_or((0, rows - 1));
+        self.parser.process(
+            format!(
+                "\x1b[{};{}r\x1b[{};{}H",
+                top + 1,
+                bottom + 1,
+                row + 1,
+                col + 1
+            )
+            .as_bytes(),
+        );
+    }
+
+    /// IL or DL (`last`, `L` or `M`). With the cursor outside the scroll
+    /// region tmux's screen_write_insertline / _deleteline move the rows
+    /// from the cursor to the bottom of the screen, where vt100 does
+    /// nothing, so they go through a region from the cursor down, then
+    /// the region and the cursor are put back. An IL there of as many rows
+    /// as are left, or more, changes nothing in tmux (grid_view_insert_lines
+    /// moves no rows, and grid_move_lines clears only what it moves).
+    fn lines(&mut self, count: u32, last: char) {
+        let screen = self.parser.screen();
+        let (rows, (row, col)) = (screen.size().0.get(), screen.cursor_position());
+        match self.region {
+            Some((top, bottom)) if (row < top || row > bottom) && !self.origin_mode => {
+                if last == 'L' && count >= u32::from(rows - row) {
+                    return;
+                }
+                let (row, col) = (row + 1, col + 1);
+                self.parser.process(
+                    format!(
+                        "\x1b[{row};{rows}r\x1b[{row};{col}H\x1b[{count}{last}\x1b[{};{}r\x1b[{row};{col}H",
+                        top + 1,
+                        bottom + 1
+                    )
+                    .as_bytes(),
+                );
+            }
+            _ => self
+                .parser
+                .process(format!("\x1b[{count}{last}").as_bytes()),
+        }
+    }
+
+    /// The scroll region's top and bottom rows, counted from 0
+    /// (`#{scroll_region_upper}`, `#{scroll_region_lower}`).
+    pub fn scroll_region(&self) -> (u16, u16) {
+        let rows = self.parser.screen().size().0.get();
+        self.region.unwrap_or((0, rows - 1))
     }
 
     /// A mouse mode set or reset as tmux's input_csi_dispatch_sm_private /
@@ -517,6 +601,9 @@ impl Emulator {
             }
             (false, _) => {}
         }
+        if alternate != self.parser.screen().alternate_screen() {
+            self.sync_region();
+        }
     }
 
     /// Feed program output. Returns bytes that must be written back to the
@@ -560,6 +647,11 @@ impl Emulator {
     /// history first, then come in blank at the bottom. (tmux takes back only
     /// rows scrolled since the screen was last cleared, vt100 any it has.)
     pub fn resize(&mut self, rows: u16, cols: u16) {
+        // A resize takes the whole screen as the region, in tmux and in
+        // vt100 alike (which keeps it when the size is the same).
+        if screen_size(self.parser.screen()) != (rows.max(1), cols.max(1)) {
+            self.region = None;
+        }
         self.parser
             .screen_mut()
             .set_size(dimension(rows), dimension(cols));
