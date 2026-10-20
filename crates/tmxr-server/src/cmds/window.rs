@@ -179,7 +179,7 @@ pub(super) fn run(
             } else if a.has('p') {
                 target::window(srv, ctx, Some(&format!("{}:-", srv.sessions[&sid].name)))?.1
             } else if a.has('l') {
-                srv.sessions[&sid].last.ok_or("no last window")?
+                srv.sessions[&sid].last().ok_or("no last window")?
             } else {
                 idx
             };
@@ -304,7 +304,7 @@ pub(super) fn run(
                             w.flags(
                                 s.id,
                                 *idx == s.current,
-                                Some(*idx) == s.last,
+                                Some(*idx) == s.last(),
                                 srv.window_is_marked(*wid)
                             ),
                             w.panes().len(),

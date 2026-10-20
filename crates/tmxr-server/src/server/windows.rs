@@ -70,7 +70,7 @@ impl Server {
                 name,
                 windows: BTreeMap::new(),
                 current: self.cfg.session.base_index,
-                last: None,
+                stack: Vec::new(),
                 cwd: cwd.clone(),
                 env,
                 hooks: crate::hooks::HookTable::new(),
@@ -163,10 +163,7 @@ impl Server {
         let s = self.sessions.get_mut(&session).ok_or("no such session")?;
         s.windows.insert(index, wid);
         if select || s.windows.len() == 1 {
-            if s.current != index && s.windows.contains_key(&s.current) {
-                s.last = Some(s.current);
-            }
-            s.current = index;
+            s.set_current(index);
         }
         self.mark_session_dirty(session);
         Ok(wid)
@@ -216,10 +213,7 @@ impl Server {
         if !s.windows.contains_key(&index) {
             return Err(format!("window not found: {index}"));
         }
-        if s.current != index {
-            s.last = Some(s.current);
-            s.current = index;
-        }
+        s.set_current(index);
         if let Some(w) = s.windows.get(&index).copied()
             && let Some(win) = self.windows.get_mut(&w)
         {
@@ -281,17 +275,19 @@ impl Server {
             self.kill_session(sid);
             return;
         }
+        let windows = &s.windows;
+        s.stack.retain(|l| windows.contains_key(l));
         if index == Some(s.current) {
-            // tmux moves to the last window, else the next one.
-            let next = s
-                .last
-                .filter(|l| s.windows.contains_key(l))
-                .or_else(|| s.windows.range(s.current..).next().map(|(i, _)| *i))
+            // As tmux's session_detach: the last window, else the previous
+            // one, wrapping round to the highest.
+            let removed = s.current;
+            let next = (!s.stack.is_empty())
+                .then(|| s.stack.remove(0))
+                .or_else(|| s.windows.range(..removed).next_back().map(|(i, _)| *i))
                 .or_else(|| s.windows.keys().next_back().copied());
             if let Some(n) = next {
                 s.current = n;
             }
-            s.last = None;
         }
         if self.session_options(sid).renumber_windows {
             self.renumber_windows(sid);
@@ -307,18 +303,14 @@ impl Server {
         let Some(s) = self.sessions.get_mut(&sid) else {
             return;
         };
-        let current_win = s.windows.get(&s.current).copied();
-        let last_win = s.last.and_then(|l| s.windows.get(&l).copied());
-        let ordered: Vec<WindowId> = s.windows.values().copied().collect();
-        s.windows = ordered
-            .iter()
-            .enumerate()
-            .map(|(i, w)| (base + i as u32, *w))
-            .collect();
-        if let Some(c) = current_win.and_then(|w| s.index_of(w)) {
-            s.current = c;
-        }
-        s.last = last_win.and_then(|w| s.index_of(w));
+        s.renumber(|windows| {
+            let ordered: Vec<WindowId> = windows.values().copied().collect();
+            *windows = ordered
+                .iter()
+                .enumerate()
+                .map(|(i, w)| (base + i as u32, *w))
+                .collect();
+        });
         self.mark_session_dirty(sid);
     }
 
@@ -461,8 +453,7 @@ impl Server {
         let s = self.sessions.get_mut(&session).ok_or("no such session")?;
         s.windows.insert(index, wid);
         if select {
-            s.last = Some(s.current);
-            s.current = index;
+            s.set_current(index);
         }
         self.mark_session_dirty(session);
         Ok(wid)

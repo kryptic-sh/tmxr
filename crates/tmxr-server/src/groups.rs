@@ -69,7 +69,7 @@ impl Server {
             && let Some(&first) = s.windows.keys().next()
         {
             s.current = first;
-            s.last = None;
+            s.stack.clear();
         }
     }
 
@@ -120,16 +120,15 @@ impl Server {
             return;
         };
         if !windows.contains_key(&s.current) {
-            let last = s.last.filter(|l| windows.contains_key(l));
+            let last = s.last().filter(|l| windows.contains_key(l));
             let lower = windows.range(..s.current).next_back().map(|(i, _)| *i);
             let higher = windows.range(s.current..).next().map(|(i, _)| *i);
             if let Some(i) = last.or(lower).or(higher) {
                 s.current = i;
             }
         }
-        s.last = s
-            .last
-            .filter(|l| windows.contains_key(l) && *l != s.current);
+        let current = s.current;
+        s.stack.retain(|l| windows.contains_key(l) && *l != current);
         let old = std::mem::replace(&mut s.windows, windows.clone());
         for w in windows.values() {
             if let Some(win) = self.windows.get_mut(w) {

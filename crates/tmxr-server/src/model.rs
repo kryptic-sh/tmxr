@@ -279,7 +279,9 @@ pub struct Session {
     /// index → window.
     pub windows: BTreeMap<u32, WindowId>,
     pub current: u32,
-    pub last: Option<u32>,
+    /// The windows visited before the current one, the latest first, as
+    /// tmux's `lastw` stack: the current window is never on it.
+    pub stack: Vec<u32>,
     pub cwd: PathBuf,
     /// The session environment: `update-environment` variables captured from
     /// the creating client, and `set-environment` changes.
@@ -300,6 +302,40 @@ pub struct Session {
 }
 
 impl Session {
+    /// The window before the current one (`last-window`, `!`).
+    pub fn last(&self) -> Option<u32> {
+        self.stack.first().copied()
+    }
+
+    /// Make window `index` current, as tmux's session_set_current: the
+    /// current one goes on top of the stack and `index` leaves it.
+    pub fn set_current(&mut self, index: u32) {
+        if self.current == index {
+            return;
+        }
+        self.stack.retain(|&i| i != index);
+        if self.windows.contains_key(&self.current) {
+            self.stack.insert(0, self.current);
+        }
+        self.current = index;
+    }
+
+    /// The windows renumbered by `renumber`, the current window and the
+    /// stack kept on the same windows.
+    pub fn renumber(&mut self, renumber: impl FnOnce(&mut BTreeMap<u32, WindowId>)) {
+        let current = self.current_window();
+        let stack: Vec<WindowId> = self
+            .stack
+            .iter()
+            .filter_map(|i| self.windows.get(i).copied())
+            .collect();
+        renumber(&mut self.windows);
+        if let Some(c) = current.and_then(|w| self.index_of(w)) {
+            self.current = c;
+        }
+        self.stack = stack.into_iter().filter_map(|w| self.index_of(w)).collect();
+    }
+
     pub fn current_window(&self) -> Option<WindowId> {
         self.windows.get(&self.current).copied()
     }

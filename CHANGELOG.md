@@ -503,6 +503,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A session remembers every window visited, as tmux's stack**: killing the
+  current window goes back to the one before it and `last-window` still has the
+  one before that, where it said `no last window`; with none, the previous index
+  is taken (wrapping to the highest), as tmux's, not the next.
+  `#{session_stack}` and `#{window_stack_index}` show the stack.
 - **The Homebrew formula loads on Homebrew 7.** Homebrew now loads every formula
   in a tap for each OS and architecture when it taps it, and this one only had
   its URLs under `on_macos`, so `brew tap kryptic-sh/tap` failed with "invalid

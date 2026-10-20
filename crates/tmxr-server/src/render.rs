@@ -856,7 +856,7 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
                 .or_else(|| set(&options.window_status_style))
                 .unwrap_or_default(),
         );
-        if session.last == Some(*idx)
+        if session.last() == Some(*idx)
             && let Some(last) = set(&options.window_status_last_style)
         {
             window_base = window_base.patch(last);

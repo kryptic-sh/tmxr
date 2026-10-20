@@ -51,8 +51,10 @@ impl Server {
             if s.current == old {
                 s.current = index;
             }
-            if s.last == Some(old) {
-                s.last = Some(index);
+            for l in &mut s.stack {
+                if *l == old {
+                    *l = index;
+                }
             }
         } else {
             self.unlink_window_from(src, wid);
@@ -82,17 +84,13 @@ impl Server {
         let s = self.sessions.get_mut(&sid)?;
         let idx = if before { at } else { at.checked_add(1)? };
         let free = (idx..u32::MAX).find(|i| !s.windows.contains_key(i))?;
-        let current = s.windows.get(&s.current).copied();
-        let last = s.last.and_then(|l| s.windows.get(&l).copied());
-        for i in (idx..free).rev() {
-            if let Some(w) = s.windows.remove(&i) {
-                s.windows.insert(i + 1, w);
+        s.renumber(|windows| {
+            for i in (idx..free).rev() {
+                if let Some(w) = windows.remove(&i) {
+                    windows.insert(i + 1, w);
+                }
             }
-        }
-        if let Some(c) = current.and_then(|w| s.index_of(w)) {
-            s.current = c;
-        }
-        s.last = last.and_then(|w| s.index_of(w));
+        });
         self.mark_session_dirty(sid);
         Some(idx)
     }

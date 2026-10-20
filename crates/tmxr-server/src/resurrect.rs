@@ -257,7 +257,7 @@ pub fn capture(srv: &Server) -> Save {
             name: s.name.clone(),
             cwd: s.cwd.clone(),
             current: s.current,
-            last: s.last,
+            last: s.last(),
             windows: s
                 .windows
                 .iter()
@@ -473,7 +473,10 @@ pub fn apply(srv: &mut Server, save: &Save, size: (u16, u16)) -> Result<Restored
             if sess.windows.contains_key(&cur) {
                 sess.current = cur;
             }
-            sess.last = last.filter(|l| sess.windows.contains_key(l));
+            sess.stack = last
+                .filter(|l| sess.windows.contains_key(l))
+                .into_iter()
+                .collect();
         }
     }
     done.missing_dirs.sort();

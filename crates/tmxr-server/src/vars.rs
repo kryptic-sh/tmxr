@@ -110,6 +110,7 @@ pub const NAMES: &[&str] = &[
     "session_marked",
     "session_name",
     "session_path",
+    "session_stack",
     "session_windows",
     "socket_path",
     "start_time",
@@ -141,6 +142,7 @@ pub const NAMES: &[&str] = &[
     "window_panes",
     "window_raw_flags",
     "window_silence_flag",
+    "window_stack_index",
     "window_start_flag",
     "window_visible_layout",
     "window_width",
@@ -700,7 +702,7 @@ impl<'a> Context for Vars<'a> {
             "window_active" => flag(session?.current_window() == Some(window?.id)),
             "window_last_flag" => {
                 let s = session?;
-                flag(s.last.is_some() && s.last == s.index_of(window?.id))
+                flag(s.last().is_some() && s.last() == s.index_of(window?.id))
             }
             // tmux's window_printable_flags: escaped for a format drawn
             // after (`##` for activity), and raw.
@@ -711,7 +713,7 @@ impl<'a> Context for Vars<'a> {
                 let flags = w.flags(
                     s.id,
                     idx == Some(s.current),
-                    idx.is_some() && idx == s.last,
+                    idx.is_some() && idx == s.last(),
                     srv.window_is_marked(w.id),
                 );
                 if name == "window_flags" {
@@ -778,6 +780,26 @@ impl<'a> Context for Vars<'a> {
             "buffer_mode_format" => BUFFER_MODE_FORMAT.to_owned(),
             "client_mode_format" => CLIENT_MODE_FORMAT.to_owned(),
             "tree_mode_format" => TREE_MODE_FORMAT.to_owned(),
+            // The current window, then the ones before it, latest first,
+            // as tmux's lastw stack.
+            "session_stack" => {
+                let s = session?;
+                std::iter::once(s.current)
+                    .chain(s.stack.iter().copied())
+                    .map(|i| i.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            }
+            // Where the window is on that stack from 1, 0 off it.
+            "window_stack_index" => {
+                let s = session?;
+                let idx = s.index_of(window?.id);
+                s.stack
+                    .iter()
+                    .position(|&i| Some(i) == idx)
+                    .map_or(0, |p| p + 1)
+                    .to_string()
+            }
             "pane_format" => flag(self.kind == Kind::Pane),
             "window_format" => flag(self.kind == Kind::Window),
             "session_format" => flag(self.kind == Kind::Session),

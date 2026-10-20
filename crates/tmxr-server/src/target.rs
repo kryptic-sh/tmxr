@@ -302,7 +302,7 @@ fn window_index(srv: &Server, sid: SessionId, spec: &str) -> Res<u32> {
     };
     match spec {
         _ if exact => {}
-        "!" | "{last}" => return s.last.ok_or_else(|| "no last window".into()),
+        "!" | "{last}" => return s.last().ok_or_else(|| "no last window".into()),
         "^" | "{start}" => return indices.first().copied().ok_or_else(|| "no windows".into()),
         "$" | "{end}" => return indices.last().copied().ok_or_else(|| "no windows".into()),
         "{next}" => return step(1, ""),

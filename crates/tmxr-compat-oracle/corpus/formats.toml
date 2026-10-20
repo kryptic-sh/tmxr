@@ -647,3 +647,36 @@ checks = [
 name = "strftime_week_numbers_as_tmux"
 steps = []
 checks = [{ command = "display -p '%U %W %V %G %g %x %z'" }]
+
+[[cases]]
+name = "the_window_stack_as_tmux"
+steps = [
+  { run = "new-window -t o:1" },
+  { run = "new-window -t o:2" },
+  { run = "new-window -t o:3" },
+  { run = "select-window -t o:1" },
+  { run = "select-window -t o:2" },
+  { run = "select-window -t o:3" },
+  { run = "set -g @a '#{session_stack} #{W:#{window_index}=#{window_stack_index}#{window_flags},}'" },
+  { run = "kill-window -t o:3" },
+  { run = "set -gF @b '#{session_stack} #{W:#{window_index}=#{window_stack_index}#{window_flags},}'" },
+  { run = "last-window -t o" },
+]
+checks = [
+  { command = "list-windows -t o -F '#{window_index}#{window_flags}'" },
+  { format = "#{session_stack} #{W:#{window_index}=#{window_stack_index},}" },
+  { command = "show -gv @b" },
+]
+
+[[cases]]
+name = "killing_the_current_window_with_no_last_goes_back_as_tmux"
+steps = [
+  { run = "new-window -d -t o:1" },
+  { run = "new-window -d -t o:2" },
+  { run = "new-window -d -t o:3" },
+  { run = "kill-window -t o:0" },
+  { run = "set -gF @a '#{window_index}'" },
+  { run = "select-window -t o:2" },
+  { run = "kill-window -t o:2" },
+]
+checks = [{ format = "#{@a} #{window_index} #{session_stack}" }]
