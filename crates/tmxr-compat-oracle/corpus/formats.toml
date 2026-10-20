@@ -489,3 +489,20 @@ checks = [{ format = "#{c:colour0} #{c:colour1} #{c:colour2} #{c:colour3} #{c:co
 [[cases]]
 name = "c_modifier_reads_colour_names_as_tmux"
 checks = [{ format = "[#{c:red}] [#{c:BrightBlue}] [#{c:7}] [#{c:90}] [#{c:97}] [#{c:98}] [#{c:8}] [#{c:default}] [#{c:terminal}] [#{c:#ABCdef}] [#{c:#abcde}] [#{c:grey}] [#{c:gray50}] [#{c:grey33}] [#{c:GREY100}] [#{c:grey101}] [#{c:color12}] [#{c:colour256}] [#{c:nonsense}] [#{c:#{e|+|:90,1}}]" }]
+
+[[cases]]
+name = "a_format_syntax_error_ends_the_expansion_as_tmux"
+checks = [
+  { format = "A#{==:a}B" },
+  { format = "A#{!=:a}B" },
+  { format = "A#{<:a}B" },
+  { format = "A#{>=:a}B" },
+  { format = "A#{m:a}B" },
+  { format = "A#{m/ri:a}B" },
+  { format = "A#{R:x}B" },
+  { format = "A#{==:a,a,a}B" },
+  { format = "A#{==:a,a}B" },
+  { format = "[#{R:ab,3}][#{m:*a*,bab}]" },
+  { format = "A#{?#{==:a},x,y}B" },
+  { format = "#{&&:1,1,0} #{&&:1,1,1} #{||:0,0,1} #{||:0,0} #{&&:1}" },
+]

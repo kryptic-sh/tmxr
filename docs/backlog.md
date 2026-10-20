@@ -454,15 +454,16 @@ table. What has been verified, and how:
     X11's names (`orchid`, `navy blue`), which tmux 3.6's colour_byname takes
     from a table of 578 (`tmxr_command::colour::rgb` reads everything else tmux
     reads, compared in the oracle; copying the table is the open choice); a
-    syntax error ends tmux's whole expansion (2026-10-18, tmux 3.6: `A#{==:a}B`,
-    `A#{m:a}B` and `A#{R:x}B` all print `A`) where tmxr expands only that item
-    (`==:` compares against an empty right side); many of tmux's format
-    variables (compare tmux's `format_table` with `vars.rs` for the list;
-    `origin_flag`, `wrap_flag`, `insert_flag`, `scroll_region_*`,
-    `alternate_saved_*`, `pane_tabs` and `cursor_shape` / `cursor_colour` need
-    terminal state the `vt100` crate does not expose); styles `align=` `fill=`
-    `list=` `range=` `push-default` / `pop-default`, strikethrough, blink,
-    overline, curly and coloured underlines.
+    syntax error ends the expansion as tmux's for a comparison, `m:` or `R:`
+    without its comma (`format::expand_item`), but not for tmux's other
+    failures, not compared: a loop or `N:` whose lookup fails (`format_loop_*`,
+    `format_window_name` returning none); many of tmux's format variables
+    (compare tmux's `format_table` with `vars.rs` for the list; `origin_flag`,
+    `wrap_flag`, `insert_flag`, `scroll_region_*`, `alternate_saved_*`,
+    `pane_tabs` and `cursor_shape` / `cursor_colour` need terminal state the
+    `vt100` crate does not expose); styles `align=` `fill=` `list=` `range=`
+    `push-default` / `pop-default`, strikethrough, blink, overline, curly and
+    coloured underlines.
   - Options: the status line is one row, at the bottom or
     (`status-position top`) the top, or none with `status off`
     (`Server::status_rows`, `Server::window_top`): no `status` `2`–`5`,

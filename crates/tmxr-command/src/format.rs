@@ -387,7 +387,11 @@ fn expand_depth(fmt: &str, ctx: &dyn Context, pass: Pass) -> String {
         match chars.next() {
             Some('{') => match matching_brace(&after[1..]) {
                 Some(end) => {
-                    out.push_str(&expand_item(&after[1..1 + end], ctx, pass));
+                    // A syntax error ends the expansion there, as tmux's.
+                    let Some(value) = expand_item(&after[1..1 + end], ctx, pass) else {
+                        return out;
+                    };
+                    out.push_str(&value);
                     rest = &after[1 + end + 1..];
                     continue;
                 }
@@ -484,7 +488,69 @@ fn truthy(s: &str) -> bool {
     !s.is_empty() && s != "0"
 }
 
-fn expand_item(body: &str, ctx: &dyn Context, pass: Pass) -> String {
+/// `s` cut at its first comma outside `#{…}`, as tmux's format_choose: the
+/// right side is all the rest. `None` without one, which tmux takes as a
+/// syntax error.
+fn split_first(s: &str) -> Option<(&str, &str)> {
+    let first = split_top(s).into_iter().next()?;
+    Some((first, s.get(first.len() + 1..)?))
+}
+
+/// One `#{…}` item's value, or `None` for a syntax error, which ends the
+/// expansion holding the item as tmux's format_replace failing does: a
+/// comparison, `m:` or `R:` without its comma.
+fn expand_item(body: &str, ctx: &dyn Context, pass: Pass) -> Option<String> {
+    let ex = |s: &str| expand_depth(s, ctx, pass.deeper());
+    let flag = |b: bool| if b { "1" } else { "0" }.to_owned();
+    // ||: and &&: over any number of parts, as tmux's format_bool_op_n.
+    for (op, and) in [("||:", false), ("&&:", true)] {
+        if let Some(rest) = body.strip_prefix(op) {
+            let mut parts = split_top(rest).into_iter().map(|p| truthy(&ex(p)));
+            return Some(flag(if and {
+                parts.all(|t| t)
+            } else {
+                parts.any(|t| t)
+            }));
+        }
+    }
+    for (op, f) in [
+        ("==:", (|a: &str, b: &str| a == b) as fn(&str, &str) -> bool),
+        ("!=:", |a, b| a != b),
+        // tmux compares with strcmp: as strings, not numbers.
+        ("<=:", |a, b| a <= b),
+        (">=:", |a, b| a >= b),
+        ("<:", |a, b| a < b),
+        (">:", |a, b| a > b),
+    ] {
+        if let Some(rest) = body.strip_prefix(op) {
+            let (a, b) = split_first(rest)?;
+            return Some(flag(f(&ex(a), &ex(b))));
+        }
+    }
+    // R: the text repeated the given number of times, from 1 to tmux's
+    // limit; any other count gives nothing.
+    if let Some(rest) = body.strip_prefix("R:") {
+        let (text, count) = split_first(rest)?;
+        return Some(
+            ex(count)
+                .parse::<usize>()
+                .ok()
+                .filter(|n| (1..=MAX_REPEAT).contains(n))
+                .map(|n| ex(text).repeat(n))
+                .unwrap_or_default(),
+        );
+    }
+    if let Some((mods, inner)) = value_modifiers(body)
+        && mods.iter().any(|m| matches!(m, Mod::Match(_)))
+        && split_first(inner).is_none()
+    {
+        return None;
+    }
+    Some(item_value(body, ctx, pass))
+}
+
+/// The value of an item that cannot be a syntax error.
+fn item_value(body: &str, ctx: &dyn Context, pass: Pass) -> String {
     let ex = |s: &str| expand_depth(s, ctx, pass.deeper());
     if let Some(cond) = body.strip_prefix('?') {
         // `#{?c1,v1,c2,v2,…,else}`: the value of the first true condition,
@@ -506,24 +572,6 @@ fn expand_item(body: &str, ctx: &dyn Context, pass: Pass) -> String {
         }
         return parts.get(i).map(|p| ex(p)).unwrap_or_default();
     }
-    for (op, f) in [
-        ("==:", (|a: &str, b: &str| a == b) as fn(&str, &str) -> bool),
-        ("!=:", |a, b| a != b),
-        ("||:", |a, b| truthy(a) || truthy(b)),
-        ("&&:", |a, b| truthy(a) && truthy(b)),
-        // tmux compares with strcmp: as strings, not numbers.
-        ("<=:", |a, b| a <= b),
-        (">=:", |a, b| a >= b),
-        ("<:", |a, b| a < b),
-        (">:", |a, b| a > b),
-    ] {
-        if let Some(rest) = body.strip_prefix(op) {
-            let parts = split_top(rest);
-            let a = ex(parts.first().copied().unwrap_or_default());
-            let b = ex(parts.get(1).copied().unwrap_or_default());
-            return if f(&a, &b) { "1" } else { "0" }.to_owned();
-        }
-    }
     // !: and !!: whether the text expands to something false or true; it is
     // expanded as a format, not looked up as a variable, as tmux's.
     if let Some(text) = body.strip_prefix("!!:") {
@@ -541,20 +589,6 @@ fn expand_item(body: &str, ctx: &dyn Context, pass: Pass) -> String {
         if let Some((flags, fmt)) = body.strip_prefix(letter).and_then(modifier_args) {
             return expand_loop(kind, flags, fmt, ctx, pass);
         }
-    }
-    // R: the text repeated the given number of times, from 1 to tmux's
-    // limit; any other count, or no count, gives nothing.
-    if let Some(rest) = body.strip_prefix("R:") {
-        let parts = split_top(rest);
-        let [text, count] = parts.as_slice() else {
-            return String::new();
-        };
-        return ex(count)
-            .parse::<usize>()
-            .ok()
-            .filter(|n| (1..=MAX_REPEAT).contains(n))
-            .map(|n| ex(text).repeat(n))
-            .unwrap_or_default();
     }
     // t: a time in seconds as ctime writes it; t/p as short as its age
     // allows; t/f/FORMAT by strftime; nothing when the value is not a time,
@@ -847,10 +881,9 @@ fn apply_modifiers(mods: &[Mod<'_>], inner: &str, ctx: &dyn Context, pass: Pass)
     let mut value = if mods.contains(&Mod::Literal) {
         inner.to_owned()
     } else if let Some(flags) = matching {
-        let parts = split_top(inner);
-        let pattern = ex(parts.first().copied().unwrap_or_default());
-        let text = ex(parts.get(1).copied().unwrap_or_default());
-        if format_match(flags, &pattern, &text) {
+        // expand_item has refused one without its comma.
+        let (pattern, text) = split_first(inner).unwrap_or((inner, ""));
+        if format_match(flags, &ex(pattern), &ex(text)) {
             "1"
         } else {
             "0"
@@ -1276,6 +1309,21 @@ mod tests {
         assert_eq!(x("#{?#{==:#S,main},yes,no}"), "yes");
         assert_eq!(x("#{&&:#{client_prefix},#{zero}}"), "0");
         assert_eq!(x("#{||:#{client_prefix},#{zero}}"), "1");
+        assert_eq!(
+            x("#{&&:1,1,#{zero}} #{||:0,0,1}"),
+            "0 1",
+            "any number of parts"
+        );
+        assert_eq!(x("#{==:a,a,a}"), "0", "the right side is all the rest");
+        // A syntax error ends the expansion holding it, as tmux's.
+        assert_eq!(x("A#{==:a}B"), "A");
+        assert_eq!(x("A#{m:a}B#{R:x}"), "A");
+        assert_eq!(x("A#{R:x}B"), "A");
+        assert_eq!(
+            x("A#{?#{<:a},x,y}B"),
+            "AyB",
+            "an inner one ends only its own"
+        );
     }
 
     #[test]

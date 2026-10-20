@@ -347,6 +347,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Format syntax errors end the expansion, as tmux's**: a comparison, `m:` or
+  `R:` without its comma (`A#{==:a}B`) now stops the format there (`A`), where
+  it compared against an empty side; a comparison's right side is all the text
+  after its first comma, and `&&:` / `||:` take any number of parts.
 - **`command-prompt -i` runs its template as tmux's**: once as it opens, then
   after every edit, the text prefixed `=`, or `-` / `+` after `C-r` / `C-s`
   (which on an empty input bring back the `-I` text, the prompt opening empty);
