@@ -819,3 +819,16 @@ checks = [
   { command = "display -p '[#{T;=/#{@n}:@s}]'" },
   { command = "display -p '[#{=/3/>:#[fg=red]abcdef#[default]}]'" },
 ]
+
+[[cases]]
+name = "status_left_takes_alignment_as_tmux"
+size = [60, 6]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "set -g status-left 'LEFT#[align=right]RL'" },
+  { run = "set -g status-right ''" },
+  { sleep = 0.3 },
+]
+checks = [{ screen_find = "LEFT" }, { screen_find = "RL", expect = "58,5" }]

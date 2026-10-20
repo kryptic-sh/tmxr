@@ -13,7 +13,7 @@ use tmxr_config::{PaneIndicators, PaneLines};
 
 use crate::backend::AnsiBackend;
 use crate::copy::cell_style;
-use crate::model::{ClientId, PaneId, SessionId, WindowId};
+use crate::model::{ClientId, PaneId, WindowId};
 use crate::overlay::{Overlay, PickerOverlay, Previewed};
 use crate::server::Server;
 use crate::vars::Vars;
@@ -93,12 +93,6 @@ pub(crate) fn apply(base: Style, s: &format::Style) -> Style {
         }
     }
     out
-}
-
-/// A status line part's style option, or nothing for `default`, which adds
-/// nothing to the status line's style, as tmux's.
-fn part_style(spec: &str, vars: &Vars<'_>) -> Option<Style> {
-    (spec != "default").then(|| style_option(spec, vars))
 }
 
 /// A style option (`fg=…,bg=…`), format-expanded first.
@@ -755,7 +749,7 @@ fn draw_screen(
 }
 
 fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u16) -> StatusRanges {
-    let mut ranges = StatusRanges::default();
+    let ranges = StatusRanges::default();
     let Some(att) = srv.clients.get(&id).and_then(|c| c.att.as_ref()) else {
         return ranges;
     };
@@ -800,129 +794,10 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
         return ranges;
     }
 
-    // A first line set apart from tmux's default is drawn from its format,
-    // its clicks from its ranges.
-    if item(0) != default_status_format() {
-        let text = format::expand_time(item(0), &vars);
-        return status_ranges(&crate::format_draw::draw(buf, y, cols, base, &text));
-    }
-
-    // The sides and the window entries with their strftime sequences filled
-    // in, as tmux's default status-format does through #{T:…}.
-    let right = format::expand_time(&opts.status_right, &vars);
-    let right_w = runs_width(&right).min(opts.status_right_length).min(cols);
-    let limit = cols - right_w;
-    let left = format::expand_time(&opts.status_left, &vars);
-    let left_base = base.patch(part_style(&opts.status_left_style, &vars).unwrap_or_default());
-    let x = draw_runs(
-        buf,
-        0,
-        y,
-        limit.min(opts.status_left_length),
-        left_base,
-        &left,
-    );
-    ranges.left_end = x;
-    // Each window's entry and the separator after it, measured first so
-    // the list can be placed by status-justify.
-    let mut entries = Vec::new();
-    let count = session.windows.len();
-    for (n, (idx, wid)) in session.windows.iter().enumerate() {
-        let Some(win) = srv.windows.get(wid) else {
-            continue;
-        };
-        let wvars = Vars {
-            srv,
-            session: Some(session.id),
-            window: Some(*wid),
-            pane: Some(win.active),
-            client: Some(id),
-            kind: crate::vars::Kind::Window,
-        };
-        let options = srv.window_options(*wid);
-        let current = *idx == session.current;
-        let fmt = if current {
-            &options.window_status_current_format
-        } else {
-            &options.window_status_format
-        };
-        // The entry's style, as tmux's default status-format builds it: the
-        // current window's own unless `default`, the last window's added.
-        let set = |spec: &str| part_style(spec, &wvars);
-        let mut window_base = base.patch(
-            current
-                .then(|| set(&options.window_status_current_style))
-                .flatten()
-                .or_else(|| set(&options.window_status_style))
-                .unwrap_or_default(),
-        );
-        if session.last() == Some(*idx)
-            && let Some(last) = set(&options.window_status_last_style)
-        {
-            window_base = window_base.patch(last);
-        }
-        // Then the bell's style, else activity's or silence's, as tmux's.
-        let alerted = |alerts: &std::collections::BTreeSet<SessionId>| alerts.contains(&session.id);
-        let alert = alerted(&win.bell)
-            .then(|| set(&options.window_status_bell_style))
-            .flatten()
-            .or_else(|| {
-                (alerted(&win.activity) || alerted(&win.silence))
-                    .then(|| set(&options.window_status_activity_style))
-                    .flatten()
-            });
-        if let Some(alert) = alert {
-            window_base = window_base.patch(alert);
-        }
-        let text = format::expand_time(fmt, &wvars);
-        let sep = if n + 1 < count {
-            format::expand(&options.window_status_separator, &wvars)
-        } else {
-            String::new()
-        };
-        entries.push((*idx, window_base, text, sep));
-    }
-    let list_w: u16 = entries
-        .iter()
-        .map(|(_, _, text, sep)| runs_width(text).saturating_add(runs_width(sep)))
-        .sum();
-    // Where the list goes and where status-right goes, as tmux's
-    // format_draw places a list aligned by status-justify; a list too long
-    // for its room is cut at its end.
-    let room = cols.saturating_sub(right_w).saturating_sub(x);
-    let shown = list_w.min(room);
-    let (start, end, right_x) = match opts.status_justify {
-        tmxr_config::StatusJustify::Left => (x, limit, cols - right_w),
-        tmxr_config::StatusJustify::Centre => {
-            let middle = x + (cols - right_w - x) / 2;
-            let start = middle - shown / 2;
-            (start, start + shown, cols - right_w)
-        }
-        // status-right follows the list in tmux's right-aligned part, so
-        // the list ends where it starts.
-        tmxr_config::StatusJustify::Right => {
-            let end = cols - right_w;
-            (end - shown, end, end)
-        }
-        tmxr_config::StatusJustify::AbsoluteCentre => {
-            let start = (cols - shown) / 2;
-            (start, start + shown, cols - right_w)
-        }
-    };
-    ranges.right_start = right_x;
-    let mut x = start;
-    for (idx, window_base, text, sep) in &entries {
-        let at = x;
-        x = draw_runs(buf, x, y, end, *window_base, text);
-        ranges.windows.push((at, x, *idx));
-        if x >= end {
-            break;
-        }
-        x = draw_runs(buf, x, y, end, base, sep);
-    }
-    let right_base = base.patch(part_style(&opts.status_right_style, &vars).unwrap_or_default());
-    draw_runs(buf, right_x, y, right_x + right_w, right_base, &right);
-    ranges
+    // The first line drawn from its format, tmux's default unless set, its
+    // clicks from its ranges.
+    let text = format::expand_time(item(0), &vars);
+    status_ranges(&crate::format_draw::draw(buf, y, cols, base, &text))
 }
 
 /// `row` cleared to blanks in `style`.
@@ -968,17 +843,6 @@ fn draw_ask(
         buf.set_stringn(0, row, &text, usize::from(cols), style);
     }
     true
-}
-
-/// tmux's default first status line, which tmxr's own status line draws.
-fn default_status_format() -> &'static str {
-    static DEFAULT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-    DEFAULT.get_or_init(|| {
-        let config = tmxr_config::defaults();
-        tmxr_config::OptionValue::items(&config.session.status_format)
-            .and_then(|items| items.get(&0).cloned())
-            .unwrap_or_default()
-    })
 }
 
 /// What clicks reach on a line `format_draw` drew, from its ranges: the
