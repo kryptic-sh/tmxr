@@ -21,6 +21,10 @@ pub struct SpawnSpec {
     pub env_remove: Vec<String>,
     pub rows: u16,
     pub cols: u16,
+    /// `argv` is a shell to start as a login shell, as tmux's spawn starts a
+    /// pane given no command: `-` and its name as `argv[0]`, and `SHELL` set
+    /// to it. Unix only: Windows runs the shell as it is.
+    pub login_shell: bool,
 }
 
 /// Something that happened to a pane's program, reported from the pane's
@@ -77,7 +81,14 @@ impl Pty {
         } else {
             spec.argv.iter().map(OsString::from).collect()
         };
-        let mut cmd = CommandBuilder::from_argv(argv);
+        // portable-pty's default program is `$SHELL` as a login shell.
+        let login = cfg!(unix) && spec.login_shell;
+        let shell = argv[0].clone();
+        let mut cmd = if login {
+            CommandBuilder::new_default_prog()
+        } else {
+            CommandBuilder::from_argv(argv)
+        };
         // A pane inherits the server's environment, as in tmux. On Windows
         // portable-pty lays the registry's variables over it (a fresh login's
         // PATH, losing what the shell that started tmxr added); setting each
@@ -94,6 +105,9 @@ impl Pty {
         }
         for (k, v) in &spec.env {
             cmd.env(k, v);
+        }
+        if login {
+            cmd.env("SHELL", shell);
         }
 
         let mut child = pair.slave.spawn_command(cmd).map_err(io::Error::other)?;

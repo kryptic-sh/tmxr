@@ -57,7 +57,7 @@ impl Server {
         rows: u16,
     ) -> Result<(), String> {
         let started = match argv {
-            Some(argv) => self.start_pty(pid, session, argv, cwd, env, cols, rows)?,
+            Some(argv) => self.start_pty(pid, session, argv, true, cwd, env, cols, rows)?,
             None => {
                 let spawn = self.next_spawn;
                 self.next_spawn += 1;
@@ -156,13 +156,16 @@ impl Server {
 
     /// Start `argv` (the default shell when empty, a shell command line when
     /// one word with spaces) on a PTY whose events arrive as pane `pid`'s,
-    /// in `session`'s environment plus `extra_env`.
+    /// in `session`'s environment plus `extra_env`. With `login`, an empty
+    /// `argv` starts the shell as a login shell, as tmux starts a pane given
+    /// no command (a popup's shell is not one).
     #[allow(clippy::too_many_arguments)]
     pub fn start_pty(
         &mut self,
         pid: PaneId,
         session: SessionId,
         argv: &[String],
+        login: bool,
         cwd: PathBuf,
         extra_env: &[(String, String)],
         cols: u16,
@@ -180,6 +183,7 @@ impl Server {
             .default_shell
             .clone()
             .filter(|s| !s.is_empty());
+        let login_shell = login && argv.is_empty();
         let argv = if argv.is_empty() {
             shell.map(|s| vec![s]).unwrap_or_default()
         } else if argv.len() == 1 && argv[0].contains(' ') {
@@ -199,6 +203,7 @@ impl Server {
             env_remove,
             rows,
             cols,
+            login_shell,
         };
         let events = self.events.clone();
         let spawn = self.next_spawn;

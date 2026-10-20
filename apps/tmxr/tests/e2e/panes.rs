@@ -778,3 +778,24 @@ fn pane_tty_is_the_terminal_the_program_sees() {
         );
     }
 }
+
+/// A pane given no command runs its shell as a login shell, as tmux's spawn
+/// does: `-` and the shell's name as `argv[0]`, so it reads the user's login
+/// files. A pane given a command runs it as it is. Unix only: Windows has no
+/// login shells.
+#[cfg(unix)]
+#[test]
+fn a_pane_without_a_command_runs_a_login_shell() {
+    let t = Tmxr::new("login");
+    t.run(&["new-session", "-d", "-s", "lg"]);
+    t.run(&["new-window", "-d", "-t", "lg:1", "sh"]);
+    for (target, name) in [("lg:0", "[-sh]"), ("lg:1", "[sh]")] {
+        t.wait_prompt(target);
+        t.run(&["send-keys", "-t", target, r#"echo "[$0]""#, "Enter"]);
+        t.wait_run(
+            &["capture-pane", "-p", "-t", target],
+            &format!("{target}'s shell named {name}"),
+            |o| o.lines().any(|l| l.trim_end() == name),
+        );
+    }
+}

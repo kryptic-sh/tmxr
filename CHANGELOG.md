@@ -466,6 +466,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **A pane given no command runs its shell as a login shell** (Unix), as tmux's
+  does: `-` and the shell's name as `argv[0]`, and `SHELL` set to it, so the
+  shell reads `~/.profile`, `~/.bash_profile` or `~/.zprofile` as it would in
+  tmux. A pane given a command, and a popup, run it as before.
 - **A `{ … }` block is kept as tmux keeps it**: its commands printed back by
   their full names and requoted, a nested block in braces, `;;` between its
   lines (`set @z { display -p A }` shows `display-message -p A`, as tmux's). A

@@ -233,6 +233,7 @@ impl Server {
             id,
             spec.session,
             &spec.argv,
+            false,
             spec.cwd,
             &spec.env,
             inner.width.max(1),
