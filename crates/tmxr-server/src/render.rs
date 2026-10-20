@@ -773,11 +773,13 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
     let base = style_option(&spec, &vars);
     // The lines after the first, each its status-format item expanded and
     // laid out as tmux's format_draw; they stay under a message or prompt.
-    for line in 1..lines {
-        let item = tmxr_config::OptionValue::items(&opts.status_format)
+    let item = |line: u16| {
+        tmxr_config::OptionValue::items(&opts.status_format)
             .and_then(|items| items.get(&u32::from(line)))
-            .map_or("", String::as_str);
-        let text = format::expand_time(item, &vars);
+            .map_or("", String::as_str)
+    };
+    for line in 1..lines {
+        let text = format::expand_time(item(line), &vars);
         crate::format_draw::draw(buf, y + line, cols, base, &text);
     }
     buf.set_style(Rect::new(0, y, cols, 1), base);
@@ -813,6 +815,13 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
             return ranges;
         }
         _ => {}
+    }
+
+    // A first line set apart from tmux's default is drawn from its format,
+    // its clicks from its ranges.
+    if item(0) != default_status_format() {
+        let text = format::expand_time(item(0), &vars);
+        return status_ranges(&crate::format_draw::draw(buf, y, cols, base, &text));
     }
 
     // The sides and the window entries with their strftime sequences filled
@@ -915,6 +924,37 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
     }
     let right_base = base.patch(style_option(&opts.status_right_style, &vars));
     draw_runs(buf, right_x, y, right_x + right_w, right_base, &right);
+    ranges
+}
+
+/// tmux's default first status line, which tmxr's own status line draws.
+fn default_status_format() -> &'static str {
+    static DEFAULT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    DEFAULT.get_or_init(|| {
+        let config = tmxr_config::defaults();
+        tmxr_config::OptionValue::items(&config.session.status_format)
+            .and_then(|items| items.get(&0).cloned())
+            .unwrap_or_default()
+    })
+}
+
+/// What clicks reach on a line `format_draw` drew, from its ranges: the
+/// left part up to the last left range's end, the right part from the
+/// first right range's start, and each window's cells.
+fn status_ranges(spans: &[(u16, u16, crate::format_draw::Range)]) -> StatusRanges {
+    use crate::format_draw::Range;
+    let mut ranges = StatusRanges::default();
+    for &(start, end, range) in spans {
+        match range {
+            Range::Left => ranges.left_end = ranges.left_end.max(end),
+            Range::Right => ranges.right_start = ranges.right_start.min(start),
+            Range::Window(idx) => match ranges.windows.last_mut() {
+                Some(last) if last.2 == idx && last.1 == start => last.1 = end,
+                _ => ranges.windows.push((start, end, idx)),
+            },
+            Range::None => {}
+        }
+    }
     ranges
 }
 

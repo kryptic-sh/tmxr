@@ -3,7 +3,8 @@
 //! `#[align=…]`, the line filled by `#[fill=…]`, and `#[default]`,
 //! `#[push-default]` and `#[pop-default]` against the line's style. A list
 //! (`#[list=…]`) is drawn in its place, without tmux's markers for a list
-//! too long for its room, and ranges (mouse targets) are not kept.
+//! too long for its room. The left, right and window ranges (mouse targets)
+//! are kept; pane, session and user ranges are not.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -20,12 +21,23 @@ enum Align {
     AbsoluteCentre,
 }
 
-/// One run of the line: its text, its style and the part it goes in.
+/// What a click on a run reaches, as tmux's `#[range=…]`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Range {
+    None,
+    Left,
+    Right,
+    Window(u32),
+}
+
+/// One run of the line: its text, its style, the part it goes in and its
+/// range.
 #[derive(Debug, Clone, PartialEq)]
 struct Run {
     text: String,
     style: Style,
     align: Align,
+    range: Range,
 }
 
 /// `text` split into runs over `base`, and the style `#[fill=…]` gives the
@@ -34,6 +46,7 @@ fn runs(text: &str, base: Style) -> (Vec<Run>, Option<Style>) {
     let mut runs = Vec::new();
     let (mut current, mut default) = (base, base);
     let mut align = Align::Left;
+    let mut range = Range::None;
     let mut fill = None;
     // Inside a list's left or right marker: shown by tmux only when the
     // list is too long, so left out here.
@@ -49,6 +62,7 @@ fn runs(text: &str, base: Style) -> (Vec<Run>, Option<Style>) {
                 text: chunk.to_owned(),
                 style: current,
                 align,
+                range,
             });
         }
         let Some(after) = after else {
@@ -62,10 +76,17 @@ fn runs(text: &str, base: Style) -> (Vec<Run>, Option<Style>) {
                 "default" | "none" => current = default,
                 "push-default" => default = current,
                 "pop-default" => default = base,
-                "norange" | "nolist" => marker = false,
-                "list=on" | "list=focus" => marker = false,
+                "norange" => range = Range::None,
+                "nolist" | "list=on" | "list=focus" => marker = false,
                 "list=left-marker" | "list=right-marker" => marker = true,
-                _ if item.starts_with("range=") => {}
+                "range=left" => range = Range::Left,
+                "range=right" => range = Range::Right,
+                _ if item.starts_with("range=") => {
+                    range = item
+                        .strip_prefix("range=window|")
+                        .and_then(|i| i.parse().ok())
+                        .map_or(Range::None, Range::Window);
+                }
                 _ => {
                     if let Some(a) = item.strip_prefix("align=") {
                         align = match a {
@@ -99,7 +120,14 @@ fn width(text: &str) -> u16 {
 /// `base`: the left part from the left edge, the right part against the
 /// right edge, the centre part centred between them and the absolute-centre
 /// part on the whole line, each cut where it meets what is drawn already.
-pub fn draw(buf: &mut Buffer, y: u16, cols: u16, base: Style, text: &str) {
+/// Returns where each run with a range went: start, end and range.
+pub fn draw(
+    buf: &mut Buffer,
+    y: u16,
+    cols: u16,
+    base: Style,
+    text: &str,
+) -> Vec<(u16, u16, Range)> {
     let (runs, fill) = runs(text, base);
     let line = fill.unwrap_or(base);
     buf.set_style(Rect::new(0, y, cols, 1), line);
@@ -110,6 +138,7 @@ pub fn draw(buf: &mut Buffer, y: u16, cols: u16, base: Style, text: &str) {
     }
     let part = |align: Align| runs.iter().filter(move |r| r.align == align);
     let part_width = |align: Align| part(align).map(|r| width(&r.text)).sum::<u16>();
+    let mut spans = Vec::new();
     let mut draw_part = |align: Align, from: u16, to: u16| {
         let mut x = from;
         for r in part(align) {
@@ -117,6 +146,9 @@ pub fn draw(buf: &mut Buffer, y: u16, cols: u16, base: Style, text: &str) {
                 break;
             }
             let (nx, _) = buf.set_stringn(x, y, &r.text, usize::from(to - x), r.style);
+            if r.range != Range::None {
+                spans.push((x, nx, r.range));
+            }
             x = nx;
         }
         x
@@ -129,6 +161,7 @@ pub fn draw(buf: &mut Buffer, y: u16, cols: u16, base: Style, text: &str) {
     draw_part(Align::Centre, centre, right_start);
     let absolute = cols.saturating_sub(part_width(Align::AbsoluteCentre)) / 2;
     draw_part(Align::AbsoluteCentre, absolute.max(left_end), right_start);
+    spans
 }
 
 #[cfg(test)]
@@ -168,6 +201,26 @@ mod tests {
         );
         let fg: Vec<_> = runs.iter().map(|r| r.style.fg).collect();
         assert_eq!(fg, [Some(RED), Some(GREEN), Some(RED), None]);
+    }
+
+    #[test]
+    fn ranges_are_kept_where_their_runs_go() {
+        let mut buf = Buffer::empty(Rect::new(0, 0, 12, 1));
+        let spans = draw(
+            &mut buf,
+            0,
+            12,
+            Style::default(),
+            "#[range=left]L#[norange]-#[range=window|3]w3#[range=pane|%1]p#[align=right range=right]R",
+        );
+        assert_eq!(
+            spans,
+            [
+                (0, 1, Range::Left),
+                (2, 4, Range::Window(3)),
+                (11, 12, Range::Right)
+            ]
+        );
     }
 
     #[test]
