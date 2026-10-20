@@ -455,8 +455,6 @@ table. What has been verified, and how:
     process snapshots per pane per second in `util::refresh_commands`;
     `#{pane_current_path}` inspects the process on each expansion; `#{m:…}`
     compiles its regex on each expansion. Not measured.
-  - Large files: `copy/mod.rs` keeps `CopyMode` with its motions and search
-    together; they could part next.
   - A message over `MAX_FRAME` from the client (`load-buffer -` of more than 16
     MiB) fails on the client before it is sent; the server turns a reply that
     large into an error (`conn.rs`).

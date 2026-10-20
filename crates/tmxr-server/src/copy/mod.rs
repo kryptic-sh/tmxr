@@ -7,11 +7,15 @@
 
 mod commands;
 mod model;
+mod search;
+mod words;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 pub use commands::{command, enter, enter_from, refuses_args};
 pub use model::{Cell, Line, cell_style, colour, snapshot};
+pub use search::Search;
+pub use words::word_at;
 
 /// How the selection's moving end goes as the cursor moves, as tmux's
 /// selflag: by characters, or snapped to words or lines.
@@ -95,103 +99,8 @@ pub struct CopyMode {
     sel_made_at: (usize, usize),
 }
 
-/// The last search, for `search-again` and highlighting.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Search {
-    pub needle: String,
-    pub forward: bool,
-    /// `search-forward` / `-backward` take a regular expression, the `-text`
-    /// and incremental searches the text itself, as tmux's searchregex.
-    pub regex: bool,
-}
-
 /// tmux's default `word-separators`: ASCII punctuation but `_`.
 pub const WORD_SEPARATORS: &str = "!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~";
-
-/// Columns where `needle` starts in `line`: literal, and case-insensitive
-/// unless the needle has an uppercase letter (smart case).
-/// The characters that make a search a regular expression; one without
-/// them is searched for as text, as tmux's window_copy_search decides.
-const REGEX_CHARS: &[char] = &['^', '$', '*', '+', '(', ')', '?', '[', ']', '.', '\\'];
-
-/// The `(start, end)` columns of `needle`'s matches in `line`: as an
-/// extended regular expression when `regex` asks and the needle has one of
-/// [`REGEX_CHARS`] (a pattern that does not compile matches nothing), else
-/// literally; case-insensitive unless the needle has an uppercase letter
-/// (smart case), as tmux's searches are.
-fn matches(line: &[char], needle: &str, regex: bool) -> Vec<(usize, usize)> {
-    if regex && needle.contains(REGEX_CHARS) {
-        let Ok(re) = regex::RegexBuilder::new(needle)
-            .case_insensitive(!needle.chars().any(char::is_uppercase))
-            .build()
-        else {
-            return Vec::new();
-        };
-        let text: String = line.iter().collect();
-        // Byte offsets in the text to columns of the line.
-        let column = |byte: usize| text[..byte].chars().count();
-        return re
-            .find_iter(&text)
-            .filter(|m| !m.is_empty())
-            .map(|m| (column(m.start()), column(m.end())))
-            .collect();
-    }
-    let len = needle.chars().count();
-    match_starts(line, needle)
-        .into_iter()
-        .map(|x| (x, x + len))
-        .collect()
-}
-
-fn match_starts(line: &[char], needle: &str) -> Vec<usize> {
-    let needle: Vec<char> = needle.chars().collect();
-    if needle.is_empty() || needle.len() > line.len() {
-        return Vec::new();
-    }
-    let smart_case = needle.iter().any(|c| c.is_uppercase());
-    let eq = |a: char, b: char| {
-        if smart_case {
-            a == b
-        } else {
-            a.to_lowercase().eq(b.to_lowercase())
-        }
-    };
-    (0..=line.len() - needle.len())
-        .filter(|x| needle.iter().zip(&line[*x..]).all(|(a, b)| eq(*a, *b)))
-        .collect()
-}
-
-/// Whether `c` ends a word: a blank, as tmux always counts, or one of
-/// `separators` (`word-separators`).
-fn is_word_separator(c: char, separators: &str) -> bool {
-    c == ' ' || c == '\t' || separators.contains(c)
-}
-
-/// The word at column `x` of `line` as tmux 3.6's `format_grid_word`
-/// finds it: the run of non-separators around `x`, or on a separator the
-/// word just after it. tmux also follows a word across a wrapped line; this
-/// keeps to `line`.
-pub fn word_at(line: &[char], x: usize, separators: &str) -> String {
-    let separator = |x: usize| {
-        line.get(x)
-            .is_none_or(|c| is_word_separator(*c, separators))
-    };
-    let mut start = x;
-    if separator(start) {
-        start += 1;
-    } else {
-        while start > 0 && !separator(start - 1) {
-            start -= 1;
-        }
-    }
-    let mut end = start;
-    while !separator(end) {
-        end += 1;
-    }
-    line.get(start..end)
-        .map(String::from_iter)
-        .unwrap_or_default()
-}
 
 /// Largest repeat count, so a stray run of digits cannot spin the server.
 pub const MAX_COUNT: usize = 9999;
@@ -629,25 +538,6 @@ impl CopyMode {
             .unwrap_or(' ')
     }
 
-    /// Word class: 0 blank, 1 word char, 2 punctuation; `big` (WORD) makes
-    /// every non-blank the same class.
-    fn class(&self, y: usize, x: usize, big: bool) -> u8 {
-        // Blanks, word characters and separators, as tmux's
-        // `window_copy_in_set` reads `word-separators`. A wide character's
-        // padding is in neither set there, so it counts as a word character.
-        if self.padding(y, x) {
-            return 1;
-        }
-        let c = self.char_at(y, x);
-        if c.is_whitespace() {
-            0
-        } else if big || !self.word_separators.contains(c) {
-            1
-        } else {
-            2
-        }
-    }
-
     /// vi's `}` / `{`: past the blank lines next to the cursor, then to the
     /// next blank line that way (or the first / last line).
     fn paragraph(&mut self, forward: bool) {
@@ -672,198 +562,6 @@ impl CopyMode {
             y = n;
         }
         (self.cy, self.cx) = (y, 0);
-    }
-
-    fn next_pos(&self, y: usize, x: usize) -> Option<(usize, usize)> {
-        if x + 1 < usize::from(self.cols) {
-            Some((y, x + 1))
-        } else if y < self.last_line() {
-            Some((y + 1, 0))
-        } else {
-            None
-        }
-    }
-
-    fn prev_pos(&self, y: usize, x: usize) -> Option<(usize, usize)> {
-        if x > 0 {
-            Some((y, x - 1))
-        } else if y > 0 {
-            Some((y - 1, usize::from(self.cols.saturating_sub(1))))
-        } else {
-            None
-        }
-    }
-
-    fn next_word(&mut self, big: bool) {
-        let (mut y, mut x) = (self.cy, self.cx);
-        let start = self.class(y, x, big);
-        while let Some((ny, nx)) = self.next_pos(y, x) {
-            let line_change = ny != y;
-            (y, x) = (ny, nx);
-            let c = self.class(y, x, big);
-            if c != 0 && (c != start || line_change) {
-                break;
-            }
-            if c == 0 {
-                // Skip the blank run, then stop at the next word.
-                while let Some((ny, nx)) = self.next_pos(y, x) {
-                    if self.class(y, x, big) != 0 {
-                        break;
-                    }
-                    (y, x) = (ny, nx);
-                }
-                break;
-            }
-        }
-        (self.cy, self.cx) = (y, x);
-    }
-
-    fn word_end(&mut self, big: bool) {
-        (self.cy, self.cx) = self.word_end_pos((self.cy, self.cx), big);
-    }
-
-    /// Where `next-word-end` from `(y, x)` lands.
-    fn word_end_pos(&self, (y, x): (usize, usize), big: bool) -> (usize, usize) {
-        let (mut y, mut x) = (y, x);
-        if let Some(p) = self.next_pos(y, x) {
-            (y, x) = p;
-        }
-        while self.class(y, x, big) == 0 {
-            match self.next_pos(y, x) {
-                Some(p) => (y, x) = p,
-                None => break,
-            }
-        }
-        let c = self.class(y, x, big);
-        while let Some((ny, nx)) = self.next_pos(y, x) {
-            if ny != y || self.class(ny, nx, big) != c {
-                break;
-            }
-            (y, x) = (ny, nx);
-        }
-        (y, x)
-    }
-
-    fn prev_word(&mut self, big: bool) {
-        (self.cy, self.cx) = self.prev_word_pos((self.cy, self.cx), big);
-    }
-
-    /// The cell before `(y, x)`, across the end of a wrapped line above, as
-    /// tmux's grid reader steps.
-    fn cell_before(&self, (y, x): (usize, usize)) -> Option<(usize, usize)> {
-        if x > 0 {
-            return Some((y, x - 1));
-        }
-        let above = y.checked_sub(1)?;
-        let line = self.lines.get(above).filter(|l| l.wrapped)?;
-        Some((above, line.cells.len().checked_sub(1)?))
-    }
-
-    /// The cell after `(y, x)`, on to the next line when this one wraps.
-    fn cell_after(&self, (y, x): (usize, usize)) -> Option<(usize, usize)> {
-        let line = self.lines.get(y)?;
-        if x + 1 < line.cells.len() {
-            return Some((y, x + 1));
-        }
-        (line.wrapped && y + 1 < self.lines.len()).then_some((y + 1, 0))
-    }
-
-    /// The first and last cells of the run of `(y, x)`'s class around it,
-    /// across wrapped lines.
-    fn class_run(&self, at: (usize, usize)) -> ((usize, usize), (usize, usize)) {
-        let class = self.class(at.0, at.1, false);
-        let same = |p: &(usize, usize)| self.class(p.0, p.1, false) == class;
-        let mut start = at;
-        while let Some(p) = self.cell_before(start).filter(same) {
-            start = p;
-        }
-        let mut end = at;
-        while let Some(p) = self.cell_after(end).filter(same) {
-            end = p;
-        }
-        (start, end)
-    }
-
-    /// The start of the word at `(y, x)`, or on a blank the previous word's,
-    /// as tmux's grid_reader_cursor_previous_word without `already` (what
-    /// word selection snaps back to), across wrapped lines.
-    fn word_start_pos(&self, (y, x): (usize, usize)) -> (usize, usize) {
-        if self.class(y, x, false) == 0 {
-            return self.prev_word_pos((y, x), false);
-        }
-        self.class_run((y, x)).0
-    }
-
-    /// Where `previous-word` from `(y, x)` lands.
-    fn prev_word_pos(&self, (y, x): (usize, usize), big: bool) -> (usize, usize) {
-        let (mut y, mut x) = (y, x);
-        if let Some(p) = self.prev_pos(y, x) {
-            (y, x) = p;
-        }
-        while self.class(y, x, big) == 0 {
-            match self.prev_pos(y, x) {
-                Some(p) => (y, x) = p,
-                None => break,
-            }
-        }
-        let c = self.class(y, x, big);
-        while let Some((py, px)) = self.prev_pos(y, x) {
-            if py != y || self.class(py, px, big) != c {
-                break;
-            }
-            (y, x) = (py, px);
-        }
-        (y, x)
-    }
-
-    fn find(&mut self, needle: &str, forward: bool, regex: bool, skip_current: bool) -> bool {
-        if needle.is_empty() {
-            return false;
-        }
-        let n = self.lines.len();
-        for step in 0..=n {
-            // Without `wrap-search` the search stops at the end it heads for.
-            if !self.wrap_search
-                && (if forward {
-                    self.cy + step >= n
-                } else {
-                    step > self.cy
-                })
-            {
-                break;
-            }
-            let y = if forward {
-                (self.cy + step) % n
-            } else {
-                (self.cy + n - step % n) % n
-            };
-            let hits = matches(&self.lines[y].chars(), needle, regex)
-                .into_iter()
-                .map(|(x, _)| x);
-            let pick = if forward {
-                hits.into_iter()
-                    .find(|x| step > 0 || *x > self.cx || (!skip_current && *x == self.cx))
-            } else {
-                hits.collect::<Vec<_>>()
-                    .into_iter()
-                    .rev()
-                    .find(|x| step > 0 || *x < self.cx || (!skip_current && *x == self.cx))
-            };
-            if let Some(x) = pick {
-                (self.cy, self.cx) = (y, x);
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Columns `(start, end)` of the last search's matches on line `y`, for
-    /// highlighting.
-    pub fn match_spans(&self, y: usize) -> Vec<(usize, usize)> {
-        let (Some(search), Some(line)) = (&self.search, self.lines.get(y)) else {
-            return Vec::new();
-        };
-        matches(&line.chars(), &search.needle, search.regex)
     }
 
     /// The selection's moving end: the cursor, unless `stop-selection`
