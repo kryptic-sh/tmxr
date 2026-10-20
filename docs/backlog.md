@@ -534,14 +534,16 @@ table. What has been verified, and how:
     tmux's; the `choose-*` pickers' tagging and sort keys (tmux's `t`, `T`,
     `O`), which tmxr's picker has no counterpart for; `choose-tree -F` replaces
     the text after a row's mark, where tmux's is the whole tree line;
-    `command-prompt` Tab's menus (tmux opens a menu of the matches when several
-    share no longer start, and of a session's windows after `-tname:`; tmxr
-    completes as far as they agree and stops), and the `window-target` prompt
-    type's completion, which in tmux is that window menu
-    (`overlay::prompt::completion`; the `target` type completes sessions as
-    tmux's); smaller flags: `source-file -v`, several paths and globs (each load
-    replaces the whole TOML config, so several files have no clear meaning yet);
-    `source-file` of a tmux command file (`%if`, `%hidden`).
+    `command-prompt` Tab's session menus (tmux opens a menu of the sessions when
+    several share no longer start after `-t` / `-s` or in a `target` prompt, and
+    of a session's windows after `-tname:`; tmxr completes as far as they agree
+    and stops; the menu of command and option names is tmux's, `prompt_tab_*` in
+    `corpus/keys.toml`), and the `window-target` prompt type's completion, which
+    in tmux is that window menu (`overlay::prompt::completion`; the `target`
+    type completes sessions as tmux's); smaller flags: `source-file -v`, several
+    paths and globs (each load replaces the whole TOML config, so several files
+    have no clear meaning yet); `source-file` of a tmux command file (`%if`,
+    `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `client-light-theme` /
     `-dark-theme`. Copy mode lacks `next-prompt` / `previous-prompt` (they need
     a prompt mark on every history line, as tmux keeps per grid line; `Emulator`

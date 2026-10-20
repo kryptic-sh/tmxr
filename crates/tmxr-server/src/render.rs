@@ -1048,8 +1048,31 @@ fn draw_overlay(
     let look = |spec: &Option<String>, option: &str| {
         style_option(spec.as_deref().unwrap_or(option), &vars)
     };
+    let menu_styles = |l: &crate::overlay::BoxLook| {
+        (
+            look(&l.style, &opts.menu_style),
+            look(&l.border_style, &opts.menu_border_style),
+            look(&l.selected_style, &opts.menu_selected_style),
+        )
+    };
     match att.overlay.as_ref()? {
         Overlay::Prompt(p) => {
+            // Tab's menu: its names under the word, against the status line.
+            if let Some(open) = &p.menu {
+                let mut menu = open.menu.clone();
+                menu.look.lines = crate::overlay::Lines::of(opts.menu_border_lines);
+                let lead: String = p.input[..open.word.0].iter().collect();
+                let word_x = Line::raw(format!("{}{lead}", p.prompt)).width() as u16;
+                let row = status_row(srv, att, rows);
+                let (_, h) = menu.size();
+                let top_row = if srv.status_at_top(att.session) {
+                    row + 1
+                } else {
+                    row.saturating_sub(h)
+                };
+                menu.at = Some((word_x.saturating_sub(2), top_row));
+                menu.draw(buf, cols, rows, menu_styles(&menu.look));
+            }
             let before: String = p.input[..p.cursor].iter().collect();
             let x = Line::raw(format!("{}{before}", p.prompt)).width() as u16;
             let y = status_row(srv, att, rows);
@@ -1100,12 +1123,7 @@ fn draw_overlay(
         }
         Overlay::Picker(p) => draw_picker(srv, p, buf, cols, (top, y), border, mode_style),
         Overlay::Menu(m) => {
-            let styles = (
-                look(&m.look.style, &opts.menu_style),
-                look(&m.look.border_style, &opts.menu_border_style),
-                look(&m.look.selected_style, &opts.menu_selected_style),
-            );
-            m.draw(buf, cols, rows, styles);
+            m.draw(buf, cols, rows, menu_styles(&m.look));
             None
         }
         Overlay::Popup(p) => {

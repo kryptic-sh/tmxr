@@ -437,3 +437,130 @@ checks = [
   { format = "[#{pane_search_string}]" },
   { format = "#{copy_cursor_x},#{copy_cursor_y}" },
 ]
+
+[[cases]]
+name = "prompt_tab_opens_a_menu_of_the_names_as_tmux"
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "select-\u0009" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_find = "select-layout (0)", expect = "2,9" },
+  { screen_find = "select-window (2)", expect = "2,11" },
+  { screen_find = "└", expect = "0,12" },
+]
+
+[[cases]]
+name = "prompt_tab_menu_enter_takes_the_first_name_as_tmux"
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "select-\u0009" },
+  { sleep = 0.3 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+  { keys = "X" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_contains = ":select-layoutX", expect = true },
+  { screen_find = "┌", expect = "none" },
+]
+
+[[cases]]
+name = "prompt_tab_menu_moves_with_tab_and_the_arrows_as_tmux"
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "select-\u0009" },
+  { sleep = 0.3 },
+  { keys = "\u0009" },
+  { sleep = 0.3 },
+  { keys = "\u001b[B" },
+  { sleep = 0.3 },
+  { keys = "\u001b[B" },
+  { sleep = 0.3 },
+  { keys = "\u001b[A" },
+  { sleep = 0.3 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+  { keys = "X" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_contains = ":select-windowX", expect = true },
+]
+
+[[cases]]
+name = "prompt_tab_menu_takes_a_names_digit_as_tmux"
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "select-\u0009" },
+  { sleep = 0.3 },
+  { keys = "1" },
+  { sleep = 0.3 },
+  { keys = "X" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_contains = ":select-paneX", expect = true },
+]
+
+[[cases]]
+name = "prompt_tab_menu_escape_keeps_the_word_as_tmux"
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "select-\u0009" },
+  { sleep = 0.3 },
+  { keys = "\u001b" },
+  { sleep = 0.3 },
+  { keys = "X" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_contains = ":select-X", expect = true },
+  { screen_find = "┌", expect = "none" },
+]
+
+[[cases]]
+name = "prompt_tab_menu_sits_under_its_word_as_tmux"
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "display -t x; kill-s\u0009" },
+  { sleep = 0.3 },
+  { keys = "\u0009" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_find = "┌", expect = "13,9" },
+  { screen_find = "kill-session (1)", expect = "15,11" },
+]

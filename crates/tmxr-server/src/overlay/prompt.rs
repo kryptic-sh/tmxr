@@ -54,6 +54,48 @@ pub struct Prompt {
     pub(super) quote_next: bool,
     /// What Tab completes from, given before a Tab is handled.
     pub completions: Option<Completions>,
+    /// The menu Tab opened of the names the word could be, as tmux's
+    /// status_prompt_complete_list_menu.
+    pub menu: Option<CompletionMenu>,
+}
+
+/// A menu of completions and the word it replaces (start and end).
+#[derive(Debug, Clone)]
+pub struct CompletionMenu {
+    pub menu: crate::menu::Menu,
+    pub word: (usize, usize),
+}
+
+impl CompletionMenu {
+    /// A menu of `names`, the first selected, each with its digit as its
+    /// key while there are digits.
+    fn new(names: &[&str], word: (usize, usize)) -> Self {
+        let items = names
+            .iter()
+            .enumerate()
+            .map(|(i, name)| crate::menu::MenuItem::Command {
+                name: (*name).to_owned(),
+                key: u32::try_from(i)
+                    .ok()
+                    .and_then(|i| char::from_digit(i, 10))
+                    .and_then(|d| d.to_string().parse().ok()),
+                cmd: (*name).to_owned(),
+                disabled: false,
+            })
+            .collect();
+        let menu = crate::menu::Menu {
+            title: String::new(),
+            items,
+            selected: Some(0),
+            look: super::BoxLook::default(),
+            at: None,
+            pane: None,
+            mouse: None,
+            mouse_mode: false,
+            stay_open: false,
+        };
+        Self { menu, word }
+    }
 }
 
 /// The names the prompt's Tab completes from, as tmux's
@@ -122,15 +164,7 @@ fn completion(word: &str, at_start: bool, target: bool, names: &Completions) -> 
         let flag = word.chars().nth(1)?;
         session_completion(s, names).map(|p| format!("-{flag}{p}"))
     } else {
-        let mut list: Vec<&str> = names
-            .commands
-            .iter()
-            .chain(names.others.iter().filter(|_| !at_start))
-            .map(String::as_str)
-            .filter(|n| n.starts_with(word))
-            .collect();
-        list.sort_unstable();
-        list.dedup();
+        let list = word_matches(word, at_start, names);
         match list.as_slice() {
             [] => None,
             [one] => Some(format!("{one} ")),
@@ -138,6 +172,21 @@ fn completion(word: &str, at_start: bool, target: bool, names: &Completions) -> 
         }
     };
     out.filter(|o| o != word)
+}
+
+/// The names `word` starts, sorted: commands, and after the first word
+/// options and layouts too, as tmux's status_prompt_complete_list.
+fn word_matches<'n>(word: &str, at_start: bool, names: &'n Completions) -> Vec<&'n str> {
+    let mut list: Vec<&str> = names
+        .commands
+        .iter()
+        .chain(names.others.iter().filter(|_| !at_start))
+        .map(String::as_str)
+        .filter(|n| n.starts_with(word))
+        .collect();
+    list.sort_unstable();
+    list.dedup();
+    list
 }
 
 /// What a key does to the input, as tmux 3.6's status_prompt_key does it.
@@ -324,6 +373,9 @@ impl Prompt {
     }
 
     pub(super) fn key(&mut self, ev: &KeyEvent) -> OverlayAction {
+        if self.menu.is_some() {
+            return self.menu_key(ev);
+        }
         if !self.incremental || self.key {
             return self.edit(ev);
         }
@@ -430,10 +482,47 @@ impl Prompt {
             return;
         }
         let word: String = self.input[first..last].iter().collect();
-        if let Some(out) = completion(&word, first == 0, self.kind == "target", &names) {
+        let target = self.kind == "target";
+        if let Some(out) = completion(&word, first == 0, target, &names) {
             self.input.splice(first..last, out.chars());
             self.cursor = first + out.chars().count();
+            return;
         }
+        // No further on with several names: a menu of them, as tmux's
+        // (not yet for sessions, which tmux also offers in one).
+        let sessions = target || word.starts_with("-t") || word.starts_with("-s");
+        if !sessions && !word.is_empty() {
+            let list = word_matches(&word, first == 0, &names);
+            if list.len() > 1 {
+                self.menu = Some(CompletionMenu::new(&list, (first, last)));
+            }
+        }
+    }
+
+    /// A key while the completion menu is open: Tab moves down, as tmux's
+    /// MENU_TAB; a chosen name replaces the word (no space after it, where
+    /// a single match gets one), and anything closing the menu leaves the
+    /// input as it was.
+    fn menu_key(&mut self, ev: &KeyEvent) -> OverlayAction {
+        let Some(open) = self.menu.as_mut() else {
+            return OverlayAction::Keep;
+        };
+        let ev = if ev.code == KeyCode::Tab {
+            KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)
+        } else {
+            *ev
+        };
+        match open.menu.key(&ev) {
+            OverlayAction::Run(name) => {
+                let (first, last) = open.word;
+                self.input.splice(first..last, name.chars());
+                self.cursor = first + name.chars().count();
+                self.menu = None;
+            }
+            OverlayAction::Keep => {}
+            _ => self.menu = None,
+        }
+        OverlayAction::Keep
     }
 
     /// The text typed, for the history once the prompt is submitted.

@@ -275,6 +275,7 @@ impl Overlay {
             paste: None,
             saved: None,
             quote_next: false,
+            menu: None,
             completions: None,
         }))
     }
