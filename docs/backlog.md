@@ -58,6 +58,20 @@ table. What has been verified, and how:
   relies on staying attached), or defaulting to `off` as tmxr behaves now
   (matches tmux only where a config sets it off). Either makes
   `-f no-detach-on-destroy` possible.
+- **The local clipboard keeps the server's first display** (found by reading
+  hjkl-clipboard 0.42.2, 2026-10-20; not run): `util::local_clipboard` uses the
+  server process's own environment, and hjkl-clipboard keeps one Wayland
+  connection per process (`WAYLAND_THREAD`, a `OnceLock`) that serves only
+  errors once the compositor goes. So after the compositor restarts (logging out
+  and in, which a detached server survives since its socket left
+  `$XDG_RUNTIME_DIR`), or for a server started without `WAYLAND_DISPLAY` (from a
+  TTY, or over SSH, where `SSH_CONNECTION` also turns the local copy off for
+  good), copies reach only OSC 52, and terminals that ignore it (VTE's) get
+  nothing. Seen working on Hyprland in one session (`set-buffer -w` and copy
+  mode, read back with `wl-paste`). Options: hjkl-clipboard reconnects when its
+  connection is gone (a release of that crate); or tmxr copies through a helper
+  process given the attaching client's `WAYLAND_DISPLAY` / `DISPLAY` and kept
+  alive until its selection is replaced, as `wl-copy` forks one.
 - **Fuzzing the command parser and the frame codec** (`docs/plan/14`, a weekly
   cron job): needs `cargo-fuzz` and `libfuzzer-sys`, new dependencies on a
   nightly toolchain, or `proptest`-style property tests on stable, also new.
