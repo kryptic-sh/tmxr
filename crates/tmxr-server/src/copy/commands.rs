@@ -78,6 +78,39 @@ struct CopyArgs<'a> {
     prefix: Option<&'a str>,
 }
 
+/// The copy commands that take flags (`-C`, `-P`), as tmux 3.6's
+/// window_copy_cmd_table gives them.
+const TAKE_FLAGS: &[&str] = &[
+    "copy-end-of-line",
+    "copy-end-of-line-and-cancel",
+    "copy-pipe-end-of-line",
+    "copy-pipe-end-of-line-and-cancel",
+    "copy-line",
+    "copy-line-and-cancel",
+    "copy-pipe-line",
+    "copy-pipe-line-and-cancel",
+    "copy-pipe-no-clear",
+    "copy-pipe",
+    "copy-pipe-and-cancel",
+    "copy-selection-no-clear",
+    "copy-selection",
+    "copy-selection-and-cancel",
+    "next-prompt",
+    "previous-prompt",
+];
+
+/// Whether tmux would skip copy command `name` given `args`: it parses them
+/// against the command's own flags and drops the command when they do not
+/// parse, so one that takes none is skipped when its first argument looks
+/// like a flag (`-li`, an incremental search up's text, as `command-prompt
+/// -i` writes it after `C-r`), unless `--` comes first.
+pub fn refuses_args(name: &str, args: &[String]) -> bool {
+    !TAKE_FLAGS.contains(&name)
+        && args
+            .first()
+            .is_some_and(|a| a.len() > 1 && a.starts_with('-') && a != "--")
+}
+
 impl<'a> CopyArgs<'a> {
     fn parse(args: &'a [String], pipe: bool) -> Self {
         let mut copy = Self {

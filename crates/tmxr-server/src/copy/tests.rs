@@ -161,13 +161,18 @@ fn goto_line_scrolls_that_far_above_the_bottom() {
 #[test]
 fn incremental_search_stays_while_the_text_still_matches() {
     let mut cm = at_start("ab abc abcd");
-    cm.apply("search-forward-incremental", Some("a"));
+    // The prompt's prefix comes first: `=` as typed, `+` / `-` for C-s / C-r.
+    cm.apply("search-forward-incremental", Some("=a"));
     assert_eq!(cm.cx, 0, "a match at the cursor counts");
-    cm.apply("search-forward-incremental", Some("ab"));
+    cm.apply("search-forward-incremental", Some("=ab"));
     assert_eq!(cm.cx, 0);
-    cm.apply("search-forward-incremental", Some("abc"));
+    cm.apply("search-forward-incremental", Some("=abc"));
     assert_eq!(cm.cx, 3, "moves on once the text stops matching");
-    cm.apply("search-forward-incremental", Some("abcd"));
+    cm.apply("search-forward-incremental", Some("+abc"));
+    assert_eq!(cm.cx, 7, "C-s moves on to the next match");
+    cm.apply("search-forward-incremental", Some("=ab"));
+    assert_eq!(cm.cx, 0, "a changed text searches from where it started");
+    cm.apply("search-forward-incremental", Some("=abcd"));
     assert_eq!(cm.cx, 7);
     // n repeats it as an ordinary search.
     cm.apply("search-again", None);

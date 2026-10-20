@@ -220,3 +220,65 @@ steps = [
   { run = "send -t o -X copy-selection" },
 ]
 checks = [{ command = "show-buffer" }]
+
+[[cases]]
+name = "command_prompt_i_runs_its_template_with_tmuxs_prefixes"
+attach = true
+unix_only = true
+steps = [
+  { run = "command-prompt -b -i -I old \"set -ga @r '[%%]'\"" },
+  { sleep = 0.3 },
+  { keys = "ab" },
+  { sleep = 0.2 },
+  { keys = "\u0012" },
+  { sleep = 0.2 },
+  { keys = "\u0013" },
+  { sleep = 0.2 },
+  { keys = "\u007f\u007f" },
+  { sleep = 0.2 },
+  { keys = "\u0012" },
+  { sleep = 0.2 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+]
+checks = [{ format = "[#{@r}]" }]
+
+[[cases]]
+name = "c_r_in_an_incremental_search_up_is_refused_as_flags"
+attach = true
+unix_only = true
+program = "printf 'line one\nline two\nline three\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "copy-mode -t o" },
+  { run = "command-prompt -b -i \"send -t o -X search-backward-incremental '%%'\"" },
+  { sleep = 0.3 },
+  { keys = "li" },
+  { sleep = 0.3 },
+  { keys = "\u0012" },
+  { sleep = 0.3 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+]
+checks = [{ format = "#{copy_cursor_x},#{copy_cursor_y}" }]
+
+[[cases]]
+name = "an_incremental_search_moves_on_with_c_r_after_dashes"
+attach = true
+unix_only = true
+program = "printf 'line one\nline two\nline three\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "copy-mode -t o" },
+  { run = "command-prompt -b -i \"send -t o -X search-backward-incremental -- '%%'\"" },
+  { sleep = 0.3 },
+  { keys = "li" },
+  { sleep = 0.3 },
+  { keys = "\u0012" },
+  { sleep = 0.3 },
+  { keys = "\u0013" },
+  { sleep = 0.3 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+]
+checks = [{ format = "#{copy_cursor_x},#{copy_cursor_y}" }]

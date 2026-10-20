@@ -10,7 +10,7 @@ mod model;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-pub use commands::{command, enter, enter_from};
+pub use commands::{command, enter, enter_from, refuses_args};
 pub use model::{Cell, Line, cell_style, colour, snapshot};
 
 /// How the selection's moving end goes as the cursor moves, as tmux's
@@ -49,6 +49,10 @@ pub struct CopyMode {
     pub rows: u16,
     pub cols: u16,
     pub search: Option<Search>,
+    /// Where an incremental search started (cursor and view top), which
+    /// each change of its text searches from again, as tmux's searchx /
+    /// searchy / searcho; any other command forgets it.
+    search_origin: Option<(usize, usize, usize)>,
     /// Repeat count typed before a command (`5j`), 0 for none.
     pub count: usize,
     /// An `f` / `F` / `t` / `T` waiting for the character to jump to.
@@ -246,6 +250,7 @@ impl CopyMode {
             rows,
             cols,
             search: None,
+            search_origin: None,
             count: 0,
             pending_jump: None,
             last_jump: None,
@@ -907,6 +912,9 @@ impl CopyMode {
     pub fn apply(&mut self, name: &str, arg: Option<&str>) -> bool {
         let rows = usize::from(self.rows.max(1));
         let last = self.last_line();
+        if !name.starts_with("search-") {
+            self.search_origin = None;
+        }
         match name {
             "cursor-left" => self.cursor_left(),
             "cursor-right" => self.cursor_right(),
@@ -1067,18 +1075,40 @@ impl CopyMode {
                     regex,
                 });
             }
-            // Run again as each character is typed: a match at the cursor
-            // counts, so the cursor stays while the longer text still
-            // matches there.
+            // Run by `command-prompt -i` as the text is typed, as tmux's:
+            // the first character is the prompt's prefix, `-` or `+` for
+            // `C-r` / `C-s` turning the search up or down. A changed text
+            // searches again from where the search started; the same one
+            // moves on to the next match.
             "search-forward-incremental" | "search-backward-incremental" => {
-                let forward = name == "search-forward-incremental";
-                let needle = arg.unwrap_or_default().to_owned();
-                self.find(&needle, forward, false, false);
-                self.search = Some(Search {
-                    needle,
-                    forward,
-                    regex: false,
-                });
+                let mut chars = arg.unwrap_or_default().chars();
+                let prefix = chars.next();
+                let needle = chars.as_str();
+                let repeat = self.search.as_ref().is_some_and(|s| s.needle == needle);
+                match self.search_origin {
+                    None => self.search_origin = Some((self.cy, self.cx, self.top)),
+                    Some((y, x, top)) if !repeat && self.search.is_some() => {
+                        (self.cy, self.cx, self.top) = (y, x, top);
+                    }
+                    Some(_) => {}
+                }
+                let forward = match prefix {
+                    Some('+') => true,
+                    Some('-') => false,
+                    _ => name == "search-forward-incremental",
+                };
+                if needle.is_empty() {
+                    self.search = None;
+                } else {
+                    // Up, the cursor's own place never counts; down, it
+                    // does until the search moves on.
+                    self.find(needle, forward, false, !forward || repeat);
+                    self.search = Some(Search {
+                        needle: needle.to_owned(),
+                        forward,
+                        regex: false,
+                    });
+                }
             }
             "jump-forward" | "jump-backward" | "jump-to-forward" | "jump-to-backward" => {
                 let jump = Jump::from_command(name).expect("matched a jump command");

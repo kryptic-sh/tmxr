@@ -500,11 +500,10 @@ table. What has been verified, and how:
     to enumerate its names); `choose-*` `-F -f -K -O -r` (`-r` needs each picker
     built reversed, and the session picker's opening on the previous session
     turned round with it), tagging and sort keys; `command-prompt` completion
-    (Tab) and incremental search's `C-r` / `C-s` direction keys (tmux's
-    `PROMPT_INCREMENTAL` prefixes `-`, `+`, `=`); session groups
-    (`new-session -t`); smaller flags: `source-file -v`, several paths and globs
-    (each load replaces the whole TOML config, so several files have no clear
-    meaning yet); `source-file` of a tmux command file (`%if`, `%hidden`).
+    (Tab); session groups (`new-session -t`); smaller flags: `source-file -v`,
+    several paths and globs (each load replaces the whole TOML config, so
+    several files have no clear meaning yet); `source-file` of a tmux command
+    file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `client-light-theme` /
     `-dark-theme`. Copy mode lacks `next-prompt` / `previous-prompt` (they need
     a prompt mark on every history line, as tmux keeps per grid line; `Emulator`
@@ -549,6 +548,15 @@ table. What has been verified, and how:
   signalling a process group the session belongs to (`detach-client -P` sends
   SIGHUP to client parents). Workaround: log to a file in `$HOME` and read it
   from a new session.
+- **`C-r` in an incremental search does nothing in tmux 3.6**, and tmxr does the
+  same on purpose (seen 2026-10-20): `command-prompt -i` passes the text after
+  `C-r` as `-text`, which tmux parses as flags of `search-backward-incremental`
+  (its table takes none), so the command is dropped without a word; it works
+  only when the template puts `--` first, as tmux's own default bind does not.
+  tmxr's `copy::refuses_args` drops the same commands. Not compared on its own:
+  where a search down leaves the cursor under emacs keys (tmux moves it past the
+  match, `window_copy_search`); tmxr's default `C-r` / `C-s` binds also lack
+  tmux's `-I "#{pane_search_string}"`, as tmxr has no `pane_search_string`.
 - **`#{pane_dead_signal}` is a number**, as tmux 3.6 shows it on Linux (seen
   2026-10-20: `15` for SIGTERM, from tmux's compat `sig2name`). Where the system
   has `sys_signame` (macOS, the BSDs) tmux may show a name instead; not checked.

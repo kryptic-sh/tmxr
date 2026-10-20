@@ -530,6 +530,9 @@ pub(super) fn run(
             };
             if a.has('X') {
                 let (name, rest) = pos.split_first().ok_or("send-keys -X needs a command")?;
+                if crate::copy::refuses_args(name, rest) {
+                    return Ok(true);
+                }
                 // A copy command's own arguments may start with `--`, as
                 // tmux's default `#` / `*` binds do; it marks their end.
                 let rest = rest.strip_prefix(&["--".to_owned()][..]).unwrap_or(rest);

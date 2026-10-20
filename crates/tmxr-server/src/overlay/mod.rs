@@ -84,6 +84,8 @@ impl Overlay {
             answers: Vec::new(),
             key: false,
             incremental: false,
+            last: String::new(),
+            submitted: false,
             single: false,
             numeric: false,
             kind: "command".into(),

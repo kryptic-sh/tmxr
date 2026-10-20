@@ -77,11 +77,24 @@ pub(super) fn run(
                 p.single = a.has('1');
                 p.numeric = a.has('N') && !p.single;
                 p.incremental = a.has('i');
+                if p.incremental {
+                    p.last = p.input.drain(..).collect();
+                    p.cursor = 0;
+                }
                 a.value('T').unwrap_or("command").clone_into(&mut p.kind);
                 p.history = srv.prompt_history.get(&p.kind).cloned().unwrap_or_default();
             }
+            // An incremental prompt runs its template once as it opens, with
+            // the input `=`, as tmux's.
+            let opened = match &overlay {
+                Overlay::Prompt(p) if p.incremental => Some(p.incremental_command('=')),
+                _ => None,
+            };
             if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
                 att.overlay = Some(overlay);
+            }
+            if let Some(cmd) = opened {
+                srv.run_bind(c, &cmd, None);
             }
             srv.mark_client_dirty(c);
         }

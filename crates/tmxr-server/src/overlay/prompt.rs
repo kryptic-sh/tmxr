@@ -22,8 +22,14 @@ pub struct Prompt {
     /// name, quoted so any key stays one argument.
     pub key: bool,
     /// `command-prompt -i`: the template runs again after every edit, for
-    /// incremental search.
+    /// incremental search, its input prefixed as tmux's: `=`, or `-` / `+`
+    /// after `C-r` / `C-s`. Enter runs nothing more.
     pub incremental: bool,
+    /// An incremental prompt's starting input (`-I`), which opens empty;
+    /// `C-r` / `C-s` on an empty input bring it back, as tmux's prompt_last.
+    pub last: String,
+    /// Answered with Enter, for the history.
+    pub submitted: bool,
     /// `command-prompt -1`: the first character typed is the answer.
     pub single: bool,
     /// `command-prompt -N`: digits are typed, any other key answers.
@@ -220,17 +226,41 @@ impl Prompt {
         }
     }
 
+    /// The template filled with the input behind `prefix`, as an
+    /// incremental prompt runs it.
+    pub fn incremental_command(&self, prefix: char) -> String {
+        let input: String = self.input.iter().collect();
+        let template = self.template.as_deref().unwrap_or("%%");
+        tmxr_command::fill_template(template, &[format!("{prefix}{input}")])
+    }
+
     pub(super) fn key(&mut self, ev: &KeyEvent) -> OverlayAction {
-        let before = self.input.clone();
-        let action = self.edit(ev);
-        if self.incremental
-            && action == OverlayAction::Keep
-            && self.input != before
-            && !self.input.is_empty()
-        {
-            return OverlayAction::Preview(self.command());
+        if !self.incremental || self.key {
+            return self.edit(ev);
         }
-        action
+        // C-r / C-s search the other way, or on an empty input bring back
+        // the starting one (emacs keys only: vi's insert mode types them).
+        let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
+        if let (KeyCode::Char(c @ ('r' | 's')), true, false) = (ev.code, ctrl, self.vi) {
+            let prefix = if self.input.is_empty() {
+                self.input = self.last.chars().collect();
+                self.cursor = self.input.len();
+                '='
+            } else if c == 'r' {
+                '-'
+            } else {
+                '+'
+            };
+            return OverlayAction::Preview(self.incremental_command(prefix));
+        }
+        let before = self.input.clone();
+        match self.edit(ev) {
+            OverlayAction::Run(_) => OverlayAction::Close,
+            OverlayAction::Keep if self.input != before => {
+                OverlayAction::Preview(self.incremental_command('='))
+            }
+            action => action,
+        }
     }
 
     /// Up (`older`) / Down through the history; Down past the newest entry
@@ -273,6 +303,7 @@ impl Prompt {
             self.recall = None;
             return OverlayAction::Keep;
         }
+        self.submitted = true;
         if self.input.is_empty() && self.template.is_none() {
             return OverlayAction::Close;
         }

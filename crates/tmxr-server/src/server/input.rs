@@ -281,7 +281,8 @@ impl Server {
                     }),
                     _ => None,
                 };
-                if let (Overlay::Prompt(p), OverlayAction::Run(_)) = (&ov, &action)
+                if let Overlay::Prompt(p) = &ov
+                    && p.submitted
                     && !p.key
                 {
                     self.remember_prompt(&p.kind, p.text());

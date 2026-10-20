@@ -343,6 +343,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`command-prompt -i` runs its template as tmux's**: once as it opens, then
+  after every edit, the text prefixed `=`, or `-` / `+` after `C-r` / `C-s`
+  (which on an empty input bring back the `-I` text, the prompt opening empty);
+  Enter runs nothing more. `search-backward-incremental` and
+  `search-forward-incremental` read the prefix for their direction and search
+  again from where they started when the text changes. A copy command that takes
+  no flags is skipped when its first argument looks like one, as tmux's.
 - **`list-keys` prints commands as tmux does**: full command names, flags
   grouped and quoted as tmux's, commands joined by `\;`.
 - **`window-size` is `smallest` by default**, so every client sees the whole
