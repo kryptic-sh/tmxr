@@ -1015,3 +1015,59 @@ checks = [
   { command = "capture-pane -p -t o:2" },
   { command = "capture-pane -p -t o:3" },
 ]
+
+[[cases]]
+name = "tab_stops_as_tmux"
+size = [20, 5]
+steps = [
+  { run = "new-window -d -t o:1 'printf \"\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:2 'printf \"\\t\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:3 'printf \"\\033[3g\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:4 'printf \"\\033[3g\\t\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:5 'printf \"\\033[5GX\\033H\\033[1G\\t\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:6 'printf \"\\033[3g\\033[5G\\033H\\033[12G\\033H\\033[1G\\t\\t\\t\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:7 'printf \"\\033[11G\\033[g\\033[1G\\t\\t\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:8 'printf \"\\033[5G\\033H\\033[20G\\033[Z\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:9 'printf \"\\033[5G\\033H\\033c\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:10 'printf \"\\033[3g\\033[?1049h\\t\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:11 'printf \"\\033[30G\\t\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:12 'printf \"\\033[5G\\033H\\033[18G\\t\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:13 'printf \"\\033]0;a\\tb\\007\\t\"; exec sleep 1000'" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "display -p -t o:0 '#{pane_tabs} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:1 '#{pane_tabs} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:2 '#{pane_tabs} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:3 '#{pane_tabs} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:4 '#{pane_tabs} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:5 '#{pane_tabs} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:6 '#{pane_tabs} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:7 '#{pane_tabs} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:8 '#{pane_tabs} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:9 '#{pane_tabs} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:10 '#{pane_tabs} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:11 '#{pane_tabs} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:12 '#{pane_tabs} #{cursor_x},#{cursor_y}'" },
+  { command = "display -p -t o:13 '#{pane_tabs} #{cursor_x},#{cursor_y}'" },
+]
+
+[[cases]]
+name = "tab_stops_reset_as_tmux"
+size = [20, 5]
+steps = [
+  { run = "new-window -d -t o:1 'printf \"\\033[3g\\033[5G\\033H\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:2 'printf \"\\033[3g\\033[5G\\033H\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:3 'printf \"\\033[3g\\033[5G\\033H\"; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "set -g window-size manual" },
+  { run = "resize-window -t o:1 -x 30 -y 5" },
+  { run = "resize-window -t o:2 -x 20 -y 7" },
+  { run = "send-keys -R -t o:3" },
+  { sleep = 0.3 },
+]
+checks = [
+  { command = "display -p -t o:1 '#{pane_tabs}'" },
+  { command = "display -p -t o:2 '#{pane_tabs}'" },
+  { command = "display -p -t o:3 '#{pane_tabs}'" },
+]

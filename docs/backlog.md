@@ -82,16 +82,19 @@ table. What has been verified, and how:
   0.16), matched tmux 3.8 on every row by their box-drawing cells (2026-10-20,
   120x40, Linux). Not compared: btop's colours (`capture-pane -e` differs run to
   run with its live graphs). SCP / RCP go through vt100's `ESC 7` / `ESC 8`,
-  which save the attributes too, as tmux's `input_save_state` does. CBT and HT
-  use vt100's fixed tab stops every 8 columns: a program's own (HTS, `CSI g`)
-  are not kept, where tmux keeps them. CHT (`CSI n I`) is ignored, as tmux 3.8
-  ignores it (probed the same day). The scroll region is kept by the emulator as
-  tmux keeps it (`Emulator::set_region`, compared by `scroll_region_as_tmux` and
-  `scroll_region_kept_across_screens_as_tmux`): one for the terminal, where
-  vt100 keeps one per screen, so it is written into vt100's again after each
-  switch; a region of fewer than two rows is ignored, where vt100 takes the
-  whole screen; and IL / DL outside it move the rows from the cursor to the
-  bottom, through a region set for the moment (`Emulator::lines`, compared by
+  which save the attributes too, as tmux's `input_save_state` does. HT, CBT, HTS
+  (`ESC H`) and TBC (`CSI g`) use tab stops the emulator keeps as tmux does
+  (`Emulator::tab`, compared by `tab_stops_as_tmux` and
+  `tab_stops_reset_as_tmux`), where vt100's are fixed every 8 columns; an HT
+  inside an OSC or DCS string stays the string's. CHT (`CSI n I`) is ignored, as
+  tmux 3.8 ignores it (probed the same day). The scroll region is kept by the
+  emulator as tmux keeps it (`Emulator::set_region`, compared by
+  `scroll_region_as_tmux` and `scroll_region_kept_across_screens_as_tmux`): one
+  for the terminal, where vt100 keeps one per screen, so it is written into
+  vt100's again after each switch; a region of fewer than two rows is ignored,
+  where vt100 takes the whole screen; and IL / DL outside it move the rows from
+  the cursor to the bottom, through a region set for the moment
+  (`Emulator::lines`, compared by
   `lines_inserted_and_deleted_outside_the_region_as_tmux`), including tmux's IL
   there of as many rows as are left changing nothing. Not compared: the region
   with origin mode on across a screen switch (vt100 keeps origin mode per screen
@@ -535,8 +538,8 @@ table. What has been verified, and how:
     gives what tmux's does (compared by
     `loops_and_n_whose_lookups_fail_as_tmux`); many of tmux's format variables
     (compare tmux's `format_table` with `vars.rs` for the list;
-    `alternate_saved_*`, `pane_tabs`, `cursor_colour` and `cursor_very_visible`
-    need terminal state the `vt100` crate does not expose (`cursor_shape` and
+    `alternate_saved_*`, `cursor_colour` and `cursor_very_visible` need terminal
+    state the `vt100` crate does not expose (`cursor_shape` and
     `cursor_blinking` are kept from DECSCUSR and `CSI ? 12`; `insert_flag` and
     `wrap_flag` are kept from the sequences vt100 passes on unhandled, but vt100
     itself still draws as with insert off and wrap on; `origin_flag` from
@@ -718,6 +721,14 @@ table. What has been verified, and how:
   `DEAD_LINE_QUIET` or ended (`PtyEvent::Eof`). Not tested: that a pane reads
   nothing after the line, as tmux closes its terminal there; on Linux the
   shell's exit hangs the terminal up, so no output came after it in any attempt.
+- **A width change does not reflow the screen**: vt100 0.18's `Grid::set_size`
+  cuts or pads each row in place (read 2026-10-21), where tmux rewraps wrapped
+  lines to the new width (`screen_reflow`). One effect probed with tmux 3.6 the
+  same day: after a width change tmux moves a cursor that was past the end of
+  its line's text back to that end (`[5G` on an empty line: column 4 to 0;
+  `ab[6G`: 5 to 2), and a height change leaves it; tmxr keeps the column. Not
+  compared otherwise; the oracle's `tab_stops_reset_as_tmux` checks only the tab
+  stops after its resize for this reason.
 - **Alternate screen switches are made over vt100's**
   (`Emulator::switch_screen`, matching tmux 3.6 in the oracle for 47, 1047 and
   1049, on and off): switching on goes through vt100's 1049, which saves the

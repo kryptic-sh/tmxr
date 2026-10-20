@@ -90,6 +90,7 @@ pub const NAMES: &[&str] = &[
     "pane_start_command",
     "pane_start_path",
     "pane_synchronized",
+    "pane_tabs",
     "pane_title",
     "pane_top",
     "pane_tty",
@@ -869,6 +870,10 @@ impl<'a> Context for Vars<'a> {
             // The modes the pane's program set, as tmux's MODE_INSERT and
             // MODE_WRAP.
             "origin_flag" => flag(pane?.emu.origin_mode()),
+            "pane_tabs" => {
+                let stops: Vec<String> = pane?.emu.tab_stops().map(|c| c.to_string()).collect();
+                stops.join(",")
+            }
             "scroll_region_upper" => pane?.emu.scroll_region().0.to_string(),
             "scroll_region_lower" => pane?.emu.scroll_region().1.to_string(),
             "insert_flag" => flag(pane?.emu.insert_and_wrap().0),

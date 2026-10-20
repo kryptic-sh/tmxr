@@ -12,14 +12,20 @@ use crate::modes::{ModeSplitter, Piece};
 /// program cannot grow it without end; the size is the terminal's choice.
 const KITTY_STACK_LIMIT: usize = 16;
 
-/// The columns between vt100's tab stops, which it keeps fixed (its
-/// `Grid::col_tab`): a program's own stops (HTS, TBC) are not kept.
+/// The columns between the default tab stops.
 const TAB_WIDTH: u16 = 8;
 
 /// `screen`'s rows and columns, which vt100 keeps nonzero, as numbers.
 pub fn screen_size(screen: &vt100::Screen) -> (u16, u16) {
     let (rows, cols) = screen.size();
     (rows.get(), cols.get())
+}
+
+/// Tab stops every `TAB_WIDTH` columns, as tmux's screen_reset_tabs.
+fn default_tabs(cols: u16) -> Vec<bool> {
+    (0..cols.max(1))
+        .map(|c| c > 0 && c % TAB_WIDTH == 0)
+        .collect()
 }
 
 /// A screen dimension as vt100 takes it: at least 1, as tmux's
@@ -271,6 +277,9 @@ pub struct Emulator {
     /// screen. tmux keeps one for the terminal; vt100 keeps one per screen,
     /// so it is written into vt100's again after each switch.
     region: Option<(u16, u16)>,
+    /// The tab stops, one flag a column, as tmux keeps them (vt100's are
+    /// fixed every `TAB_WIDTH` columns).
+    tabs: Vec<bool>,
     /// The mouse encodings the program set, apart as tmux keeps them (vt100
     /// keeps one).
     mouse_utf8: bool,
@@ -299,6 +308,7 @@ impl Emulator {
             alt_allowed: true,
             origin_mode: false,
             region: None,
+            tabs: default_tabs(cols),
             mouse_utf8: false,
             mouse_sgr: false,
             scrollback,
@@ -354,6 +364,7 @@ impl Emulator {
         (self.mouse_utf8, self.mouse_sgr) = (false, false);
         self.origin_mode = false;
         self.region = None;
+        self.tabs = default_tabs(self.parser.screen().size().1.get());
         // CAN ends whatever sequence is in progress, but vte acts on an OSC
         // it cuts off: what that could change is put back, as tmux's
         // input_clear drops the sequence.
@@ -423,6 +434,7 @@ impl Emulator {
                     (self.mouse_utf8, self.mouse_sgr) = (false, false);
                     self.origin_mode = false;
                     self.region = None;
+                    self.tabs = default_tabs(self.parser.screen().size().1.get());
                     // tmux's full reset stops the blinking, its shape kept.
                     self.parser.callbacks_mut().cursor_blinking = false;
                     self.parser.process(b"\x1bc");
@@ -433,6 +445,19 @@ impl Emulator {
                 Piece::ScrollRegion(top, bottom) => self.set_region(top, bottom),
                 Piece::InsertLines(count) => self.lines(count, 'L'),
                 Piece::DeleteLines(count) => self.lines(count, 'M'),
+                Piece::Tab => self.tab(),
+                Piece::TabSet => {
+                    if let Some(stop) = self.tab_at_cursor() {
+                        *stop = true;
+                    }
+                }
+                Piece::TabClear(0) => {
+                    if let Some(stop) = self.tab_at_cursor() {
+                        *stop = false;
+                    }
+                }
+                Piece::TabClear(3) => self.tabs.fill(false),
+                Piece::TabClear(_) => {}
             }
         }
     }
@@ -450,8 +475,7 @@ impl Emulator {
         self.parser.process(ch.to_string().repeat(times).as_bytes());
     }
 
-    /// CBT as tmux's input_csi_dispatch: the cursor back `count` tab stops,
-    /// which are vt100's, every `TAB_WIDTH` columns.
+    /// CBT as tmux's input_csi_dispatch: the cursor back `count` tab stops.
     fn back_tab(&mut self, count: u32) {
         let screen = self.parser.screen();
         let mut col = screen.cursor_position().1.min(screen.size().1.get() - 1);
@@ -460,9 +484,39 @@ impl Emulator {
                 break;
             }
             col -= 1;
-            col -= col % TAB_WIDTH;
+            while col > 0 && !self.tabs[usize::from(col)] {
+                col -= 1;
+            }
         }
         self.parser.process(format!("\x1b[{}G", col + 1).as_bytes());
+    }
+
+    /// HT as tmux's input_c0_dispatch: the cursor on to the next tab stop,
+    /// or the last column if there is none; from the last column, nowhere.
+    fn tab(&mut self) {
+        let screen = self.parser.screen();
+        let (cols, col) = (screen.size().1.get(), screen.cursor_position().1);
+        if col >= cols - 1 {
+            return;
+        }
+        let stop = (col + 1..cols - 1)
+            .find(|&c| self.tabs[usize::from(c)])
+            .unwrap_or(cols - 1);
+        self.parser
+            .process(format!("\x1b[{}G", stop + 1).as_bytes());
+    }
+
+    /// The tab stop flag of the cursor's column, if it is on the screen.
+    fn tab_at_cursor(&mut self) -> Option<&mut bool> {
+        let col = self.parser.screen().cursor_position().1;
+        self.tabs.get_mut(usize::from(col))
+    }
+
+    /// The columns with a tab stop, counted from 0 (`#{pane_tabs}`).
+    pub fn tab_stops(&self) -> impl Iterator<Item = u16> + '_ {
+        (0..)
+            .zip(&self.tabs)
+            .filter_map(|(col, &stop)| stop.then_some(col))
     }
 
     /// DECSTBM as tmux's screen_write_scrollregion: rows past the screen
@@ -649,8 +703,13 @@ impl Emulator {
     pub fn resize(&mut self, rows: u16, cols: u16) {
         // A resize takes the whole screen as the region, in tmux and in
         // vt100 alike (which keeps it when the size is the same).
-        if screen_size(self.parser.screen()) != (rows.max(1), cols.max(1)) {
+        let (old_rows, old_cols) = screen_size(self.parser.screen());
+        if (old_rows, old_cols) != (rows.max(1), cols.max(1)) {
             self.region = None;
+        }
+        // And a new width the default tab stops, as tmux's screen_resize.
+        if old_cols != cols.max(1) {
+            self.tabs = default_tabs(cols.max(1));
         }
         self.parser
             .screen_mut()

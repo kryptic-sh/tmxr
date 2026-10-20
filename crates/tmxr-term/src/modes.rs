@@ -10,7 +10,8 @@
 //! needs the emulator's cursor, DECSCUSR (`SP q`), whose shape and
 //! blinking the emulator keeps itself, and DECSTBM (`r`), IL (`L`) and DL
 //! (`M`), as the emulator keeps the scroll region (vt100 keeps one per
-//! screen, and its IL and DL do nothing outside it).
+//! screen, and its IL and DL do nothing outside it), and HT, HTS (`ESC H`)
+//! and TBC (`g`), as it keeps the tab stops (vt100's are fixed).
 
 /// The DEC private modes split out.
 const SPLIT_MODES: [u32; 11] = [6, 9, 47, 1000, 1001, 1002, 1003, 1005, 1006, 1047, 1049];
@@ -50,6 +51,12 @@ pub enum Piece {
     InsertLines(u32),
     /// DL: `count` lines deleted at the cursor.
     DeleteLines(u32),
+    /// HT: the cursor on to the next tab stop.
+    Tab,
+    /// HTS: a tab stop set at the cursor.
+    TabSet,
+    /// TBC: the tab stop at the cursor (0) or every one (3) cleared.
+    TabClear(u32),
 }
 
 /// Splits the split modes out of DEC private mode sets and resets
@@ -63,6 +70,9 @@ pub struct ModeSplitter {
     /// tmux repeats only a character with nothing after it but the REP
     /// (input_print's `INPUT_LAST`, which every control clears).
     tail: Vec<u8>,
+    /// Inside a string (OSC, DCS, APC, PM or SOS), whose tabs are its own,
+    /// until a BEL, CAN, SUB or ESC ends it.
+    in_string: bool,
 }
 
 enum Scan {
@@ -72,6 +82,10 @@ enum Scan {
     Incomplete,
     /// `ESC c`.
     Reset,
+    /// `ESC H`.
+    TabSet,
+    /// The two bytes that start a string.
+    String,
     /// A CSI `len` bytes long: its private marker (`<` to `?`), its
     /// parameters, its intermediate bytes, and its final byte.
     Csi {
@@ -88,9 +102,10 @@ fn scan(bytes: &[u8]) -> Scan {
     match bytes {
         [_] => Scan::Incomplete,
         [_, b'c', ..] => Scan::Reset,
+        [_, b'H', ..] => Scan::TabSet,
         [_, b'[', ..] => scan_csi(bytes),
         // A string's body follows, and ends at a BEL or an `ESC \`.
-        [_, b']' | b'P' | b'_' | b'^' | b'X', ..] => Scan::Other(2),
+        [_, b']' | b'P' | b'_' | b'^' | b'X', ..] => Scan::String,
         // An escape: intermediates, then its final byte.
         _ => {
             for (i, &b) in bytes.iter().enumerate().skip(1) {
@@ -237,6 +252,8 @@ impl ModeSplitter {
                 break;
             };
             self.text(&mut pieces, &input[i..i + esc]);
+            // An ESC ends a string, as its `ESC \` or by cutting it off.
+            self.in_string = false;
             i += esc;
             let len = match scan(&input[i..]) {
                 Scan::Incomplete => {
@@ -249,6 +266,15 @@ impl ModeSplitter {
                 }
                 Scan::Reset => {
                     pieces.push(Piece::Reset);
+                    2
+                }
+                Scan::TabSet => {
+                    pieces.push(Piece::TabSet);
+                    2
+                }
+                Scan::String => {
+                    push_text(&mut pieces, &input[i..i + 2]);
+                    self.in_string = true;
                     2
                 }
                 Scan::Csi {
@@ -296,6 +322,11 @@ impl ModeSplitter {
                                 pieces.push(Piece::DeleteLines(count));
                             }
                         }
+                        (None, [], b'g') => {
+                            if let Some(ps) = value(&params) {
+                                pieces.push(Piece::TabClear(ps));
+                            }
+                        }
                         _ => push_text(&mut pieces, seq),
                     }
                     len
@@ -307,8 +338,33 @@ impl ModeSplitter {
         pieces
     }
 
-    /// Adds text between sequences to `pieces`, keeping its last bytes.
-    fn text(&mut self, pieces: &mut Vec<Piece>, bytes: &[u8]) {
+    /// Adds text between sequences to `pieces`, each HT outside a string
+    /// as its own piece.
+    fn text(&mut self, pieces: &mut Vec<Piece>, mut bytes: &[u8]) {
+        while !bytes.is_empty() {
+            if self.in_string {
+                let Some(end) = bytes.iter().position(|b| matches!(b, 0x07 | 0x18 | 0x1a)) else {
+                    self.plain(pieces, bytes);
+                    return;
+                };
+                self.plain(pieces, &bytes[..=end]);
+                self.in_string = false;
+                bytes = &bytes[end + 1..];
+            } else {
+                let Some(at) = bytes.iter().position(|&b| b == b'\t') else {
+                    self.plain(pieces, bytes);
+                    return;
+                };
+                self.plain(pieces, &bytes[..at]);
+                pieces.push(Piece::Tab);
+                self.tail.clear();
+                bytes = &bytes[at + 1..];
+            }
+        }
+    }
+
+    /// Adds text to `pieces`, keeping its last bytes.
+    fn plain(&mut self, pieces: &mut Vec<Piece>, bytes: &[u8]) {
         push_text(pieces, bytes);
         self.tail.extend_from_slice(bytes);
         let cut = self.tail.len().saturating_sub(MAX_CHAR);
@@ -338,7 +394,10 @@ mod tests {
                 | Piece::CursorStyle(_)
                 | Piece::ScrollRegion(..)
                 | Piece::InsertLines(_)
-                | Piece::DeleteLines(_) => None,
+                | Piece::DeleteLines(_)
+                | Piece::Tab
+                | Piece::TabSet
+                | Piece::TabClear(_) => None,
             })
             .flatten()
             .collect()
@@ -430,6 +489,29 @@ mod tests {
         assert_eq!(text(f.split(b"2J")), b"\x1b[2J");
         assert_eq!(text(f.split(b"\x1b[?10")), b"");
         assert_eq!(f.flush(), b"\x1b[?10");
+    }
+
+    #[test]
+    fn tabs_split_out_but_not_from_strings() {
+        let mut f = ModeSplitter::default();
+        assert_eq!(
+            f.split(b"a\tb\x1bH\x1b[3g\x1b[g"),
+            vec![
+                Piece::Text(b"a".to_vec()),
+                Piece::Tab,
+                Piece::Text(b"b".to_vec()),
+                Piece::TabSet,
+                Piece::TabClear(3),
+                Piece::TabClear(0),
+            ]
+        );
+        // A title's tab is the title's, to its BEL or its `ESC \`; one
+        // split across reads too.
+        assert_eq!(text(f.split(b"\x1b]0;a\tb\x07")), b"\x1b]0;a\tb\x07");
+        assert_eq!(f.split(b"\t"), vec![Piece::Tab]);
+        assert_eq!(text(f.split(b"\x1b]2;c\t")), b"\x1b]2;c\t");
+        assert_eq!(text(f.split(b"d\x1b\\")), b"d\x1b\\");
+        assert_eq!(f.split(b"\t"), vec![Piece::Tab]);
     }
 
     #[test]

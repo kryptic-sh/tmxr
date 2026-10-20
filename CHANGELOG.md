@@ -32,6 +32,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`#{cursor_shape}` and `#{cursor_blinking}`**, as tmux's: the cursor the
   pane's program set (`block`, `underline`, `bar` or `default`) and whether it
   blinks.
+- **`#{pane_tabs}`**, as tmux's: the columns of the pane's tab stops.
 - **`#{scroll_region_upper}` and `#{scroll_region_lower}`**, as tmux's: the
   pane's scroll region.
 - **`#{insert_flag}`, `#{wrap_flag}` and `#{origin_flag}`**, as tmux's: insert
@@ -538,6 +539,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A program's own tab stops are kept**: HTS (`ESC H`) sets one and TBC
+  (`CSI g`) clears them, and tabs and back tabs move by them, as tmux's, where
+  tmxr kept fixed stops every 8 columns. A width change, `ESC c` and
+  `send-keys -R` put back the defaults.
 - **The scroll region is kept as tmux keeps it**: inserting or deleting lines
   (`CSI L` / `CSI M`) with the cursor outside it now moves the rows from the
   cursor to the bottom, where it did nothing; a region set on one screen is kept
