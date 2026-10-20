@@ -638,11 +638,12 @@ table. What has been verified, and how:
   `format::expand_time` fills in strftime sequences at each level of a format
   (nested parts, `E:` values, modifier arguments) as tmux's `FORMAT_EXPAND_TIME`
   does, and the status line, the terminal title and `display-message` use it.
-  Not checked against tmux: menus, popups' titles and `pane-border-format` (tmxr
-  has none yet), and `#()` jobs (tmux turns time expansion off for them; tmxr
-  has no jobs in formats). strftime covers the C locale's common conversions
-  (`format::strftime`); `%Z`, `%z`, `%U`, `%V`, `%W`, `%G`, `%g` and `%x` / `%X`
-  are kept as written.
+  Read against tmux 3.6 (2026-10-20), not run: `pane-border-format` takes it, as
+  screen_redraw's format_expand_time; menus' items and the `-T` titles of menus
+  and popups do not, as tmux's format_single. Not done: `#()` jobs (tmux turns
+  time expansion off for them; tmxr has no jobs in formats). strftime covers the
+  C locale's common conversions (`format::strftime`); `%Z`, `%z`, `%U`, `%V`,
+  `%W`, `%G`, `%g` and `%x` / `%X` are kept as written.
 - **tmux's `link-window` and `move-window` drop the mark** of a pane in the
   window they place (2026-10-18, tmux 3.6): `server_link_window` moves
   `marked_pane.wl` to the new link but keeps `marked_pane.s`, so the mark no
