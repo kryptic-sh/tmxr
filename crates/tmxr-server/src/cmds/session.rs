@@ -226,6 +226,7 @@ pub(super) fn run(
                     window,
                     pane: window.and_then(|w| srv.windows.get(&w)).map(|w| w.active),
                     client: Some(c.id),
+                    kind: crate::vars::Kind::Unknown,
                 };
                 let line = list_item(a, &vars, || {
                     let session = srv
@@ -257,6 +258,7 @@ pub(super) fn run(
                     window,
                     pane: window.and_then(|w| srv.windows.get(&w)).map(|w| w.active),
                     client: None,
+                    kind: crate::vars::Kind::Session,
                 };
                 let line = list_item(a, &vars, || {
                     let attached = srv

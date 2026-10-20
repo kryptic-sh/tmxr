@@ -24,6 +24,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`#{pane_format}`, `#{window_format}` and `#{session_format}`**, as tmux's: 1
+  for the kind of thing a format is expanded for, so a `#{W:…}` row or a
+  `list-windows` line is a window though it carries the window's active pane.
 - **`#{pane_tty}`**, as tmux's: the pane's terminal device on Unix, which
   scripts hand to `ps -t` (vim-tmux-navigator's `is_vim` check among them);
   empty on Windows, where a ConPTY has none.

@@ -400,6 +400,7 @@ pub(super) fn run(
                         window: Some(wid),
                         pane: Some(*p),
                         client: None,
+                        kind: crate::vars::Kind::Pane,
                     };
                     let line = list_item(a, &vars, || {
                         let prefix = if a.has('a') {

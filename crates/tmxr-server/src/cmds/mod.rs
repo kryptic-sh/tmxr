@@ -299,6 +299,7 @@ fn print_new(
         window: pane.and_then(|p| srv.panes.get(&p)).map(|p| p.window),
         pane,
         client: ctx.client,
+        kind: crate::vars::Kind::of(Some(session), None, pane),
     };
     out.stdout.push_str(&expand_with(
         srv,

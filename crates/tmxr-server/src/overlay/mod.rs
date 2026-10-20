@@ -164,6 +164,7 @@ impl Choose<'_> {
                     window: Some(w),
                     pane: Some(p),
                     client: self.client,
+                    kind: crate::vars::Kind::Pane,
                 };
                 crate::cmds::format_true(&tmxr_command::format::expand(filter, &vars))
             })
@@ -355,6 +356,7 @@ impl Overlay {
                     window,
                     pane: window.and_then(|w| srv.windows.get(&w)).map(|w| w.active),
                     client: choose.client,
+                    kind: crate::vars::Kind::Session,
                 };
                 let text = choose.text(&vars, || {
                     format!(
@@ -450,6 +452,7 @@ impl Overlay {
                     window: Some(w.id),
                     pane: Some(w.active),
                     client: choose.client,
+                    kind: crate::vars::Kind::Window,
                 };
                 let text = choose.text(&vars, || format!("{}:{idx} {}", s.name, w.name));
                 let item = Item {

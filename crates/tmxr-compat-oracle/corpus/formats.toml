@@ -618,3 +618,16 @@ checks = [
   { screen_contains = "aa##bb", expect = false },
   { screen_contains = "x#[y", expect = true },
 ]
+
+[[cases]]
+name = "format_types_as_tmux"
+steps = [{ run = "new-window -d -t o:1" }, { run = "split-window -d -t o:1" }]
+checks = [
+  { command = "display -p -t o:1 '#{session_format}#{window_format}#{pane_format}'" },
+  { command = "display -p 'S[#{S:#{session_format}#{window_format}#{pane_format}}]'" },
+  { command = "display -p -t o 'W[#{W:#{session_format}#{window_format}#{pane_format},}]'" },
+  { command = "display -p -t o:1 'P[#{P:#{session_format}#{window_format}#{pane_format},}]'" },
+  { command = "list-windows -t o -F '#{session_format}#{window_format}#{pane_format}'" },
+  { command = "list-sessions -F '#{session_format}#{window_format}#{pane_format}'" },
+  { command = "list-panes -t o:1 -F '#{session_format}#{window_format}#{pane_format}'" },
+]

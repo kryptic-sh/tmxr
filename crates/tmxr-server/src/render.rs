@@ -837,6 +837,7 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
             window: Some(*wid),
             pane: Some(win.active),
             client: Some(id),
+            kind: crate::vars::Kind::Window,
         };
         let options = srv.window_options(*wid);
         let current = *idx == session.current;

@@ -62,6 +62,7 @@ pub const NAMES: &[&str] = &[
     "pane_dead_signal",
     "pane_dead_status",
     "pane_dead_time",
+    "pane_format",
     "pane_height",
     "pane_id",
     "pane_in_mode",
@@ -92,6 +93,7 @@ pub const NAMES: &[&str] = &[
     "session_attached",
     "session_attached_list",
     "session_created",
+    "session_format",
     "session_group",
     "session_group_attached",
     "session_group_attached_list",
@@ -121,6 +123,7 @@ pub const NAMES: &[&str] = &[
     "window_bell_flag",
     "window_end_flag",
     "window_flags",
+    "window_format",
     "window_height",
     "window_id",
     "window_index",
@@ -148,6 +151,34 @@ pub struct Vars<'a> {
     pub window: Option<WindowId>,
     pub pane: Option<PaneId>,
     pub client: Option<ClientId>,
+    /// What the format is for (`#{pane_format}` and the like).
+    pub kind: Kind,
+}
+
+/// What a format is expanded for, as tmux's format type: the most specific
+/// of the session, window and pane its caller named, before the rest are
+/// filled in (a window's rows carry its active pane and stay windows).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kind {
+    Unknown,
+    Session,
+    Window,
+    Pane,
+}
+
+impl Kind {
+    /// The kind of a format given these.
+    pub fn of(session: Option<SessionId>, window: Option<WindowId>, pane: Option<PaneId>) -> Self {
+        if pane.is_some() {
+            Self::Pane
+        } else if window.is_some() {
+            Self::Window
+        } else if session.is_some() {
+            Self::Session
+        } else {
+            Self::Unknown
+        }
+    }
 }
 
 impl<'a> Vars<'a> {
@@ -169,6 +200,7 @@ impl<'a> Vars<'a> {
             window,
             pane,
             client,
+            kind: Kind::of(None, None, pane),
         }
     }
 }
@@ -328,12 +360,13 @@ impl<'a> Context for Vars<'a> {
             activity,
         };
         // A session's or window's own window and pane, as tmux fills them in.
-        let in_window = |session, window: WindowId| Vars {
+        let in_window = |session, window: WindowId, kind| Vars {
             srv,
             session,
             window: Some(window),
             pane: srv.windows.get(&window).map(|w| w.active),
             client: self.client,
+            kind,
         };
         Some(match kind {
             LoopKind::Sessions => {
@@ -349,10 +382,11 @@ impl<'a> Context for Vars<'a> {
                             session: Some(s.id),
                             window: None,
                             pane: None,
+                            kind: Kind::Session,
                             ..*self
                         };
                         if let Some(w) = s.current_window() {
-                            vars = in_window(Some(s.id), w);
+                            vars = in_window(Some(s.id), w, Kind::Session);
                         }
                         item(
                             vars,
@@ -371,7 +405,7 @@ impl<'a> Context for Vars<'a> {
                     .filter_map(|(index, wid)| {
                         let w = srv.windows.get(wid)?;
                         let activity = std::time::SystemTime::now() - w.last_output.elapsed();
-                        let vars = in_window(Some(s.id), *wid);
+                        let vars = in_window(Some(s.id), *wid, Kind::Window);
                         Some(item(
                             vars,
                             *index == s.current,
@@ -389,6 +423,7 @@ impl<'a> Context for Vars<'a> {
                     .map(|pid| {
                         let vars = Vars {
                             pane: Some(pid),
+                            kind: Kind::Pane,
                             ..*self
                         };
                         let activity = std::time::SystemTime::now();
@@ -725,6 +760,11 @@ impl<'a> Context for Vars<'a> {
                     p.pty.pid()?.to_string()
                 }
             }
+            // tmux's: whether the format is for a pane, a window or a
+            // session (`Kind`).
+            "pane_format" => flag(self.kind == Kind::Pane),
+            "window_format" => flag(self.kind == Kind::Window),
+            "session_format" => flag(self.kind == Kind::Session),
             "pane_tty" => pane?
                 .pty
                 .tty_name()
