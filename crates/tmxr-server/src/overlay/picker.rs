@@ -228,15 +228,20 @@ impl PickerOverlay {
         self.picker.title() == "sessions"
     }
 
-    /// The highlighted session, for the session picker's actions.
-    fn selected_session(&mut self) -> Option<(SessionId, String)> {
+    /// The highlighted row's target.
+    fn selected_target(&mut self) -> Option<Target> {
         match self.picker.accept() {
             PickerEvent::Select(PickerAction::Custom(any)) => {
-                match *any.downcast::<Target>().ok()? {
-                    Target::Session(id, name) => Some((id, name)),
-                    _ => None,
-                }
+                any.downcast::<Target>().ok().map(|t| *t)
             }
+            _ => None,
+        }
+    }
+
+    /// The highlighted session, for the session picker's actions.
+    fn selected_session(&mut self) -> Option<(SessionId, String)> {
+        match self.selected_target()? {
+            Target::Session(id, name) => Some((id, name)),
             _ => None,
         }
     }
@@ -306,6 +311,12 @@ impl PickerOverlay {
             KeyCode::Char('p') if ctrl => self.picker.select_prev(),
             KeyCode::Char('c') if ctrl => return OverlayAction::Close,
             KeyCode::Char('q') | KeyCode::Esc => return OverlayAction::Close,
+            // tmux's choose-buffer: the buffer in `editor`.
+            KeyCode::Char('e') if self.picker.title() == "buffers" => {
+                if let Some(Target::Buffer(name)) = self.selected_target() {
+                    return OverlayAction::EditBuffer(name);
+                }
+            }
             KeyCode::Char('i' | 'I' | 'a' | 'A' | '/') => {
                 self.typing = true;
                 self.picker.query.enter_insert_at_end();

@@ -609,3 +609,8 @@ checks = [
   { command = "show-hooks -g after-kill-pane" },
   { command = "show-hooks -gw pane-died" },
 ]
+
+[[cases]]
+name = "editor_defaults_as_tmux"
+steps = []
+checks = [{ command = "show -s editor" }, { command = "show -sv editor" }]

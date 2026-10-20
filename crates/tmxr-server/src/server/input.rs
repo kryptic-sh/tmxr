@@ -376,6 +376,11 @@ impl Server {
                             a.overlay = Some(Overlay::prompt(":".into(), line, None));
                         }
                     }
+                    OverlayAction::EditBuffer(name) => {
+                        if let Err(e) = self.edit_buffer(id, &name) {
+                            self.show_message_for(id, e, None, false, false);
+                        }
+                    }
                     OverlayAction::Switch(sid) => self.switch_client(id, sid),
                     OverlayAction::SwitchWindow(sid, idx) => {
                         self.switch_client(id, sid);

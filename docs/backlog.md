@@ -512,12 +512,16 @@ table. What has been verified, and how:
     `bad colour` and shows `#ABCDEF` as `#abcdef`; checking them as tmux does
     was considered and declined for now: tmxr's own defaults put formats in
     colour options (`display-panes-colour = "#{@thm_blue}"`), which tmux's check
-    would refuse, so it needs those expanded first or the theme moved; server
-    `editor`. `escape-time` holds a lone Escape on the server
-    (`Server::escape_time`), where tmux's client reads its terminal with the
-    wait; tmxr's client reads through crossterm, which already reads an Escape
-    and a key that arrive together as Meta and the key, so only keys arriving
-    apart are joined there (tmxr's default is 0, tmux's 10).
+    would refuse, so it needs those expanded first or the theme moved. `editor`
+    edits a buffer from `choose-buffer` (`e`) in a popup, as tmux's
+    popup_editor, but the popup takes the picker's place (tmxr's overlay is one
+    at a time), so the picker is not there again after the edit, where tmux's
+    buffer mode is; on Windows, where tmux has no default, `editor` falls back
+    to `notepad` (a choice, not tmux's). `escape-time` holds a lone Escape on
+    the server (`Server::escape_time`), where tmux's client reads its terminal
+    with the wait; tmxr's client reads through crossterm, which already reads an
+    Escape and a key that arrive together as Meta and the key, so only keys
+    arriving apart are joined there (tmxr's default is 0, tmux's 10).
   - Commands: `capture-pane -a` (it needs the saved normal screen, which `vt100`
     does not expose). `-e` writes only the attributes `vt100` keeps (bold, dim,
     italics, underline, reverse; not blink, hidden, strikethrough, overline or

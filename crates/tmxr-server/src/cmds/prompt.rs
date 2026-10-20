@@ -206,37 +206,20 @@ pub(super) fn run(
                     .or_else(|| srv.sessions.get(&sid).map(|s| s.cwd.clone()))
                     .unwrap_or_else(crate::util::home_dir),
             };
-            let env = super::env_flags(a)?;
-            let inner = crate::popup::Popup::inner_of(rect, border);
-            let id = srv.next_pane;
-            let started = srv.start_pty(
-                id,
-                sid,
-                pos,
-                cwd,
-                &env,
-                inner.width.max(1),
-                inner.height.max(1),
-            )?;
-            let popup = crate::popup::Popup {
-                id,
-                spawn: started.spawn,
-                pty: started.pty,
-                emu: srv.new_emulator(inner.height.max(1), inner.width.max(1), 0),
-                output: started.output,
+            let spec = crate::popup::PopupSpec {
                 rect,
                 border,
                 title,
                 look,
                 close_on_exit,
                 any_key: a.has('k'),
-                exited: false,
-                extended_keys: srv.extended_keys(),
+                session: sid,
+                argv: pos.to_vec(),
+                cwd,
+                env: super::env_flags(a)?,
+                edit: None,
             };
-            if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
-                att.overlay = Some(Overlay::Popup(Box::new(popup)));
-            }
-            srv.mark_client_dirty(c);
+            srv.open_popup(c, spec)?;
         }
         "show-prompt-history" => {
             for (kind, list) in &srv.prompt_history {

@@ -121,6 +121,9 @@ main-pane-width = "80"
 other-pane-height = "0"
 other-pane-width = "0"
 copy-command = ""
+# Empty takes $VISUAL, else $EDITOR, else /usr/bin/vi as tmux's (Notepad on
+# Windows).
+editor = ""
 # tmux's default: the prompts' history is kept in no file.
 history-file = ""
 # tmux's default; `lock-client` runs it in the client's terminal.

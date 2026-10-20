@@ -62,6 +62,8 @@ pub struct Config {
     pub rgb_colour: String,
     /// Shell command `copy-pipe` sends the copied text to when it names none.
     pub copy_command: String,
+    /// `editor`: what edits a paste buffer (`choose-buffer`'s `e`).
+    pub editor: String,
     /// `history-file`: where the prompts' history is read from when the
     /// server starts and written when it exits; empty, nowhere.
     pub history_file: String,
@@ -164,6 +166,7 @@ struct File {
     other_pane_height: String,
     other_pane_width: String,
     copy_command: String,
+    editor: String,
     history_file: String,
     lock_command: String,
     lock_after_time: u64,
@@ -314,6 +317,11 @@ impl From<File> for Config {
             set_clipboard: f.set_clipboard,
             rgb_colour: f.rgb_colour,
             copy_command: f.copy_command,
+            editor: if f.editor.is_empty() {
+                default_editor()
+            } else {
+                f.editor
+            },
             history_file: f.history_file,
             socket_access: f.socket_access,
             navigator: f.navigator,
@@ -816,6 +824,19 @@ pub fn load(path: Option<&Path>) -> Result<(Config, ConfigSource), ConfigError> 
     }
 }
 
+/// The editor tmux starts with: `$VISUAL`, else `$EDITOR`, else tmux's
+/// `/usr/bin/vi` (`_PATH_VI`); on Windows, which has neither, Notepad.
+fn default_editor() -> String {
+    let fallback = if cfg!(windows) {
+        "notepad"
+    } else {
+        "/usr/bin/vi"
+    };
+    ["VISUAL", "EDITOR"]
+        .into_iter()
+        .find_map(|k| std::env::var(k).ok().filter(|v| !v.is_empty()))
+        .unwrap_or_else(|| fallback.to_owned())
+}
 #[cfg(test)]
 mod tests {
     use super::*;

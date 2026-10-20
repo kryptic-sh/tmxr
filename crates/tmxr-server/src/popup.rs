@@ -37,6 +37,39 @@ pub struct Popup {
     pub exited: bool,
     /// The `extended-keys` option, for encoding keys as for a pane.
     pub extended_keys: tmxr_term::ExtendedKeys,
+    /// A paste buffer being edited in this popup's program.
+    pub edit: Option<BufferEdit>,
+}
+
+/// A paste buffer written to a file for an editor, as tmux's popup_editor:
+/// read back into the buffer when the editor succeeds. The file goes with
+/// it.
+pub struct BufferEdit {
+    pub name: String,
+    pub path: std::path::PathBuf,
+}
+
+impl Drop for BufferEdit {
+    fn drop(&mut self) {
+        // The file is ours and only for this edit; one already gone is fine.
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+/// What a new popup is: its box and look, how it closes, and the program
+/// it runs where.
+pub struct PopupSpec {
+    pub rect: Rect,
+    pub border: bool,
+    pub title: String,
+    pub look: crate::overlay::BoxLook,
+    pub close_on_exit: usize,
+    pub any_key: bool,
+    pub session: crate::model::SessionId,
+    pub argv: Vec<String>,
+    pub cwd: std::path::PathBuf,
+    pub env: Vec<(String, String)>,
+    pub edit: Option<BufferEdit>,
 }
 
 impl Popup {
@@ -165,17 +198,127 @@ impl Server {
         self.mark_client_dirty(client);
     }
 
-    /// The popup's program exited: close the popup, or keep it to be read.
+    /// The popup's program exited: close the popup, or keep it to be read;
+    /// a buffer it edited takes the file back if it succeeded.
     pub fn popup_exited(&mut self, id: PaneId, spawn: u64, code: Option<u32>) {
         let Some((client, p)) = self.popup_mut(id, spawn) else {
             return;
         };
         p.exited = true;
+        let edit = p.edit.take();
         if p.closes_on(code)
             && let Some(att) = self.clients.get_mut(&client).and_then(|c| c.att.as_mut())
         {
             att.overlay = None;
         }
+        if let Some(edit) = edit.filter(|_| code == Some(0)) {
+            self.finish_buffer_edit(&edit);
+        }
         self.mark_client_dirty(client);
+    }
+
+    /// Open a popup on `client` running `spec`'s program.
+    pub fn open_popup(&mut self, client: ClientId, spec: PopupSpec) -> Result<(), String> {
+        let inner = Popup::inner_of(spec.rect, spec.border);
+        let id = self.next_pane;
+        let started = self.start_pty(
+            id,
+            spec.session,
+            &spec.argv,
+            spec.cwd,
+            &spec.env,
+            inner.width.max(1),
+            inner.height.max(1),
+        )?;
+        let popup = Popup {
+            id,
+            spawn: started.spawn,
+            pty: started.pty,
+            emu: self.new_emulator(inner.height.max(1), inner.width.max(1), 0),
+            output: started.output,
+            rect: spec.rect,
+            border: spec.border,
+            title: spec.title,
+            look: spec.look,
+            close_on_exit: spec.close_on_exit,
+            any_key: spec.any_key,
+            exited: false,
+            extended_keys: self.extended_keys(),
+            edit: spec.edit,
+        };
+        if let Some(att) = self.clients.get_mut(&client).and_then(|c| c.att.as_mut()) {
+            att.overlay = Some(Overlay::Popup(Box::new(popup)));
+        }
+        self.mark_client_dirty(client);
+        Ok(())
+    }
+
+    /// `choose-buffer`'s `e`, as tmux's window_buffer_start_edit and
+    /// popup_editor: buffer `name` written to a file, which `editor` opens
+    /// in a popup nine tenths of the client's size, closing when it exits.
+    pub fn edit_buffer(&mut self, client: ClientId, name: &str) -> Result<(), String> {
+        static EDITS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let data = self
+            .buffers
+            .iter()
+            .find(|b| b.name == name)
+            .map(|b| b.data.clone())
+            .ok_or_else(|| format!("no buffer {name}"))?;
+        let att = self
+            .clients
+            .get(&client)
+            .and_then(|c| c.att.as_ref())
+            .ok_or("no current client")?;
+        let (cols, rows, session) = (att.cols, att.rows, att.session);
+        let n = EDITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!("tmxr.{}.{n}", std::process::id()));
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .and_then(|mut f| std::io::Write::write_all(&mut f, data.as_bytes()))
+            .map_err(|e| format!("{}: {e}", path.display()))?;
+        let edit = BufferEdit {
+            name: name.to_owned(),
+            path,
+        };
+        let (w, h) = (cols * 9 / 10, rows * 9 / 10);
+        let lines = self.client_window_options(client).popup_border_lines;
+        let spec = PopupSpec {
+            rect: Rect::new(cols / 2 - w / 2, rows / 2 - h / 2, w, h),
+            border: crate::overlay::Lines::of(lines).is_some(),
+            title: String::new(),
+            look: crate::overlay::BoxLook {
+                lines: crate::overlay::Lines::of(lines),
+                ..crate::overlay::BoxLook::default()
+            },
+            close_on_exit: 1,
+            any_key: false,
+            session,
+            argv: vec![format!("{} {}", self.cfg.editor, edit.path.display())],
+            cwd: std::env::temp_dir(),
+            env: Vec::new(),
+            edit: Some(edit),
+        };
+        self.open_popup(client, spec)
+    }
+
+    /// An edited buffer's file read back into it, as tmux's
+    /// window_buffer_finish_edit: an empty file changes nothing, and a
+    /// newline the editor added at the end goes if the buffer had none.
+    fn finish_buffer_edit(&mut self, edit: &BufferEdit) {
+        let Ok(bytes) = std::fs::read(&edit.path) else {
+            return;
+        };
+        let mut text = String::from_utf8_lossy(&bytes).into_owned();
+        let Some(buffer) = self.buffers.iter_mut().find(|b| b.name == edit.name) else {
+            return;
+        };
+        if !buffer.data.is_empty() && !buffer.data.ends_with('\n') && text.ends_with('\n') {
+            text.pop();
+        }
+        if !text.is_empty() {
+            buffer.data = text;
+        }
     }
 }

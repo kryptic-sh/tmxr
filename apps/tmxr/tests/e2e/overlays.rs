@@ -1708,3 +1708,42 @@ fn tmuxs_status_line_menus_act_on_what_was_clicked() {
         |o| o.trim() == "3",
     );
 }
+
+/// choose-buffer's `e`, as tmux's: the buffer in `editor`, in a popup, and
+/// what the editor leaves in the file back in the buffer when it succeeds.
+#[test]
+fn choose_buffer_e_edits_the_buffer_in_the_editor() {
+    let t = Tmxr::new("bufedit");
+    let s = t.attach(&["new", "-s", "be"]);
+    s.wait_for("status line", |text| text.contains("be"));
+    t.run(&["set-buffer", "-b", "mybuf", "old text"]);
+    // The editor copies the new text over the file it is given.
+    let new = t.dir.path().join("new.txt");
+    std::fs::write(&new, "new text\n").unwrap();
+    let copy = if cfg!(windows) { "copy /y" } else { "cp" };
+    t.run(&["set", "-s", "editor", &format!("{copy} {}", new.display())]);
+    t.run(&["choose-buffer"]);
+    s.wait_for("the buffer picker", |text| text.contains("mybuf"));
+    s.send(b"e");
+    // Its newline goes, as the buffer had none.
+    t.wait_run(&["show-buffer", "-b", "mybuf"], "the edited buffer", |o| {
+        o == "new text"
+    });
+    // An editor that changes the file and fails leaves the buffer as it
+    // was.
+    let fail = if cfg!(windows) {
+        let script = t.dir.path().join("fail.cmd");
+        std::fs::write(&script, "@echo changed> %1\r\n@exit /b 1\r\n").unwrap();
+        script.display().to_string()
+    } else {
+        let script = t.dir.path().join("fail.sh");
+        std::fs::write(&script, "echo changed > \"$1\"\nexit 1\n").unwrap();
+        format!("sh {}", script.display())
+    };
+    t.run(&["set", "-s", "editor", &fail]);
+    t.run(&["choose-buffer"]);
+    s.wait_for("the buffer picker", |text| text.contains("mybuf"));
+    s.send(b"e");
+    std::thread::sleep(Duration::from_millis(1500));
+    assert_eq!(t.run(&["show-buffer", "-b", "mybuf"]), "new text");
+}

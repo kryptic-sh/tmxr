@@ -145,6 +145,7 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed) -> Res {
             }
         },
         "copy-command" => need()?.clone_into(&mut c.copy_command),
+        "editor" => need()?.clone_into(&mut c.editor),
         "history-file" => need()?.clone_into(&mut c.history_file),
         "socket-access" => {
             return Err(
@@ -167,6 +168,7 @@ pub const SERVER_OPTIONS: &[&str] = &[
     "client-away-time",
     "copy-command",
     "default-terminal",
+    "editor",
     "escape-time",
     "exit-empty",
     "exit-unattached",
@@ -194,6 +196,7 @@ pub fn server_option(srv: &Server, name: &str) -> Option<String> {
         "client-away-time" => c.client_away_time.to_string(),
         "copy-command" => c.copy_command.clone(),
         "default-terminal" => c.default_terminal.clone(),
+        "editor" => c.editor.clone(),
         "escape-time" => c.escape_time.to_string(),
         "exit-empty" => on_off(c.exit_empty).to_owned(),
         "exit-unattached" => on_off(c.exit_unattached).to_owned(),
@@ -218,7 +221,7 @@ fn server_option_lines(srv: &Server) -> Vec<String> {
         .map(|&name| {
             let value = server_option(srv, name).unwrap_or_default();
             let value = match name {
-                "copy-command" | "default-terminal" | "history-file" => {
+                "copy-command" | "default-terminal" | "editor" | "history-file" => {
                     tmxr_command::escape_arg(&value)
                 }
                 _ => value,
