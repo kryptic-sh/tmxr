@@ -222,7 +222,7 @@ pub(super) fn run(
                 id,
                 spawn: started.spawn,
                 pty: started.pty,
-                emu: tmxr_term::Emulator::new(inner.height.max(1), inner.width.max(1), 0),
+                emu: srv.new_emulator(inner.height.max(1), inner.width.max(1), 0),
                 output: started.output,
                 rect,
                 border,
@@ -231,7 +231,7 @@ pub(super) fn run(
                 close_on_exit,
                 any_key: a.has('k'),
                 exited: false,
-                extended_keys: srv.cfg.extended_keys == "always",
+                extended_keys: srv.extended_keys(),
             };
             if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
                 att.overlay = Some(Overlay::Popup(Box::new(popup)));

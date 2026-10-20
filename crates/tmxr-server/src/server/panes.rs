@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use hjkl_layout::{LayoutTree, SplitDir};
-use tmxr_term::{Emulator, Pty, PtyEvent, SpawnSpec};
+use tmxr_term::{Pty, PtyEvent, SpawnSpec};
 use tracing::debug;
 
 use super::{ChildEnv, Event, Server, SplitSize};
@@ -73,13 +73,14 @@ impl Server {
         let empty = argv.is_none();
         let argv = argv.unwrap_or_default();
         let history_limit = self.session_options(session).history_limit;
+        let emu = self.new_emulator(rows.max(1), cols.max(1), history_limit);
         self.panes.insert(
             pid,
             Pane {
                 id: pid,
                 window,
                 pty: started.pty,
-                emu: Emulator::new(rows.max(1), cols.max(1), history_limit),
+                emu,
                 rect: hjkl_layout::LayoutRect::new(0, 0, cols, rows),
                 start_cwd: started.cwd,
                 copy: None,
@@ -542,10 +543,12 @@ impl Server {
                 let options = self.pane_options(pid);
                 let (allow_title, alternate_ok) =
                     (options.allow_set_title, options.alternate_screen);
+                let extended_keys = self.extended_keys();
                 let Some(p) = self.panes.get_mut(&pid) else {
                     return;
                 };
                 p.emu.set_alternate_screen(alternate_ok);
+                p.emu.set_extended_keys(extended_keys);
                 // Output after the exit puts the dead line off again; once
                 // it is written, tmux has closed the pane's terminal
                 // (server_destroy_pane), so nothing more is read.

@@ -680,3 +680,27 @@ steps = [
   { run = "kill-window -t o:2" },
 ]
 checks = [{ format = "#{@a} #{window_index} #{session_stack}" }]
+
+[[cases]]
+name = "pane_key_mode_as_tmux"
+steps = [
+  { run = "set -g extended-keys off" },
+  { run = "new-window -d -t o:1 'printf \"\\033[>4;1m\"; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "set -g extended-keys on" },
+  { run = "new-window -d -t o:2 'printf \"\\033[>4;1m\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:3 'printf \"\\033[>4;2m\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:4" },
+  { sleep = 0.5 },
+  { run = "set -g extended-keys always" },
+  { run = "new-window -d -t o:5" },
+  { run = "set -g extended-keys off" },
+]
+checks = [
+  { command = "display -p -t o:0 '#{pane_key_mode}'" },
+  { command = "display -p -t o:1 '#{pane_key_mode}'" },
+  { command = "display -p -t o:2 '#{pane_key_mode}'" },
+  { command = "display -p -t o:3 '#{pane_key_mode}'" },
+  { command = "display -p -t o:4 '#{pane_key_mode}'" },
+  { command = "display -p -t o:5 '#{pane_key_mode}'" },
+]

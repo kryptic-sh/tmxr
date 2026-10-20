@@ -503,6 +503,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`extended-keys off` ignores a program's request for extended keys**, as
+  tmux's (xterm modifyOtherKeys, `CSI > 4 ; n m`), where tmxr honoured it; a
+  level asked for before stays. The kitty keyboard protocol, which tmux does not
+  have, is not affected. `#{pane_key_mode}` shows the level, as tmux's (`VT10x`,
+  `Ext 1`, `Ext 2`; a pane started under `always` has `Ext 1`).
 - **A session remembers every window visited, as tmux's stack**: killing the
   current window goes back to the one before it and `last-window` still has the
   one before that, where it said `no last window`; with none, the previous index

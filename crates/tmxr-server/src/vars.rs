@@ -70,6 +70,7 @@ pub const NAMES: &[&str] = &[
     "pane_in_mode",
     "pane_index",
     "pane_input_off",
+    "pane_key_mode",
     "pane_last",
     "pane_left",
     "pane_marked",
@@ -800,6 +801,14 @@ impl<'a> Context for Vars<'a> {
                     .map_or(0, |p| p + 1)
                     .to_string()
             }
+            // tmux's names for the pane's modifyOtherKeys level (what it
+            // asked for, or `always` gave it when it started).
+            "pane_key_mode" => match pane?.emu.input_modes().modify_other_keys {
+                0 => "VT10x",
+                1 => "Ext 1",
+                _ => "Ext 2",
+            }
+            .to_owned(),
             "pane_format" => flag(self.kind == Kind::Pane),
             "window_format" => flag(self.kind == Kind::Window),
             "session_format" => flag(self.kind == Kind::Session),

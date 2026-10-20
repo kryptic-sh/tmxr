@@ -35,8 +35,8 @@ pub struct Popup {
     /// `-k`: any key closes the popup once its command has exited.
     pub any_key: bool,
     pub exited: bool,
-    /// `extended-keys always`, for encoding keys as for a pane.
-    pub extended_keys: bool,
+    /// The `extended-keys` option, for encoding keys as for a pane.
+    pub extended_keys: tmxr_term::ExtendedKeys,
 }
 
 impl Popup {
@@ -157,6 +157,7 @@ impl Server {
             return;
         };
         let bytes = p.output.0.take();
+        p.emu.set_extended_keys(p.extended_keys);
         let replies = p.emu.process(&bytes);
         if !replies.is_empty() {
             let _ = p.pty.write(&replies);

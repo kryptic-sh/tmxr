@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use crate::dcs::DcsSplitter;
-use crate::encode::InputModes;
+use crate::encode::{ExtendedKeys, InputModes};
 use crate::modes::{ModeSplitter, Piece};
 
 /// Most kitty keyboard flag sets a pane keeps. The protocol asks a terminal
@@ -24,6 +24,9 @@ pub struct Hooks {
     replies: Vec<u8>,
     /// xterm `modifyOtherKeys` level set with `CSI > 4 ; n m`.
     modify_other_keys: u8,
+    /// The `extended-keys` option as output arrives: `off` ignores a
+    /// `CSI > 4 ; n m`, as tmux's input_csi_dispatch_sgr_other.
+    extended_keys: ExtendedKeys,
     /// kitty keyboard flags stack (`CSI > f u` pushes, `CSI < n u` pops).
     kitty_flags: Vec<u8>,
     /// The program asked for focus reports (`CSI ? 1004 h`).
@@ -97,7 +100,7 @@ impl vt100::Callbacks for Hooks {
                 }
                 _ => {}
             },
-            (Some(b'>'), 'm') if p(0) == Some(4) => {
+            (Some(b'>'), 'm') if p(0) == Some(4) && self.extended_keys != ExtendedKeys::Off => {
                 self.modify_other_keys = p(1).unwrap_or(0).min(2) as u8;
             }
             (Some(b'>'), 'u') => {
@@ -319,9 +322,22 @@ impl Emulator {
         hooks.cwd = cwd;
         hooks.input_mark = mark;
         hooks.focus_reports = false;
-        hooks.modify_other_keys = 0;
         hooks.kitty_flags.clear();
+        self.reset_keys();
         self.count_history();
+    }
+
+    /// The `extended-keys` option, for the output that follows: `off`
+    /// ignores a program's request for extended keys, as tmux's.
+    pub fn set_extended_keys(&mut self, option: ExtendedKeys) {
+        self.parser.callbacks_mut().extended_keys = option;
+    }
+
+    /// The extended-keys level a new or reset screen starts at, as tmux's
+    /// screen_write_reset: 1 under `extended-keys always`, else none.
+    pub fn reset_keys(&mut self) {
+        let hooks = self.parser.callbacks_mut();
+        hooks.modify_other_keys = u8::from(hooks.extended_keys == ExtendedKeys::Always);
     }
 
     /// Whether the program may switch to the alternate screen (tmux's
@@ -757,6 +773,18 @@ mod tests {
         assert_eq!(e.input_modes().modify_other_keys, 0);
         e.process(b"\x1b[>4;2m");
         assert_eq!(e.input_modes().modify_other_keys, 2);
+        // Under `extended-keys off` a request is ignored as it arrives, and
+        // a reset under `always` starts at level 1, as tmux's.
+        e.set_extended_keys(ExtendedKeys::Off);
+        e.process(b"\x1b[>4;1m");
+        assert_eq!(e.input_modes().modify_other_keys, 2);
+        e.reset_keys();
+        assert_eq!(e.input_modes().modify_other_keys, 0);
+        e.set_extended_keys(ExtendedKeys::Always);
+        e.reset_keys();
+        assert_eq!(e.input_modes().modify_other_keys, 1);
+        e.set_extended_keys(ExtendedKeys::On);
+        e.process(b"\x1b[>4;2m");
         e.process(b"\x1b[>1u");
         assert_eq!(e.input_modes().kitty_flags, 1);
         assert_eq!(e.process(b"\x1b[?u"), b"\x1b[?1u");

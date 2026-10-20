@@ -24,9 +24,47 @@ pub struct InputModes {
     pub modify_other_keys: u8,
 }
 
+/// The `extended-keys` option, as tmux's: whether a program's request for
+/// extended keys (xterm modifyOtherKeys) is honoured, and whether keys are
+/// extended without one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ExtendedKeys {
+    /// Requests are ignored.
+    Off,
+    /// Keys are extended when the program asks.
+    #[default]
+    On,
+    /// Keys are always extended.
+    Always,
+}
+
+impl ExtendedKeys {
+    /// The option's value; anything but `on` and `always` is `off`, as
+    /// tmux's default.
+    pub fn from_option(value: &str) -> Self {
+        match value {
+            "on" => Self::On,
+            "always" => Self::Always,
+            _ => Self::Off,
+        }
+    }
+}
+
 impl InputModes {
-    fn extended(self, always: bool) -> bool {
-        always || self.kitty_flags & 1 != 0 || self.modify_other_keys > 0
+    /// The modifyOtherKeys level keys go out at: the pane's (which a
+    /// request made under `extended-keys off` never set), at least 1 with
+    /// `always`.
+    pub fn key_level(self, option: ExtendedKeys) -> u8 {
+        match option {
+            ExtendedKeys::Always => self.modify_other_keys.max(1),
+            ExtendedKeys::Off | ExtendedKeys::On => self.modify_other_keys,
+        }
+    }
+
+    /// Whether keys go extended: the kitty protocol's flag (which tmux has
+    /// no counterpart for, so the option leaves it alone) or a key level.
+    fn extended(self, option: ExtendedKeys) -> bool {
+        self.kitty_flags & 1 != 0 || self.key_level(option) > 0
     }
 }
 
@@ -60,16 +98,16 @@ fn ctrl_byte(c: char) -> Option<u8> {
     })
 }
 
-/// Encode a key for a pane. `extended_always` is the `extended-keys always`
-/// option. Release events and keys with no encoding produce nothing.
-pub fn encode_key(key: &KeyEvent, modes: InputModes, extended_always: bool) -> Vec<u8> {
+/// Encode a key for a pane under the `extended-keys` option. Release
+/// events and keys with no encoding produce nothing.
+pub fn encode_key(key: &KeyEvent, modes: InputModes, option: ExtendedKeys) -> Vec<u8> {
     if key.kind == KeyEventKind::Release {
         return Vec::new();
     }
     let m = key.modifiers & (KeyModifiers::SHIFT | KeyModifiers::ALT | KeyModifiers::CONTROL);
     let alt = m.contains(KeyModifiers::ALT);
     let ctrl = m.contains(KeyModifiers::CONTROL);
-    let extended = modes.extended(extended_always);
+    let extended = modes.extended(option);
     let kitty = modes.kitty_flags & 1 != 0;
 
     let with_alt = |mut bytes: Vec<u8>| {
@@ -277,7 +315,7 @@ mod tests {
     fn conpty_takes_c_h_and_c_j_as_win32_input() {
         let ctrl = |c, m| KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL | m);
         let win32 = |key: KeyEvent| {
-            let bytes = encode_key(&key, InputModes::default(), false);
+            let bytes = encode_key(&key, InputModes::default(), ExtendedKeys::On);
             conpty_key(&key, &bytes).map(|b| String::from_utf8(b).unwrap())
         };
         assert_eq!(
@@ -305,7 +343,10 @@ mod tests {
             ..InputModes::default()
         };
         let key = ctrl('j', KeyModifiers::NONE);
-        assert_eq!(conpty_key(&key, &encode_key(&key, kitty, false)), None);
+        assert_eq!(
+            conpty_key(&key, &encode_key(&key, kitty, ExtendedKeys::On)),
+            None
+        );
     }
 
     const NONE: KeyModifiers = KeyModifiers::NONE;
@@ -314,7 +355,11 @@ mod tests {
     const S: KeyModifiers = KeyModifiers::SHIFT;
 
     fn enc(code: KeyCode, m: KeyModifiers) -> Vec<u8> {
-        encode_key(&KeyEvent::new(code, m), InputModes::default(), false)
+        encode_key(
+            &KeyEvent::new(code, m),
+            InputModes::default(),
+            ExtendedKeys::On,
+        )
     }
 
     #[test]
@@ -358,29 +403,36 @@ mod tests {
             ..InputModes::default()
         };
         let up = KeyEvent::new(KeyCode::Up, NONE);
-        assert_eq!(encode_key(&up, modes, false), b"\x1bOA");
+        assert_eq!(encode_key(&up, modes, ExtendedKeys::On), b"\x1bOA");
         let c_up = KeyEvent::new(KeyCode::Up, C);
-        assert_eq!(encode_key(&c_up, modes, false), b"\x1b[1;5A");
+        assert_eq!(encode_key(&c_up, modes, ExtendedKeys::On), b"\x1b[1;5A");
     }
 
     #[test]
     fn keys_without_legacy_form_need_extended_mode() {
         let c_semi = KeyEvent::new(KeyCode::Char(';'), C);
-        assert!(encode_key(&c_semi, InputModes::default(), false).is_empty());
+        assert!(encode_key(&c_semi, InputModes::default(), ExtendedKeys::On).is_empty());
         assert_eq!(
-            encode_key(&c_semi, InputModes::default(), true),
+            encode_key(&c_semi, InputModes::default(), ExtendedKeys::Always),
             b"\x1b[59;5u"
         );
         let mok = InputModes {
             modify_other_keys: 2,
             ..InputModes::default()
         };
-        assert_eq!(encode_key(&c_semi, mok, false), b"\x1b[59;5u");
+        assert_eq!(encode_key(&c_semi, mok, ExtendedKeys::On), b"\x1b[59;5u");
         let c_enter = KeyEvent::new(KeyCode::Enter, C);
-        assert_eq!(encode_key(&c_enter, mok, false), b"\x1b[13;5u");
+        assert_eq!(encode_key(&c_enter, mok, ExtendedKeys::On), b"\x1b[13;5u");
+        // A level the pane holds stands whatever the option is now, as
+        // tmux's; `always` extends keys without one.
+        assert_eq!(mok.key_level(ExtendedKeys::Off), 2);
+        assert_eq!(InputModes::default().key_level(ExtendedKeys::Always), 1);
         let cs_h = KeyEvent::new(KeyCode::Char('H'), C | S);
-        assert_eq!(encode_key(&cs_h, InputModes::default(), false), b"\x08");
-        assert_eq!(encode_key(&cs_h, mok, false), b"\x1b[104;6u");
+        assert_eq!(
+            encode_key(&cs_h, InputModes::default(), ExtendedKeys::On),
+            b"\x08"
+        );
+        assert_eq!(encode_key(&cs_h, mok, ExtendedKeys::On), b"\x1b[104;6u");
     }
 
     #[test]
@@ -389,7 +441,7 @@ mod tests {
             kitty_flags: 1,
             ..InputModes::default()
         };
-        let k = |code, m| encode_key(&KeyEvent::new(code, m), kitty, false);
+        let k = |code, m| encode_key(&KeyEvent::new(code, m), kitty, ExtendedKeys::On);
         assert_eq!(k(KeyCode::Char('h'), C), b"\x1b[104;5u");
         assert_eq!(k(KeyCode::Char('h'), A), b"\x1b[104;3u");
         assert_eq!(k(KeyCode::Esc, NONE), b"\x1b[27u");
@@ -400,7 +452,7 @@ mod tests {
     fn releases_are_ignored() {
         let mut ev = KeyEvent::new(KeyCode::Char('a'), NONE);
         ev.kind = KeyEventKind::Release;
-        assert!(encode_key(&ev, InputModes::default(), false).is_empty());
+        assert!(encode_key(&ev, InputModes::default(), ExtendedKeys::On).is_empty());
     }
 
     #[test]

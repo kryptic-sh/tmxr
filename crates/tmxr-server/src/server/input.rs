@@ -546,13 +546,27 @@ impl Server {
         self.send_key_to_pane(pane, ev);
     }
 
+    /// The `extended-keys` option.
+    pub fn extended_keys(&self) -> tmxr_term::ExtendedKeys {
+        tmxr_term::ExtendedKeys::from_option(&self.cfg.extended_keys)
+    }
+
+    /// A terminal for a new pane or popup, under the `extended-keys`
+    /// option as tmux's new screen.
+    pub fn new_emulator(&self, rows: u16, cols: u16, history: usize) -> tmxr_term::Emulator {
+        let mut emu = tmxr_term::Emulator::new(rows, cols, history);
+        emu.set_extended_keys(self.extended_keys());
+        emu.reset_keys();
+        emu
+    }
+
     /// Encode a key for a pane (and, with synchronize-panes, its siblings).
     pub fn send_key_to_pane(&mut self, pane: PaneId, ev: &KeyEvent) {
-        let always = self.cfg.extended_keys == "always";
+        let option = self.extended_keys();
         let targets = self.input_targets(pane);
         for t in targets {
             if let Some(p) = self.panes.get_mut(&t) {
-                let mut bytes = encode_key(ev, p.emu.input_modes(), always);
+                let mut bytes = encode_key(ev, p.emu.input_modes(), option);
                 // Every Windows pane is a ConPTY.
                 if cfg!(windows)
                     && let Some(win32) = conpty_key(ev, &bytes)

@@ -564,17 +564,22 @@ table. What has been verified, and how:
   runs at `4e59d9a`, from before that day's work, and the same at the day's end,
   so the rate is unchanged; a full `cargo test` fails one about every run. Load
   decides it: with other programs busy, the e2e suite alone failed five or six
-  tests in a run, and with the machine idle none (178 of 178, the same day). The
-  servers did start, only late: after the third, two `__server` processes for
-  the failed run's pipes (`oracle-58296-44`, `-45`) were still running 20
-  minutes on with no session, so the client's wait elapsed before the server
-  opened its pipe. Such a server never exits: `Server::check_exit` waits for a
-  first session (`had_session`, there because tmxr's server starts apart from
-  its client, unlike tmux's forked one) and none comes. Options, neither taken:
-  the server exits with no session and no client once a startup grace longer
-  than `SPAWN_TIMEOUT` has passed (a test of it waits out the grace), or the
-  client keeps the spawned `Child` and kills it when it gives up (the child is
-  dropped at once today). Why the start took so long under load is not known.
+  tests in a run, and with the machine idle none (178 of 178, the same day).
+  Timing checks fail the same way under load:
+  `run_shell_holds_its_command_list_and_reply` (`run-shell -b` returning within
+  2 s; 2.65 s and 2.28 s in two full runs), `display_menu_runs_the_item_picked`
+  (3.1 s to show) and `display_popup_runs_a_command_over_the_panes`, each
+  passing alone three times running. The servers did start, only late: after the
+  third, two `__server` processes for the failed run's pipes (`oracle-58296-44`,
+  `-45`) were still running 20 minutes on with no session, so the client's wait
+  elapsed before the server opened its pipe. Such a server never exits:
+  `Server::check_exit` waits for a first session (`had_session`, there because
+  tmxr's server starts apart from its client, unlike tmux's forked one) and none
+  comes. Options, neither taken: the server exits with no session and no client
+  once a startup grace longer than `SPAWN_TIMEOUT` has passed (a test of it
+  waits out the grace), or the client keeps the spawned `Child` and kills it
+  when it gives up (the child is dropped at once today). Why the start took so
+  long under load is not known.
 - **`word_separators_and_wrap_search_reach_copy_mode` failed once** (Windows,
   full e2e suite, 2026-10-18) at its first `#{copy_cursor_word}` check; four
   runs alone and the next full run passed. The failure output was not kept, so
