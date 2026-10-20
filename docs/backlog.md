@@ -522,10 +522,11 @@ table. What has been verified, and how:
     the text after a row's mark, where tmux's is the whole tree line;
     `command-prompt` Tab's menus (tmux opens a menu of the matches when several
     share no longer start, and of a session's windows after `-tname:`; tmxr
-    completes as far as they agree and stops), and the `target` /
-    `window-target` prompt types' completion (`overlay::prompt::completion`);
-    smaller flags: `source-file -v`, several paths and globs (each load replaces
-    the whole TOML config, so several files have no clear meaning yet);
+    completes as far as they agree and stops), and the `window-target` prompt
+    type's completion, which in tmux is that window menu
+    (`overlay::prompt::completion`; the `target` type completes sessions as
+    tmux's); smaller flags: `source-file -v`, several paths and globs (each load
+    replaces the whole TOML config, so several files have no clear meaning yet);
     `source-file` of a tmux command file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `client-light-theme` /
     `-dark-theme`. Copy mode lacks `next-prompt` / `previous-prompt` (they need
@@ -550,7 +551,9 @@ table. What has been verified, and how:
   its session and server going with it. Not new: run twice each the same day,
   the e2e suite alone failed one test (a different one each time) in one of two
   runs at `4e59d9a`, from before that day's work, and the same at the day's end,
-  so the rate is unchanged; a full `cargo test` fails one about every run. The
+  so the rate is unchanged; a full `cargo test` fails one about every run. Load
+  decides it: with other programs busy, the e2e suite alone failed five or six
+  tests in a run, and with the machine idle none (178 of 178, the same day). The
   servers did start, only late: after the third, two `__server` processes for
   the failed run's pipes (`oracle-58296-44`, `-45`) were still running 20
   minutes on with no session, so the client's wait elapsed before the server

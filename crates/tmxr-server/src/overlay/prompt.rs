@@ -84,34 +84,43 @@ fn common_prefix<S: AsRef<str>>(words: &[S]) -> Option<String> {
     Some(prefix.into_iter().collect())
 }
 
-/// What tmux's status_prompt_complete gives for `word`: one name it starts
-/// (with a space after) or what all of them share; for a `-t` or `-s` word
-/// the sessions as `-tname:`. `None` when that is no further on (tmux then
-/// opens a menu of them, which tmxr does not) or there is nothing.
-fn completion(word: &str, at_start: bool, names: &Completions) -> Option<String> {
-    if word.is_empty() {
+/// The sessions `s` starts the name (or after `$`, the id) of, as
+/// `name:`, and what they share, as tmux's status_prompt_complete_session.
+/// None after a colon, where tmux opens a menu of the session's windows.
+fn session_completion(s: &str, names: &Completions) -> Option<String> {
+    if s.contains(':') {
         return None;
     }
-    let out = if let Some(s) = word.strip_prefix("-t").or_else(|| word.strip_prefix("-s")) {
-        // tmux opens a menu of the session's windows after a colon.
-        if s.contains(':') {
-            return None;
-        }
+    let list: Vec<String> = names
+        .sessions
+        .iter()
+        .filter_map(|(name, id)| {
+            if s.is_empty() || name.starts_with(s) {
+                Some(format!("{name}:"))
+            } else {
+                let id = id.to_string();
+                let n = s.strip_prefix('$')?;
+                id.starts_with(n).then(|| format!("${id}:"))
+            }
+        })
+        .collect();
+    common_prefix(&list)
+}
+
+/// What tmux's status_prompt_complete gives for `word`: one name it starts
+/// (with a space after) or what all of them share; for a `-t` or `-s` word,
+/// or any word of a `target` prompt (`command-prompt -T target`), the
+/// sessions. `None` when that is no further on (tmux then opens a menu of
+/// them, which tmxr does not) or there is nothing.
+fn completion(word: &str, at_start: bool, target: bool, names: &Completions) -> Option<String> {
+    if word.is_empty() && !target {
+        return None;
+    }
+    let out = if target {
+        session_completion(word, names)
+    } else if let Some(s) = word.strip_prefix("-t").or_else(|| word.strip_prefix("-s")) {
         let flag = word.chars().nth(1)?;
-        let list: Vec<String> = names
-            .sessions
-            .iter()
-            .filter_map(|(name, id)| {
-                if s.is_empty() || name.starts_with(s) {
-                    Some(format!("{name}:"))
-                } else {
-                    let id = id.to_string();
-                    let n = s.strip_prefix('$')?;
-                    id.starts_with(n).then(|| format!("${id}:"))
-                }
-            })
-            .collect();
-        common_prefix(&list).map(|p| format!("-{flag}{p}"))
+        session_completion(s, names).map(|p| format!("-{flag}{p}"))
     } else {
         let mut list: Vec<&str> = names
             .commands
@@ -421,7 +430,7 @@ impl Prompt {
             return;
         }
         let word: String = self.input[first..last].iter().collect();
-        if let Some(out) = completion(&word, first == 0, &names) {
+        if let Some(out) = completion(&word, first == 0, self.kind == "target", &names) {
             self.input.splice(first..last, out.chars());
             self.cursor = first + out.chars().count();
         }
@@ -711,7 +720,7 @@ mod tests {
     #[test]
     fn tab_completes_as_tmux() {
         let n = names();
-        let c = |word: &str, at_start: bool| completion(word, at_start, &n);
+        let c = |word: &str, at_start: bool| completion(word, at_start, false, &n);
         // One match, with a space after; several, what they share.
         assert_eq!(c("new-w", true).as_deref(), Some("new-window "));
         assert_eq!(c("sel", true).as_deref(), Some("select"));
@@ -727,5 +736,10 @@ mod tests {
         assert_eq!(c("select", true), None);
         assert_eq!(c("", true), None);
         assert_eq!(c("-tmain:", false), None);
+        // A target prompt completes any word as a session, without -t.
+        let t = |word: &str| completion(word, true, true, &n);
+        assert_eq!(t("ot").as_deref(), Some("other:"));
+        assert_eq!(t("ma").as_deref(), Some("mai"));
+        assert_eq!(t("new-w"), None, "not a command there");
     }
 }

@@ -60,7 +60,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Tab completion in the command prompt**, as tmux's: the word at the cursor
   completes to a command name or alias (and after the first word an option name
   or layout) with a space after when one matches, or as far as the matches
-  agree; `-t` / `-s` words complete session names as `-tname:`.
+  agree; `-t` / `-s` words complete session names as `-tname:`, and a
+  `command-prompt -T target` prompt completes any word as a session.
 - **Empty panes, `split-window -I` and `display-message -I`**, as tmux's:
   `split-window ''` or `split-window -I` makes a pane with no program (no pid,
   `#{pane_dead}` 1, the cursor hidden, typed keys going nowhere), and `-I` shows

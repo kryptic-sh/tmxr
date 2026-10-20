@@ -330,8 +330,14 @@ steps = [
   { sleep = 0.2 },
   { keys = "\u000d" },
   { sleep = 0.3 },
+  { run = "command-prompt -b -T target \"set -g @h '%%'\"" },
+  { sleep = 0.3 },
+  { keys = "o\u0009" },
+  { sleep = 0.2 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
 ]
-checks = [{ format = "[#{@a}] [#{@b}] [#{@c}] [#{@d}] [#{@e}] [#{@f}] [#{@g}]" }]
+checks = [{ format = "[#{@a}] [#{@b}] [#{@c}] [#{@d}] [#{@e}] [#{@f}] [#{@g}] [#{@h}]" }]
 
 [[cases]]
 name = "select_line_cursor_moves_as_tmux"
