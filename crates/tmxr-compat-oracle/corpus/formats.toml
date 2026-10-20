@@ -506,3 +506,17 @@ checks = [
   { format = "A#{?#{==:a},x,y}B" },
   { format = "#{&&:1,1,0} #{&&:1,1,1} #{||:0,0,1} #{||:0,0} #{&&:1}" },
 ]
+
+[[cases]]
+name = "capture_pane_n_t_and_j_take_cells_as_tmux"
+program = 'sleep 0.5; printf "ab  \n\033[5Cx\nfull-line-of-twenty!wrapped\n"; exec sleep 1000'
+steps = [{ run = "resize-window -t o -x 20 -y 8" }, { sleep = 1.5 }]
+checks = [
+  { command = "capture-pane -p -E 3" },
+  { command = "capture-pane -p -N -E 3" },
+  { command = "capture-pane -p -T -E 3" },
+  { command = "capture-pane -p -N -T -E 3" },
+  { command = "capture-pane -p -J -E 3" },
+  { command = "capture-pane -p -J -N -E 3" },
+  { command = "capture-pane -p -N -e -E 3" },
+]

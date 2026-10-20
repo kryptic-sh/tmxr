@@ -475,7 +475,12 @@ pub(super) fn run(
                 .map(|v| super::expand_for(srv, ctx, Some(pid), v));
             let pane = srv.panes.get_mut(&pid).ok_or("no such pane")?;
             let range = (start.as_deref(), end.as_deref());
-            let flags = (a.has('J'), a.has('N'), a.has('e'));
+            let flags = CaptureFlags {
+                join: a.has('J'),
+                keep_spaces: a.has('N'),
+                written_only: a.has('T'),
+                escapes: a.has('e'),
+            };
             let mut text = capture(pane.emu.screen_mut(), range, flags);
             // -C: escaped as tmux's GRID_STRING_ESCAPE_SEQUENCES does
             // plain text, its backslashes doubled, and -e's escapes written
@@ -610,13 +615,38 @@ pub(super) fn run(
 /// blanks go unless `keep_blanks` (`-N`); `join` (`-J`) runs a wrapped line
 /// into the next. (tmux's `-J` keeps spaces a program wrote at a line's end,
 /// which the history snapshot cannot tell from blank cells.)
-/// The lines `start..=end` of a pane as text: `join` wrapped lines joined
-/// (-J), `keep_blanks` their trailing blanks kept (-N), and `escapes` each
-/// change of colour or attribute written as tmux's -e writes it.
+/// The capture-pane flags that shape each line.
+#[derive(Debug, Clone, Copy)]
+struct CaptureFlags {
+    /// -J: wrapped lines joined, each line's written cells kept whole.
+    join: bool,
+    /// -N: trailing spaces kept.
+    keep_spaces: bool,
+    /// -T: only the cells written, not the line's whole allocation.
+    written_only: bool,
+    /// -e: each change of colour or attribute as tmux's escape for it.
+    escapes: bool,
+}
+
+/// How many cells tmux's grid_expand_line has given a line once `used` of
+/// them were written: a quarter of the width, half, or all of it.
+fn allocated(used: usize, width: usize) -> usize {
+    match used {
+        0 => 0,
+        n if n < width / 4 => width / 4,
+        n if n < width / 2 => width / 2,
+        n => n.max(width),
+    }
+}
+
+/// The lines `start..=end` of a pane as text, as tmux's
+/// cmd_capture_pane_history: each line's cells up to its allocation (or,
+/// with -T or -J, to what was written), its trailing spaces cut unless -N
+/// or -J.
 fn capture(
     screen: &mut vt100::Screen,
     (start, end): (Option<&str>, Option<&str>),
-    (join, keep_blanks, escapes): (bool, bool, bool),
+    flags: CaptureFlags,
 ) -> String {
     let lines = crate::copy::snapshot(screen);
     let rows = usize::from(screen.size().0);
@@ -633,37 +663,30 @@ fn capture(
     let top = line(start, 0, history);
     let bottom = line(end, last, last);
     let (top, bottom) = (top.min(bottom), top.max(bottom));
+    let width = usize::from(screen.size().1);
     let mut out = String::new();
     // As tmux's, the last cell's style carries over from line to line.
     let mut last = Style::default();
     for l in lines.get(top..=bottom).unwrap_or_default() {
-        let text: String = if escapes {
-            // Blank default cells at the end stand for tmux's never-written
-            // ones. tmux's grid_expand_line rounds a line's cells up past
-            // what was written, so one of those follows a line that is not
-            // full, and takes the escapes back to the default.
-            let blank = Style::default().fg(Color::Reset).bg(Color::Reset);
-            let used = l
-                .cells
-                .iter()
-                .rposition(|c| c.symbol != " " || c.style != blank)
-                .map_or(0, |i| (i + 2).min(l.cells.len()));
-            let mut text = String::new();
-            for c in l.cells[..used].iter().filter(|c| !c.symbol.is_empty()) {
+        let take = if flags.join || flags.written_only {
+            l.used
+        } else {
+            allocated(l.used, width)
+        };
+        let mut text = String::new();
+        for c in l.cells.iter().take(take).filter(|c| !c.symbol.is_empty()) {
+            if flags.escapes {
                 text.push_str(&sgr_change(last, c.style));
-                text.push_str(&c.symbol);
                 last = c.style;
             }
-            text
-        } else {
-            l.cells.iter().map(|c| c.symbol.as_str()).collect()
-        };
-        if keep_blanks {
+            text.push_str(&c.symbol);
+        }
+        if flags.keep_spaces || flags.join {
             out.push_str(&text);
         } else {
             out.push_str(text.trim_end_matches(' '));
         }
-        if !(join && l.wrapped) {
+        if !(flags.join && l.wrapped) {
             out.push('\n');
         }
     }

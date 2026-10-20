@@ -482,30 +482,27 @@ table. What has been verified, and how:
     (`display-panes-colour = "#{@thm_blue}"`), which tmux's check would refuse,
     so it needs those expanded first or the theme moved; server `editor`.
     `escape-time` is kept but never read.
-  - Commands: `capture-pane -a -T` (`-a` needs the saved normal screen, which
-    `vt100` does not expose). `-e` writes only the attributes `vt100` keeps
-    (bold, dim, italics, underline, reverse; not blink, hidden, strikethrough,
-    overline or the underline styles and colour), and `38;5;n` for n below 16 as
-    the plain or bright code, as `vt100` stores both alike; it takes one default
-    cell past a line's content to stand for tmux's rounded-up line, where tmux's
-    actual count of them depends on the line's history. `-T`, `-N` and `-J` all
-    need written cells told from never-written ones, which `copy::snapshot`
-    (what `capture` reads) turns into the same space. Seen against tmux 3.6
-    (2026-10-19, a line `ab` plus two written spaces): `-N` printed `ab` and
-    three spaces, one past the written ones, where tmxr pads to the pane's
-    width; `-N -T` printed exactly the written `ab` and two spaces. The oracle
-    cannot catch the difference on a capture's last line, as it trims the
-    output's end. tmux also keeps a tab as the tab character, where `vt100`
-    keeps the spaces it moved over; `split-window -I`;
-    `display-message -a -v -I` (`-a` lists every variable, which needs `vars.rs`
-    to enumerate its names); `-K` on the `choose-*` pickers, tagging and sort
-    keys; `buffer_created` and `buffer_full` (tmxr's buffers keep no creation
-    time, so `-O time` is their newest-first order); `choose-tree -F` replaces
-    the text after a row's mark, where tmux's is the whole tree line;
-    `command-prompt` completion (Tab); smaller flags: `source-file -v`, several
-    paths and globs (each load replaces the whole TOML config, so several files
-    have no clear meaning yet); `source-file` of a tmux command file (`%if`,
-    `%hidden`).
+  - Commands: `capture-pane -a` (it needs the saved normal screen, which `vt100`
+    does not expose). `-e` writes only the attributes `vt100` keeps (bold, dim,
+    italics, underline, reverse; not blink, hidden, strikethrough, overline or
+    the underline styles and colour), and `38;5;n` for n below 16 as the plain
+    or bright code, as `vt100` stores both alike. A line's allocation (what
+    `-N`, `-e` and a plain capture run to) is worked out from what was written
+    (`allocated` in `cmds/pane.rs`, as grid_expand_line rounds), where tmux's
+    comes from the line's whole history, so a line written long and then cut
+    short differs; an erased cell counts as unwritten (known divergence
+    `capture_pane_t_counts_an_erased_cell_as_written`). The oracle cannot catch
+    a difference on a capture's last line, as it trims the output's end. tmux
+    also keeps a tab as the tab character, where `vt100` keeps the spaces it
+    moved over; `split-window -I`; `display-message -a -v -I` (`-a` lists every
+    variable, which needs `vars.rs` to enumerate its names); `-K` on the
+    `choose-*` pickers, tagging and sort keys; `buffer_created` and
+    `buffer_full` (tmxr's buffers keep no creation time, so `-O time` is their
+    newest-first order); `choose-tree -F` replaces the text after a row's mark,
+    where tmux's is the whole tree line; `command-prompt` completion (Tab);
+    smaller flags: `source-file -v`, several paths and globs (each load replaces
+    the whole TOML config, so several files have no clear meaning yet);
+    `source-file` of a tmux command file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `client-light-theme` /
     `-dark-theme`. Copy mode lacks `next-prompt` / `previous-prompt` (they need
     a prompt mark on every history line, as tmux keeps per grid line; `Emulator`

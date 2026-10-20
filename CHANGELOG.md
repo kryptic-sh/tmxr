@@ -24,6 +24,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`capture-pane -T`**, and `-N` and `-J` as tmux's: each line runs to what
+  tmux allocates for it (a quarter, half or all of the width) or, with `-T` or
+  `-J`, to its last written cell, where `-N` padded every line to the pane's
+  width and `-J` cut written trailing spaces; a never-written line is empty.
 - **`choose-tree`, `choose-client` and `choose-buffer` `-F`, `-f`, `-O` and
   `-r`**, as tmux's: `-F` sets each row's text, `-f` filters them (`choose-tree`
   keeps the sessions and windows with a pane that passes), `-O` sorts them by

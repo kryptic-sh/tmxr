@@ -16,6 +16,11 @@ pub struct Line {
     /// The line continues on the next one (soft wrap): no newline between
     /// them when copied.
     pub wrapped: bool,
+    /// How many cells from the left were written, as tmux's cellused: up to
+    /// the last holding a character or a background colour. (vt100 keeps
+    /// an erased cell as it keeps one never written, where tmux counts an
+    /// erased cell inside what was written.)
+    pub used: usize,
 }
 
 impl Line {
@@ -93,6 +98,17 @@ pub fn snapshot(screen: &mut vt100::Screen) -> Vec<Line> {
             if idx >= total || lines[idx].is_some() {
                 continue;
             }
+            let written = |c: u16| {
+                screen.cell(r, c).is_some_and(|cell| {
+                    cell.has_contents()
+                        || cell.is_wide_continuation()
+                        || cell.bgcolor() != vt100::Color::Default
+                })
+            };
+            let used = (0..cols)
+                .rev()
+                .find(|&c| written(c))
+                .map_or(0, |c| usize::from(c) + 1);
             let cells = (0..cols)
                 .map(|c| match screen.cell(r, c) {
                     Some(cell) => Cell {
@@ -114,6 +130,7 @@ pub fn snapshot(screen: &mut vt100::Screen) -> Vec<Line> {
             lines[idx] = Some(Line {
                 cells,
                 wrapped: screen.row_wrapped(r),
+                used,
             });
         }
         if offset == 0 {
@@ -128,6 +145,7 @@ pub fn snapshot(screen: &mut vt100::Screen) -> Vec<Line> {
             l.unwrap_or(Line {
                 cells: Vec::new(),
                 wrapped: false,
+                used: 0,
             })
         })
         .collect()

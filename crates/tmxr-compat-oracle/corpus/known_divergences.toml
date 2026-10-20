@@ -15,3 +15,16 @@ checks = [
   { screen_contains = "^[^[[<2;6;6M", expect = true },
   { format = "#{window_panes}", expect = "1" },
 ]
+
+[[cases]]
+name = "capture_pane_t_counts_an_erased_cell_as_written"
+# tmux's cellused counts a cell erased inside what was written (here the c
+# of abc, erased by EL), so -N -T and -J keep it as a space (a line follows,
+# as the oracle trims a capture's end); vt100 keeps an
+# erased cell as one never written, so tmxr's Line::used stops at the b.
+program = 'sleep 0.5; printf "abc\033[1D\033[K\nend\n"; exec sleep 1000'
+steps = [{ sleep = 1.5 }]
+checks = [
+  { command = "capture-pane -p -N -T -E 1" },
+  { command = "capture-pane -p -J -E 1" },
+]
