@@ -24,6 +24,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`#{command}`**, as tmux's: the name of the command whose formats are
+  expanding (`display-message`, a hook's `set-option`).
 - **`#{pane_fg}`, `#{pane_bg}` and `#{sixel_support}`**: a pane's default
   colours from `window-style` and, for the active pane, `window-active-style`,
   named as tmux's; `sixel_support` is 0, as tmxr draws no sixel images.

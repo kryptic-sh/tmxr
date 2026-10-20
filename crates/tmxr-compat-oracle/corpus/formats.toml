@@ -865,3 +865,17 @@ checks = [
   { command = "display -p -t o.0 '#{pane_active} #{pane_fg} #{pane_bg}'" },
   { command = "display -p -t o.1 '#{pane_active} #{pane_fg} #{pane_bg}'" },
 ]
+
+[[cases]]
+name = "command_is_the_running_command_as_tmux"
+steps = [
+  { run = "set -gF @set '#{command}'" },
+  { run = "set-hook -g after-new-window \"set -gF @hook '#{command}'\"" },
+  { run = "new-window -d" },
+  { sleep = 0.3 },
+]
+checks = [
+  { command = "display -p '#{command}'" },
+  { command = "list-windows -F '#{command}'" },
+  { format = "#{@set} #{@hook}" },
+]

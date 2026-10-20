@@ -289,6 +289,8 @@ pub struct Server {
     pub config_error: Option<String>,
     /// A hook's commands are running: they fire no further hooks.
     pub in_hook: bool,
+    /// The command running now, for `#{command}`.
+    pub running: Option<&'static str>,
     last_save: Instant,
     /// What resurrect last wrote, so an unchanged layout is not saved again.
     pub last_saved: Option<crate::resurrect::Save>,
@@ -374,6 +376,7 @@ impl Server {
             watched: crate::notify::Watched::default(),
             config_error: None,
             in_hook: false,
+            running: None,
             last_save: Instant::now(),
             last_saved: None,
             clock_shown: None,

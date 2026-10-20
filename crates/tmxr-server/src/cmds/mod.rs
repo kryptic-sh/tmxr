@@ -418,6 +418,15 @@ fn on_off(value: Option<&str>, current: bool) -> Result<bool, String> {
 }
 
 fn run_one(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res {
+    // The command's name for its formats; a command it runs in turn has
+    // its own while it runs.
+    let outer = srv.running.replace(p.name());
+    let ran = dispatch(srv, ctx, p, out);
+    srv.running = outer;
+    ran
+}
+
+fn dispatch(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res {
     // A read-only client runs only what looks; a hook's commands are the
     // owner's, whoever's event fired it.
     if !srv.in_hook

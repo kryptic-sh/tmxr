@@ -29,6 +29,7 @@ pub const NAMES: &[&str] = &[
     "client_uid",
     "client_user",
     "client_width",
+    "command",
     "config_files",
     "copy_cursor_word",
     "copy_cursor_x",
@@ -828,6 +829,8 @@ impl<'a> Context for Vars<'a> {
                     c.unwrap_or(tmxr_command::format::Colour::Default),
                 )
             }
+            // The command whose formats these are, as tmux's.
+            "command" => srv.running?.to_owned(),
             // tmxr draws no sixel images.
             "sixel_support" => "0".to_owned(),
             "pane_unseen_changes" => flag(pane?.copy.as_ref().is_some_and(|c| c.unseen_changes)),
