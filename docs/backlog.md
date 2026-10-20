@@ -461,9 +461,6 @@ table. What has been verified, and how:
     process snapshots of `util::refresh_commands` were not measured. (`#{m:…}`
     and `s/…/` keep their compiled patterns, `format::compiled`: 89 µs an
     expansion with two patterns before, 7 µs after, release build, 2026-10-20.)
-  - A message over `MAX_FRAME` from the client (`load-buffer -` of more than 16
-    MiB) fails on the client before it is sent; the server turns a reply that
-    large into an error (`conn.rs`).
 - **tmux 3.6 features tmxr lacks** (the same review; compared against tmux's
   `cmd-*.c`, `options-table.c` and `format.c`, not run):
   - Formats: `#()` jobs run as tmux's (`format_jobs.rs`), and a job no format

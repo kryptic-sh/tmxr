@@ -424,21 +424,22 @@ fn destroy_unattached_and_the_exit_options_follow_tmux() {
 }
 
 #[test]
-fn a_reply_too_large_to_send_is_an_error_not_a_dropped_connection() {
+fn input_and_replies_larger_than_a_frame_go_whole() {
     let t = Tmxr::new("bigreply");
     t.run(&["new-session", "-d", "-s", "br"]);
-    // Larger than a frame may be (`MAX_FRAME`, 16 MiB).
-    let big = t.dir.path().join("big.txt");
-    std::fs::write(&big, "x".repeat(17 << 20)).unwrap();
-    let load = t.output(&["load-buffer", "-b", "big", &big.display().to_string()]);
+    // Larger than a frame may be (`MAX_FRAME`, 16 MiB), each way.
+    let size = 17 << 20;
+    let text = "x".repeat(size);
+    let load = t.output_with_stdin(&["load-buffer", "-b", "big", "-"], text.as_bytes());
     assert!(load.status.success(), "{load:?}");
     let out = t.output(&["show-buffer", "-b", "big"]);
-    assert!(!out.status.success());
-    let err = String::from_utf8_lossy(&out.stderr);
     assert!(
-        err.contains("over the") && err.contains("byte limit"),
-        "{err}"
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
     );
+    assert_eq!(out.stdout.len(), size);
+    assert!(out.stdout.iter().all(|&b| b == b'x'));
     assert!(t.output(&["has-session", "-t", "br"]).status.success());
 }
 

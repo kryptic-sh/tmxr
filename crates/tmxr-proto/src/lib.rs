@@ -17,6 +17,11 @@ pub use codec::{ProtoError, read_msg, write_msg};
 /// talk across a mismatch rather than mis-decode each other.
 pub const PROTOCOL_VERSION: u32 = 9;
 
+/// The most bytes of standard input one [`ClientMsg::Stdin`] carries, and
+/// of a reply's output one [`ServerMsg::Output`] carries, so input or a
+/// reply of any size stays under [`codec::MAX_FRAME`].
+pub const STDIN_PIECE: usize = 1 << 20;
+
 /// First message a client sends.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hello {
@@ -65,8 +70,9 @@ pub enum ClientMsg {
     /// The lock command could not run or did not exit cleanly: why. The
     /// client has its terminal back, as after [`ClientMsg::Resumed`].
     LockFailed(String),
-    /// All of the client's standard input, sent before a
-    /// [`ClientMsg::Command`] that reads it (`load-buffer -`).
+    /// The client's standard input, sent before a [`ClientMsg::Command`]
+    /// that reads it (`load-buffer -`), in pieces of at most
+    /// [`STDIN_PIECE`] bytes, which the server joins.
     Stdin(Vec<u8>),
 }
 

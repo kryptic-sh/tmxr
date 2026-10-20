@@ -121,22 +121,19 @@ pub fn accept_loop(
                             match write_msg(&mut send, &msg) {
                                 Ok(()) => {}
                                 // Nothing of a message too large was sent,
-                                // so the connection still works: a reply
-                                // becomes an error saying so, anything else
-                                // is dropped.
+                                // so the connection still works: a reply's
+                                // output goes ahead of it in pieces, and
+                                // anything else is dropped.
                                 Err(ProtoError::TooLarge(n)) => {
-                                    if matches!(msg, ServerMsg::CommandResult { .. }) {
-                                        let reply = ServerMsg::CommandResult {
-                                            status: 1,
-                                            stdout: String::new(),
-                                            stderr: format!(
-                                                "the reply, {n} bytes, is over the {}-byte limit",
-                                                tmxr_proto::codec::MAX_FRAME
-                                            ),
-                                        };
-                                        if write_msg(&mut send, &reply).is_err() {
-                                            break;
-                                        }
+                                    if let ServerMsg::CommandResult {
+                                        status,
+                                        stdout,
+                                        stderr,
+                                    } = msg
+                                        && write_in_pieces(&mut send, status, &stdout, stderr, n)
+                                            .is_err()
+                                    {
+                                        break;
                                     }
                                 }
                                 Err(_) => break,
@@ -155,5 +152,39 @@ pub fn accept_loop(
                 let _ = events.send(Event::Disconnected(id));
             }
         }
+    }
+}
+
+/// A reply too large for one frame (`size` bytes): its output in pieces
+/// the client writes as they come, then the reply without it; if that is
+/// still too large (its errors), an error saying so.
+fn write_in_pieces<W: std::io::Write>(
+    send: &mut W,
+    status: i32,
+    stdout: &str,
+    stderr: String,
+    size: usize,
+) -> Result<(), ProtoError> {
+    for piece in stdout.as_bytes().chunks(tmxr_proto::STDIN_PIECE) {
+        write_msg(send, &ServerMsg::Output(piece.to_vec()))?;
+    }
+    let rest = ServerMsg::CommandResult {
+        status,
+        stdout: String::new(),
+        stderr,
+    };
+    match write_msg(send, &rest) {
+        Err(ProtoError::TooLarge(_)) => write_msg(
+            send,
+            &ServerMsg::CommandResult {
+                status: 1,
+                stdout: String::new(),
+                stderr: format!(
+                    "the reply, {size} bytes, is over the {}-byte limit",
+                    tmxr_proto::codec::MAX_FRAME
+                ),
+            },
+        ),
+        other => other,
     }
 }

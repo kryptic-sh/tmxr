@@ -139,11 +139,17 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
     let to_io = |e: tmxr_proto::ProtoError| io::Error::other(e.to_string());
     write_msg(&mut send, &ClientMsg::Hello(hello())).map_err(to_io)?;
     // `load-buffer -` reads this process's standard input: all of it goes
-    // ahead of the command.
+    // ahead of the command, in pieces a frame holds (one, empty, for none).
     if tmxr_command::reads_stdin(&args) {
         let mut data = Vec::new();
         io::stdin().read_to_end(&mut data)?;
-        write_msg(&mut send, &ClientMsg::Stdin(data)).map_err(to_io)?;
+        let mut pieces = data.chunks(tmxr_proto::STDIN_PIECE).peekable();
+        if pieces.peek().is_none() {
+            write_msg(&mut send, &ClientMsg::Stdin(Vec::new())).map_err(to_io)?;
+        }
+        for piece in pieces {
+            write_msg(&mut send, &ClientMsg::Stdin(piece.to_vec())).map_err(to_io)?;
+        }
     }
     write_msg(&mut send, &ClientMsg::Command(args)).map_err(to_io)?;
 

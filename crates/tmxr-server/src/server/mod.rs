@@ -611,9 +611,10 @@ impl Server {
                 let out = crate::cmds::run_argv_list(self, &ctx, &argv);
                 self.conclude_command(id, &ctx, out);
             }
+            // The client's input comes in pieces, joined here.
             ClientMsg::Stdin(data) => {
                 if let Some(c) = self.clients.get_mut(&id) {
-                    c.stdin = Some(data);
+                    c.stdin.get_or_insert_with(Vec::new).extend(data);
                 }
             }
             ClientMsg::Input(ev) => self.input(id, ev),

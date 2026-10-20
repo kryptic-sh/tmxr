@@ -523,6 +523,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`load-buffer -` and replies past 16 MiB go whole**: the client's standard
+  input and a command's output are sent in pieces, where input that large failed
+  on the client and a reply that large (`show-buffer` of a big buffer) came back
+  as an error.
 - **`assume-paste-time` counts a mouse event as input and is kept per session**,
   as tmux's: a key right after a click (or attaching) is timed from it,
   whichever of the session's clients it came from, where it was timed from the
