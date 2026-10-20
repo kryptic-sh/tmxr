@@ -84,18 +84,25 @@ table. What has been verified, and how:
   fixed. Menus take the mouse as tmux's (`Menu::mouse`, from `menu_key_cb`),
   checked by the oracle's menu cases. Still missing: nothing has been tried by
   hand in a real terminal.
-- **crossterm is patched for Alt+Escape** until a release carries the fix:
-  crossterm 0.29's Unix parser read `ESC ESC` as a plain Escape, so Alt+Escape
-  lost its Alt. The fix is upstream as crossterm-rs/crossterm#1143 (branch
-  `fix-alt-escape` of kryptic-sh/crossterm); tmxr builds against a backport to
-  0.29.0 (branch `alt-escape-0.29`, pinned by `rev` in the root `Cargo.toml`'s
-  `[patch.crates-io]`, and allowed in `deny.toml`). Once a crossterm release has
-  it, upgrade and drop both. A `[patch]` applies only to builds from this
-  workspace: the release binaries and packages have the fix, but
-  `cargo install tmxr` from crates.io builds against crates.io's crossterm
-  without it. Still different from tmux: an Escape and a mouse event in one read
-  (`known_divergences.toml`), as crossterm drops the rest of a read once it has
-  an event.
+- **crossterm is patched** until a release carries both fixes: crossterm 0.29's
+  Unix parser read `ESC ESC` as a plain Escape, so Alt+Escape lost its Alt
+  (upstream as crossterm-rs/crossterm#1143, branch `fix-alt-escape` of
+  kryptic-sh/crossterm); and its mio event source returned on the first tty
+  event of a poll's batch, so a SIGWINCH ready in the same wakeup as a key was
+  never seen (mio is edge-triggered), losing the resize (fixed 2026-10-20, not
+  yet offered upstream, where `try_read` still has it). tmxr builds against both
+  on 0.29.0 (branch `alt-escape-0.29`, pinned by `rev` in the root
+  `Cargo.toml`'s `[patch.crates-io]`, and allowed in `deny.toml`). Once a
+  crossterm release has them, upgrade and drop both. A `[patch]` applies only to
+  builds from this workspace: the release binaries and packages have the fixes,
+  but `cargo install tmxr` from crates.io builds against crates.io's crossterm
+  without them. Still different from tmux: an Escape and a mouse event in one
+  read (`known_divergences.toml`), as crossterm drops the rest of a read once it
+  has an event. Read in the same `try_read`, not changed or run: a read that
+  fills its 1024-byte buffer with an event in it returns with the rest of the
+  input unread, which no new edge announces until more input comes; and a read
+  error other than `WouldBlock` or `Interrupted` (EIO once the terminal hangs
+  up) loops on the read without end.
 - **tmux default binds**: all of tmux 3.6's 267 are bound (compared with its
   `list-keys`, 2026-10-11) except the 18 digit binds (`1`-`9` in vi, `M-1`-`M-9`
   in emacs) that open a "(repeat)" prompt, declined: tmxr's copy mode takes
@@ -433,24 +440,22 @@ table. What has been verified, and how:
   a SIGWINCH); a start is a log of the client's crossterm events while Hyprland
   retiles, to tell a missed SIGWINCH from a size crossterm reads wrong, and
   whether tmux on the same setup sees the resize.
-- **A resize just after attaching can go unseen on Linux** (2026-10-18). In
-  `refresh_client_sets_and_clears_client_flags`, a client resized as soon as its
-  status line showed kept its old size on the server for the test's 30 s. This
-  happened in CI (run 39064458482, `test ubuntu-latest`, all three tries) and in
-  about half of the runs in WSL Ubuntu when other e2e tests ran alongside; it
-  never happened alone. A log of the client's events showed the `x` typed after
-  the resize but no `Resize` event, so crossterm never saw a SIGWINCH. The cause
-  was not found: crossterm's event source exists by then (`Guard::enter`'s
-  keyboard probe makes it), and the patched crossterm turns SIGWINCH into a
-  resize plainly. The test resizes again until the server has the size. A
-  separate gap, not shown to matter: the hello's size is read at connect, before
-  crossterm watches for resizes, so a resize between connect and attach would
-  also be missed. A related finding: the e2e key-log fixture lost a focus report
-  (`CSI I`, written by the server) in about one full Linux run in four when it
-  arrived before the fixture's first crossterm `read`, and in none of twelve
-  once the fixture polled first (`key_log_fixture`). Whether crossterm drops
-  input that comes before its reader starts, and whether that is what loses the
-  client's resize, is not established.
+- **A resize just after attaching went unseen on Linux** (2026-10-18), in
+  `refresh_client_sets_and_clears_client_flags` under load (CI run 39064458482):
+  the client's log showed the `x` typed after the resize but no `Resize` event.
+  The cause was crossterm's dropped SIGWINCH (see "crossterm is patched"),
+  reproduced deterministically on 2026-10-20 (Arch Linux): a resize and a key
+  arriving while a lock command runs, when the client reads nothing, lost the
+  resize every time with the old crossterm and none with the fix
+  (`a_resize_and_a_key_arriving_together_both_reach_the_server`, which passes
+  with the old crossterm when no key comes). The flags test resizes once again.
+  A separate gap, not shown to matter: the hello's size is read at connect,
+  before crossterm watches for resizes, so a resize between connect and attach
+  would be missed. Not established: whether the same fix explains the focus
+  report the e2e key-log fixture lost in about one full Linux run in four when
+  it arrived before the fixture's first crossterm `read` (none in twelve once
+  the fixture polled first, `key_log_fixture`), or the one the "Pane focus"
+  entry describes.
 - **From a code review by a sub-agent (2026-10-18).** Found by reading code and
   tmux 3.6's source; nothing was run. Items marked _checked_ were confirmed by
   reading the code again; the rest are as reported.

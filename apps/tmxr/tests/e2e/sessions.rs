@@ -1213,6 +1213,42 @@ fn an_ignore_size_client_sizes_windows_only_alone() {
     );
 }
 
+/// A resize and a key reaching the client at once both count: crossterm
+/// dropped the SIGWINCH when its terminal had input in the same wakeup.
+/// Both arrive while a lock command runs, when the client reads nothing, so
+/// they are ready together once it reads again. Unix only: a Windows
+/// console's resize is an input record in the keys' own queue, with no
+/// signal beside it to lose.
+#[cfg(unix)]
+#[test]
+fn a_resize_and_a_key_arriving_together_both_reach_the_server() {
+    let t = Tmxr::new("winch");
+    let s = t.attach(&["new", "-s", "winch"]);
+    s.wait_for("the status line", |text| text.contains("winch"));
+    // It reads nothing from the terminal, so the key waits for the client.
+    t.run(&[
+        "set-option",
+        "-g",
+        "lock-command",
+        "echo LOCKED-NOW; sleep 1",
+    ]);
+    t.run(&["lock-session", "-t", "winch"]);
+    s.wait_for("the lock command", |text| text.contains("LOCKED-NOW"));
+    s.resize(20, 70);
+    s.send(b"x");
+    t.wait_run(
+        &[
+            "display-message",
+            "-p",
+            "-t",
+            "winch",
+            "#{window_width}x#{window_height}",
+        ],
+        "the window sized for the resized client",
+        |o| o.trim() == "70x19",
+    );
+}
+
 #[test]
 fn refresh_client_sets_and_clears_client_flags() {
     let t = Tmxr::new("clientflags");
@@ -1246,24 +1282,19 @@ fn refresh_client_sets_and_clears_client_flags() {
     // refresh-client from outside means it.
     let b = t.attach(&["attach", "-t", "cf"]);
     b.wait_for("the status line", |text| text.contains("cf"));
-    // On Linux under load a resize just after attaching can go unseen by
-    // the client (docs/backlog.md, "A resize just after attaching"), so
-    // resize again until the server has the size: this test is about the
-    // flags, not that.
-    let deadline = Instant::now() + TIMEOUT;
-    loop {
-        b.resize(21, 71);
-        b.resize(20, 70);
-        b.send(b"x");
-        std::thread::sleep(Duration::from_millis(300));
-        if size(&t) == "70x19" {
-            break;
-        }
-        assert!(
-            Instant::now() < deadline,
-            "the window never took the second client's size"
-        );
-    }
+    b.resize(20, 70);
+    b.send(b"x");
+    t.wait_run(
+        &[
+            "display-message",
+            "-p",
+            "-t",
+            "cf",
+            "#{window_width}x#{window_height}",
+        ],
+        "the window sized for the second client",
+        |o| o.trim() == "70x19",
+    );
 
     // -f ignore-size gives the window back to the first client at once.
     t.run(&["refresh-client", "-f", "ignore-size"]);

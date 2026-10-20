@@ -36,7 +36,8 @@ lto = "thin"
 codegen-units = 1
 strip = true
 
-# crossterm 0.29.0 with Alt+Esc parsed on Unix (crossterm-rs/crossterm#1143);
-# drop once a crossterm release carries it.
+# crossterm 0.29.0 with Alt+Esc parsed on Unix (crossterm-rs/crossterm#1143)
+# and a SIGWINCH that comes with input kept; drop once a crossterm release
+# carries both.
 [patch.crates-io]
-crossterm = { git = "https://github.com/kryptic-sh/crossterm", rev = "05e475cc7b0180382508334265408c3d3bce17d8" }
+crossterm = { git = "https://github.com/kryptic-sh/crossterm", rev = "4056269728db316ff9b14fa6dcc0ee0c022f91b0" }
