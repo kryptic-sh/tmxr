@@ -342,6 +342,13 @@ pub fn strftime(fmt: &str, t: &crate::localtime::LocalTime) -> String {
             'V' => format!("{:02}", iso_week(t).1 / 7 + 1),
             'G' => iso_week(t).0.to_string(),
             'g' => format!("{:02}", iso_week(t).0.rem_euclid(100)),
+            // The zone's offset from UTC, `+hhmm`.
+            'z' => {
+                let minutes = t.utc_offset().div_euclid(60);
+                let sign = if minutes < 0 { '-' } else { '+' };
+                let minutes = minutes.abs();
+                format!("{sign}{:02}{:02}", minutes / 60, minutes % 60)
+            }
             // The C locale's date and time.
             'x' => format!("{:02}/{:02}/{:02}", t.month, t.day, t.year.rem_euclid(100)),
             'X' => format!("{:02}:{:02}:{:02}", t.hour, t.minute, t.second),
@@ -1404,6 +1411,30 @@ mod tests {
             "00 01 01 2024 24 01/01/24"
         );
         assert_eq!(strftime("%X", &at(2026, 1, 4, 0, 3)), "07:08:09");
+        // The offset is the local clock against the moment: 1970-01-01
+        // 00:00 UTC seen as 05:30, and 2026-10-20 12:00 UTC as 07:00.
+        let local =
+            |year, month, day, hour, minute, weekday, yearday, epoch| crate::localtime::LocalTime {
+                hour,
+                minute,
+                second: 0,
+                epoch,
+                ..at(year, month, day, weekday, yearday)
+            };
+        assert_eq!(strftime("%z", &local(1970, 1, 1, 5, 30, 4, 0, 0)), "+0530");
+        assert_eq!(
+            strftime("%z", &local(2026, 10, 20, 7, 0, 2, 292, 1_792_497_600)),
+            "-0500"
+        );
+        assert_eq!(
+            strftime("%z", &local(1969, 12, 31, 19, 0, 3, 364, 0)),
+            "-0500"
+        );
+        // After a leap day.
+        assert_eq!(
+            strftime("%z", &local(2024, 3, 1, 1, 0, 5, 60, 1_709_251_200)),
+            "+0100"
+        );
     }
 
     #[test]

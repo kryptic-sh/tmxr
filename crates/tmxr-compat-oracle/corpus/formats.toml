@@ -646,4 +646,4 @@ checks = [
 [[cases]]
 name = "strftime_week_numbers_as_tmux"
 steps = []
-checks = [{ command = "display -p '%U %W %V %G %g %x'" }]
+checks = [{ command = "display -p '%U %W %V %G %g %x %z'" }]

@@ -24,6 +24,21 @@ pub struct LocalTime {
     pub epoch: i64,
 }
 
+impl LocalTime {
+    /// Seconds the local time is ahead of UTC: the local date and time read
+    /// as if they were UTC, less the moment itself.
+    pub fn utc_offset(&self) -> i64 {
+        let leaps_before =
+            |y: i64| (y - 1).div_euclid(4) - (y - 1).div_euclid(100) + (y - 1).div_euclid(400);
+        let year = i64::from(self.year);
+        let days =
+            365 * (year - 1970) + leaps_before(year) - leaps_before(1970) + i64::from(self.yearday);
+        let clock =
+            i64::from(self.hour) * 3600 + i64::from(self.minute) * 60 + i64::from(self.second);
+        days * 86_400 + clock - self.epoch
+    }
+}
+
 /// The local time now, or `None` if the platform cannot say.
 pub fn now() -> Option<LocalTime> {
     let secs = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs();

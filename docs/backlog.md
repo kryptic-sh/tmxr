@@ -677,8 +677,9 @@ table. What has been verified, and how:
   expand without it, and the whole format's strftime pass comes first (so a `%`
   in a command wants `%%`), as tmux's format_expand1 and format_job_get (read,
   not run). strftime covers the C locale's common conversions
-  (`format::strftime`); `%Z` and `%z` are kept as written (`LocalTime` has no
-  zone name or offset).
+  (`format::strftime`); `%Z` is kept as written: `LocalTime` has no zone name,
+  and Windows' is a long display name (`Taipei Standard Time`) where glibc gives
+  `CST`.
 - **tmux's `link-window` and `move-window` drop the mark** of a pane in the
   window they place (2026-10-18, tmux 3.6): `server_link_window` moves
   `marked_pane.wl` to the new link but keeps `marked_pane.s`, so the mark no
