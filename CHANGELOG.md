@@ -570,7 +570,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **A resize made as a key arrives reaches the server** (Linux and macOS): the
   client's terminal reader (crossterm, patched) dropped a SIGWINCH that became
   ready in the same wakeup as input, so the window kept the old size until the
-  next resize.
+  next resize. A tiling window manager (Hyprland) hits this when closing a
+  window grows and focuses its neighbour: the terminal's focus report comes with
+  the resize.
 - **btop draws its boxes in place**: a pane now takes the cursor sequences tmux
   takes and its emulator (`vt100`) ignored, so a program using them no longer
   draws everything as one run of text. HVP (`CSI row;col f`, btop's cursor move)

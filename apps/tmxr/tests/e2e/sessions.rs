@@ -1216,7 +1216,10 @@ fn an_ignore_size_client_sizes_windows_only_alone() {
 /// A resize and a key reaching the client at once both count: crossterm
 /// dropped the SIGWINCH when its terminal had input in the same wakeup.
 /// Both arrive while a lock command runs, when the client reads nothing, so
-/// they are ready together once it reads again. Unix only: a Windows
+/// they are ready together once it reads again. The input may as well be a
+/// focus report: a tiling compositor (Hyprland) resizes a window and gives
+/// it the focus at once when its neighbour closes, which lost the resize
+/// that way. Unix only: a Windows
 /// console's resize is an input record in the keys' own queue, with no
 /// signal beside it to lose.
 #[cfg(unix)]
@@ -1232,21 +1235,38 @@ fn a_resize_and_a_key_arriving_together_both_reach_the_server() {
         "lock-command",
         "echo LOCKED-NOW; sleep 1",
     ]);
+    let size = |t: &Tmxr, want: &str| {
+        t.wait_run(
+            &[
+                "display-message",
+                "-p",
+                "-t",
+                "winch",
+                "#{window_width}x#{window_height}",
+            ],
+            &format!("the window sized {want}"),
+            |o| o.trim() == want,
+        );
+    };
     t.run(&["lock-session", "-t", "winch"]);
     s.wait_for("the lock command", |text| text.contains("LOCKED-NOW"));
     s.resize(20, 70);
     s.send(b"x");
-    t.wait_run(
-        &[
-            "display-message",
-            "-p",
-            "-t",
-            "winch",
-            "#{window_width}x#{window_height}",
-        ],
-        "the window sized for the resized client",
-        |o| o.trim() == "70x19",
-    );
+    size(&t, "70x19");
+
+    t.run(&[
+        "set-option",
+        "-g",
+        "lock-command",
+        "echo LOCKED-AGAIN; sleep 1",
+    ]);
+    t.run(&["lock-session", "-t", "winch"]);
+    s.wait_for("the lock command again", |text| {
+        text.contains("LOCKED-AGAIN")
+    });
+    s.resize(21, 71);
+    s.send(b"\x1b[I");
+    size(&t, "71x20");
 }
 
 /// Keys typed faster than the client reads all reach the pane: crossterm

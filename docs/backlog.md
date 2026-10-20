@@ -472,13 +472,17 @@ table. What has been verified, and how:
   detach (`CSI 22;0t` / `CSI 23;0t`), as tmux does not either; a title set while
   a client is attached reaches it with the next frame, as any change.
 - **A terminal resize can go unseen while attached** (reported by the owner
-  2026-10-20, Hyprland with Alacritty): with two windows side by side, closing
-  one grows the Alacritty window holding the client, but tmxr keeps the old size
-  until the window is made floating and docked again. Not reproduced or
-  investigated. It may share a cause with the entry below (crossterm not seeing
-  a SIGWINCH); a start is a log of the client's crossterm events while Hyprland
-  retiles, to tell a missed SIGWINCH from a size crossterm reads wrong, and
-  whether tmux on the same setup sees the resize.
+  2026-10-20, Hyprland with Alacritty, tmxr 0.9.0): with two windows side by
+  side, closing one grows the Alacritty window holding the client, but tmxr kept
+  the old size until the window was made floating and docked again. Probable
+  cause, fixed 2026-10-21: Hyprland gives the grown window the focus as it
+  resizes it, so Alacritty writes a focus report (`focus-events` is on by
+  default) in the same wakeup as the SIGWINCH, which 0.9.0's crossterm dropped
+  (see "crossterm is patched"); floating and docking resizes without a focus
+  change. `a_resize_and_a_key_arriving_together_both_reach_the_server` sends a
+  resize with a `CSI I` and fails with 0.9.0's crossterm, passes with the fix.
+  Not confirmed in Hyprland itself: try the owner's steps on a build with the
+  fix.
 - **A resize just after attaching went unseen on Linux** (2026-10-18), in
   `refresh_client_sets_and_clears_client_flags` under load (CI run 39064458482):
   the client's log showed the `x` typed after the resize but no `Resize` event.
