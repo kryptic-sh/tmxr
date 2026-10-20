@@ -515,11 +515,35 @@ fn hooks_at(srv: &Server, scope: Scope) -> Vec<(&str, &[String])> {
 /// What `-H` adds to a list, as tmux's: each hook set at `scope` as
 /// `name[index] command`, with `-A` the inherited ones too, marked `*`.
 /// Hooks set nowhere are left out, as `show-hooks` leaves them.
+/// `show-hooks`: the hooks of the table its flags pick, as `show-options -H`
+/// lists them.
+pub(super) fn show_hooks_command(
+    srv: &Server,
+    ctx: &Ctx,
+    a: &Args,
+    out: &mut Outcome,
+) -> Result<(), String> {
+    let scope = scope(srv, ctx, a, false, None)?;
+    show_hooks(srv, scope, a, out);
+    Ok(())
+}
+
 fn show_hooks(srv: &Server, scope: Scope, a: &Args, out: &mut Outcome) {
     let mut hooks: BTreeMap<&str, (&str, &[String])> = hooks_at(srv, scope)
         .into_iter()
         .map(|(name, cmds)| (name, ("", cmds)))
         .collect();
+    // tmux's table order; a global table lists every hook, the unset ones
+    // as bare names, as tmux's.
+    let table: Vec<&str> = match scope {
+        Scope::GlobalWindow | Scope::Window(_) | Scope::Pane(_) => PANE_HOOKS.to_vec(),
+        Scope::GlobalSession | Scope::Session(_) => crate::hooks::TMUX_SESSION_HOOKS
+            .iter()
+            .copied()
+            .filter(|n| crate::hooks::known(n))
+            .collect(),
+    };
+    let global = matches!(scope, Scope::GlobalSession | Scope::GlobalWindow);
     if a.has('A') {
         let mut up = parent(srv, scope);
         while let Some(s) = up {
@@ -529,8 +553,24 @@ fn show_hooks(srv: &Server, scope: Scope, a: &Args, out: &mut Outcome) {
             up = parent(srv, s);
         }
     }
-    for (name, (mark, cmds)) in hooks {
+    let mut names: Vec<&str> = table
+        .iter()
+        .copied()
+        .filter(|n| global || hooks.contains_key(n))
+        .collect();
+    // Set hooks outside tmux's table (an `after-` hook for a command it
+    // has none for) go last, by name.
+    names.extend(hooks.keys().copied().filter(|n| !table.contains(n)));
+    for name in names {
+        let Some(&(mark, cmds)) = hooks.get(name) else {
+            if !a.has('v') {
+                let _ = writeln!(out.stdout, "{name}");
+            }
+            continue;
+        };
         for (i, cmd) in cmds.iter().enumerate() {
+            // Re-parsed, as tmux's cmd_list_print gives it back.
+            let cmd = tmxr_command::print_command_list(cmd).unwrap_or_else(|| cmd.clone());
             if a.has('v') {
                 let _ = writeln!(out.stdout, "{cmd}");
             } else {

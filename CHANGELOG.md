@@ -409,6 +409,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`show-hooks` and `show-options -H` list hooks as tmux's**: in tmux's order,
+  a global table every hook (the unset ones as a bare name), each command
+  printed re-parsed (`display-message hi` for `display hi`).
 - **Format syntax errors end the expansion, as tmux's**: a comparison, `m:` or
   `R:` without its comma (`A#{==:a}B`) now stops the format there (`A`), where
   it compared against an empty side; a comparison's right side is all the text

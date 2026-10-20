@@ -105,10 +105,10 @@ table. What has been verified, and how:
   - **Fewer server options**: `show -s` lists the ones tmxr has
     (`cmds::options::SERVER_OPTIONS`).
   - **Array options** (`tmxr_config::Array`, checked against tmux 3.6 by
-    `corpus/options.toml`): `update-environment` is the only one; tmux's others
-    (`command-alias`, `terminal-features`, `status-format`, `user-keys`,
-    `pane-colours`, `codepoint-widths`) are options tmxr does not have. The
-    config file keeps it as a list, so `--import-tmux-conf` leaves out a
+    `corpus/options.toml`): `update-environment` and `status-format`; tmux's
+    others (`command-alias`, `terminal-features`, `user-keys`, `pane-colours`,
+    `codepoint-widths`) are options tmxr does not have. The config file keeps it
+    as a list, so `--import-tmux-conf` leaves out a
     `set -g update-environment[3] X` line (an unknown key there), and
     `customize-mode` shows it as one value, all items joined, whose Enter sets
     the whole array. `set -g x[i] value` on an option that is not an array
@@ -125,11 +125,12 @@ table. What has been verified, and how:
   - **Resurrect does not save session options** (tmux-resurrect does not
     either): a restored session has only the global ones.
   - **Hooks in `show-options -H` and `show-hooks`** (`scoped::show_hooks`,
-    checked against tmux 3.6 by `corpus/options.toml`): only hooks that are set
-    are listed, where tmux lists every hook it has, the empty ones as a bare
-    name (so `show -gH` and `show -AH` differ from tmux's by those lines). A
-    hook's commands print as they were given (`display hi`), where tmux prints
-    them parsed (`display-message hi`).
+    checked against tmux 3.6 by `corpus/options.toml`): in tmux's table order,
+    the global tables listing every hook (the unset ones bare) and the others
+    only the hooks set, each command re-parsed as tmux prints it; the global
+    session table leaves out the three hooks tmxr does not fire (`after-queue`,
+    `client-light-theme`, `client-dark-theme`; known divergence
+    `show_hooks_g_lists_the_hooks_tmxr_fires`).
   - **`show-options` quoting is tmux's, quirk included** (`escape_arg`, from
     `args_escape`): a value with a `"` and a backslash but none of ` #';${}%` is
     single-quoted with the backslash doubled, which reads back doubled, in tmux

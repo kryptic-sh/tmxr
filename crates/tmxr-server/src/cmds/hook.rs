@@ -1,7 +1,5 @@
 //! `set-hook` and `show-hooks`.
 
-use std::fmt::Write as _;
-
 use tmxr_command::Parsed;
 
 use super::{Ctx, Outcome};
@@ -41,14 +39,7 @@ pub(super) fn run(
                 list.push(cmd.clone());
             }
         }
-        "show-hooks" => {
-            let table = hooks_mut(srv, ctx, a)?;
-            for (name, cmds) in table {
-                for (i, cmd) in cmds.iter().enumerate() {
-                    let _ = writeln!(out.stdout, "{name}[{i}] {cmd}");
-                }
-            }
-        }
+        "show-hooks" => super::scoped::show_hooks_command(srv, ctx, a, out)?,
         _ => return Ok(false),
     }
     Ok(true)

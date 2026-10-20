@@ -178,10 +178,19 @@ session-created = [\"new-window -d\", \"new-window -d\"]
     t.wait_prompt("proj:2");
     let path = t.run(&["display", "-p", "-t", "proj:2", "#{pane_current_path}"]);
     assert!(path.trim().ends_with("proj"), "{path}");
+    // The set entries (show-hooks -g also lists the unset hooks, bare).
+    let set: Vec<String> = t
+        .run(&["show-hooks", "-g"])
+        .lines()
+        .filter(|l| l.contains('['))
+        .map(str::to_owned)
+        .collect();
     assert_eq!(
-        t.run(&["show-hooks", "-g"]).trim(),
-        "session-created[0] new-window -d
-session-created[1] new-window -d"
+        set,
+        [
+            "session-created[0] new-window -d",
+            "session-created[1] new-window -d"
+        ]
     );
 
     // Attaching again runs no hook: still three windows.
@@ -745,7 +754,7 @@ fn hooks_run_after_commands_and_events() {
         "{shown}"
     );
     t.run(&["set-hook", "-gu", "session-created"]);
-    assert!(!t.run(&["show-hooks", "-g"]).contains("session-created"));
+    assert!(!t.run(&["show-hooks", "-g"]).contains("session-created["));
 
     assert!(
         !t.output(&["set-hook", "-g", "no-such-hook", "ls"])

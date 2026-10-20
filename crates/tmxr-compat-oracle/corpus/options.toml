@@ -542,3 +542,16 @@ checks = [
   { screen_contains = "LASTLINEMSG", expect = true },
   { screen_contains = " P: 0[", expect = false },
 ]
+
+[[cases]]
+name = "show_hooks_lists_hooks_in_tmuxs_order"
+steps = [
+  { run = "set-hook -g after-new-window 'display hi'" },
+  { run = "set-hook -gw pane-died 'display dead'" },
+  { run = "set-hook -t o session-renamed 'display r'" },
+  { run = "set-hook -t o client-attached 'display a'" },
+]
+checks = [
+  { command = "show-hooks -gw" },
+  { command = "show-hooks -t o" },
+]

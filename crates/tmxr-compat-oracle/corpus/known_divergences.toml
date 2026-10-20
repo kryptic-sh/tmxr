@@ -28,3 +28,11 @@ checks = [
   { command = "capture-pane -p -N -T -E 1" },
   { command = "capture-pane -p -J -E 1" },
 ]
+
+[[cases]]
+name = "show_hooks_g_lists_the_hooks_tmxr_fires"
+# tmux lists every hook in its session table; tmxr leaves out the three it
+# does not fire (after-queue, client-light-theme, client-dark-theme), as
+# set-hook refuses them. The rest are in tmux's order.
+steps = [{ run = "set-hook -g after-new-window 'display hi'" }]
+checks = [{ command = "show-hooks -g" }]
