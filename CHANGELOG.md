@@ -407,6 +407,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The alternate screen keeps the cursor where it was**, as tmux's: a program
+  switching with `ESC [ ? 1049 h` now prints where its cursor stood, not at the
+  top left; mode 1047 switches screens (it was ignored) and 47 clears the
+  alternate screen as tmux's do, and switching off with 47 or 1047 leaves the
+  cursor where it got to.
 - **A window made from a shell has a latest client**, as tmux's: `new-window`
   and `break-pane` run from a shell give it the best attached client, so typing
   in it does not run `client-active` as if a client had just come to it.

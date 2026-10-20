@@ -517,6 +517,10 @@ table. What has been verified, and how:
     `select-line` (tmux's `lineflag` moves the cursor to a line's end or start
     on up / down), and on lines holding wide characters.
 
+- **`lock_hands_the_keys_to_the_lock_command` failed once** (Windows, full
+  `cargo test`, 2026-10-20): the client reported `server did not start` on its
+  pipe. The test alone and the next full e2e run passed; a guess is the server's
+  start timing out under the whole workspace's load.
 - **`word_separators_and_wrap_search_reach_copy_mode` failed once** (Windows,
   full e2e suite, 2026-10-18) at its first `#{copy_cursor_word}` check; four
   runs alone and the next full run passed. The failure output was not kept, so
@@ -576,14 +580,14 @@ table. What has been verified, and how:
   `DEAD_LINE_QUIET` or ended (`PtyEvent::Eof`). Not tested: that a pane reads
   nothing after the line, as tmux closes its terminal there; on Linux the
   shell's exit hangs the terminal up, so no output came after it in any attempt.
-- **vt100 homes the cursor on `ESC [ ? 1049 h`**: tmux (and xterm) keep the
-  cursor where it was when switching to the alternate screen, so a program that
-  prints a line, then switches and prints `alt`, shows `alt` on the second row
-  in tmux 3.6 and on the first in tmxr (seen 2026-10-20 in the oracle). vt100
-  0.16 gives the alternate screen its own cursor, cleared to the top on 1049,
-  and takes 47 but not 1047 at all (a program using 1047 stays on the main
-  screen in tmxr). Not fixed: `Emulator` would have to split the output at these
-  modes and set the cursor itself (`alt_screen.rs` already finds them).
+- **Alternate screen switches are made over vt100's**
+  (`Emulator::switch_screen`, matching tmux 3.6 in the oracle for 47, 1047 and
+  1049, on and off): switching on goes through vt100's 1049, which saves the
+  cursor in the main screen's own slot, so a program's earlier `ESC 7` there is
+  lost (tmux keeps 1049's cursor apart from it); and the cursor moves written
+  after a switch are absolute, which origin mode (`ESC [ ? 6 h`) on the main
+  screen would turn relative to its scroll region when 47 / 1047 switch off.
+  Neither compared with tmux.
 - **Pane status lines skip tmux's finer border rules**: with
   `pane-border-status`, tmux's `screen_redraw_pane_border` and `check_cell`
   treat the status text's cells as inside the pane and change which pane owns

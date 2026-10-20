@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use crate::alt_screen::{AltScreenSplitter, Piece};
 use crate::dcs::DcsSplitter;
 use crate::encode::InputModes;
 
@@ -215,9 +216,11 @@ pub struct Emulator {
     rename: Option<Vec<u8>>,
     /// [`passthrough_supported`], read once.
     split: bool,
-    /// Set with `alternate-screen off`: the program's switches to the
-    /// alternate screen are dropped before the parser sees them.
-    alt_filter: Option<crate::alt_screen::AltScreenFilter>,
+    /// The program's switches to and from the alternate screen, split
+    /// from its output.
+    alt_screen: AltScreenSplitter,
+    /// Cleared with `alternate-screen off`: the switches are dropped.
+    alt_allowed: bool,
     /// The history limit, for a fresh parser.
     scrollback: usize,
     /// Lines of history above the screen, counted whenever they can change
@@ -233,7 +236,8 @@ impl Emulator {
             passthrough: Vec::new(),
             rename: None,
             split: passthrough_supported(),
-            alt_filter: None,
+            alt_screen: AltScreenSplitter::default(),
+            alt_allowed: true,
             scrollback,
             history: 0,
         }
@@ -290,9 +294,7 @@ impl Emulator {
     /// alternate screen stay, as tmux's.
     pub fn reset(&mut self) {
         self.dcs = DcsSplitter::default();
-        if let Some(f) = self.alt_filter.as_mut() {
-            f.flush();
-        }
+        self.alt_screen.flush();
         // CAN ends whatever sequence is in progress, but vte acts on an OSC
         // it cuts off: what that could change is put back, as tmux's
         // input_clear drops the sequence.
@@ -316,28 +318,44 @@ impl Emulator {
     }
 
     /// Whether the program may switch to the alternate screen (tmux's
-    /// `alternate-screen`). Allowed again, what the filter held is parsed.
+    /// `alternate-screen`).
     pub fn set_alternate_screen(&mut self, allowed: bool) {
-        match (&mut self.alt_filter, allowed) {
-            (None, false) => self.alt_filter = Some(crate::alt_screen::AltScreenFilter::default()),
-            (Some(f), true) => {
-                let held = f.flush();
-                self.alt_filter = None;
-                self.parser.process(&held);
+        self.alt_allowed = allowed;
+    }
+
+    /// Parse program text, its alternate screen switches made as tmux's, or
+    /// dropped when they are not allowed.
+    fn feed(&mut self, text: &[u8]) {
+        for piece in self.alt_screen.split(text) {
+            match piece {
+                Piece::Text(text) => self.parser.process(&text),
+                Piece::Switch { .. } if !self.alt_allowed => {}
+                Piece::Switch { mode, on } => self.switch_screen(mode, on),
             }
-            _ => {}
         }
     }
 
-    /// Parse program text, without its alternate screen switches when they
-    /// are not allowed.
-    fn feed(&mut self, text: &[u8]) {
-        match &mut self.alt_filter {
-            Some(f) => {
-                let kept = f.filter(text);
-                self.parser.process(&kept);
+    /// Switch to or from the alternate screen as tmux's screen_alternate_on
+    /// / _off, not as vt100 would: on (47, 1047 or 1049, unless already
+    /// there) clears it and keeps the cursor where it was, where vt100 homes
+    /// it on 1049, keeps the old screen on 47 and ignores 1047; off, 1049
+    /// puts back the cursor it saved, and 47 / 1047 keep it where it is.
+    fn switch_screen(&mut self, mode: u32, on: bool) {
+        let alternate = self.parser.screen().alternate_screen();
+        let (row, col) = self.parser.screen().cursor_position();
+        let cursor = format!("\x1b[{};{}H", row + 1, col + 1);
+        match (on, mode) {
+            (true, _) if alternate => {}
+            (true, _) => {
+                self.parser.process(b"\x1b[?1049h");
+                self.parser.process(cursor.as_bytes());
             }
-            None => self.parser.process(text),
+            (false, 1049) => self.parser.process(b"\x1b[?1049l"),
+            (false, _) if alternate => {
+                self.parser.process(b"\x1b[?47l");
+                self.parser.process(cursor.as_bytes());
+            }
+            (false, _) => {}
         }
     }
 
@@ -524,6 +542,40 @@ mod tests {
         emu.process(b"after");
         assert_eq!(emu.screen().contents().trim(), "after");
         assert_eq!(emu.title(), None);
+    }
+
+    #[test]
+    fn the_alternate_screen_keeps_the_cursor_as_tmuxs() {
+        let rows = |emu: &Emulator| {
+            let s = emu.screen();
+            (s.alternate_screen(), s.cursor_position(), s.contents())
+        };
+        // 1049 keeps the cursor going on and puts it back coming off.
+        let mut emu = Emulator::new(4, 20, 100);
+        emu.process(b"main\r\n\x1b[?1049halt");
+        assert_eq!(rows(&emu), (true, (1, 3), "\nalt".to_owned()));
+        emu.process(b"\r\nmore\x1b[?1049l");
+        assert_eq!(rows(&emu), (false, (1, 0), "main".to_owned()));
+        // 1047, which vt100 ignores, switches and clears as 47 does; going
+        // off, both keep the cursor where it got to.
+        for mode in ["1047", "47"] {
+            let mut emu = Emulator::new(4, 20, 100);
+            emu.process(format!("main\r\n\x1b[?{mode}hx").as_bytes());
+            assert_eq!(rows(&emu), (true, (1, 1), "\nx".to_owned()), "{mode}");
+            emu.process(format!("\r\ny\x1b[?{mode}lz").as_bytes());
+            assert_eq!(
+                rows(&emu),
+                (false, (2, 2), "main\n\n z".to_owned()),
+                "{mode}"
+            );
+            // Switched on again, the alternate screen starts clear.
+            emu.process(format!("\x1b[?{mode}h").as_bytes());
+            assert_eq!(emu.screen().contents(), "", "{mode}");
+        }
+        // Already there, switching on changes nothing.
+        let mut emu = Emulator::new(4, 20, 100);
+        emu.process(b"\x1b[?1049hab\x1b[?1049h");
+        assert_eq!(rows(&emu), (true, (0, 2), "ab".to_owned()));
     }
 
     #[test]

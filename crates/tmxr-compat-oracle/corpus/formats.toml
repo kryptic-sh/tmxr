@@ -427,3 +427,57 @@ checks = [
   { command = "capture-pane -p -e" },
   { command = "capture-pane -p -e -C -S 1 -E 2" },
 ]
+
+[[cases]]
+name = "alternate_screen_1049_keeps_the_cursor_as_tmux"
+program = 'sleep 0.5; printf "main\nabc\033[?1049hxy"; exec sleep 1000'
+steps = [{ sleep = 1.5 }]
+checks = [
+  { command = "capture-pane -p" },
+  { format = "#{alternate_on} #{cursor_x},#{cursor_y}" },
+]
+
+[[cases]]
+name = "alternate_screen_1049_off_leaves_the_cursor_as_tmux"
+program = 'sleep 0.5; printf "main\n\033[?1049halt\n\033[?1049l"; exec sleep 1000'
+steps = [{ sleep = 1.5 }]
+checks = [
+  { command = "capture-pane -p" },
+  { format = "#{alternate_on} #{cursor_x},#{cursor_y}" },
+]
+
+[[cases]]
+name = "alternate_screen_1047_keeps_the_cursor_as_tmux"
+program = 'sleep 0.5; printf "main\nabc\033[?1047hxy"; exec sleep 1000'
+steps = [{ sleep = 1.5 }]
+checks = [
+  { command = "capture-pane -p" },
+  { format = "#{alternate_on} #{cursor_x},#{cursor_y}" },
+]
+
+[[cases]]
+name = "alternate_screen_1047_off_leaves_the_cursor_as_tmux"
+program = 'sleep 0.5; printf "main\n\033[?1047halt\n\033[?1047l"; exec sleep 1000'
+steps = [{ sleep = 1.5 }]
+checks = [
+  { command = "capture-pane -p" },
+  { format = "#{alternate_on} #{cursor_x},#{cursor_y}" },
+]
+
+[[cases]]
+name = "alternate_screen_47_keeps_the_cursor_as_tmux"
+program = 'sleep 0.5; printf "main\nabc\033[?47hxy"; exec sleep 1000'
+steps = [{ sleep = 1.5 }]
+checks = [
+  { command = "capture-pane -p" },
+  { format = "#{alternate_on} #{cursor_x},#{cursor_y}" },
+]
+
+[[cases]]
+name = "alternate_screen_47_off_leaves_the_cursor_as_tmux"
+program = 'sleep 0.5; printf "main\n\033[?47halt\n\033[?47l"; exec sleep 1000'
+steps = [{ sleep = 1.5 }]
+checks = [
+  { command = "capture-pane -p" },
+  { format = "#{alternate_on} #{cursor_x},#{cursor_y}" },
+]
