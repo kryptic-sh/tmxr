@@ -704,3 +704,108 @@ checks = [
   { command = "display -p -t o:4 '#{pane_key_mode}'" },
   { command = "display -p -t o:5 '#{pane_key_mode}'" },
 ]
+
+[[cases]]
+name = "a_status_list_on_the_left_is_cut_around_its_focus_as_tmux"
+size = [24, 6]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [{ run = "set -g status-format[0] 'L#[list=on align=left]#[list=left-marker]<#[list=right-marker]>#[list=on]aa1 bb2 cc3 #[list=focus]dd4#[list=on] ee5 ff6 gg7#[nolist]X#[align=right]R'" }, { sleep = 0.3 }]
+checks = [
+  { screen_find = "<", expect = "1,5" },
+  { screen_find = ">", expect = "21,5" },
+  { screen_find = "bb2", expect = "2,5" },
+  { screen_find = "X", expect = "22,5" },
+  { screen_find = "R", expect = "23,5" },
+]
+
+[[cases]]
+name = "a_status_list_in_the_centre_is_cut_around_its_focus_as_tmux"
+size = [24, 6]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [{ run = "set -g status-format[0] 'L#[align=centre list=on]#[list=left-marker]<#[list=right-marker]>#[list=on]aa1 bb2 cc3 #[list=focus]dd4#[list=on] ee5 ff6 gg7#[nolist]X#[align=right]R'" }, { sleep = 0.3 }]
+checks = [
+  { screen_find = "<", expect = "2,5" },
+  { screen_find = ">", expect = "22,5" },
+  { screen_find = "bb2", expect = "3,5" },
+  { screen_find = "X", expect = "23,5" },
+]
+
+[[cases]]
+name = "a_status_list_on_the_right_is_cut_around_its_focus_as_tmux"
+size = [24, 6]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [{ run = "set -g status-format[0] 'L#[align=right list=on]#[list=left-marker]<#[list=right-marker]>#[list=on]aa1 bb2 cc3 #[list=focus]dd4#[list=on] ee5 ff6 gg7#[nolist]XR'" }, { sleep = 0.3 }]
+checks = [
+  { screen_find = "<", expect = "1,5" },
+  { screen_find = ">", expect = "21,5" },
+  { screen_find = "XR", expect = "22,5" },
+]
+
+[[cases]]
+name = "a_status_list_focused_first_shows_its_start_as_tmux"
+size = [24, 6]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [{ run = "set -g status-format[0] 'L#[list=on align=left]#[list=left-marker]<#[list=right-marker]>#[list=on]#[list=focus]aa1#[list=on] bb2 cc3 dd4 ee5 ff6 gg7#[nolist]X#[align=right]R'" }, { sleep = 0.3 }]
+checks = [
+  { screen_find = "aa1", expect = "1,5" },
+  { screen_find = ">", expect = "21,5" },
+  { screen_find = "<", expect = "none" },
+]
+
+[[cases]]
+name = "a_status_list_focused_last_shows_its_end_as_tmux"
+size = [24, 6]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [{ run = "set -g status-format[0] 'L#[list=on align=left]#[list=left-marker]<#[list=right-marker]>#[list=on]aa1 bb2 cc3 dd4 ee5 ff6 #[list=focus]gg7#[list=on]#[nolist]X#[align=right]R'" }, { sleep = 0.3 }]
+checks = [
+  { screen_find = "<", expect = "1,5" },
+  { screen_find = "gg7", expect = "19,5" },
+  { screen_find = ">", expect = "none" },
+]
+
+[[cases]]
+name = "a_status_list_that_fits_has_no_markers_as_tmux"
+size = [24, 6]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [{ run = "set -g status-format[0] 'L#[list=on align=left]#[list=left-marker]<#[list=right-marker]>#[list=on]aa1 #[list=focus]dd4#[list=on] gg7#[nolist]X#[align=right]R'" }, { sleep = 0.3 }]
+checks = [
+  { screen_find = "aa1", expect = "1,5" },
+  { screen_find = "X", expect = "12,5" },
+  { screen_find = "<", expect = "none" },
+  { screen_find = ">", expect = "none" },
+]
+
+[[cases]]
+name = "a_status_list_with_no_alignment_is_not_drawn_as_tmux"
+size = [24, 6]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [{ run = "set -g status-format[0] 'L#[list=on]#[list=left-marker]<#[list=right-marker]>#[list=on]aa1 bb2 cc3 #[list=focus]dd4#[list=on] ee5 ff6 gg7#[nolist]X#[align=right]R'" }, { sleep = 0.3 }]
+checks = [
+  { screen_find = "L", expect = "0,5" },
+  { screen_find = "R", expect = "23,5" },
+  { screen_find = "aa1", expect = "none" },
+  { screen_find = "X", expect = "none" },
+]
+
+[[cases]]
+name = "status_line_parts_are_trimmed_and_centred_as_tmux"
+size = [20, 6]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [{ run = "set -g status-format[0] 'ab#[align=centre]0123456789abcdefghij#[align=right]yz'" }, { sleep = 0.3 }]
+checks = [{ screen_find = "9ab", expect = "9,5" }, { screen_find = "yz", expect = "18,5" }]

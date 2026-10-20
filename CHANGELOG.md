@@ -503,6 +503,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A status-format list too long for its room is cut as tmux's**: around its
+  focused item (`#[list=focus]`), with its `<` / `>` markers, the text after it
+  (`#[nolist]`) beside it; the parts are trimmed in tmux's order and the centre
+  placed as tmux places it. A list given no alignment is not drawn, as tmux's.
 - **`extended-keys off` ignores a program's request for extended keys**, as
   tmux's (xterm modifyOtherKeys, `CSI > 4 ; n m`), where tmxr honoured it; a
   level asked for before stays. The kitty keyboard protocol, which tmux does not

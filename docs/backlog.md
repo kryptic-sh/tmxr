@@ -489,30 +489,31 @@ table. What has been verified, and how:
     `status-format[0]` is tmux's default; set to anything else, and the rows
     after it (`status 2` to `5`), are drawn from `status-format` by
     `format_draw`, which takes tmux's `align`, `fill`, `default` /
-    `push-default` / `pop-default`, lists and the left, right and window ranges,
-    but not a list's markers and focus when it is too long for its room, nor
-    pane, session or user ranges; clicks reach only the first row's ranges. With
-    `status off` and `status-position top`, a message covers the window's first
-    row, as tmux 3.6 shows it (compared 2026-10-20): tmux's
-    `screen_redraw_set_context` would draw the window a row down, but a message
-    asks only for the status line to be drawn and freezes the terminal
-    (`status_message_set`, `TTY_FREEZE`), so the shift shows only after a full
-    redraw (a resize, `refresh-client`), which tmxr does not copy. tmxr does not
-    freeze either: a pane's output is drawn while a message shows, where tmux
-    holds it until the message goes (not with `display-message -C`); (not
-    tested: `send-keys -M` under a top status line or in a panned view, which
-    now measure from the mouse's window cell, `MouseTarget::col` / `row`, not
-    its client cell); `window-status-activity-style` and `-bell-style` default
-    to `default` where tmux's are `reverse`, on purpose (tmux's would change
-    tmxr's theme, which shows the alert flags in its window format); colour
-    options (`status-fg` / `-bg`, `display-panes-colour`, `clock-mode-colour`
-    and the rest, all `Word`) keep any text as typed, where tmux 3.6 (seen
-    2026-10-20) refuses `nocolour` or `colour300` with `bad colour` and shows
-    `#ABCDEF` as `#abcdef`; checking them as tmux does was considered and
-    declined for now: tmxr's own defaults put formats in colour options
-    (`display-panes-colour = "#{@thm_blue}"`), which tmux's check would refuse,
-    so it needs those expanded first or the theme moved; server `editor`.
-    `escape-time` is kept but never read.
+    `push-default` / `pop-default`, lists (cut around their focus with their
+    markers, laid out as tmux's format_draw_left / _centre / _right /
+    _absolute_centre, compared by the `a_status_list_*` cases) and the left,
+    right and window ranges, but not pane, session or user ranges; clicks reach
+    only the first row's ranges. With `status off` and `status-position top`, a
+    message covers the window's first row, as tmux 3.6 shows it (compared
+    2026-10-20): tmux's `screen_redraw_set_context` would draw the window a row
+    down, but a message asks only for the status line to be drawn and freezes
+    the terminal (`status_message_set`, `TTY_FREEZE`), so the shift shows only
+    after a full redraw (a resize, `refresh-client`), which tmxr does not copy.
+    tmxr does not freeze either: a pane's output is drawn while a message shows,
+    where tmux holds it until the message goes (not with `display-message -C`);
+    (not tested: `send-keys -M` under a top status line or in a panned view,
+    which now measure from the mouse's window cell, `MouseTarget::col` / `row`,
+    not its client cell); `window-status-activity-style` and `-bell-style`
+    default to `default` where tmux's are `reverse`, on purpose (tmux's would
+    change tmxr's theme, which shows the alert flags in its window format);
+    colour options (`status-fg` / `-bg`, `display-panes-colour`,
+    `clock-mode-colour` and the rest, all `Word`) keep any text as typed, where
+    tmux 3.6 (seen 2026-10-20) refuses `nocolour` or `colour300` with
+    `bad colour` and shows `#ABCDEF` as `#abcdef`; checking them as tmux does
+    was considered and declined for now: tmxr's own defaults put formats in
+    colour options (`display-panes-colour = "#{@thm_blue}"`), which tmux's check
+    would refuse, so it needs those expanded first or the theme moved; server
+    `editor`. `escape-time` is kept but never read.
   - Commands: `capture-pane -a` (it needs the saved normal screen, which `vt100`
     does not expose). `-e` writes only the attributes `vt100` keeps (bold, dim,
     italics, underline, reverse; not blink, hidden, strikethrough, overline or
