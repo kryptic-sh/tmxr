@@ -242,3 +242,20 @@ steps = [
   { sleep = 0.5 },
 ]
 checks = [{ format = "#{@m}", expect = "StatusDefault" }]
+
+[[cases]]
+name = "a_key_after_a_click_counts_toward_a_paste_as_tmux"
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "set -g mouse on" },
+  { run = "set -g assume-paste-time 500" },
+  { run = "bind -n x set -ga @hits x" },
+  { sleep = 0.7 },
+  { mouse = { action = "click", at = [5, 5] } },
+  { keys = "x" },
+  { keys = "x" },
+  { sleep = 0.6 },
+]
+checks = [{ format = "[#{@hits}]" }]

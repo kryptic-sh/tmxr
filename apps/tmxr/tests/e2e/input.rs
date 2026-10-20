@@ -603,3 +603,28 @@ fn escape_time_makes_escape_and_a_key_meta() {
         "x alone is not M-x"
     );
 }
+
+/// assume-paste-time times a key from the mouse event before it too, as
+/// tmux's: after a click, the first quick key arms the paste and the next
+/// is pasted, where timed from the key before the click both are keys.
+#[test]
+fn a_key_right_after_a_click_counts_toward_a_paste() {
+    let t = Tmxr::new("pasteclick");
+    let s = t.attach(&["new", "-s", "pc"]);
+    s.wait_for("status line", |text| text.contains("pc"));
+    t.run(&["set", "-g", "mouse", "on"]);
+    t.run(&["set", "-g", "assume-paste-time", "500"]);
+    t.run(&["bind", "-n", "x", "set", "-ga", "@hits", "x"]);
+    std::thread::sleep(Duration::from_millis(600));
+    s.click(0, 2, 2);
+    for _ in 0..2 {
+        std::thread::sleep(Duration::from_millis(50));
+        s.send(b"x");
+    }
+    std::thread::sleep(Duration::from_millis(400));
+    assert_eq!(
+        t.run(&["show", "-gv", "@hits"]).trim(),
+        "x",
+        "the second was pasted"
+    );
+}

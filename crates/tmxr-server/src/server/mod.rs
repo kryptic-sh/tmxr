@@ -117,8 +117,9 @@ pub struct Attached {
     /// A lone Escape held for `escape-time`: a key before this goes as
     /// Meta and that key, as tmux's tty_keys_next.
     pub pending_escape: Option<Instant>,
-    /// When the last key reached the key tables (not an overlay), and
-    /// whether keys are being taken as pasted (`assume-paste-time`).
+    /// When the last key or mouse event reached the key tables (not an
+    /// overlay), and whether keys are being taken as pasted
+    /// (`assume-paste-time`).
     pub key_at: Option<Instant>,
     pub assume_pasting: bool,
     pub drag: Option<crate::mouse::Drag>,
