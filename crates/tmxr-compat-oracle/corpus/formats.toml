@@ -809,3 +809,13 @@ unix_only = true
 program = "exec sleep 1000"
 steps = [{ run = "set -g status-format[0] 'ab#[align=centre]0123456789abcdefghij#[align=right]yz'" }, { sleep = 0.3 }]
 checks = [{ screen_find = "9ab", expect = "9,5" }, { screen_find = "yz", expect = "18,5" }]
+
+[[cases]]
+name = "modifier_counts_may_be_formats_as_tmux"
+steps = [{ run = "set -g @n 4" }, { run = "set -g @s abcdefgh" }, { run = "set -g @m '>'" }]
+checks = [
+  { command = "display -p '[#{=/#{@n}:@s}]'" },
+  { command = "display -p '[#{=/#{@n}/#{@m}:@s}]'" },
+  { command = "display -p '[#{T;=/#{@n}:@s}]'" },
+  { command = "display -p '[#{=/3/>:#[fg=red]abcdef#[default]}]'" },
+]

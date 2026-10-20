@@ -516,6 +516,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`=` and `p` take their count from a format, and `=` cuts around styles**, as
+  tmux's: `#{=/#{status-left-length}:status-left}` expands the length, where it
+  stayed as text, and a `#[…]` style in the value takes no room in the count.
 - **Resurrect restores an empty pane empty** (`split-window -I`), with no
   program, where it came back running the shell.
 - **`list-keys` prints a bind's `{ … }` blocks in braces**, as tmux's, where it

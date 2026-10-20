@@ -864,10 +864,11 @@ enum Mod<'a> {
         flags: &'a str,
     },
     /// `=N` keeps the first N characters, `=-N` the last; `=/N/marker`
-    /// also puts `marker` where text was cut off.
-    Limit(i64, &'a str),
+    /// also puts `marker` where text was cut off. N may be a format, as in
+    /// tmux's `=/#{status-left-length}`, so it is read when applied.
+    Limit(&'a str, &'a str),
     /// `pN` pads to N characters with spaces after, `p-N` before.
-    Pad(i64),
+    Pad(&'a str),
     /// `E`: the value expanded again as a format.
     Expand,
     /// `T`: the same with time expansion on.
@@ -877,6 +878,28 @@ enum Mod<'a> {
     Quote(&'a str),
     /// `m/flags:pattern,text`: 1 when the pattern matches the text.
     Match(&'a str),
+}
+
+/// Where a modifier's argument ends: at the first `;` or `:` outside a
+/// `#{…}` in it.
+fn arg_end(s: &str) -> Option<usize> {
+    let bytes = s.as_bytes();
+    let mut depth = 0usize;
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'#' if bytes.get(i + 1) == Some(&b'{') => {
+                depth += 1;
+                i += 2;
+                continue;
+            }
+            b'}' if depth > 0 => depth -= 1,
+            b';' | b':' if depth == 0 => return Some(i),
+            _ => {}
+        }
+        i += 1;
+    }
+    None
 }
 
 /// `body` as a list of value modifiers and what follows their `:`; `None`
@@ -935,18 +958,19 @@ fn value_modifiers(body: &str) -> Option<(Vec<Mod<'_>>, &str)> {
             'p' | '=' => {
                 let (args, tail) = match after.chars().next() {
                     Some(c) if c == '-' || c.is_ascii_digit() => {
-                        let end = after.find([';', ':'])?;
+                        let end = arg_end(after)?;
                         (&after[..end], &after[end..])
                     }
-                    Some(sep) if letter == '=' && !sep.is_alphanumeric() && sep != '=' => {
+                    // `#` starts a format, so tmux takes no `=#…`.
+                    Some(sep) if letter == '=' && !sep.is_alphanumeric() && !"=#".contains(sep) => {
                         let inner = &after[sep.len_utf8()..];
-                        let end = inner.find([';', ':'])?;
+                        let end = arg_end(inner)?;
                         (inner[..end].trim_end_matches(sep), &inner[end..])
                     }
                     _ => return None,
                 };
                 let mut args = args.split(['/', '|']);
-                let n = args.next()?.parse::<i64>().ok()?;
+                let n = args.next()?;
                 let m = if letter == 'p' {
                     Mod::Pad(n)
                 } else {
@@ -1031,18 +1055,24 @@ fn apply_modifiers(mods: &[Mod<'_>], inner: &str, ctx: &dyn Context, pass: Pass)
             value = substitute(&value, &ex(pattern), &ex(replacement), flags);
         }
     }
+    // A count that is no number does nothing.
+    let count = |n: &str| ex(n).trim().parse::<i64>().ok();
     for m in mods {
-        if let Mod::Limit(n, marker) = m {
-            value = limit(&value, *n, &ex(marker));
+        if let Mod::Limit(n, marker) = m
+            && let Some(n) = count(n)
+        {
+            value = limit(&value, n, &ex(marker));
         }
     }
     for m in mods {
-        if let Mod::Pad(n) = m {
+        if let Mod::Pad(n) = m
+            && let Some(n) = count(n)
+        {
             let missing = usize::try_from(n.unsigned_abs())
                 .unwrap_or(usize::MAX)
                 .saturating_sub(value.chars().count());
             let spaces = " ".repeat(missing);
-            value = if *n >= 0 {
+            value = if n >= 0 {
                 value + &spaces
             } else {
                 spaces + &value
@@ -1085,18 +1115,76 @@ fn substitute(text: &str, pattern: &str, replacement: &str, flags: &str) -> Stri
 }
 
 /// `=N`: the first N characters of `text` (the last with N negative), with
-/// `marker` where text was cut off.
+/// `marker` where text was cut off. A `#[…]` style takes no room, as
+/// tmux's format_trim_left / format_trim_right count it.
 fn limit(text: &str, n: i64, marker: &str) -> String {
-    let chars: Vec<char> = text.chars().collect();
     let keep = usize::try_from(n.unsigned_abs()).unwrap_or(usize::MAX);
-    if chars.len() <= keep {
-        return text.to_owned();
-    }
-    if n >= 0 {
-        chars.iter().take(keep).collect::<String>() + marker
+    let cut = if n >= 0 {
+        trim_left(text, keep)
     } else {
-        marker.to_owned() + &chars[chars.len() - keep..].iter().collect::<String>()
+        trim_right(text, keep)
+    };
+    if cut == text {
+        cut
+    } else if n >= 0 {
+        cut + marker
+    } else {
+        marker.to_owned() + &cut
     }
+}
+
+/// `text` in styles (`#[…]`, which take no room) and characters.
+fn style_pieces(text: &str) -> Vec<(&str, bool)> {
+    let mut pieces = Vec::new();
+    let mut rest = text;
+    while let Some(c) = rest.chars().next() {
+        if rest.starts_with("#[")
+            && let Some(end) = rest.find(']')
+        {
+            pieces.push((&rest[..=end], true));
+            rest = &rest[end + 1..];
+            continue;
+        }
+        pieces.push((&rest[..c.len_utf8()], false));
+        rest = &rest[c.len_utf8()..];
+    }
+    pieces
+}
+
+/// The first `keep` characters of `text` and the styles among them, as
+/// tmux's format_trim_left (it stops once they are taken).
+fn trim_left(text: &str, keep: usize) -> String {
+    let mut out = String::new();
+    let mut taken = 0;
+    for (piece, style) in style_pieces(text) {
+        if taken >= keep {
+            break;
+        }
+        out.push_str(piece);
+        taken += usize::from(!style);
+    }
+    out
+}
+
+/// The last `keep` characters of `text` and every style, as tmux's
+/// format_trim_right.
+fn trim_right(text: &str, keep: usize) -> String {
+    let pieces = style_pieces(text);
+    let total = pieces.iter().filter(|(_, style)| !style).count();
+    let skip = total.saturating_sub(keep);
+    let mut seen = 0;
+    let mut out = String::new();
+    for (piece, style) in pieces {
+        if style {
+            out.push_str(piece);
+        } else {
+            if seen >= skip {
+                out.push_str(piece);
+            }
+            seen += 1;
+        }
+    }
+    out
 }
 
 /// A modifier's `/`-separated arguments and what follows its `:`, for
@@ -1361,6 +1449,17 @@ pub fn styled(text: &str) -> Vec<(Style, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn limits_count_no_room_for_styles_as_tmux() {
+        assert_eq!(limit("#[fg=red]abcdef", 3, ""), "#[fg=red]abc");
+        assert_eq!(limit("ab#[bold]cdef#[default]", 4, ">"), "ab#[bold]cd>");
+        assert_eq!(
+            limit("#[fg=red]abcdef#[default]", -2, ""),
+            "#[fg=red]ef#[default]"
+        );
+        assert_eq!(limit("#[fg=red]ab", 5, ">"), "#[fg=red]ab");
+    }
 
     #[test]
     fn strftime_gives_week_numbers_and_the_c_locales_date_as_glibc() {
