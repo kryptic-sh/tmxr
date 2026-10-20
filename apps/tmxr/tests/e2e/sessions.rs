@@ -1249,6 +1249,45 @@ fn a_resize_and_a_key_arriving_together_both_reach_the_server() {
     );
 }
 
+/// Keys typed faster than the client reads all reach the pane: crossterm
+/// stopped reading once a read filled its buffer, and the rest waited for
+/// the next key. The keys go in one write, so they are all waiting when the
+/// client reads. Unix only, as the resize test above: a Windows console
+/// hands over input records, not a byte buffer.
+#[cfg(unix)]
+#[test]
+fn keys_typed_faster_than_the_client_reads_all_arrive() {
+    const KEYS: usize = 3000;
+    let t = Tmxr::new("burst");
+    let s = t.attach(&["new", "-s", "burst"]);
+    s.wait_for("the status line", |text| text.contains("burst"));
+    t.wait_prompt("burst");
+    let sink = t.dir.path().join("typed");
+    let command = format!("cat > '{}'", sink.display());
+    t.run(&["send-keys", "-t", "burst", &command, "Enter"]);
+    let read = || std::fs::read_to_string(&sink).ok();
+    let deadline = Instant::now() + TIMEOUT;
+    while read().is_none() {
+        assert!(Instant::now() < deadline, "cat never started");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let mut keys = vec![b'a'; KEYS];
+    keys.push(b'\r');
+    s.send(&keys);
+    loop {
+        let typed = read().unwrap_or_default();
+        if typed.trim_end() == "a".repeat(KEYS) {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "{} of {KEYS} keys reached the pane",
+            typed.trim_end().len()
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
 #[test]
 fn refresh_client_sets_and_clears_client_flags() {
     let t = Tmxr::new("clientflags");

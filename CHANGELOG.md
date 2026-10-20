@@ -536,6 +536,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Keys typed faster than the client reads them all reach the pane** (Linux and
+  macOS): once a read of the terminal filled crossterm's buffer, the rest of the
+  input waited for the next key press, so a burst of more than 1024 bytes (a
+  large unbracketed paste) arrived cut short.
 - **A resize made as a key arrives reaches the server** (Linux and macOS): the
   client's terminal reader (crossterm, patched) dropped a SIGWINCH that became
   ready in the same wakeup as input, so the window kept the old size until the

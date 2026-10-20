@@ -98,25 +98,31 @@ table. What has been verified, and how:
   fixed. Menus take the mouse as tmux's (`Menu::mouse`, from `menu_key_cb`),
   checked by the oracle's menu cases. Still missing: nothing has been tried by
   hand in a real terminal.
-- **crossterm is patched** until a release carries both fixes: crossterm 0.29's
+- **crossterm is patched** until a release carries the fixes: crossterm 0.29's
   Unix parser read `ESC ESC` as a plain Escape, so Alt+Escape lost its Alt
   (upstream as crossterm-rs/crossterm#1143, branch `fix-alt-escape` of
-  kryptic-sh/crossterm); and its mio event source returned on the first tty
-  event of a poll's batch, so a SIGWINCH ready in the same wakeup as a key was
-  never seen (mio is edge-triggered), losing the resize (fixed 2026-10-20, not
-  yet offered upstream, where `try_read` still has it). tmxr builds against both
-  on 0.29.0 (branch `alt-escape-0.29`, pinned by `rev` in the root
-  `Cargo.toml`'s `[patch.crates-io]`, and allowed in `deny.toml`). Once a
-  crossterm release has them, upgrade and drop both. A `[patch]` applies only to
-  builds from this workspace: the release binaries and packages have the fixes,
-  but `cargo install tmxr` from crates.io builds against crates.io's crossterm
+  kryptic-sh/crossterm); and its mio event source, which mio wakes
+  edge-triggered, lost input in two ways (both fixed 2026-10-20, not yet offered
+  upstream, where `try_read` still has them): it returned on the first tty event
+  of a poll's batch, so a SIGWINCH ready in the same wakeup as a key was never
+  seen, and it stopped reading once a read that filled its 1024-byte buffer gave
+  an event, so the rest of a burst waited for the next key (now read on while
+  `FIONREAD` says bytes wait). tmxr builds against all three on 0.29.0 (branch
+  `alt-escape-0.29`, pinned by `rev` in the root `Cargo.toml`'s
+  `[patch.crates-io]`, and allowed in `deny.toml`); each event-source fix has an
+  e2e test that fails without it (run on Linux)
+  (`a_resize_and_a_key_arriving_together_both_reach_the_server`,
+  `keys_typed_faster_than_the_client_reads_all_arrive`). Once a crossterm
+  release has them, upgrade and drop both. A `[patch]` applies only to builds
+  from this workspace: the release binaries and packages have the fixes, but
+  `cargo install tmxr` from crates.io builds against crates.io's crossterm
   without them. Still different from tmux: an Escape and a mouse event in one
   read (`known_divergences.toml`), as crossterm drops the rest of a read once it
-  has an event. Read in the same `try_read`, not changed or run: a read that
-  fills its 1024-byte buffer with an event in it returns with the rest of the
-  input unread, which no new edge announces until more input comes; and a read
-  error other than `WouldBlock` or `Interrupted` (EIO once the terminal hangs
-  up) loops on the read without end.
+  has an event. Left as it is in the same `try_read`: a read error other than
+  `WouldBlock` or `Interrupted` (EIO once the terminal hangs up) loops on the
+  read without end; tmxr's client does not get there, as the hangup's SIGHUP
+  ends it first (a pty closed under an attached client, 2026-10-20: the client
+  exited).
 - **tmux default binds**: all of tmux 3.6's 267 are bound (compared with its
   `list-keys`, 2026-10-11) except the 18 digit binds (`1`-`9` in vi, `M-1`-`M-9`
   in emacs) that open a "(repeat)" prompt, declined: tmxr's copy mode takes
