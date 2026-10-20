@@ -66,8 +66,22 @@ pub const COMMANDS: &[CommandSpec] = &[
         0,
         "[-CeJNpq] [-b buffer-name] [-E end-line] [-S start-line] [-t target-pane]"
     ),
-    cmd!("choose-buffer", None, "NyZ", 0, 1, "[-NyZ] [template]"),
-    cmd!("choose-client", None, "NyZ", 0, 1, "[-NyZ] [template]"),
+    cmd!(
+        "choose-buffer",
+        None,
+        "F:f:NO:ryZ",
+        0,
+        1,
+        "[-NryZ] [-F format] [-f filter] [-O sort-order] [template]"
+    ),
+    cmd!(
+        "choose-client",
+        None,
+        "F:f:NO:ryZ",
+        0,
+        1,
+        "[-NryZ] [-F format] [-f filter] [-O sort-order] [template]"
+    ),
     cmd!(
         "choose-tree",
         None,

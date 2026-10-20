@@ -19,19 +19,44 @@ use picker::{Item, Target, current_first};
 pub use picker::{PickerOverlay, Previewed};
 pub use prompt::Prompt;
 
-/// The orders `choose-tree -O` takes, as tmux's window_tree_sort_list.
+/// The orders `-O` names, for the `choose-*` pickers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sort {
     Index,
     Name,
-    /// The most recently active first.
+    /// The most recently active (a buffer: made) first.
     Time,
+    /// The smallest client, the largest buffer, first.
+    Size,
+    /// The newest client first.
+    Creation,
+    /// The client last typed into first.
+    Activity,
 }
 
-/// `choose-tree`'s -F, -f, -O and -r, as tmux's: each item's text, the
-/// filter (a session or window stays while any of its panes passes, as
-/// tmux's tree keeps them), the order and whether it is turned round.
-/// Without -O the picker keeps its own order.
+/// The orders each picker takes, as tmux's window_tree_sort_list,
+/// window_client_sort_list and window_buffer_sort_list.
+const TREE_SORTS: &[(&str, Sort)] = &[
+    ("index", Sort::Index),
+    ("name", Sort::Name),
+    ("time", Sort::Time),
+];
+const CLIENT_SORTS: &[(&str, Sort)] = &[
+    ("name", Sort::Name),
+    ("size", Sort::Size),
+    ("creation", Sort::Creation),
+    ("activity", Sort::Activity),
+];
+const BUFFER_SORTS: &[(&str, Sort)] = &[
+    ("time", Sort::Time),
+    ("name", Sort::Name),
+    ("size", Sort::Size),
+];
+
+/// The `choose-*` pickers' -F, -f, -O and -r, as tmux's: each item's text,
+/// the filter (in `choose-tree` a session or window stays while any of its
+/// panes passes, as tmux's tree keeps them), the order and whether it is
+/// turned round. Without -O the picker keeps its own order.
 #[derive(Debug, Default)]
 pub struct Choose<'a> {
     pub format: Option<&'a str>,
@@ -49,7 +74,9 @@ impl Sort {
     fn sessions(self, sessions: &mut [&crate::model::Session]) {
         match self {
             Self::Index => sessions.sort_by_key(|s| s.id),
-            Self::Name => sessions.sort_by(|a, b| a.name.cmp(&b.name)),
+            Self::Name | Self::Size | Self::Creation | Self::Activity => {
+                sessions.sort_by(|a, b| a.name.cmp(&b.name));
+            }
             Self::Time => {
                 sessions.sort_by(|a, b| {
                     b.activity
@@ -62,22 +89,25 @@ impl Sort {
 }
 
 impl Choose<'_> {
-    fn sort(&self) -> Option<Sort> {
+    /// The order -O names among those a picker takes.
+    fn sort(&self, takes: &[(&str, Sort)]) -> Option<Sort> {
         let sort = self.sort?;
-        [
-            ("index", Sort::Index),
-            ("name", Sort::Name),
-            ("time", Sort::Time),
-        ]
-        .into_iter()
-        .find(|(name, _)| sort.eq_ignore_ascii_case(name))
-        .map(|(_, s)| s)
+        takes
+            .iter()
+            .find(|(name, _)| sort.eq_ignore_ascii_case(name))
+            .map(|(_, s)| *s)
     }
 
-    /// Whether the items are not in the picker's own order, so it opens on
-    /// the current one.
+    /// Whether the tree is not in the picker's own order, so it opens on
+    /// the current item.
     fn reorders(&self) -> bool {
-        self.sort().is_some() || self.reverse
+        self.sort(TREE_SORTS).is_some() || self.reverse
+    }
+
+    /// Whether the filter passes in `vars`.
+    fn passes(&self, vars: &dyn tmxr_command::format::Context) -> bool {
+        self.filter
+            .is_none_or(|f| crate::cmds::format_true(&tmxr_command::format::expand(f, vars)))
     }
 
     /// Whether any pane of `windows` (in `session`) passes the filter.
@@ -106,7 +136,11 @@ impl Choose<'_> {
     }
 
     /// An item's text: -F expanded for it, else `default`.
-    fn text(&self, vars: &Vars<'_>, default: impl FnOnce() -> String) -> String {
+    fn text(
+        &self,
+        vars: &dyn tmxr_command::format::Context,
+        default: impl FnOnce() -> String,
+    ) -> String {
         self.format
             .map_or_else(default, |f| tmxr_command::format::expand(f, vars))
     }
@@ -245,7 +279,7 @@ impl Overlay {
             .values()
             .filter(|s| choose.keeps(srv, s.id, s.windows.values().copied()))
             .collect();
-        match choose.sort() {
+        match choose.sort(TREE_SORTS) {
             None => {
                 sessions.sort_by_key(|s| std::cmp::Reverse(s.last_used));
                 current_first(&mut sessions, |s| Some(s.id) == current);
@@ -321,7 +355,7 @@ impl Overlay {
     ) -> Self {
         let (current, current_index) = (current.map(|c| c.0), current.map(|c| c.1));
         let mut sessions: Vec<_> = srv.sessions.values().collect();
-        match choose.sort() {
+        match choose.sort(TREE_SORTS) {
             None => sessions.sort_by_key(|s| (Some(s.id) != current, s.name.clone())),
             Some(sort) => sort.sessions(&mut sessions),
         }
@@ -336,14 +370,14 @@ impl Overlay {
             let by_name = |a: &(u32, &crate::model::Window), b: &(u32, &crate::model::Window)| {
                 a.1.name.cmp(&b.1.name)
             };
-            match choose.sort() {
+            match choose.sort(TREE_SORTS) {
                 Some(Sort::Name) => windows.sort_by(by_name),
                 Some(Sort::Time) => windows.sort_by(|a, b| {
                     b.1.last_output
                         .cmp(&a.1.last_output)
                         .then_with(|| by_name(a, b))
                 }),
-                Some(Sort::Index) | None => {}
+                _ => {}
             }
             rows.extend(windows.into_iter().map(|(idx, w)| (s, idx, w)));
         }
@@ -380,18 +414,56 @@ impl Overlay {
     }
 
     /// The attached clients; Enter detaches one (`choose-client`).
-    pub fn client_picker(srv: &Server) -> Self {
-        let items = srv
+    pub fn client_picker(srv: &Server, choose: &Choose<'_>) -> Self {
+        let vars_of = |c: &crate::server::Client| {
+            let session = c.att.as_ref().map(|a| a.session);
+            Vars::for_pane(
+                srv,
+                session.and_then(|s| srv.active_pane_of_session(s)),
+                Some(c.id),
+            )
+        };
+        let mut clients: Vec<_> = srv
             .clients
             .values()
+            .filter(|c| c.att.is_some())
+            .filter(|c| choose.passes(&vars_of(c)))
+            .collect();
+        // tmux's window_client_cmp: by name as the tie breaker.
+        let by_name = |a: &&crate::server::Client, b: &&crate::server::Client| {
+            a.id.to_string().cmp(&b.id.to_string())
+        };
+        match choose.sort(CLIENT_SORTS) {
+            Some(Sort::Name) => clients.sort_by(by_name),
+            Some(Sort::Size) => clients.sort_by(|a, b| {
+                let size = |c: &crate::server::Client| c.att.as_ref().map(|a| (a.cols, a.rows));
+                size(a).cmp(&size(b)).then_with(|| by_name(a, b))
+            }),
+            Some(Sort::Creation) => {
+                clients.sort_by(|a, b| b.created.cmp(&a.created).then_with(|| by_name(a, b)));
+            }
+            Some(Sort::Activity) => clients.sort_by(|a, b| {
+                let input = |c: &crate::server::Client| c.att.as_ref().map(|a| a.last_input);
+                input(b).cmp(&input(a)).then_with(|| by_name(a, b))
+            }),
+            _ => {}
+        }
+        if choose.reverse {
+            clients.reverse();
+        }
+        let items = clients
+            .iter()
             .filter_map(|c| {
                 let att = c.att.as_ref()?;
                 let session = srv
                     .sessions
                     .get(&att.session)
                     .map_or("", |s| s.name.as_str());
+                let text = choose.text(&vars_of(c), || {
+                    format!("{}: {session} [{}x{}]", c.id, att.cols, att.rows)
+                });
                 Some(Item {
-                    label: format!("{}: {session} [{}x{}]", c.id, att.cols, att.rows),
+                    label: text,
                     matches: format!("{} {session}", c.id),
                     target: Target::Client(c.id),
                 })
@@ -401,9 +473,37 @@ impl Overlay {
     }
 
     /// The paste buffers, newest first; Enter pastes one into the pane.
-    pub fn buffer_picker(srv: &Server) -> Self {
-        let items = srv
+    pub fn buffer_picker(srv: &Server, choose: &Choose<'_>) -> Self {
+        /// A buffer's variables over the client's.
+        fn buffer_vars<'a>(
+            b: &'a crate::server::Buffer,
+            vars: &'a Vars<'a>,
+        ) -> impl Fn(&str) -> Option<String> + 'a {
+            move |name| {
+                b.var(name)
+                    .or_else(|| tmxr_command::format::Context::get(vars, name))
+            }
+        }
+        let vars = Vars::for_pane(srv, None, choose.client);
+        let context = |b| buffer_vars(b, &vars);
+        // Newest first is tmux's time order.
+        let mut buffers: Vec<_> = srv
             .buffers
+            .iter()
+            .filter(|b| choose.passes(&context(b)))
+            .collect();
+        let by_name = |a: &&crate::server::Buffer, b: &&crate::server::Buffer| a.name.cmp(&b.name);
+        match choose.sort(BUFFER_SORTS) {
+            Some(Sort::Name) => buffers.sort_by(by_name),
+            Some(Sort::Size) => {
+                buffers.sort_by(|a, b| b.data.len().cmp(&a.data.len()).then_with(|| by_name(a, b)));
+            }
+            _ => {}
+        }
+        if choose.reverse {
+            buffers.reverse();
+        }
+        let items = buffers
             .iter()
             .map(|b| {
                 let preview: String = b
@@ -412,8 +512,11 @@ impl Overlay {
                     .take(50)
                     .map(|c| if c.is_control() { ' ' } else { c })
                     .collect();
+                let text = choose.text(&context(b), || {
+                    format!("{}: {} bytes: \"{preview}\"", b.name, b.data.len())
+                });
                 Item {
-                    label: format!("{}: {} bytes: \"{preview}\"", b.name, b.data.len()),
+                    label: text,
                     matches: format!("{} {preview}", b.name),
                     target: Target::Buffer(b.name.clone()),
                 }

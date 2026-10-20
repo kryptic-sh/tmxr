@@ -549,28 +549,23 @@ pub(super) fn run(
                     .and_then(|at| srv.sessions.get(&at.session))
                     .map(|s| (s.id, s.current)),
             };
+            let choose = crate::overlay::Choose {
+                format: a.value('F'),
+                filter: a.value('f'),
+                sort: a.value('O'),
+                reverse: a.has('r'),
+                client: Some(c),
+            };
             let mut ov = match p.name() {
                 "choose-buffer" if srv.buffers.is_empty() => return Err("no buffers".into()),
-                "choose-buffer" => Overlay::buffer_picker(srv),
-                "choose-client" => Overlay::client_picker(srv),
+                "choose-buffer" => Overlay::buffer_picker(srv, &choose),
+                "choose-client" => Overlay::client_picker(srv, &choose),
                 "find-window" => {
                     let found = window_matcher(srv, a, &pos[0])?;
                     Overlay::found_windows(srv, current, found)
                 }
-                _ => {
-                    let choose = crate::overlay::Choose {
-                        format: a.value('F'),
-                        filter: a.value('f'),
-                        sort: a.value('O'),
-                        reverse: a.has('r'),
-                        client: Some(c),
-                    };
-                    if a.has('w') {
-                        Overlay::window_picker(srv, current, &choose)
-                    } else {
-                        Overlay::session_picker(srv, current.map(|c| c.0), &choose)
-                    }
-                }
+                _ if a.has('w') => Overlay::window_picker(srv, current, &choose),
+                _ => Overlay::session_picker(srv, current.map(|c| c.0), &choose),
             };
             // A template runs for the chosen item, as tmux's.
             // find-window's argument is its match, and its -N matches names.

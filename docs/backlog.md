@@ -498,9 +498,9 @@ table. What has been verified, and how:
     output's end. tmux also keeps a tab as the tab character, where `vt100`
     keeps the spaces it moved over; `split-window -I`;
     `display-message -a -v -I` (`-a` lists every variable, which needs `vars.rs`
-    to enumerate its names); `choose-client` and `choose-buffer` `-F -f -O -r`
-    (`choose-buffer` needs `buffer_*` variables, which `Vars` has no buffer to
-    give), `-K` on all three, tagging and sort keys; `choose-tree -F` replaces
+    to enumerate its names); `-K` on the `choose-*` pickers, tagging and sort
+    keys; `buffer_created` and `buffer_full` (tmxr's buffers keep no creation
+    time, so `-O time` is their newest-first order); `choose-tree -F` replaces
     the text after a row's mark, where tmux's is the whole tree line;
     `command-prompt` completion (Tab); smaller flags: `source-file -v`, several
     paths and globs (each load replaces the whole TOML config, so several files

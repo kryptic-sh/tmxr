@@ -155,22 +155,12 @@ pub(super) fn run(
         "list-buffers" => {
             let vars = Vars::for_pane(srv, ctx.pane, ctx.client);
             for b in &srv.buffers {
-                // tmux's buffer_sample: the start, with newlines shown as spaces.
-                let sample = || -> String {
-                    b.data
-                        .chars()
-                        .take(50)
-                        .map(|c| if c == '\n' { ' ' } else { c })
-                        .collect()
-                };
-                let item = |name: &str| match name {
-                    "buffer_name" => Some(b.name.clone()),
-                    "buffer_size" => Some(b.data.len().to_string()),
-                    "buffer_sample" => Some(sample()),
-                    _ => tmxr_command::format::Context::get(&vars, name),
+                let item = |name: &str| {
+                    b.var(name)
+                        .or_else(|| tmxr_command::format::Context::get(&vars, name))
                 };
                 let line = list_item(a, &item, || {
-                    format!("{}: {} bytes: \"{}\"", b.name, b.data.len(), sample())
+                    format!("{}: {} bytes: \"{}\"", b.name, b.data.len(), b.sample())
                 });
                 if let Some(line) = line {
                     let _ = writeln!(out.stdout, "{line}");

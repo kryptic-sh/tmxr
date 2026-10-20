@@ -757,6 +757,79 @@ fn choose_tree_takes_tmuxs_format_filter_order_and_reverse() {
 }
 
 #[test]
+fn choose_buffer_and_choose_client_take_tmuxs_format_filter_and_order() {
+    let t = Tmxr::new("choosebc");
+    let s = t.attach(&["new", "-s", "bc"]);
+    s.wait_for("status line", |text| text.contains("bc"));
+    for (name, data) in [("alpha", "xx"), ("beta", "yyyy"), ("gamma", "z")] {
+        t.run(&["set-buffer", "-b", name, data]);
+    }
+    let order = |text: &str, names: &[&str]| {
+        let at: Vec<usize> = names
+            .iter()
+            .map(|n| text.find(n).unwrap_or(usize::MAX))
+            .collect();
+        assert!(at.windows(2).all(|w| w[0] < w[1]), "{names:?} in {text}");
+    };
+    // -O size: the largest first; -f leaves gamma out; -F with buffer_*.
+    t.run(&[
+        "choose-buffer",
+        "-N",
+        "-O",
+        "size",
+        "-F",
+        "<#{buffer_name}:#{buffer_size}>",
+        "-f",
+        "#{!=:#{buffer_name},gamma}",
+    ]);
+    s.wait_for("the buffer picker", |text| text.contains("<beta:4>"));
+    order(&s.text(), &["<beta:4>", "<alpha:2>"]);
+    assert!(!s.text().contains("<gamma"), "{}", s.text());
+    s.send(b"\x1b");
+    s.wait_for("the picker gone", |text| !text.contains("<beta"));
+    // -O name -r: by name the other way round.
+    t.run(&[
+        "choose-buffer",
+        "-N",
+        "-O",
+        "name",
+        "-r",
+        "-F",
+        "<#{buffer_name}>",
+    ]);
+    s.wait_for("the buffer picker", |text| text.contains("<beta>"));
+    order(&s.text(), &["<gamma>", "<beta>", "<alpha>"]);
+    s.send(b"\x1b");
+    s.wait_for("the picker gone", |text| !text.contains("<beta"));
+    // Clients: -O size puts the smaller first; -F with client_*.
+    let small = t.attach(&["attach", "-t", "bc"]);
+    small.resize(20, 70);
+    small.wait_for("status line", |text| text.contains("bc"));
+    t.run(&[
+        "choose-client",
+        "-N",
+        "-O",
+        "size",
+        "-F",
+        "<#{client_width}>",
+    ]);
+    // From the command line the picker opens on the newest client.
+    small.wait_for("the client picker", |text| text.contains("<70>"));
+    let shown = small.text();
+    let big = shown.lines().find_map(|l| {
+        let w = l.split_once('<')?.1.split_once('>')?.0;
+        (w != "70").then(|| format!("<{w}>"))
+    });
+    order(&shown, &["<70>", &big.unwrap_or_default()]);
+    small.send(b"\x1b");
+    small.wait_for("the picker gone", |text| !text.contains("<70>"));
+    // -f: no client passes, so the picker is empty.
+    t.run(&["choose-client", "-N", "-f", "0", "-F", "<#{client_width}>"]);
+    small.wait_for("the client picker", |text| text.contains("clients"));
+    assert!(!small.text().contains("<70>"), "{}", small.text());
+}
+
+#[test]
 fn prompt_history_is_kept_recalled_and_cleared() {
     let t = Tmxr::new("phist");
     let s = t.attach(&["new", "-s", "ph"]);

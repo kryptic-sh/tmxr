@@ -146,6 +146,27 @@ pub struct Buffer {
     pub automatic: bool,
 }
 
+impl Buffer {
+    /// tmux's buffer_sample: the start, with newlines shown as spaces.
+    pub fn sample(&self) -> String {
+        self.data
+            .chars()
+            .take(50)
+            .map(|c| if c == '\n' { ' ' } else { c })
+            .collect()
+    }
+
+    /// The `buffer_*` format variables for this buffer.
+    pub fn var(&self, name: &str) -> Option<String> {
+        match name {
+            "buffer_name" => Some(self.name.clone()),
+            "buffer_size" => Some(self.data.len().to_string()),
+            "buffer_sample" => Some(self.sample()),
+            _ => None,
+        }
+    }
+}
+
 pub struct Server {
     pub endpoint: Endpoint,
     pub pid: u32,
