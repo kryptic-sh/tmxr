@@ -405,3 +405,16 @@ checks = [
   { command = "show-buffer -b buffer1" },
   { format = "#{copy_cursor_x},#{copy_cursor_y}" },
 ]
+
+[[cases]]
+name = "a_binds_variables_print_expanded_as_tmux"
+attach = true
+unix_only = true
+steps = [
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "bind F5 display \"$HOME\" \\; display ${HOME}x\u000d" },
+  { sleep = 0.3 },
+  { run = "bind F6 display '$HOME'" },
+]
+checks = [{ command = "list-keys -T prefix F5" }, { command = "list-keys -T prefix F6" }]
