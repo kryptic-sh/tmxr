@@ -207,6 +207,18 @@ impl Pty {
             .and_then(|p| u32::try_from(p).ok())
     }
 
+    /// The terminal's device (`#{pane_tty}`), as tmux keeps the pty's name.
+    #[cfg(unix)]
+    pub fn tty_name(&self) -> Option<std::path::PathBuf> {
+        self.live.as_ref()?.master.tty_name()
+    }
+
+    /// A ConPTY has no device name, so `#{pane_tty}` is empty on Windows.
+    #[cfg(windows)]
+    pub fn tty_name(&self) -> Option<std::path::PathBuf> {
+        None
+    }
+
     /// Kill the program started in the pane.
     pub fn kill(&mut self) -> io::Result<()> {
         match &mut self.live {

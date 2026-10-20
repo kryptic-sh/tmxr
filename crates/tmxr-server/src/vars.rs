@@ -80,6 +80,7 @@ pub const NAMES: &[&str] = &[
     "pane_synchronized",
     "pane_title",
     "pane_top",
+    "pane_tty",
     "pane_width",
     "pid",
     "scroll_position",
@@ -716,6 +717,11 @@ impl<'a> Context for Vars<'a> {
                     p.pty.pid()?.to_string()
                 }
             }
+            "pane_tty" => pane?
+                .pty
+                .tty_name()
+                .map(|t| t.display().to_string())
+                .unwrap_or_default(),
             "copy_cursor_word" => pane?.copy.as_ref()?.cursor_word(),
             // tmux's: the column, and the row in the view.
             "copy_cursor_x" => pane?.copy.as_ref()?.cx.to_string(),

@@ -741,3 +741,36 @@ fn split_window_i_shows_its_input_in_an_empty_pane() {
     let shown = t.run(&["capture-pane", "-p", "-t", "e.1"]);
     assert!(!shown.contains("typed"), "{shown}");
 }
+
+/// `#{pane_tty}` is the pane's terminal as the program in it sees it, as
+/// tmux's; a ConPTY has no device name, so on Windows it is empty.
+#[test]
+fn pane_tty_is_the_terminal_the_program_sees() {
+    let t = Tmxr::new("panetty");
+    #[cfg(unix)]
+    {
+        t.run(&[
+            "new-session",
+            "-d",
+            "-s",
+            "pt",
+            "echo TTY=$(tty); exec sleep 100",
+        ]);
+        let shown = t.wait_run(&["capture-pane", "-p", "-t", "pt"], "the tty", |o| {
+            o.contains("TTY=/")
+        });
+        let tty = shown
+            .lines()
+            .find_map(|l| l.trim_end().strip_prefix("TTY="))
+            .unwrap()
+            .to_owned();
+        let pane_tty = t.run(&["display-message", "-p", "-t", "pt", "#{pane_tty}"]);
+        assert_eq!(pane_tty.trim(), tty);
+    }
+    #[cfg(windows)]
+    {
+        t.run(&["new-session", "-d", "-s", "pt"]);
+        let pane_tty = t.run(&["display-message", "-p", "-t", "pt", "[#{pane_tty}]"]);
+        assert_eq!(pane_tty.trim(), "[]");
+    }
+}

@@ -24,6 +24,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`#{pane_tty}`**, as tmux's: the pane's terminal device on Unix, which
+  scripts hand to `ps -t` (vim-tmux-navigator's `is_vim` check among them);
+  empty on Windows, where a ConPTY has none.
 - **`#{client_tty}`**, as tmux's: the client's terminal device on Unix
   (`/dev/pts/3`), empty on Windows, whose console has none.
 - **The `strikethrough`, `blink` and `hidden` style attributes**, as tmux's, and
