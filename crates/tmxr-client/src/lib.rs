@@ -120,6 +120,7 @@ fn hello() -> Hello {
             rows,
             term: std::env::var("TERM").unwrap_or_default(),
             job_control: cfg!(unix),
+            tty: terminal::tty_name(),
         });
     Hello {
         protocol: PROTOCOL_VERSION,

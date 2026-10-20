@@ -23,6 +23,7 @@ pub const NAMES: &[&str] = &[
     "client_readonly",
     "client_session",
     "client_termname",
+    "client_tty",
     "client_uid",
     "client_user",
     "client_width",
@@ -494,6 +495,15 @@ impl<'a> Context for Vars<'a> {
                 .terminal
                 .as_ref()?
                 .term
+                .clone(),
+            "client_tty" => srv
+                .clients
+                .get(&self.client?)?
+                .hello
+                .as_ref()?
+                .terminal
+                .as_ref()?
+                .tty
                 .clone(),
             "session_name" => session?.name.clone(),
             "session_id" => format!("${}", session?.id),

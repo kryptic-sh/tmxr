@@ -77,6 +77,7 @@ mod tests {
                     rows: 24,
                     term: "xterm-256color".into(),
                     job_control: true,
+                    tty: "/dev/pts/3".into(),
                 }),
             }),
             ClientMsg::Command(vec!["split-window".into(), "-h".into()]),
@@ -159,7 +160,7 @@ mod tests {
         for m in sample_server() {
             write_msg(&mut buf, &m).unwrap();
         }
-        assert_eq!(PROTOCOL_VERSION, 8, "update the golden digest below too");
+        assert_eq!(PROTOCOL_VERSION, 9, "update the golden digest below too");
         assert_eq!(
             fnv1a(&buf),
             GOLDEN,
@@ -167,7 +168,7 @@ mod tests {
         );
     }
 
-    const GOLDEN: u64 = 12_421_139_882_657_924_417;
+    const GOLDEN: u64 = 16_031_002_265_491_766_994;
 
     /// FNV-1a 64-bit (http://www.isthe.com/chongo/tech/comp/fnv/), used only to
     /// pin the golden bytes in a readable constant.

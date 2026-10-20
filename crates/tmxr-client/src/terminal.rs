@@ -233,6 +233,29 @@ pub fn suspend() -> io::Result<()> {
     Ok(())
 }
 
+/// The terminal on standard input, as tmux's client takes
+/// `ttyname(STDIN_FILENO)` for `#{client_tty}`; empty when it has none.
+#[cfg(unix)]
+pub fn tty_name() -> String {
+    let mut buf = [0u8; 256];
+    // SAFETY: `ttyname_r` writes at most `buf.len()` bytes, its NUL
+    // included, into `buf`, which outlives the call.
+    let failed = unsafe { libc::ttyname_r(libc::STDIN_FILENO, buf.as_mut_ptr().cast(), buf.len()) };
+    if failed != 0 {
+        return String::new();
+    }
+    std::ffi::CStr::from_bytes_until_nul(&buf)
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// A Windows console has no device name, so `#{client_tty}` is empty, as
+/// tmux's for a client without a tty.
+#[cfg(windows)]
+pub fn tty_name() -> String {
+    String::new()
+}
+
 /// Send this process's parent (the shell it ran from) SIGHUP, which usually
 /// closes the terminal too (`detach-client -P`).
 #[cfg(unix)]

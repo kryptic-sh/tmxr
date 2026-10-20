@@ -591,6 +591,14 @@ fn client_variables_tell_its_times_and_last_session() {
         client("#{client_pid}"),
         s.child.process_id().unwrap().to_string()
     );
+    // Its terminal's device, as tmux's ttyname; a Windows console has none.
+    #[cfg(unix)]
+    assert_eq!(
+        Some(std::path::PathBuf::from(client("#{client_tty}"))),
+        s.master.tty_name()
+    );
+    #[cfg(windows)]
+    assert_eq!(client("[#{client_tty}]"), "[]");
     // The client is in "second" now, showing its window, and no longer in
     // "first".
     let name = client("#{client_name}");

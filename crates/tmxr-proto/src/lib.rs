@@ -15,7 +15,7 @@ pub use codec::{ProtoError, read_msg, write_msg};
 
 /// Bumped on any change to a type in this module. Client and server refuse to
 /// talk across a mismatch rather than mis-decode each other.
-pub const PROTOCOL_VERSION: u32 = 8;
+pub const PROTOCOL_VERSION: u32 = 9;
 
 /// First message a client sends.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -43,6 +43,8 @@ pub struct TerminalInfo {
     pub term: String,
     /// The client can suspend itself (`suspend-client`): Unix job control.
     pub job_control: bool,
+    /// The terminal's device (`#{client_tty}`), empty where it has none.
+    pub tty: String,
 }
 
 /// Messages from a client to the server.

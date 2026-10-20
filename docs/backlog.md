@@ -257,16 +257,19 @@ table. What has been verified, and how:
   tmux's (`!read-only` leaves a read-only client read-only). `#{client_flags}`
   lists only what tmxr keeps: `attached`, `focused`, `ignore-size`, `read-only`
   and `UTF-8` (every client, as tmxr writes nothing else, where tmux's follows
-  the client's locale), not tmux's `suspended`. `#{client_tty}` is empty and
-  `#{client_name}` is tmxr's client id, where tmux's are the client's tty: the
-  client does not send its tty name. A client is `focused` from attaching, as
-  tmux's, until its terminal reports focus out; the terminal is asked for focus
-  reports only with `focus-events on`, as tmux's (`ServerMsg::FocusEvents`), and
-  reports that come anyway are taken, as tmux's `tty_keys_next` takes them. On
-  Windows the console hands crossterm focus events whether asked or not, and
-  ConPTY asks its own terminal for them when it starts, so `focus-events off`
-  does not keep them out there. Compared with tmux by `client_flags_as_tmux`
-  (flags and `refresh-client -f`); the focus reports are not.
+  the client's locale), not tmux's `suspended`. `#{client_tty}` is the client's
+  terminal on Unix (`terminal::tty_name`, `ttyname_r`, which no dynamic-analysis
+  tool covers: CI runs none, and Miri cannot run the call) and empty on Windows;
+  `#{client_name}` is tmxr's client id, where tmux's is the tty (and `-c` takes
+  it), not changed: every `-c` target and the e2e tests name clients by id. A
+  client is `focused` from attaching, as tmux's, until its terminal reports
+  focus out; the terminal is asked for focus reports only with
+  `focus-events on`, as tmux's (`ServerMsg::FocusEvents`), and reports that come
+  anyway are taken, as tmux's `tty_keys_next` takes them. On Windows the console
+  hands crossterm focus events whether asked or not, and ConPTY asks its own
+  terminal for them when it starts, so `focus-events off` does not keep them out
+  there. Compared with tmux by `client_flags_as_tmux` (flags and
+  `refresh-client -f`); the focus reports are not.
 - **Pane focus** (`Server::update_pane_focus`, from tmux's
   `window_pane_update_focus`): a pane is focused while it is the active pane of
   a window a focused client shows, and a program that asked (mode 1004) gets
