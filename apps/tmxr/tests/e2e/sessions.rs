@@ -1252,12 +1252,16 @@ fn a_resize_and_a_key_arriving_together_both_reach_the_server() {
 /// Keys typed faster than the client reads all reach the pane: crossterm
 /// stopped reading once a read filled its buffer, and the rest waited for
 /// the next key. The keys go in one write, so they are all waiting when the
-/// client reads. Unix only, as the resize test above: a Windows console
-/// hands over input records, not a byte buffer.
+/// client reads, as lines short enough for the pane's canonical mode (macOS
+/// takes 1024 bytes a line). Unix only, as the resize test above: a Windows
+/// console hands over input records, not a byte buffer.
 #[cfg(unix)]
 #[test]
 fn keys_typed_faster_than_the_client_reads_all_arrive() {
-    const KEYS: usize = 3000;
+    const LINES: usize = 30;
+    const LINE_LEN: usize = 99;
+    // crossterm's read buffer (its `TTY_BUFFER_SIZE`).
+    const READ_BUFFER: usize = 1024;
     let t = Tmxr::new("burst");
     let s = t.attach(&["new", "-s", "burst"]);
     s.wait_for("the status line", |text| text.contains("burst"));
@@ -1271,18 +1275,24 @@ fn keys_typed_faster_than_the_client_reads_all_arrive() {
         assert!(Instant::now() < deadline, "cat never started");
         std::thread::sleep(Duration::from_millis(50));
     }
-    let mut keys = vec![b'a'; KEYS];
-    keys.push(b'\r');
-    s.send(&keys);
+    let line = "a".repeat(LINE_LEN);
+    let keys = format!("{line}\r").repeat(LINES);
+    assert!(
+        keys.len() > 2 * READ_BUFFER,
+        "the keys fill more than one read"
+    );
+    s.send(keys.as_bytes());
+    let expected = format!("{line}\n").repeat(LINES);
     loop {
         let typed = read().unwrap_or_default();
-        if typed.trim_end() == "a".repeat(KEYS) {
+        if typed == expected {
             break;
         }
         assert!(
             Instant::now() < deadline,
-            "{} of {KEYS} keys reached the pane",
-            typed.trim_end().len()
+            "{} of {} bytes reached the pane",
+            typed.len(),
+            expected.len()
         );
         std::thread::sleep(Duration::from_millis(100));
     }
