@@ -531,6 +531,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **btop draws its boxes in place**: a pane now takes the cursor sequences tmux
+  takes and its emulator (`vt100`) ignored, so a program using them no longer
+  draws everything as one run of text. HVP (`CSI row;col f`, btop's cursor move)
+  and HPA (`` CSI col ` ``) move the cursor, `CSI s` / `CSI u` save and restore
+  it, REP (`CSI n b`) repeats the character just printed and CBT (`CSI n Z`)
+  moves back tab stops, each as tmux 3.8 draws them.
 - **`load-buffer -` and replies past 16 MiB go whole**: the client's standard
   input and a command's output are sent in pieces, where input that large failed
   on the client and a reply that large (`show-buffer` of a big buffer) came back

@@ -64,13 +64,15 @@ table. What has been verified, and how:
 
 ## Known gaps and follow-ups
 
-- **btop's layout breaks in tmxr** (reported by the owner 2026-10-20, seen on
-  Linux; Windows and macOS not tried). Not reproduced or investigated yet: what
-  breaks (boxes, borders, sizes, colours) and which sequences btop sends that
-  tmxr's emulator (`vt100`) or renderer mishandles are unknown. A start: run
-  btop in tmxr and in tmux 3.6 at the same size, compare `capture-pane -e` of
-  both (the oracle can, with `program = "btop"`), and log the bytes btop writes
-  (`pipe-pane -O`) to find the sequence tmxr draws differently.
+- **CSIs vt100 lacks are made beside it** (`modes::ModeSplitter`, from tmux's
+  `input_csi_table`): HVP, HPA, SCP / RCP, REP and CBT; btop's boxes, which
+  broke for want of HVP, matched tmux 3.8 on every row by their box-drawing
+  cells (2026-10-20, 120x40, Linux). Not compared: btop's colours
+  (`capture-pane -e` differs run to run with its live graphs). SCP / RCP go
+  through vt100's `ESC 7` / `ESC 8`, which save the attributes too, as tmux's
+  `input_save_state` does. CBT and HT use vt100's fixed tab stops every 8
+  columns: a program's own (HTS, `CSI g`) are not kept, where tmux keeps them.
+  CHT (`CSI n I`) is ignored, as tmux 3.8 ignores it (probed the same day).
 - **Mouse use as in the owner's tmux config** (asked for 2026-10-11). The tmux
   compatibility oracle (`crates/tmxr-compat-oracle`, `corpus/mouse.toml`) drives
   a tmux 3.6 client and a tmxr client with the same SGR mouse events in CI and
@@ -478,7 +480,7 @@ table. What has been verified, and how:
     in both a command's own children outlive it unless the shell `exec`s them;
     modifiers `w:` (it needs a display-width measure `tmxr-command` does not
     have, unicode-width being a new dependency); `c:` gives no colour for X11's
-    names (`orchid`, `navy blue`), which tmux 3.6's colour_byname takes from a
+    names (`orchid`, `navy blue`), which tmux 3.6's `colour_byname` takes from a
     table of 578 (`tmxr_command::colour::rgb` reads everything else tmux reads,
     compared in the oracle; copying the table is the open choice); a syntax
     error ends the expansion as tmux's for a comparison, `m:` or `R:` without
@@ -499,46 +501,47 @@ table. What has been verified, and how:
   - Options: every status row is drawn from its `status-format` item by
     `format_draw` (the first from tmux's default unless set), which takes tmux's
     `align`, `fill`, `default` / `push-default` / `pop-default`, lists (cut
-    around their focus with their markers, laid out as tmux's format_draw_left /
-    _centre / _right / _absolute_centre, compared by the `a_status_list_*`
-    cases) and the left, right and window ranges, but not pane, session or user
-    ranges; clicks reach only the first row's ranges. With `status off` and
-    `status-position top`, a message covers the window's first row, as tmux 3.6
-    shows it (compared 2026-10-20): tmux's `screen_redraw_set_context` would
-    draw the window a row down, but a message asks only for the status line to
-    be drawn and freezes the terminal (`status_message_set`, `TTY_FREEZE`), so
-    the shift shows only after a full redraw (a resize, `refresh-client`), which
-    tmxr does not copy. tmxr does not freeze either: a pane's output is drawn
-    while a message shows, where tmux holds it until the message goes (not with
-    `display-message -C`); (not tested: `send-keys -M` under a top status line
-    or in a panned view, which now measure from the mouse's window cell,
-    `MouseTarget::col` / `row`, not its client cell);
-    `window-status-activity-style` and `-bell-style` default to `default` where
-    tmux's are `reverse`, on purpose (tmux's would change tmxr's theme, which
-    shows the alert flags in its window format); colour options (`status-fg` /
-    `-bg`, `display-panes-colour`, `clock-mode-colour` and the rest, all `Word`)
-    keep any text as typed, where tmux 3.6 (seen 2026-10-20) refuses `nocolour`
-    or `colour300` with `bad colour` and shows `#ABCDEF` as `#abcdef`; checking
-    them as tmux does was considered and declined for now: tmxr's own defaults
-    put formats in colour options (`display-panes-colour = "#{@thm_blue}"`),
-    which tmux's check would refuse, so it needs those expanded first or the
-    theme moved. `editor` edits a buffer from `choose-buffer` (`e`) in a popup,
-    as tmux's popup_editor, the popup taking the picker's place (tmxr's overlay
-    is one at a time) and the picker opened again by its command once the editor
-    is done, so it comes back on its first row, where tmux's buffer mode keeps
-    the buffer highlighted; on Windows, where tmux has no default, `editor`
-    falls back to `notepad` (a choice, not tmux's). `escape-time` holds a lone
-    Escape on the server (`Server::escape_time`), where tmux's client reads its
-    terminal with the wait; tmxr's client reads through crossterm, which already
-    reads an Escape and a key that arrive together as Meta and the key, so only
-    keys arriving apart are joined there (tmxr's default is 0, tmux's 10).
+    around their focus with their markers, laid out as tmux's `format_draw_left`
+    / `_centre` / `_right` / `_absolute_centre`, compared by the
+    `a_status_list_*` cases) and the left, right and window ranges, but not
+    pane, session or user ranges; clicks reach only the first row's ranges. With
+    `status off` and `status-position top`, a message covers the window's first
+    row, as tmux 3.6 shows it (compared 2026-10-20): tmux's
+    `screen_redraw_set_context` would draw the window a row down, but a message
+    asks only for the status line to be drawn and freezes the terminal
+    (`status_message_set`, `TTY_FREEZE`), so the shift shows only after a full
+    redraw (a resize, `refresh-client`), which tmxr does not copy. tmxr does not
+    freeze either: a pane's output is drawn while a message shows, where tmux
+    holds it until the message goes (not with `display-message -C`); (not
+    tested: `send-keys -M` under a top status line or in a panned view, which
+    now measure from the mouse's window cell, `MouseTarget::col` / `row`, not
+    its client cell); `window-status-activity-style` and `-bell-style` default
+    to `default` where tmux's are `reverse`, on purpose (tmux's would change
+    tmxr's theme, which shows the alert flags in its window format); colour
+    options (`status-fg` / `-bg`, `display-panes-colour`, `clock-mode-colour`
+    and the rest, all `Word`) keep any text as typed, where tmux 3.6 (seen
+    2026-10-20) refuses `nocolour` or `colour300` with `bad colour` and shows
+    `#ABCDEF` as `#abcdef`; checking them as tmux does was considered and
+    declined for now: tmxr's own defaults put formats in colour options
+    (`display-panes-colour = "#{@thm_blue}"`), which tmux's check would refuse,
+    so it needs those expanded first or the theme moved. `editor` edits a buffer
+    from `choose-buffer` (`e`) in a popup, as tmux's `popup_editor`, the popup
+    taking the picker's place (tmxr's overlay is one at a time) and the picker
+    opened again by its command once the editor is done, so it comes back on its
+    first row, where tmux's buffer mode keeps the buffer highlighted; on
+    Windows, where tmux has no default, `editor` falls back to `notepad` (a
+    choice, not tmux's). `escape-time` holds a lone Escape on the server
+    (`Server::escape_time`), where tmux's client reads its terminal with the
+    wait; tmxr's client reads through crossterm, which already reads an Escape
+    and a key that arrive together as Meta and the key, so only keys arriving
+    apart are joined there (tmxr's default is 0, tmux's 10).
   - Commands: `capture-pane -a` (it needs the saved normal screen, which `vt100`
     does not expose). `-e` writes only the attributes `vt100` keeps (bold, dim,
     italics, underline, reverse; not blink, hidden, strikethrough, overline or
     the underline styles and colour), and `38;5;n` for n below 16 as the plain
     or bright code, as `vt100` stores both alike. A line's allocation (what
     `-N`, `-e` and a plain capture run to) is worked out from what was written
-    (`allocated` in `cmds/pane.rs`, as grid_expand_line rounds), where tmux's
+    (`allocated` in `cmds/pane.rs`, as `grid_expand_line` rounds), where tmux's
     comes from the line's whole history, so a line written long and then cut
     short differs; an erased cell counts as unwritten (known divergence
     `capture_pane_t_counts_an_erased_cell_as_written`). The oracle cannot catch
@@ -641,17 +644,17 @@ table. What has been verified, and how:
   match, `window_copy_search`); tmxr's default `C-r` / `C-s` binds also lack
   tmux's `-I "#{pane_search_string}"`, as tmxr has no `pane_search_string`.
 - **Session groups follow tmux by comparison, not by call** (`groups.rs`): tmux
-  calls session_group_synchronize_from wherever a command changes a session's
+  calls `session_group_synchronize_from` wherever a command changes a session's
   windows; tmxr keeps each group's window list as last synchronised and, after
   every command and in `Server::settle`, copies the list of whichever member no
   longer matches it to the others. Two members changed between passes would lose
   one's change; no command changes two, as `swap-window`, `move-window` and
   `link-window` between members are refused as tmux refuses them
   (`Server::grouped_together`). A member whose current window went takes its
-  last, else a lower, else a higher one: tmux's session_last / session_previous
-  / session_next on the old list, not compared beyond the oracle's case. Not
-  done: resurrect saves the members' windows as linked windows, not as a group,
-  so a restore has no group.
+  last, else a lower, else a higher one: tmux's `session_last` /
+  `session_previous` / `session_next` on the old list, not compared beyond the
+  oracle's case. Not done: resurrect saves the members' windows as linked
+  windows, not as a group, so a restore has no group.
 - **`#{pane_dead_signal}` is a number**, as tmux 3.6 shows it on Linux (seen
   2026-10-20: `15` for SIGTERM, from tmux's compat `sig2name`). Where the system
   has `sys_signame` (macOS, the BSDs) tmux may show a name instead; not checked.
@@ -687,14 +690,14 @@ table. What has been verified, and how:
   (nested parts, `E:` values, modifier arguments) as tmux's `FORMAT_EXPAND_TIME`
   does, and the status line, the terminal title and `display-message` use it.
   Read against tmux 3.6 (2026-10-20), not run: `pane-border-format` takes it, as
-  screen_redraw's format_expand_time; menus' items and the `-T` titles of menus
-  and popups do not, as tmux's format_single. A `#()` job's command and output
-  expand without it, and the whole format's strftime pass comes first (so a `%`
-  in a command wants `%%`), as tmux's format_expand1 and format_job_get (read,
-  not run). strftime covers the C locale's common conversions
-  (`format::strftime`); `%Z` is kept as written: `LocalTime` has no zone name,
-  and Windows' is a long display name (`Taipei Standard Time`) where glibc gives
-  `CST`.
+  `screen_redraw`'s `format_expand_time`; menus' items and the `-T` titles of
+  menus and popups do not, as tmux's `format_single`. A `#()` job's command and
+  output expand without it, and the whole format's strftime pass comes first (so
+  a `%` in a command wants `%%`), as tmux's `format_expand1` and
+  `format_job_get` (read, not run). strftime covers the C locale's common
+  conversions (`format::strftime`); `%Z` is kept as written: `LocalTime` has no
+  zone name, and Windows' is a long display name (`Taipei Standard Time`) where
+  glibc gives `CST`.
 - **tmux's `link-window` and `move-window` drop the mark** of a pane in the
   window they place (2026-10-18, tmux 3.6): `server_link_window` moves
   `marked_pane.wl` to the new link but keeps `marked_pane.s`, so the mark no

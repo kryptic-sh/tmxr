@@ -11,6 +11,10 @@ use crate::modes::{ModeSplitter, Piece};
 /// program cannot grow it without end; the size is the terminal's choice.
 const KITTY_STACK_LIMIT: usize = 16;
 
+/// The columns between vt100's tab stops, which it keeps fixed (its
+/// `Grid::col_tab`): a program's own stops (HTS, TBC) are not kept.
+const TAB_WIDTH: u16 = 8;
+
 /// Side-channel state collected while parsing a pane's output.
 #[derive(Debug, Default)]
 pub struct Hooks {
@@ -388,8 +392,37 @@ impl Emulator {
                     (self.mouse_utf8, self.mouse_sgr) = (false, false);
                     self.parser.process(b"\x1bc");
                 }
+                Piece::Repeat { ch, count } => self.repeat(ch, count),
+                Piece::BackTab(count) => self.back_tab(count),
             }
         }
+    }
+
+    /// REP as tmux's input_csi_dispatch: `ch` again `count` times, no more
+    /// than the columns left of the cursor's row.
+    fn repeat(&mut self, ch: char, count: u32) {
+        let screen = self.parser.screen();
+        let left = screen.size().1.saturating_sub(screen.cursor_position().1);
+        let times = count.min(u32::from(left)) as usize;
+        self.parser.process(ch.to_string().repeat(times).as_bytes());
+    }
+
+    /// CBT as tmux's input_csi_dispatch: the cursor back `count` tab stops,
+    /// which are vt100's, every `TAB_WIDTH` columns.
+    fn back_tab(&mut self, count: u32) {
+        let screen = self.parser.screen();
+        let mut col = screen
+            .cursor_position()
+            .1
+            .min(screen.size().1.saturating_sub(1));
+        for _ in 0..count {
+            if col == 0 {
+                break;
+            }
+            col -= 1;
+            col -= col % TAB_WIDTH;
+        }
+        self.parser.process(format!("\x1b[{}G", col + 1).as_bytes());
     }
 
     /// A mouse mode set or reset as tmux's input_csi_dispatch_sm_private /
@@ -755,6 +788,26 @@ mod tests {
         assert_eq!(e.history_size(), 0);
         assert_eq!((row(&e, 0), row(&e, 1)), ("one".into(), "$ ".into()));
         assert_eq!(e.screen().cursor_position(), (1, 2));
+    }
+
+    #[test]
+    fn csis_vt100_lacks_draw_as_tmuxs() {
+        // Each row as tmux 3.8 drew the same output in a 20-column pane.
+        let mut e = Emulator::new(8, 20, 0);
+        e.process(b"\x1b[1;18Hx\x1b[9b");
+        e.process(b"\x1b[2;1H12345678901234567890\x1b[ZC");
+        e.process(b"\x1b[3;1Hab\x1b[5Zq");
+        e.process(b"\x1b[4;3fhvp\x1b[f@");
+        e.process(b"\x1b[5;1Hbq\x1b[6`Y");
+        e.process(b"\x1b[6;1Hsave\x1b[s\x1b[8;1Hmid\x1b[uR");
+        let row = |r: u16| e.screen().contents_between(r, 0, r, 20);
+        assert_eq!(row(0), "@                xxx");
+        assert_eq!(row(1), "1234567890123456C890");
+        assert_eq!(row(2), "qb");
+        assert_eq!(row(3), "  hvp");
+        assert_eq!(row(4), "bq   Y");
+        assert_eq!(row(5), "saveR");
+        assert_eq!(row(7), "mid");
     }
 
     #[test]
