@@ -24,6 +24,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`#{buffer_full}` and `#{buffer_created}`**, as tmux's.
 - **`#(command)` in formats**, as tmux's: the command runs in the background
   with the session's shell and directory (again at most once a second while a
   format names it, at once when its expanded text changes), and the format shows
@@ -470,6 +471,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Paste buffers as tmux's**: `#{buffer_sample}` is the first 200 bytes with
+  control characters escaped (`\n`, `\t`, octal), cut with `...`, where it was
+  50 characters with newlines as spaces; and setting a named buffer that exists
+  makes it the newest, where it kept its place in the list.
 - **A `default` status part style keeps the status line's colours**, as tmux's:
   `status-left-style`, `status-right-style` and `window-status-style` set to
   `default` drew their part in the terminal's colours instead of

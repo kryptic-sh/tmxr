@@ -12,6 +12,7 @@ mod windows;
 pub use shell::{ChildEnv, pipe_to_shell, shell_succeeds, shell_text};
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, SyncSender, TrySendError};
 use std::time::{Duration, Instant};
@@ -148,16 +149,53 @@ pub struct Buffer {
     /// Named by tmxr (`bufferN`), not by `-b`: only these count against
     /// `buffer-limit` and make way for new ones, as tmux's.
     pub automatic: bool,
+    /// When it was made (`#{buffer_created}`).
+    pub created: std::time::SystemTime,
 }
 
+/// How many bytes of a buffer tmux's paste_make_sample shows.
+const SAMPLE_BYTES: usize = 200;
+
 impl Buffer {
-    /// tmux's buffer_sample: the start, with newlines shown as spaces.
+    fn new(name: String, data: String, automatic: bool) -> Self {
+        Self {
+            name,
+            data,
+            automatic,
+            created: std::time::SystemTime::now(),
+        }
+    }
+
+    /// tmux's buffer_sample (paste_make_sample): the first bytes, escaped
+    /// as vis(3) with VIS_CSTYLE, VIS_OCTAL, VIS_TAB and VIS_NL does, cut
+    /// with `...` when there is more.
     pub fn sample(&self) -> String {
-        self.data
-            .chars()
-            .take(50)
-            .map(|c| if c == '\n' { ' ' } else { c })
-            .collect()
+        let mut end = self.data.len().min(SAMPLE_BYTES);
+        while !self.data.is_char_boundary(end) {
+            end -= 1;
+        }
+        let mut out = String::new();
+        for c in self.data[..end].chars() {
+            match c {
+                '\n' => out.push_str("\\n"),
+                '\t' => out.push_str("\\t"),
+                '\r' => out.push_str("\\r"),
+                '\\' => out.push_str("\\\\"),
+                c if c.is_control() && u32::from(c) < 0x80 => {
+                    let _ = write!(out, "\\{:03o}", u32::from(c));
+                }
+                c => out.push(c),
+            }
+        }
+        if self.data.len() > SAMPLE_BYTES || out.len() > SAMPLE_BYTES {
+            let mut cut = out.len().min(SAMPLE_BYTES);
+            while !out.is_char_boundary(cut) {
+                cut -= 1;
+            }
+            out.truncate(cut);
+            out.push_str("...");
+        }
+        out
     }
 
     /// The `buffer_*` format variables for this buffer.
@@ -166,6 +204,13 @@ impl Buffer {
             "buffer_name" => Some(self.name.clone()),
             "buffer_size" => Some(self.data.len().to_string()),
             "buffer_sample" => Some(self.sample()),
+            "buffer_full" => Some(self.data.clone()),
+            "buffer_created" => Some(
+                self.created
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |d| d.as_secs())
+                    .to_string(),
+            ),
             _ => None,
         }
     }
@@ -699,25 +744,16 @@ impl Server {
     }
 
     /// Add a paste buffer, or with `name` set the one of that name, which
-    /// then counts as named, as tmux's `paste_set`. The oldest automatic
+    /// then counts as named, as tmux's `paste_set`: one of that name already
+    /// there is replaced by a new one, newest of all. The oldest automatic
     /// buffer makes way once there are more than `buffer-limit`.
     pub fn add_buffer(&mut self, data: String, name: Option<String>) {
-        if let Some(n) = &name
-            && let Some(b) = self.buffers.iter_mut().find(|b| &b.name == n)
-        {
-            b.data = data;
-            b.automatic = false;
-            return;
-        }
         let Some(name) = name else {
             self.add_buffer_prefixed(data, "buffer");
             return;
         };
-        self.buffers.push_front(Buffer {
-            name,
-            data,
-            automatic: false,
-        });
+        self.buffers.retain(|b| b.name != name);
+        self.buffers.push_front(Buffer::new(name, data, false));
         self.trim_buffers();
     }
 
@@ -731,11 +767,7 @@ impl Server {
                 break n;
             }
         };
-        self.buffers.push_front(Buffer {
-            name,
-            data,
-            automatic: true,
-        });
+        self.buffers.push_front(Buffer::new(name, data, true));
         self.trim_buffers();
     }
 

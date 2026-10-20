@@ -664,3 +664,23 @@ checks = [
   { command = "capture-pane -p -S 0 -E 0" },
   { command = "capture-pane -p -q -S 0 -E 0" },
 ]
+
+[[cases]]
+name = "buffer_variables_and_samples_are_tmuxs"
+steps = [
+  { run = "set-buffer -b a 'x\ty\nz\\w\u0001é'" },
+  { run = "set-buffer -b long 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" },
+  { run = "set-buffer -b mid m" },
+  { run = "set-buffer -b a again" },
+]
+checks = [
+  { command = "list-buffers -F '#{buffer_name}|#{buffer_sample}|#{buffer_size}'" },
+  { command = "list-buffers -F '#{buffer_name}=[#{buffer_full}]'" },
+]
+
+[[cases]]
+name = "a_buffer_sample_escapes_as_tmux"
+steps = [{ run = "set-buffer -b a 'x\ty\nz\\w\u0001é'" }]
+checks = [
+  { command = "list-buffers -F '#{buffer_sample}|#{buffer_size}|#{?#{buffer_created},made,}'" },
+]
