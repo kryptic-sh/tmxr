@@ -39,6 +39,14 @@ pub trait Context {
     /// `None` when there is nothing to loop in (no session for windows, no
     /// window for panes), which expands to nothing.
     fn loop_items(&self, kind: LoopKind) -> Option<Vec<LoopItem<'_>>>;
+
+    /// What shell command `cmd` (as written in `#(…)`, `expanded` its text
+    /// expanded) printed last, as tmux's format_job_get; `None` when the
+    /// context runs no commands, which expands to nothing.
+    fn job(&self, cmd: &str, expanded: &str) -> Option<String> {
+        let _ = (cmd, expanded);
+        None
+    }
 }
 
 /// What a format loop goes over.
@@ -116,6 +124,10 @@ impl Context for InLoop<'_> {
     fn loop_items(&self, kind: LoopKind) -> Option<Vec<LoopItem<'_>>> {
         self.inner.loop_items(kind)
     }
+
+    fn job(&self, cmd: &str, expanded: &str) -> Option<String> {
+        self.inner.job(cmd, expanded)
+    }
 }
 
 /// tmux's format loops: `fmt` expanded for each item in turn, sorted as
@@ -189,6 +201,7 @@ pub fn expand_time(fmt: &str, ctx: &dyn Context) -> String {
         Pass {
             depth: 0,
             time: true,
+            jobs: true,
         },
     )
 }
@@ -198,6 +211,9 @@ pub fn expand_time(fmt: &str, ctx: &dyn Context) -> String {
 struct Pass {
     depth: usize,
     time: bool,
+    /// `#(…)` runs its command; off inside a command and its output, as
+    /// tmux's FORMAT_EXPAND_NOJOBS.
+    jobs: bool,
 }
 
 impl Pass {
@@ -363,8 +379,30 @@ pub fn expand(fmt: &str, ctx: &dyn Context) -> String {
         Pass {
             depth: 0,
             time: false,
+            jobs: true,
         },
     )
+}
+
+/// `#(command)` at the start of `after` (just past the `#`): the command's
+/// text and what follows its `)`, found by counting parentheses as tmux's
+/// format_expand1 does; `None` without a closing one.
+fn job_text(after: &str) -> Option<(&str, &str)> {
+    let body = after.strip_prefix('(')?;
+    let mut depth = 1;
+    for (i, c) in body.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some((&body[..i], &body[i + 1..]));
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 fn expand_depth(fmt: &str, ctx: &dyn Context, pass: Pass) -> String {
@@ -403,6 +441,24 @@ fn expand_depth(fmt: &str, ctx: &dyn Context, pass: Pass) -> String {
             Some('#') => {
                 out.push('#');
                 rest = &after[1..];
+                continue;
+            }
+            Some('(') if job_text(after).is_some() => {
+                let (cmd, tail) = job_text(after).unwrap_or_default();
+                if pass.jobs {
+                    // The command and what it printed are formats with no
+                    // jobs and no time in them, as tmux's.
+                    let plain = Pass {
+                        time: false,
+                        jobs: false,
+                        ..pass.deeper()
+                    };
+                    let expanded = expand_depth(cmd, ctx, plain);
+                    if let Some(printed) = ctx.job(cmd, &expanded) {
+                        out.push_str(&expand_depth(&printed, ctx, plain));
+                    }
+                }
+                rest = tail;
                 continue;
             }
             Some(c) if short_alias(c).is_some() => {
@@ -1387,6 +1443,60 @@ mod tests {
         // Names that only start like a modifier are variables.
         assert_eq!(x("#{session_name}"), "main");
         assert_eq!(x("#{pane_current_path}"), "/home/u/src");
+    }
+
+    /// A context whose jobs print their expanded command, bracketed, and
+    /// whose variables are `v` and `out`.
+    struct Jobs;
+
+    impl Context for Jobs {
+        fn get(&self, name: &str) -> Option<String> {
+            match name {
+                "v" => Some("V".into()),
+                "out" => Some("#(nested)".into()),
+                _ => None,
+            }
+        }
+
+        fn name_exists(&self, _kind: NameKind, _name: &str) -> Option<bool> {
+            None
+        }
+
+        fn pane_lines(&self) -> Option<Vec<String>> {
+            None
+        }
+
+        fn loop_items(&self, _kind: LoopKind) -> Option<Vec<LoopItem<'_>>> {
+            None
+        }
+
+        fn job(&self, cmd: &str, expanded: &str) -> Option<String> {
+            Some(if cmd == "show" {
+                "#{v}#(again)".into()
+            } else {
+                format!("[{expanded}]")
+            })
+        }
+    }
+
+    #[test]
+    fn jobs_run_their_expanded_command_as_tmux() {
+        let x = |f: &str| expand(f, &Jobs);
+        assert_eq!(x("a#(echo #{v})b"), "a[echo V]b");
+        // Parentheses are counted to find the end.
+        assert_eq!(x("x#(echo a(b)c)y"), "x[echo a(b)c]y");
+        // What it printed is a format, with no jobs in it.
+        assert_eq!(x("<#(show)>"), "<V>");
+        // A job's command runs no jobs in it.
+        assert_eq!(x("#(echo x#(inner)y)"), "[echo xy]");
+        // A variable's value goes into the command as it is.
+        assert_eq!(
+            x("#(echo #{out})"),
+            "[echo ]",
+            "printed, its #() runs nothing"
+        );
+        // A context that runs none gives nothing.
+        assert_eq!(expand("a#(echo hi)b", &ctx), "ab");
     }
 
     #[test]

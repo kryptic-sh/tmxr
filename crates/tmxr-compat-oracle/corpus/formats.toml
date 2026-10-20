@@ -562,3 +562,16 @@ checks = [
   { format = "[#{status-justify}] [#{E:pane-status-style}] [#{escape-time}] [#{base-index}] [#{pane-status-current-style}] [#{session-status-style}] [#{nosuchoption}]" },
   { command = "show -gv session-status-current-style" },
 ]
+
+[[cases]]
+name = "a_job_in_the_status_line_shows_what_it_printed_as_tmux"
+attach = true
+unix_only = true
+steps = [
+  { run = "set -g status-right '<#(echo first; echo JOBOUT)>'" },
+  { sleep = 1.5 },
+]
+checks = [
+  { screen_contains = "<JOBOUT>", expect = true },
+  { format = "[#(echo hi)]" },
+]

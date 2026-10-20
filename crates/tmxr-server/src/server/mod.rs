@@ -48,6 +48,8 @@ pub enum Event {
     PtyOutput(PaneId, u64),
     /// A `run-shell` job finished.
     JobDone(Box<crate::jobs::Done>),
+    /// A line from a `#(…)` format job, or its end.
+    FormatJob(Box<crate::format_jobs::JobOutput>),
     /// A line for the message log from work done off the state thread.
     Log(String),
     /// `pipe-pane -I`: the command printed this, to be typed into the pane.
@@ -216,6 +218,9 @@ pub struct Server {
     pub waits: crate::waits::Waits<crate::jobs::Done>,
     /// Session groups (`new-session -t`), in the order they were made.
     pub groups: Vec<crate::groups::SessionGroup>,
+    /// `#(…)` format jobs, kept behind a lock as formats read them through
+    /// a shared reference.
+    pub format_jobs: std::sync::Mutex<crate::format_jobs::FormatJobs>,
     /// `copy-command-line` under way, waiting for its pane to settle.
     pub copy_line: Option<crate::copyline::CopyLine>,
     /// The user running the server, always admitted.
@@ -310,6 +315,7 @@ impl Server {
             prompt_history: BTreeMap::new(),
             waits: crate::waits::Waits::default(),
             groups: Vec::new(),
+            format_jobs: std::sync::Mutex::default(),
             copy_line: None,
             owner: String::new(),
             acl: crate::access::SharedAcl::default(),
@@ -439,6 +445,7 @@ impl Server {
                 // still goes on when signalled.
                 self.waits
                     .forget(|d| d.then.reply.as_ref().is_some_and(|r| r.0 == id));
+                self.forget_format_jobs(id);
                 if let Some(c) = self.clients.remove(&id)
                     && c.att.is_some()
                 {
@@ -471,6 +478,7 @@ impl Server {
                 }
             }
             Event::JobDone(done) => self.job_done(*done),
+            Event::FormatJob(output) => self.format_job_output(*output),
             Event::Log(line) => self.log_message(line),
             Event::PipeInput { pane, pipe, bytes } => {
                 // Only from the pane's open pipe: one since closed is done.

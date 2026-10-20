@@ -295,6 +295,10 @@ fn client_flags(c: &crate::server::Client) -> String {
 }
 
 impl<'a> Context for Vars<'a> {
+    fn job(&self, cmd: &str, expanded: &str) -> Option<String> {
+        Some(self.srv.format_job(self.client, cmd, expanded))
+    }
+
     fn name_exists(&self, kind: NameKind, name: &str) -> Option<bool> {
         let srv = self.srv;
         Some(match kind {

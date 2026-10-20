@@ -1412,3 +1412,17 @@ fn window_entries_take_the_bell_and_activity_styles() {
     });
     assert_eq!(bg("0"), "Idx(0)", "the current window: no alert");
 }
+
+#[test]
+fn a_job_in_status_right_shows_its_last_line() {
+    let t = Tmxr::new("formatjob");
+    let s = t.attach(&["new", "-s", "fj"]);
+    s.wait_for("the status line", |text| text.contains("fj"));
+    let job = if cfg!(windows) {
+        "<#(echo first& echo JOBOUT)>"
+    } else {
+        "<#(echo first; echo JOBOUT)>"
+    };
+    t.run(&["set", "-g", "status-right", job]);
+    s.wait_for("the job's last line", |text| text.contains("<JOBOUT>"));
+}

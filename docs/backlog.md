@@ -448,22 +448,25 @@ table. What has been verified, and how:
     large into an error (`conn.rs`).
 - **tmux 3.6 features tmxr lacks** (the same review; compared against tmux's
   `cmd-*.c`, `options-table.c` and `format.c`, not run):
-  - Formats: `#(shell)` in status formats (tmux's default `status-right` uses
-    it); modifiers `w:` (it needs a display-width measure `tmxr-command` does
-    not have, unicode-width being a new dependency); `c:` gives no colour for
-    X11's names (`orchid`, `navy blue`), which tmux 3.6's colour_byname takes
-    from a table of 578 (`tmxr_command::colour::rgb` reads everything else tmux
-    reads, compared in the oracle; copying the table is the open choice); a
-    syntax error ends the expansion as tmux's for a comparison, `m:` or `R:`
-    without its comma (`format::expand_item`), but not for tmux's other
-    failures, not compared: a loop or `N:` whose lookup fails (`format_loop_*`,
-    `format_window_name` returning none); many of tmux's format variables
-    (compare tmux's `format_table` with `vars.rs` for the list; `origin_flag`,
-    `wrap_flag`, `insert_flag`, `scroll_region_*`, `alternate_saved_*`,
-    `pane_tabs` and `cursor_shape` / `cursor_colour` need terminal state the
-    `vt100` crate does not expose); styles `align=` `fill=` `list=` `range=`
-    `push-default` / `pop-default`, strikethrough, blink, overline, curly and
-    coloured underlines.
+  - Formats: `#()` jobs run as tmux's (`format_jobs.rs`), but a job made to run
+    again by a change in its expanded text leaves its earlier run going where
+    tmux kills it, and a client's jobs are kept until it goes, where tmux also
+    drops ones unused for an hour (format_job_tidy); modifiers `w:` (it needs a
+    display-width measure `tmxr-command` does not have, unicode-width being a
+    new dependency); `c:` gives no colour for X11's names (`orchid`,
+    `navy blue`), which tmux 3.6's colour_byname takes from a table of 578
+    (`tmxr_command::colour::rgb` reads everything else tmux reads, compared in
+    the oracle; copying the table is the open choice); a syntax error ends the
+    expansion as tmux's for a comparison, `m:` or `R:` without its comma
+    (`format::expand_item`), but not for tmux's other failures, not compared: a
+    loop or `N:` whose lookup fails (`format_loop_*`, `format_window_name`
+    returning none); many of tmux's format variables (compare tmux's
+    `format_table` with `vars.rs` for the list; `origin_flag`, `wrap_flag`,
+    `insert_flag`, `scroll_region_*`, `alternate_saved_*`, `pane_tabs` and
+    `cursor_shape` / `cursor_colour` need terminal state the `vt100` crate does
+    not expose); styles `align=` `fill=` `list=` `range=` `push-default` /
+    `pop-default`, strikethrough, blink, overline, curly and coloured
+    underlines.
   - Options: the status line's first row is tmxr's own (`render::draw_status`,
     from `status-left`, the window list and `status-right`) while
     `status-format[0]` is tmux's default; set to anything else, and the rows
@@ -537,17 +540,20 @@ table. What has been verified, and how:
   `move_window_renumbers_and_replaces` found its session's windows gone, and
   `alerts_follow_the_action_and_visual_options` attached to a server with
   `no sessions`; a guess is a pane's `cmd.exe` failing to start under the load,
-  its session and server going with it. The servers did start, only late: after
-  the third, two `__server` processes for the failed run's pipes
-  (`oracle-58296-44`, `-45`) were still running 20 minutes on with no session,
-  so the client's wait elapsed before the server opened its pipe. Such a server
-  never exits: `Server::check_exit` waits for a first session (`had_session`,
-  there because tmxr's server starts apart from its client, unlike tmux's forked
-  one) and none comes. Options, neither taken: the server exits with no session
-  and no client once a startup grace longer than `SPAWN_TIMEOUT` has passed (a
-  test of it waits out the grace), or the client keeps the spawned `Child` and
-  kills it when it gives up (the child is dropped at once today). Why the start
-  took so long under load is not known.
+  its session and server going with it. Not new: run twice each the same day,
+  the e2e suite alone failed one test (a different one each time) in one of two
+  runs at `4e59d9a`, from before that day's work, and the same at the day's end,
+  so the rate is unchanged; a full `cargo test` fails one about every run. The
+  servers did start, only late: after the third, two `__server` processes for
+  the failed run's pipes (`oracle-58296-44`, `-45`) were still running 20
+  minutes on with no session, so the client's wait elapsed before the server
+  opened its pipe. Such a server never exits: `Server::check_exit` waits for a
+  first session (`had_session`, there because tmxr's server starts apart from
+  its client, unlike tmux's forked one) and none comes. Options, neither taken:
+  the server exits with no session and no client once a startup grace longer
+  than `SPAWN_TIMEOUT` has passed (a test of it waits out the grace), or the
+  client keeps the spawned `Child` and kills it when it gives up (the child is
+  dropped at once today). Why the start took so long under load is not known.
 - **`word_separators_and_wrap_search_reach_copy_mode` failed once** (Windows,
   full e2e suite, 2026-10-18) at its first `#{copy_cursor_word}` check; four
   runs alone and the next full run passed. The failure output was not kept, so
@@ -640,10 +646,12 @@ table. What has been verified, and how:
   does, and the status line, the terminal title and `display-message` use it.
   Read against tmux 3.6 (2026-10-20), not run: `pane-border-format` takes it, as
   screen_redraw's format_expand_time; menus' items and the `-T` titles of menus
-  and popups do not, as tmux's format_single. Not done: `#()` jobs (tmux turns
-  time expansion off for them; tmxr has no jobs in formats). strftime covers the
-  C locale's common conversions (`format::strftime`); `%Z`, `%z`, `%U`, `%V`,
-  `%W`, `%G`, `%g` and `%x` / `%X` are kept as written.
+  and popups do not, as tmux's format_single. A `#()` job's command and output
+  expand without it, and the whole format's strftime pass comes first (so a `%`
+  in a command wants `%%`), as tmux's format_expand1 and format_job_get (read,
+  not run). strftime covers the C locale's common conversions
+  (`format::strftime`); `%Z`, `%z`, `%U`, `%V`, `%W`, `%G`, `%g` and `%x` / `%X`
+  are kept as written.
 - **tmux's `link-window` and `move-window` drop the mark** of a pane in the
   window they place (2026-10-18, tmux 3.6): `server_link_window` moves
   `marked_pane.wl` to the new link but keeps `marked_pane.s`, so the mark no

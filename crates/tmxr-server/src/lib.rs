@@ -14,6 +14,7 @@ pub mod conn;
 pub mod copy;
 pub mod copyline;
 pub mod format_draw;
+pub mod format_jobs;
 pub mod groups;
 pub mod hooks;
 pub mod jobs;
