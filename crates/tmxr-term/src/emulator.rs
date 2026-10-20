@@ -2,9 +2,9 @@
 
 use std::path::PathBuf;
 
-use crate::alt_screen::{AltScreenSplitter, Piece};
 use crate::dcs::DcsSplitter;
 use crate::encode::InputModes;
+use crate::modes::{ModeSplitter, Piece};
 
 /// Most kitty keyboard flag sets a pane keeps. The protocol asks a terminal
 /// to cap the stack, dropping the oldest entry on a push to a full one, so a
@@ -218,7 +218,7 @@ pub struct Emulator {
     split: bool,
     /// The program's switches to and from the alternate screen, split
     /// from its output.
-    alt_screen: AltScreenSplitter,
+    modes: ModeSplitter,
     /// Cleared with `alternate-screen off`: the switches are dropped.
     alt_allowed: bool,
     /// The history limit, for a fresh parser.
@@ -236,7 +236,7 @@ impl Emulator {
             passthrough: Vec::new(),
             rename: None,
             split: passthrough_supported(),
-            alt_screen: AltScreenSplitter::default(),
+            modes: ModeSplitter::default(),
             alt_allowed: true,
             scrollback,
             history: 0,
@@ -294,7 +294,7 @@ impl Emulator {
     /// alternate screen stay, as tmux's.
     pub fn reset(&mut self) {
         self.dcs = DcsSplitter::default();
-        self.alt_screen.flush();
+        self.modes.flush();
         // CAN ends whatever sequence is in progress, but vte acts on an OSC
         // it cuts off: what that could change is put back, as tmux's
         // input_clear drops the sequence.
@@ -326,7 +326,7 @@ impl Emulator {
     /// Parse program text, its alternate screen switches made as tmux's, or
     /// dropped when they are not allowed.
     fn feed(&mut self, text: &[u8]) {
-        for piece in self.alt_screen.split(text) {
+        for piece in self.modes.split(text) {
             match piece {
                 Piece::Text(text) => self.parser.process(&text),
                 Piece::Switch { .. } if !self.alt_allowed => {}

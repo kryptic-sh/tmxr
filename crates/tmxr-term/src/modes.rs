@@ -25,7 +25,7 @@ pub enum Piece {
 /// (`ESC [ ? … h` / `l`), keeping any other mode the same sequence sets, in
 /// order. A sequence split across reads is held until its end arrives.
 #[derive(Debug, Default)]
-pub struct AltScreenSplitter {
+pub struct ModeSplitter {
     pending: Vec<u8>,
 }
 
@@ -89,7 +89,7 @@ fn push_modes(pieces: &mut Vec<Piece>, kept: &mut Vec<&[u8]>, last: u8) {
     kept.clear();
 }
 
-impl AltScreenSplitter {
+impl ModeSplitter {
     /// `bytes`, after anything held from the last call, with each screen
     /// switch split out.
     pub fn split(&mut self, bytes: &[u8]) -> Vec<Piece> {
@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn alternate_modes_split_out_and_others_stay() {
-        let mut f = AltScreenSplitter::default();
+        let mut f = ModeSplitter::default();
         assert_eq!(
             f.split(b"a\x1b[?1049hb"),
             vec![
@@ -211,7 +211,7 @@ mod tests {
 
     #[test]
     fn a_sequence_split_across_reads_is_held() {
-        let mut f = AltScreenSplitter::default();
+        let mut f = ModeSplitter::default();
         assert_eq!(text(f.split(b"x\x1b")), b"x");
         assert_eq!(f.split(b"[?10"), vec![]);
         assert_eq!(text(f.split(b"49hy")), b"y");
