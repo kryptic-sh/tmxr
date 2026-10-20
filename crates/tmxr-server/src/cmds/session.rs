@@ -33,6 +33,32 @@ pub(super) fn run(
                 return Ok(true);
             }
             let flags = client_flags(a.value('f'))?;
+            // -t: the new session joins a group, as tmux's: the group the
+            // session -t names is in, else the group of that name; it is
+            // named after the group unless -s names it.
+            let group = a.value('t');
+            if group.is_some() && (!pos.is_empty() || a.has('n')) {
+                return Err("command or window name given with target".into());
+            }
+            let with = group.and_then(|t| target::session(srv, ctx, Some(t)).ok());
+            let mut name = a.value('s').map(str::to_owned);
+            if let Some(t) = group
+                && name.is_none()
+            {
+                let prefix = match with {
+                    Some(w) => srv.group_of(w).map_or(&srv.sessions[&w].name, |g| &g.name),
+                    None => srv
+                        .groups
+                        .iter()
+                        .find(|g| g.name == t)
+                        .map_or(t, |g| &g.name),
+                }
+                .to_owned();
+                if with.is_none() && crate::target::check_session_name(&prefix).is_err() {
+                    return Err(format!("invalid session group: {t}"));
+                }
+                name = Some(srv.grouped_session_name(&prefix));
+            }
             let (size, own_size) = new_session_size(srv, ctx, a)?;
             let cwd = cwd_arg(srv, ctx, None, a)
                 .or_else(|| ctx.cwd.clone())
@@ -48,7 +74,7 @@ pub(super) fn run(
                 env.set(&name, Some(value));
             }
             let sid = srv.new_session(
-                a.value('s').map(str::to_owned),
+                name,
                 cwd,
                 env,
                 a.value('n').map(str::to_owned),
@@ -67,6 +93,9 @@ pub(super) fn run(
                         &inherited,
                     )?;
                 }
+            }
+            if let Some(t) = group {
+                srv.join_group(sid, with, t);
             }
             // tmux's `NEW_SESSION_TEMPLATE`.
             super::print_new(srv, ctx, a, out, sid, None, "#{session_name}:");
@@ -234,8 +263,12 @@ pub(super) fn run(
                         .clients
                         .values()
                         .any(|c| c.att.as_ref().is_some_and(|a| a.session == s.id));
+                    let group = srv
+                        .group_of(s.id)
+                        .map(|g| format!(" (group {})", g.name))
+                        .unwrap_or_default();
                     format!(
-                        "{}: {} windows{}",
+                        "{}: {} windows{group}{}",
                         s.name,
                         s.windows.len(),
                         if attached { " (attached)" } else { "" }

@@ -13,6 +13,7 @@ pub mod cmds;
 pub mod conn;
 pub mod copy;
 pub mod copyline;
+pub mod groups;
 pub mod hooks;
 pub mod jobs;
 pub mod keys;

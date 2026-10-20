@@ -1284,3 +1284,28 @@ fn refresh_client_sets_and_clears_client_flags() {
     assert!(!out.status.success(), "{out:?}");
     drop(a);
 }
+
+#[test]
+fn a_grouped_session_takes_no_command_and_lists_its_group() {
+    let t = Tmxr::new("groups");
+    t.run(&["new-session", "-d", "-s", "g"]);
+    // tmux's error: the group's windows are the new session's.
+    for extra in [&["-n", "x"][..], &["sleep", "10"][..]] {
+        let args = [&["new-session", "-d", "-t", "g"][..], extra].concat();
+        let refused = t.output(&args);
+        assert!(!refused.status.success(), "{refused:?}");
+        assert!(
+            String::from_utf8_lossy(&refused.stderr)
+                .contains("command or window name given with target"),
+            "{refused:?}"
+        );
+    }
+    t.run(&["new-session", "-d", "-t", "g", "-s", "member"]);
+    let listed = t.run(&["list-sessions"]);
+    assert!(
+        listed
+            .lines()
+            .any(|l| l.starts_with("member: 1 windows (group g)")),
+        "{listed}"
+    );
+}

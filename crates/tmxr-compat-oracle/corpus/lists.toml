@@ -109,3 +109,33 @@ checks = [
 name = "set_buffer_w_t_with_no_such_client_still_sets_the_buffer"
 steps = [{ run = "set-buffer -w -t nosuch zqbuf" }]
 checks = [{ command = "show-buffer", expect = "zqbuf" }, { command = "set-buffer -w -t nosuch again" }]
+
+[[cases]]
+name = "session_groups_share_their_windows_as_tmux"
+steps = [
+  { run = "new-window -d -t o:1" },
+  { run = "new-session -d -t o" },
+  { run = "new-session -d -t o -s named" },
+  { run = "new-window -d -t named:5" },
+  { run = "select-window -t o:1" },
+  { run = "kill-window -t o-1:1" },
+  { run = "new-session -d -t brandnew" },
+  { run = "new-session -d -s alone" },
+]
+checks = [
+  { command = "list-sessions -F '#{session_name}: #{session_windows} [#{session_group}] #{session_grouped} #{session_group_size} [#{session_group_list}] #{window_index}'" },
+  { command = "list-windows -t o-1 -F '#{window_index} #{window_active}'" },
+]
+
+[[cases]]
+name = "a_session_group_outlives_a_killed_member_as_tmux"
+steps = [
+  { run = "new-window -d -t o:3" },
+  { run = "new-session -d -t o" },
+  { run = "kill-session -t o" },
+  { run = "new-window -d -t o-1:7" },
+]
+checks = [
+  { command = "list-sessions -F '#{session_name}: #{session_windows} [#{session_group}] #{session_grouped} #{session_group_size} [#{session_group_list}] #{window_index}'" },
+  { command = "list-windows -a -F '#{session_name}:#{window_index}'" },
+]

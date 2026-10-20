@@ -501,10 +501,9 @@ table. What has been verified, and how:
     to enumerate its names); `choose-*` `-F -f -K -O -r` (`-r` needs each picker
     built reversed, and the session picker's opening on the previous session
     turned round with it), tagging and sort keys; `command-prompt` completion
-    (Tab); session groups (`new-session -t`); smaller flags: `source-file -v`,
-    several paths and globs (each load replaces the whole TOML config, so
-    several files have no clear meaning yet); `source-file` of a tmux command
-    file (`%if`, `%hidden`).
+    (Tab); smaller flags: `source-file -v`, several paths and globs (each load
+    replaces the whole TOML config, so several files have no clear meaning yet);
+    `source-file` of a tmux command file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `client-light-theme` /
     `-dark-theme`. Copy mode lacks `next-prompt` / `previous-prompt` (they need
     a prompt mark on every history line, as tmux keeps per grid line; `Emulator`
@@ -562,6 +561,16 @@ table. What has been verified, and how:
   where a search down leaves the cursor under emacs keys (tmux moves it past the
   match, `window_copy_search`); tmxr's default `C-r` / `C-s` binds also lack
   tmux's `-I "#{pane_search_string}"`, as tmxr has no `pane_search_string`.
+- **Session groups follow tmux by comparison, not by call** (`groups.rs`): tmux
+  calls session_group_synchronize_from wherever a command changes a session's
+  windows; tmxr keeps each group's window list as last synchronised and, after
+  every command and in `Server::settle`, copies the list of whichever member no
+  longer matches it to the others. Two members changed between passes would lose
+  one's change (no command does that). A member whose current window went takes
+  its last, else a lower, else a higher one: tmux's session_last /
+  session_previous / session_next on the old list, not compared beyond the
+  oracle's case. Not done: resurrect saves the members' windows as linked
+  windows, not as a group, so a restore has no group.
 - **`#{pane_dead_signal}` is a number**, as tmux 3.6 shows it on Linux (seen
   2026-10-20: `15` for SIGTERM, from tmux's compat `sig2name`). Where the system
   has `sys_signame` (macOS, the BSDs) tmux may show a name instead; not checked.

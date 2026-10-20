@@ -129,7 +129,11 @@ pub fn run_list(srv: &mut Server, ctx: &Ctx, cmds: &[Vec<String>]) -> Outcome {
                 return out;
             }
         };
-        if let Err(e) = run_one(srv, ctx, &parsed, &mut out) {
+        let ran = run_one(srv, ctx, &parsed, &mut out);
+        // What one member of a session group changed reaches the others
+        // before the next command, as tmux's.
+        srv.sync_groups();
+        if let Err(e) = ran {
             out.status = 1;
             out.stderr.push_str(&e);
             // A command that failed as it ran (not one that did not parse)

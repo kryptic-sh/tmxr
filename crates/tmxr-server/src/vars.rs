@@ -363,6 +363,36 @@ impl<'a> Context for Vars<'a> {
             "session_id" => format!("${}", session?.id),
             "session_windows" => session?.windows.len().to_string(),
             "session_attached" => attached(session?.id).to_string(),
+            // A session group's, nothing outside one (but session_grouped).
+            "session_grouped" => flag(srv.group_of(session?.id).is_some()),
+            "session_group" => srv.group_of(session?.id)?.name.clone(),
+            "session_group_size" => srv.group_of(session?.id)?.sessions.len().to_string(),
+            "session_group_list" => {
+                let g = srv.group_of(session?.id)?;
+                g.sessions
+                    .iter()
+                    .filter_map(|s| srv.sessions.get(s))
+                    .map(|s| s.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            }
+            "session_group_attached" | "session_group_many_attached" => {
+                let n: usize = srv
+                    .group_of(session?.id)?
+                    .sessions
+                    .iter()
+                    .map(|s| attached(*s))
+                    .sum();
+                if name == "session_group_attached" {
+                    n.to_string()
+                } else {
+                    flag(n > 1)
+                }
+            }
+            "session_group_attached_list" => {
+                let g = srv.group_of(session?.id)?;
+                client_names(srv, |a| g.sessions.contains(&a.session))
+            }
             "session_attached_list" => {
                 let sid = session?.id;
                 client_names(srv, |a| a.session == sid)

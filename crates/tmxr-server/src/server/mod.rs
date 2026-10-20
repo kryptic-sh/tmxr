@@ -191,6 +191,8 @@ pub struct Server {
     pub prompt_history: BTreeMap<String, Vec<String>>,
     /// `wait-for` channels and the command clients waiting on them.
     pub waits: crate::waits::Waits<crate::jobs::Done>,
+    /// Session groups (`new-session -t`), in the order they were made.
+    pub groups: Vec<crate::groups::SessionGroup>,
     /// `copy-command-line` under way, waiting for its pane to settle.
     pub copy_line: Option<crate::copyline::CopyLine>,
     /// The user running the server, always admitted.
@@ -284,6 +286,7 @@ impl Server {
             global_env: Environment::default(),
             prompt_history: BTreeMap::new(),
             waits: crate::waits::Waits::default(),
+            groups: Vec::new(),
             copy_line: None,
             owner: String::new(),
             acl: crate::access::SharedAcl::default(),
@@ -306,6 +309,7 @@ impl Server {
     /// After an event or a tick: queue the hooks for what changed, run every
     /// queued hook, then take what those hooks changed in without firing.
     fn settle(&mut self) {
+        self.sync_groups();
         self.update_pane_focus();
         self.queue_changes();
         self.run_pending_hooks();

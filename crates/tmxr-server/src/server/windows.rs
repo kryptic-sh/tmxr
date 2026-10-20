@@ -30,6 +30,19 @@ impl Server {
             .unwrap_or_default()
     }
 
+    /// The name tmux gives a grouped session made without `-s`: the
+    /// group's name, a dash and the session's id, taking the next id while
+    /// that name is taken.
+    pub fn grouped_session_name(&mut self, prefix: &str) -> String {
+        loop {
+            let name = format!("{prefix}-{}", self.next_session);
+            if !self.sessions.values().any(|s| s.name == name) {
+                return name;
+            }
+            self.next_session += 1;
+        }
+    }
+
     pub fn new_session(
         &mut self,
         name: Option<String>,

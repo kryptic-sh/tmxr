@@ -24,6 +24,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Session groups**, as tmux's: `new-session -t target` makes a session that
+  shares the target's windows (or joins the group of that name), named `group-N`
+  unless `-s` names it; a window made, killed or moved in one member reaches the
+  others, each keeping its own current window. `#{session_group}`,
+  `#{session_grouped}`, `#{session_group_size}`, `#{session_group_list}`,
+  `#{session_group_attached}`, `#{session_group_attached_list}` and
+  `#{session_group_many_attached}`, and `list-sessions` shows `(group name)`.
 - **The `c:` format modifier**, as tmux's: `#{c:colour110}` gives the colour's
   RGB as six hex digits (`87afd7`), for `#rrggbb`, `colourN`, the eight colour
   names and their `bright` forms, and `greyN`; X11's colour names are not read
