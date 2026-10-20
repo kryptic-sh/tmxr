@@ -24,6 +24,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`display-message -a`**, as tmux's: every format variable with a value, as
+  `name=value` lines sorted by name.
 - **`capture-pane -T`**, and `-N` and `-J` as tmux's: each line runs to what
   tmux allocates for it (a quarter, half or all of the width) or, with `-T` or
   `-J`, to its last written cell, where `-N` padded every line to the pane's

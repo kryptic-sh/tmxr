@@ -7,6 +7,135 @@ use tmxr_command::format::{Context, LoopItem, LoopKind, NameKind};
 use crate::model::{ClientId, PaneId, SessionId, WindowId};
 use crate::server::{Attached, Server};
 
+/// Every variable [`Vars`] answers, sorted, for `display-message -a`.
+pub const NAMES: &[&str] = &[
+    "active_window_index",
+    "alternate_on",
+    "client_activity",
+    "client_created",
+    "client_flags",
+    "client_height",
+    "client_key_table",
+    "client_last_session",
+    "client_name",
+    "client_pid",
+    "client_prefix",
+    "client_readonly",
+    "client_session",
+    "client_termname",
+    "client_uid",
+    "client_user",
+    "client_width",
+    "config_files",
+    "copy_cursor_word",
+    "copy_cursor_x",
+    "copy_cursor_y",
+    "cursor_character",
+    "cursor_flag",
+    "cursor_x",
+    "cursor_y",
+    "history_limit",
+    "history_size",
+    "host",
+    "host_short",
+    "keypad_cursor_flag",
+    "keypad_flag",
+    "last_window_index",
+    "loop_last_flag",
+    "mouse_all_flag",
+    "mouse_any_flag",
+    "mouse_button_flag",
+    "mouse_sgr_flag",
+    "mouse_standard_flag",
+    "next_session_id",
+    "pane_active",
+    "pane_at_bottom",
+    "pane_at_left",
+    "pane_at_right",
+    "pane_at_top",
+    "pane_bottom",
+    "pane_current_command",
+    "pane_current_path",
+    "pane_dead",
+    "pane_dead_signal",
+    "pane_dead_status",
+    "pane_dead_time",
+    "pane_height",
+    "pane_id",
+    "pane_in_mode",
+    "pane_index",
+    "pane_input_off",
+    "pane_last",
+    "pane_left",
+    "pane_marked",
+    "pane_marked_set",
+    "pane_mode",
+    "pane_pid",
+    "pane_pipe",
+    "pane_right",
+    "pane_start_command",
+    "pane_start_path",
+    "pane_synchronized",
+    "pane_title",
+    "pane_top",
+    "pane_width",
+    "pid",
+    "scroll_position",
+    "selection_present",
+    "server_sessions",
+    "session_activity",
+    "session_alert",
+    "session_alerts",
+    "session_attached",
+    "session_attached_list",
+    "session_created",
+    "session_group",
+    "session_group_attached",
+    "session_group_attached_list",
+    "session_group_list",
+    "session_group_many_attached",
+    "session_group_size",
+    "session_grouped",
+    "session_id",
+    "session_last_attached",
+    "session_many_attached",
+    "session_marked",
+    "session_name",
+    "session_path",
+    "session_windows",
+    "socket_path",
+    "start_time",
+    "uid",
+    "user",
+    "version",
+    "window_active",
+    "window_active_clients",
+    "window_active_clients_list",
+    "window_active_sessions",
+    "window_active_sessions_list",
+    "window_activity",
+    "window_activity_flag",
+    "window_bell_flag",
+    "window_end_flag",
+    "window_flags",
+    "window_height",
+    "window_id",
+    "window_index",
+    "window_last_flag",
+    "window_layout",
+    "window_linked",
+    "window_linked_sessions",
+    "window_linked_sessions_list",
+    "window_marked_flag",
+    "window_name",
+    "window_panes",
+    "window_silence_flag",
+    "window_start_flag",
+    "window_visible_layout",
+    "window_width",
+    "window_zoomed_flag",
+];
+
 /// Variables for one (session, window, pane, client) combination.
 #[derive(Clone, Copy)]
 pub struct Vars<'a> {
@@ -627,5 +756,36 @@ impl<'a> Context for Vars<'a> {
             }
             _ => return None,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The names `get` matches on, read from this file.
+    fn matched_names() -> std::collections::BTreeSet<&'static str> {
+        let src = include_str!("vars.rs");
+        let start = src.find("    fn get(&self, name: &str)").expect("get");
+        let body = &src[start..];
+        let body = &body[..body.find("\n    }\n}").expect("end of get")];
+        let arm = regex::Regex::new(r#"^\s*((?:"[a-z0-9_]+"\s*\|\s*)*"[a-z0-9_]+")\s*=>"#)
+            .expect("arm pattern");
+        let name = regex::Regex::new(r#""([a-z0-9_]+)""#).expect("name pattern");
+        body.lines()
+            .filter_map(|line| arm.captures(line))
+            .flat_map(|c| {
+                name.captures_iter(c.get(1).map_or("", |m| m.as_str()))
+                    .filter_map(|n| n.get(1).map(|m| m.as_str()))
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn names_lists_every_variable_in_order() {
+        let listed: std::collections::BTreeSet<_> = NAMES.iter().copied().collect();
+        assert_eq!(listed, matched_names());
+        assert!(NAMES.windows(2).all(|w| w[0] < w[1]), "sorted, once each");
     }
 }

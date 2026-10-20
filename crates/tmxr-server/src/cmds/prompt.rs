@@ -318,6 +318,15 @@ pub(super) fn run(
             if let Some((sid, _, _)) = target {
                 vars.session = Some(sid);
             }
+            // -a: every variable with a value, as tmux's format_each.
+            if a.has('a') {
+                for name in crate::vars::NAMES {
+                    if let Some(value) = tmxr_command::format::Context::get(&vars, name) {
+                        let _ = writeln!(out.stdout, "{name}={value}");
+                    }
+                }
+                return Ok(true);
+            }
             // -l: the text as given, not expanded; else with its strftime
             // sequences filled in first, as tmux's.
             let msg = if a.has('l') {

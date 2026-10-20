@@ -1335,3 +1335,21 @@ fn the_terminal_title_is_the_programs_else_session_and_window() {
     t.run(&["set", "-g", "set-titles", "on"]);
     wait_title("other");
 }
+
+#[test]
+fn display_message_a_lists_every_variable_with_its_value() {
+    let t = Tmxr::new("displaya");
+    t.run(&["new-session", "-d", "-s", "vars", "-n", "listed"]);
+    let out = t.run(&["display-message", "-p", "-a", "-t", "vars"]);
+    let lines: Vec<&str> = out.lines().collect();
+    // name=value, sorted by name, as tmux's format_each.
+    assert!(lines.contains(&"session_name=vars"), "{out}");
+    assert!(lines.contains(&"window_name=listed"), "{out}");
+    let names: Vec<&str> = lines
+        .iter()
+        .filter_map(|l| l.split_once('='))
+        .map(|(n, _)| n)
+        .collect();
+    assert_eq!(names.len(), lines.len(), "{out}");
+    assert!(names.windows(2).all(|w| w[0] < w[1]), "{out}");
+}

@@ -167,10 +167,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "display-message",
         Some("display"),
-        "Cc:d:F:lNpt:",
+        "aCc:d:F:lNpt:",
         0,
         1,
-        "[-ClNp] [-c target-client] [-d delay] [-F format] [-t target-pane] [message]"
+        "[-aClNp] [-c target-client] [-d delay] [-F format] [-t target-pane] [message]"
     ),
     cmd!(
         "display-panes",
