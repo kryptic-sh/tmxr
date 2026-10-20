@@ -1353,3 +1353,62 @@ fn display_message_a_lists_every_variable_with_its_value() {
     assert_eq!(names.len(), lines.len(), "{out}");
     assert!(names.windows(2).all(|w| w[0] < w[1]), "{out}");
 }
+
+#[test]
+fn window_entries_take_the_bell_and_activity_styles() {
+    let t = Tmxr::new("alertstyle");
+    let s = t.attach(&["new", "-s", "al", "-n", "a"]);
+    s.wait_for("the status line", |text| text.contains("al"));
+    for (opt, value) in [
+        ("status-left", ""),
+        ("status-right", ""),
+        ("status-style", "bg=black"),
+    ] {
+        t.run(&["set", "-g", opt, value]);
+    }
+    for (opt, value) in [
+        ("monitor-activity", "on"),
+        ("window-status-bell-style", "bg=red"),
+        ("window-status-activity-style", "bg=blue"),
+        ("window-status-format", "<#I>"),
+        ("window-status-current-format", "<#I>"),
+    ] {
+        t.run(&["set", "-wg", opt, value]);
+    }
+    // A bell in window 1 (its output is activity too: the bell's style wins)
+    // and activity in window 2.
+    #[cfg(unix)]
+    let ring = ["/bin/sh", "-c", r"printf '\007'; sleep 30"];
+    #[cfg(windows)]
+    let ring = [
+        "powershell.exe",
+        "-NoProfile",
+        "-Command",
+        "[Console]::Out.Write([char]7); Start-Sleep 30",
+    ];
+    let mut bell = vec!["new-window", "-d", "-t", "al:1"];
+    bell.extend(ring);
+    t.run(&bell);
+    t.run(&["new-window", "-d", "-t", "al:2"]);
+    t.wait_prompt("al:2");
+    t.run(&["send-keys", "-t", "al:2", "echo busy", "Enter"]);
+    s.wait_for("the window list", |text| text.contains("<0><1><2>"));
+    let flag = |target: &str, name: &str| {
+        t.wait_run(&["display", "-p", "-t", target, name], name, |o| {
+            o.trim() == "1"
+        });
+    };
+    flag("al:1", "#{window_bell_flag}");
+    flag("al:2", "#{window_activity_flag}");
+    let row = ROWS - 1;
+    let bg = |c: &str| {
+        let line = s.text().lines().last().unwrap_or_default().to_owned();
+        let col = line.find(c).unwrap() as u16;
+        let emu = s.emu.lock().unwrap();
+        format!("{:?}", emu.screen().cell(row, col).unwrap().bgcolor())
+    };
+    s.wait_for("the alert styles", |_| {
+        bg("1") == "Idx(1)" && bg("2") == "Idx(4)"
+    });
+    assert_eq!(bg("0"), "Idx(0)", "the current window: no alert");
+}

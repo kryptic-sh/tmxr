@@ -476,17 +476,17 @@ table. What has been verified, and how:
     window's first row; tmux's `screen_redraw_set_context` moves the window down
     a row for it instead; (not tested: `send-keys -M` under a top status line or
     in a panned view, which now measure from the mouse's window cell,
-    `MouseTarget::col` / `row`, not its client cell); no
-    `window-status-activity-style` / `-bell-style` (tmux's default `reverse`
-    would change tmxr's theme, which shows flags in its window format); colour
-    options (`status-fg` / `-bg`, `display-panes-colour`, `clock-mode-colour`
-    and the rest, all `Word`) keep any text as typed, where tmux 3.6 (seen
-    2026-10-20) refuses `nocolour` or `colour300` with `bad colour` and shows
-    `#ABCDEF` as `#abcdef`; checking them as tmux does was considered and
-    declined for now: tmxr's own defaults put formats in colour options
-    (`display-panes-colour = "#{@thm_blue}"`), which tmux's check would refuse,
-    so it needs those expanded first or the theme moved; server `editor`.
-    `escape-time` is kept but never read.
+    `MouseTarget::col` / `row`, not its client cell);
+    `window-status-activity-style` and `-bell-style` default to `default` where
+    tmux's are `reverse`, on purpose (tmux's would change tmxr's theme, which
+    shows the alert flags in its window format); colour options (`status-fg` /
+    `-bg`, `display-panes-colour`, `clock-mode-colour` and the rest, all `Word`)
+    keep any text as typed, where tmux 3.6 (seen 2026-10-20) refuses `nocolour`
+    or `colour300` with `bad colour` and shows `#ABCDEF` as `#abcdef`; checking
+    them as tmux does was considered and declined for now: tmxr's own defaults
+    put formats in colour options (`display-panes-colour = "#{@thm_blue}"`),
+    which tmux's check would refuse, so it needs those expanded first or the
+    theme moved; server `editor`. `escape-time` is kept but never read.
   - Commands: `capture-pane -a` (it needs the saved normal screen, which `vt100`
     does not expose). `-e` writes only the attributes `vt100` keeps (bold, dim,
     italics, underline, reverse; not blink, hidden, strikethrough, overline or
@@ -532,17 +532,22 @@ table. What has been verified, and how:
   2026-10-20: `lock_hands_the_keys_to_the_lock_command`, then
   `layout_matches_tmux` and `option_scopes_match_tmux` in one run): a client
   gave up waiting for its server's pipe (`wait_for_server` in `tmxr-client`,
-  `SPAWN_TIMEOUT`). Each passed alone and in the next full run. The servers did
-  start, only late: after the third, two `__server` processes for the failed
-  run's pipes (`oracle-58296-44`, `-45`) were still running 20 minutes on with
-  no session, so the client's wait elapsed before the server opened its pipe.
-  Such a server never exits: `Server::check_exit` waits for a first session
-  (`had_session`, there because tmxr's server starts apart from its client,
-  unlike tmux's forked one) and none comes. Options, neither taken: the server
-  exits with no session and no client once a startup grace longer than
-  `SPAWN_TIMEOUT` has passed (a test of it waits out the grace), or the client
-  keeps the spawned `Child` and kills it when it gives up (the child is dropped
-  at once today). Why the start took so long under load is not known.
+  `SPAWN_TIMEOUT`). Each passed alone and in the next full run. Two more
+  one-offs under a full run the same day, each passing alone:
+  `move_window_renumbers_and_replaces` found its session's windows gone, and
+  `alerts_follow_the_action_and_visual_options` attached to a server with
+  `no sessions`; a guess is a pane's `cmd.exe` failing to start under the load,
+  its session and server going with it. The servers did start, only late: after
+  the third, two `__server` processes for the failed run's pipes
+  (`oracle-58296-44`, `-45`) were still running 20 minutes on with no session,
+  so the client's wait elapsed before the server opened its pipe. Such a server
+  never exits: `Server::check_exit` waits for a first session (`had_session`,
+  there because tmxr's server starts apart from its client, unlike tmux's forked
+  one) and none comes. Options, neither taken: the server exits with no session
+  and no client once a startup grace longer than `SPAWN_TIMEOUT` has passed (a
+  test of it waits out the grace), or the client keeps the spawned `Child` and
+  kills it when it gives up (the child is dropped at once today). Why the start
+  took so long under load is not known.
 - **`word_separators_and_wrap_search_reach_copy_mode` failed once** (Windows,
   full e2e suite, 2026-10-18) at its first `#{copy_cursor_word}` check; four
   runs alone and the next full run passed. The failure output was not kept, so

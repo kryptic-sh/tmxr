@@ -24,6 +24,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`window-status-bell-style` and `window-status-activity-style`**, as tmux's:
+  a window's entry with a bell alert takes the bell style, else with an activity
+  or silence alert the activity style, unless `default` (tmxr's defaults, where
+  tmux's are `reverse`).
 - **`message-line` and styled messages**, as tmux's: a message or the prompt
   takes the status line `message-line` names (0 to 4, the last there is when
   fewer), and `display-message`'s text is laid out by its `#[…]` styles rather
@@ -461,6 +465,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A `default` status part style keeps the status line's colours**, as tmux's:
+  `status-left-style`, `status-right-style` and `window-status-style` set to
+  `default` drew their part in the terminal's colours instead of
+  `status-style`'s.
 - **Mouse modes as tmux's**: a program's `ESC [ ? 9 h` (X10) is ignored,
   resetting any of modes 1000 to 1003 clears the one set, and the UTF-8 (1005)
   and SGR (1006) encodings are kept apart, SGR winning for the events sent;

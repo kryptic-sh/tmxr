@@ -189,6 +189,10 @@ right-style = "default"
 window-style = "default"
 window-current-style = "default"
 window-last-style = "default"
+# tmux's are "reverse"; here "default", so the theme's entries, which show the
+# alert flags in their text, look as they did before tmxr had the options.
+window-activity-style = "default"
+window-bell-style = "default"
 window-separator = ""
 pane-border-style = "fg=#{@thm_surface1}"
 pane-active-border-style = "fg=#{@thm_blue}"

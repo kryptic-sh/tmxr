@@ -523,6 +523,10 @@ options_table! {
     /// none, over `window-style`'s; `default`, none of its own.
     "window-active-style" => window_active_style: String,
     "window-size" => window_size: WindowSize,
+    /// Added to the entry of a window with an activity or silence alert,
+    /// unless `default`; a bell alert's takes the bell style first.
+    "window-status-activity-style" => window_status_activity_style: String,
+    "window-status-bell-style" => window_status_bell_style: String,
     "window-status-current-format" => window_status_current_format: String,
     /// The style the current window's entry is drawn over; `default` takes
     /// `window-status-style`.

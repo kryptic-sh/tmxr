@@ -13,7 +13,7 @@ use tmxr_config::{PaneIndicators, PaneLines};
 
 use crate::backend::AnsiBackend;
 use crate::copy::cell_style;
-use crate::model::{ClientId, PaneId, WindowId};
+use crate::model::{ClientId, PaneId, SessionId, WindowId};
 use crate::overlay::{Overlay, PickerOverlay, Previewed};
 use crate::server::Server;
 use crate::vars::Vars;
@@ -90,6 +90,12 @@ pub(crate) fn apply(base: Style, s: &format::Style) -> Style {
         }
     }
     out
+}
+
+/// A status line part's style option, or nothing for `default`, which adds
+/// nothing to the status line's style, as tmux's.
+fn part_style(spec: &str, vars: &Vars<'_>) -> Option<Style> {
+    (spec != "default").then(|| style_option(spec, vars))
 }
 
 /// A style option (`fg=…,bg=…`), format-expanded first.
@@ -804,7 +810,7 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
     let right_w = runs_width(&right).min(opts.status_right_length).min(cols);
     let limit = cols - right_w;
     let left = format::expand_time(&opts.status_left, &vars);
-    let left_base = base.patch(style_option(&opts.status_left_style, &vars));
+    let left_base = base.patch(part_style(&opts.status_left_style, &vars).unwrap_or_default());
     let x = draw_runs(
         buf,
         0,
@@ -838,17 +844,31 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
         };
         // The entry's style, as tmux's default status-format builds it: the
         // current window's own unless `default`, the last window's added.
-        let set = |spec: &str| (spec != "default").then(|| style_option(spec, &wvars));
+        let set = |spec: &str| part_style(spec, &wvars);
         let mut window_base = base.patch(
             current
                 .then(|| set(&options.window_status_current_style))
                 .flatten()
-                .unwrap_or_else(|| style_option(&options.window_status_style, &wvars)),
+                .or_else(|| set(&options.window_status_style))
+                .unwrap_or_default(),
         );
         if session.last == Some(*idx)
             && let Some(last) = set(&options.window_status_last_style)
         {
             window_base = window_base.patch(last);
+        }
+        // Then the bell's style, else activity's or silence's, as tmux's.
+        let alerted = |alerts: &std::collections::BTreeSet<SessionId>| alerts.contains(&session.id);
+        let alert = alerted(&win.bell)
+            .then(|| set(&options.window_status_bell_style))
+            .flatten()
+            .or_else(|| {
+                (alerted(&win.activity) || alerted(&win.silence))
+                    .then(|| set(&options.window_status_activity_style))
+                    .flatten()
+            });
+        if let Some(alert) = alert {
+            window_base = window_base.patch(alert);
         }
         let text = format::expand_time(fmt, &wvars);
         let sep = if n + 1 < count {
@@ -896,7 +916,7 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
         }
         x = draw_runs(buf, x, y, end, base, sep);
     }
-    let right_base = base.patch(style_option(&opts.status_right_style, &vars));
+    let right_base = base.patch(part_style(&opts.status_right_style, &vars).unwrap_or_default());
     draw_runs(buf, right_x, y, right_x + right_w, right_base, &right);
     ranges
 }
