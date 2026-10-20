@@ -486,6 +486,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A command run from a shell expands `client_*` for the best client**, as
+  tmux's: `display-message`, `set -F` and the other formats a command expands
+  took no client, so `#{client_flags}` or `#{client_session}` came out empty.
+- **`#{client_flags}` ends with `UTF-8`**, as tmux's does for a UTF-8 client.
 - **Copy mode's word moves and `select-word` take wide characters as tmux's**: a
   wide character's second cell counts as part of the word, where it split the
   word as a blank (`select-word` on `日本語xy` took one character).

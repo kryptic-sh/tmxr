@@ -239,13 +239,12 @@ fn client_size(srv: &Server, ctx: &Ctx) -> (u16, u16) {
     (cols.max(2), rows.saturating_sub(status).max(2))
 }
 
+/// `s` expanded for `pane` (else the command's) and the command's client,
+/// from a shell the best one, as tmux's format_single_from_target takes
+/// the target client.
 pub(crate) fn expand_for(srv: &Server, ctx: &Ctx, pane: Option<PaneId>, s: &str) -> String {
-    expand_with(
-        srv,
-        ctx,
-        &Vars::for_pane(srv, pane.or(ctx.pane), ctx.client),
-        s,
-    )
+    let client = display_client(srv, ctx);
+    expand_with(srv, ctx, &Vars::for_pane(srv, pane.or(ctx.pane), client), s)
 }
 
 /// `s` expanded with `vars`: [`expand_for`] for variables already chosen.

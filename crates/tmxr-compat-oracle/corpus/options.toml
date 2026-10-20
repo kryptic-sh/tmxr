@@ -571,3 +571,28 @@ steps = [
   { sleep = 0.3 },
 ]
 checks = [{ command = "show -v @z" }, { command = "show -v @y" }]
+
+[[cases]]
+name = "client_flags_as_tmux"
+attach = true
+unix_only = true
+steps = [
+  { run = "set -g @a '#{client_flags}'" },
+  { run = "refresh-client -f read-only,ignore-size" },
+  { run = "set -gF @b '#{client_flags}'" },
+  { run = "refresh-client -f '!ignore-size'" },
+]
+checks = [
+  { command = "list-clients -F '#{client_flags} #{client_readonly}'" },
+  { command = "show -gv @b" },
+]
+
+[[cases]]
+name = "client_formats_from_outside_take_the_best_client_as_tmux"
+attach = true
+unix_only = true
+steps = []
+checks = [
+  { format = "#{client_flags}" },
+  { command = "display -p '#{client_session} #{client_readonly}'" },
+]

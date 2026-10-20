@@ -279,7 +279,8 @@ fn epoch(t: std::time::SystemTime) -> String {
 }
 
 /// `#{client_flags}`: the flags tmux's `server_client_get_flags` lists that
-/// tmxr keeps, in its order.
+/// tmxr keeps, in its order. Every client is `UTF-8`, as tmxr writes
+/// nothing else, where tmux's is when the client's locale is.
 fn client_flags(c: &crate::server::Client) -> String {
     let att = c.att.as_ref();
     [
@@ -287,6 +288,7 @@ fn client_flags(c: &crate::server::Client) -> String {
         (att.is_some_and(|a| a.focused), "focused"),
         (c.ignore_size, "ignore-size"),
         (c.read_only(), "read-only"),
+        (true, "UTF-8"),
     ]
     .into_iter()
     .filter_map(|(on, name)| on.then_some(name))

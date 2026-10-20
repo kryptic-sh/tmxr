@@ -313,8 +313,16 @@ pub(super) fn run(
             let fmt = pos.first().map(String::as_str).or_else(|| a.value('F')).unwrap_or(
                 "[#S] #I:#P [#{pane_width}x#{pane_height}] \"#{pane_title}\" #{pane_current_command} #{pane_current_path}",
             );
+            // -c: the client the message shows on, else the command's or,
+            // from a shell, the best one, as tmux's cmd_find_current_client;
+            // with none, as tmux's, it shows nowhere. Its formats are that
+            // client's, as tmux's format_defaults.
+            let client = match a.value('c') {
+                Some(c) => Some(super::session::target_client(srv, c)?),
+                None => super::display_client(srv, ctx),
+            };
             // The target's session, which a linked window has several of.
-            let mut vars = Vars::for_pane(srv, target.map(|(_, _, p)| p), ctx.client);
+            let mut vars = Vars::for_pane(srv, target.map(|(_, _, p)| p), client);
             if let Some((sid, _, _)) = target {
                 vars.session = Some(sid);
             }
@@ -346,13 +354,6 @@ pub(super) fn run(
                 fmt.to_owned()
             } else {
                 super::expand_by(srv, ctx, &vars, fmt, tmxr_command::format::expand_time)
-            };
-            // -c: the client the message shows on, else the command's or,
-            // from a shell, the best one, as tmux's cmd_find_current_client;
-            // with none, as tmux's, it shows nowhere.
-            let client = match a.value('c') {
-                Some(c) => Some(super::session::target_client(srv, c)?),
-                None => super::display_client(srv, ctx),
             };
             match client {
                 _ if a.has('p') => {
