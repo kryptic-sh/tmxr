@@ -539,6 +539,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Copies reach the desktop the copying client is on** (Linux and the BSDs):
+  the local clipboard was set with the server's own display, so a server started
+  from a TTY, or left running across a logout or a compositor restart, copied
+  only through OSC 52. A copy now takes the client's `WAYLAND_DISPLAY` /
+  `DISPLAY`, and a `tmxr __clipboard` helper holds it until the next copy. The
+  SSH check follows the client too: a client over SSH gets OSC 52 alone, a local
+  one the desktop clipboard, whichever way the server was started.
 - **A program's own tab stops are kept**: HTS (`ESC H`) sets one and TBC
   (`CSI g`) clears them, and tabs and back tabs move by them, as tmux's, where
   tmxr kept fixed stops every 8 columns. A width change, `ESC c` and

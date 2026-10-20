@@ -9,6 +9,7 @@
 pub mod access;
 pub mod alerts;
 pub mod backend;
+pub mod clipboard;
 pub mod cmds;
 pub mod conn;
 pub mod copy;

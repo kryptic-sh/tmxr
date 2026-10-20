@@ -152,31 +152,6 @@ pub fn base64(data: &[u8]) -> String {
     out
 }
 
-/// Copy to the local desktop clipboard, best effort, off the server thread
-/// (a clipboard backend may block talking to the display server). Skipped
-/// over SSH, where OSC 52 to the client is the only meaningful target.
-pub fn local_clipboard(text: &str) {
-    if std::env::var_os("SSH_CONNECTION").is_some() {
-        return;
-    }
-    let text = text.to_owned();
-    let _ = std::thread::Builder::new()
-        .name("tmxr-clipboard".into())
-        .spawn(move || match hjkl_clipboard::Clipboard::new() {
-            Ok(cb) => {
-                let r = cb.set(
-                    hjkl_clipboard::Selection::Clipboard,
-                    hjkl_clipboard::MimeType::Text,
-                    text.as_bytes(),
-                );
-                if let Err(e) = r {
-                    tracing::debug!(error = %e, "local clipboard copy failed");
-                }
-            }
-            Err(e) => tracing::debug!(error = %e, "no local clipboard"),
-        });
-}
-
 /// Refresh every pane's foreground command, and auto-named windows' names.
 pub fn refresh_commands(srv: &mut Server) {
     let ids: Vec<_> = srv.panes.keys().copied().collect();

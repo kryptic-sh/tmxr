@@ -55,26 +55,23 @@ table. What has been verified, and how:
   relies on staying attached), or defaulting to `off` as tmxr behaves now
   (matches tmux only where a config sets it off). Either makes
   `-f no-detach-on-destroy` possible.
-- **The local clipboard keeps the server's first display** (found by reading
-  hjkl-clipboard 0.42.2, 2026-10-20; not run): `util::local_clipboard` uses the
-  server process's own environment, and hjkl-clipboard keeps one Wayland
-  connection per process (`WAYLAND_THREAD`, a `OnceLock`) that serves only
-  errors once the compositor goes. So after the compositor restarts (logging out
-  and in, which a detached server survives since its socket left
-  `$XDG_RUNTIME_DIR`), or for a server started without `WAYLAND_DISPLAY` (from a
-  TTY, or over SSH, where `SSH_CONNECTION` also turns the local copy off for
-  good), copies reach only OSC 52, and terminals that ignore it (VTE's) get
-  nothing. Seen working on Hyprland in one session (`set-buffer -w` and copy
-  mode, read back with `wl-paste`). Options: hjkl-clipboard reconnects when its
-  connection is gone (a release of that crate); or tmxr copies through a helper
-  process given the attaching client's `WAYLAND_DISPLAY` / `DISPLAY` and kept
-  alive until its selection is replaced, as `wl-copy` forks one.
 - **Fuzzing the command parser and the frame codec** (`docs/plan/14`, a weekly
   cron job): needs `cargo-fuzz` and `libfuzzer-sys`, new dependencies on a
   nightly toolchain, or `proptest`-style property tests on stable, also new.
 
 ## Known gaps and follow-ups
 
+- **The local clipboard follows the copying client** (`clipboard::Local`): the
+  display and SSH variables come from that client's environment, or the attached
+  client last typed in, and on Linux and the BSDs each copy runs
+  `tmxr __clipboard`, which holds the selection until the next copy stops it or
+  the server is gone. Seen on Hyprland (2026-10-20): a server started without
+  `WAYLAND_DISPLAY` copied to the Wayland clipboard through an attached client
+  (the build before this copied nothing), one helper at a time, gone within its
+  second once the server was. Not tested in CI, which has no display; not tried
+  on X11 or with a compositor restart, nor the macOS and Windows arms (they set
+  the clipboard in the server, as before). A selection another program takes
+  over leaves the helper running, holding nothing, until the next tmxr copy.
 - **CSIs the emulator makes beside vt100** (`modes::ModeSplitter`, from tmux's
   `input_csi_table`): SCP / RCP, REP (only right after a printed character, as
   tmux's), CBT and DECSCUSR (the shape and blinking tmxr keeps); HVP and HPA are

@@ -267,6 +267,8 @@ pub struct Server {
     pub format_jobs: std::sync::Mutex<crate::format_jobs::FormatJobs>,
     /// `copy-command-line` under way, waiting for its pane to settle.
     pub copy_line: Option<crate::copyline::CopyLine>,
+    /// Copies to the local desktop's clipboard.
+    pub clipboard: crate::clipboard::Local,
     /// The user running the server, always admitted.
     pub owner: crate::access::UserId,
     /// Other users `server-access` admits; shared with the accept thread.
@@ -377,6 +379,7 @@ impl Server {
             groups: Vec::new(),
             format_jobs: std::sync::Mutex::default(),
             copy_line: None,
+            clipboard: crate::clipboard::Local::default(),
             owner: String::new(),
             acl: crate::access::SharedAcl::default(),
             socket_access: tmxr_proto::socket::Access::Owner,
@@ -842,14 +845,32 @@ impl Server {
     }
 
     /// Put text on the clipboard: OSC 52 to every attached client (works
-    /// locally and over SSH), plus the local clipboard via hjkl-clipboard.
+    /// locally and over SSH), plus the local desktop's of the client last
+    /// typed in.
     pub fn set_clipboard(&mut self, text: &str) {
         if self.cfg.set_clipboard == "off" {
             return;
         }
         let b64 = crate::util::base64(text.as_bytes());
         self.forward_osc52(&b64);
-        crate::util::local_clipboard(text);
+        self.local_clipboard(None, text);
+    }
+
+    /// The local desktop's clipboard of `client`, else of the attached
+    /// client last typed in, else of the server's own environment.
+    fn local_clipboard(&mut self, client: Option<ClientId>, text: &str) {
+        let client = client.or_else(|| {
+            self.clients
+                .values()
+                .filter_map(|c| c.att.as_ref().map(|a| (c.id, a.last_input)))
+                .max_by_key(|(_, t)| *t)
+                .map(|(id, _)| id)
+        });
+        let env = client
+            .and_then(|id| self.clients.get(&id))
+            .and_then(|c| c.hello.as_ref())
+            .map(|h| h.env.clone());
+        self.clipboard.copy(text, env.as_deref());
     }
 
     /// The clipboard of one client (`set-buffer -w`, `load-buffer -w`), as
@@ -859,7 +880,7 @@ impl Server {
         if self.cfg.set_clipboard == "off" {
             return;
         }
-        crate::util::local_clipboard(text);
+        self.local_clipboard(client, text);
         let Some(id) = client else {
             return;
         };

@@ -1,7 +1,8 @@
 //! `tmxr` — a tmux-style terminal multiplexer.
 //!
 //! The same binary is the client (`tmxr [command]`) and, run as
-//! `tmxr -S <socket> __server`, the server a client starts on demand.
+//! `tmxr -S <socket> __server`, the server a client starts on demand, and,
+//! as `tmxr __clipboard`, the helper that holds a copy for the desktop.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -128,6 +129,13 @@ fn main() -> ExitCode {
     }
     if let Some(path) = &cli.import_tmux_conf {
         return import_tmux_conf(path);
+    }
+    if cli.command.first().map(String::as_str) == Some(tmxr_server::clipboard::CLIPBOARD_ARG) {
+        return if tmxr_server::clipboard::helper() {
+            ExitCode::SUCCESS
+        } else {
+            ExitCode::FAILURE
+        };
     }
     let endpoint = match Endpoint::resolve(cli.socket.as_deref(), cli.label.as_deref()) {
         Ok(e) => e,

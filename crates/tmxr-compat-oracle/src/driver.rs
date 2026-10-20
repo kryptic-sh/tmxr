@@ -113,7 +113,7 @@ impl Server {
             ("XDG_STATE_HOME".to_owned(), d.clone()),
             ("XDG_CONFIG_HOME".to_owned(), d),
             // Over SSH tmxr leaves the desktop's clipboard alone
-            // (`util::local_clipboard`): a case that copies must not
+            // (`clipboard::Local::copy`): a case that copies must not
             // overwrite it.
             ("SSH_CONNECTION".to_owned(), String::new()),
         ];
