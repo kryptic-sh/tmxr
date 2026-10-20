@@ -1301,6 +1301,28 @@ fn a_grouped_session_takes_no_command_and_lists_its_group() {
         );
     }
     t.run(&["new-session", "-d", "-t", "g", "-s", "member"]);
+    // Windows do not move between two members, which hold the same ones.
+    for (args, error) in [
+        (
+            &["swap-window", "-s", "g:0", "-t", "member:0"][..],
+            "can't move window, sessions are grouped",
+        ),
+        (
+            &["move-window", "-s", "g:0", "-t", "member:3"][..],
+            "sessions are grouped",
+        ),
+        (
+            &["link-window", "-s", "g:0", "-t", "member:3"][..],
+            "sessions are grouped",
+        ),
+    ] {
+        let refused = t.output(args);
+        assert!(!refused.status.success(), "{refused:?}");
+        assert!(
+            String::from_utf8_lossy(&refused.stderr).contains(error),
+            "{refused:?}"
+        );
+    }
     let listed = t.run(&["list-sessions"]);
     assert!(
         listed

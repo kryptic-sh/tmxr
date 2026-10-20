@@ -25,6 +25,12 @@ impl Server {
         self.groups.iter().find(|g| g.sessions.contains(&session))
     }
 
+    /// Whether `a` and `b` are two sessions of one group, between which tmux
+    /// moves, links and swaps no windows: they hold the same ones.
+    pub fn grouped_together(&self, a: SessionId, b: SessionId) -> bool {
+        a != b && self.group_of(a).is_some_and(|g| g.sessions.contains(&b))
+    }
+
     /// Put new session `session` in the group `-t` names, as tmux's
     /// new-session: the group `with` is in (or a new one named after it),
     /// else the group called `name` (or a new one); then it takes the

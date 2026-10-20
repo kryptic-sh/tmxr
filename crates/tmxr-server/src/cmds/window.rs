@@ -101,6 +101,9 @@ pub(super) fn run(
                 Some(t) if !t.is_empty() => target::destination(srv, ctx, t)?,
                 _ => (target::session(srv, ctx, None)?, None),
             };
+            if srv.grouped_together(src, dst) {
+                return Err("sessions are grouped".into());
+            }
             // -a / -b: next to the target window, the later ones moving up.
             if a.has('a') || a.has('b') {
                 index = srv.index_beside(dst, index, a.has('b'));
@@ -148,6 +151,9 @@ pub(super) fn run(
                 }
             };
             let (sid, idx, _) = target::window(srv, ctx, a.value('t'))?;
+            if srv.grouped_together(src.0, sid) {
+                return Err("can't move window, sessions are grouped".into());
+            }
             srv.swap_windows(src, (sid, idx), a.has('d'))?;
         }
         "kill-window" => {

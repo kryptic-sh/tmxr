@@ -27,7 +27,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Session groups**, as tmux's: `new-session -t target` makes a session that
   shares the target's windows (or joins the group of that name), named `group-N`
   unless `-s` names it; a window made, killed or moved in one member reaches the
-  others, each keeping its own current window. `#{session_group}`,
+  others, each keeping its own current window, and `swap-window`, `move-window`
+  and `link-window` refuse to move one between members. `#{session_group}`,
   `#{session_grouped}`, `#{session_group_size}`, `#{session_group_list}`,
   `#{session_group_attached}`, `#{session_group_attached_list}` and
   `#{session_group_many_attached}`, and `list-sessions` shows `(group name)`.
