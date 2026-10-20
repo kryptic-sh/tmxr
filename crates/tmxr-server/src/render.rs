@@ -82,6 +82,9 @@ pub(crate) fn apply(base: Style, s: &format::Style) -> Style {
         (s.italic, Modifier::ITALIC),
         (s.underscore, Modifier::UNDERLINED),
         (s.reverse, Modifier::REVERSED),
+        (s.blink, Modifier::SLOW_BLINK),
+        (s.hidden, Modifier::HIDDEN),
+        (s.strikethrough, Modifier::CROSSED_OUT),
     ] {
         match flag {
             Some(true) => out = out.add_modifier(m),
@@ -1370,6 +1373,22 @@ fn draw_clock(buf: &mut Buffer, area: Rect, colour: Style, style: tmxr_config::C
 mod tests {
     use super::*;
     use tmxr_command::MouseLocation as L;
+
+    #[test]
+    fn style_attributes_reach_the_terminal() {
+        let mut st = format::Style::default();
+        st.apply("strikethrough,blink,hidden");
+        let out = apply(Style::default(), &st);
+        for m in [
+            Modifier::CROSSED_OUT,
+            Modifier::SLOW_BLINK,
+            Modifier::HIDDEN,
+        ] {
+            assert!(out.add_modifier.contains(m), "{m:?}");
+        }
+        st.apply("noblink");
+        assert!(apply(out, &st).sub_modifier.contains(Modifier::SLOW_BLINK));
+    }
 
     #[test]
     fn status_clicks_land_on_left_windows_gap_and_right() {

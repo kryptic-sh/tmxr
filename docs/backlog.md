@@ -465,8 +465,10 @@ table. What has been verified, and how:
     `insert_flag`, `scroll_region_*`, `alternate_saved_*`, `pane_tabs` and
     `cursor_shape` / `cursor_colour` need terminal state the `vt100` crate does
     not expose); styles `align=` `fill=` `list=` `range=` `push-default` /
-    `pop-default`, strikethrough, blink, overline, curly and coloured
-    underlines.
+    `pop-default` outside `format_draw` (status-left, status-right and window
+    entries on tmxr's own first status line, pane border formats), overline, and
+    underline styles and colours (`double-`, `curly-`, `dotted-` and
+    `dashed-underscore` draw as the plain underline).
   - Options: the status line's first row is tmxr's own (`render::draw_status`,
     from `status-left`, the window list and `status-right`) while
     `status-format[0]` is tmux's default; set to anything else, and the rows

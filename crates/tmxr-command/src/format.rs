@@ -1169,6 +1169,9 @@ pub struct Style {
     pub italic: Option<bool>,
     pub underscore: Option<bool>,
     pub reverse: Option<bool>,
+    pub blink: Option<bool>,
+    pub hidden: Option<bool>,
+    pub strikethrough: Option<bool>,
 }
 
 impl Style {
@@ -1190,6 +1193,9 @@ impl Style {
                 self.italic = Some(false);
                 self.underscore = Some(false);
                 self.reverse = Some(false);
+                self.blink = Some(false);
+                self.hidden = Some(false);
+                self.strikethrough = Some(false);
             } else {
                 let (on, name) = match item.strip_prefix("no") {
                     Some(n) => (false, n),
@@ -1199,8 +1205,13 @@ impl Style {
                     "bold" | "bright" => self.bold = Some(on),
                     "dim" => self.dim = Some(on),
                     "italics" | "italic" => self.italic = Some(on),
-                    "underscore" | "underline" => self.underscore = Some(on),
+                    // tmux's other underlines are drawn as the plain one.
+                    "underscore" | "underline" | "double-underscore" | "curly-underscore"
+                    | "dotted-underscore" | "dashed-underscore" => self.underscore = Some(on),
                     "reverse" => self.reverse = Some(on),
+                    "blink" => self.blink = Some(on),
+                    "hidden" => self.hidden = Some(on),
+                    "strikethrough" => self.strikethrough = Some(on),
                     _ => {}
                 }
             }
@@ -1497,6 +1508,21 @@ mod tests {
         );
         // A context that runs none gives nothing.
         assert_eq!(expand("a#(echo hi)b", &ctx), "ab");
+    }
+
+    #[test]
+    fn styles_take_tmuxs_other_attributes() {
+        let mut st = Style::default();
+        st.apply("strikethrough,blink hidden,curly-underscore");
+        assert_eq!(
+            (st.strikethrough, st.blink, st.hidden, st.underscore),
+            (Some(true), Some(true), Some(true), Some(true))
+        );
+        st.apply("nostrikethrough");
+        assert_eq!(st.strikethrough, Some(false));
+        st.apply("blink");
+        st.apply("default");
+        assert_eq!(st.blink, Some(false), "default takes them all off");
     }
 
     #[test]
