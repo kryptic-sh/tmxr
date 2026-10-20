@@ -449,28 +449,28 @@ table. What has been verified, and how:
     large into an error (`conn.rs`).
 - **tmux 3.6 features tmxr lacks** (the same review; compared against tmux's
   `cmd-*.c`, `options-table.c` and `format.c`, not run):
-  - Formats: `#()` jobs run as tmux's (`format_jobs.rs`), but a client's jobs
-    are kept until it goes, where tmux also drops ones unused for an hour
-    (format_job_tidy); a job's run is stopped by killing its own process
-    (SIGKILL), where tmux sends SIGTERM, and in both a command's own children
-    outlive it unless the shell `exec`s them; modifiers `w:` (it needs a
-    display-width measure `tmxr-command` does not have, unicode-width being a
-    new dependency); `c:` gives no colour for X11's names (`orchid`,
-    `navy blue`), which tmux 3.6's colour_byname takes from a table of 578
-    (`tmxr_command::colour::rgb` reads everything else tmux reads, compared in
-    the oracle; copying the table is the open choice); a syntax error ends the
-    expansion as tmux's for a comparison, `m:` or `R:` without its comma
-    (`format::expand_item`), but not for tmux's other failures, not compared: a
-    loop or `N:` whose lookup fails (`format_loop_*`, `format_window_name`
-    returning none); many of tmux's format variables (compare tmux's
-    `format_table` with `vars.rs` for the list; `origin_flag`, `wrap_flag`,
-    `insert_flag`, `scroll_region_*`, `alternate_saved_*`, `pane_tabs` and
-    `cursor_shape` / `cursor_colour` need terminal state the `vt100` crate does
-    not expose); styles `align=` `fill=` `list=` `range=` `push-default` /
-    `pop-default` outside `format_draw` (status-left, status-right and window
-    entries on tmxr's own first status line, pane border formats), overline, and
-    underline styles and colours (`double-`, `curly-`, `dotted-` and
-    `dashed-underscore` draw as the plain underline).
+  - Formats: `#()` jobs run as tmux's (`format_jobs.rs`), and a job no format
+    has started for an hour is dropped (`FormatJobs::tidy`, unit tested; the
+    server's tick calling it is not observed by any test); a job's run is
+    stopped by killing its own process (SIGKILL), where tmux sends SIGTERM, and
+    in both a command's own children outlive it unless the shell `exec`s them;
+    modifiers `w:` (it needs a display-width measure `tmxr-command` does not
+    have, unicode-width being a new dependency); `c:` gives no colour for X11's
+    names (`orchid`, `navy blue`), which tmux 3.6's colour_byname takes from a
+    table of 578 (`tmxr_command::colour::rgb` reads everything else tmux reads,
+    compared in the oracle; copying the table is the open choice); a syntax
+    error ends the expansion as tmux's for a comparison, `m:` or `R:` without
+    its comma (`format::expand_item`), but not for tmux's other failures, not
+    compared: a loop or `N:` whose lookup fails (`format_loop_*`,
+    `format_window_name` returning none); many of tmux's format variables
+    (compare tmux's `format_table` with `vars.rs` for the list; `origin_flag`,
+    `wrap_flag`, `insert_flag`, `scroll_region_*`, `alternate_saved_*`,
+    `pane_tabs` and `cursor_shape` / `cursor_colour` need terminal state the
+    `vt100` crate does not expose); styles `align=` `fill=` `list=` `range=`
+    `push-default` / `pop-default` outside `format_draw` (status-left,
+    status-right and window entries on tmxr's own first status line, pane border
+    formats), overline, and underline styles and colours (`double-`, `curly-`,
+    `dotted-` and `dashed-underscore` draw as the plain underline).
   - Options: the status line's first row is tmxr's own (`render::draw_status`,
     from `status-left`, the window list and `status-right`) while
     `status-format[0]` is tmux's default; set to anything else, and the rows

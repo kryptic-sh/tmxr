@@ -2,7 +2,8 @@
 //! formats name runs in the background (again at most once a second, or at
 //! once when its expanded text changes, the run before killed), and the
 //! format shows the last line it printed, or nothing until it has printed
-//! one (`<'command' not ready>` after a second).
+//! one (`<'command' not ready>` after a second). A job no format has
+//! started for an hour is dropped, as tmux's format_job_tidy.
 
 use std::collections::HashMap;
 use std::io::{BufRead as _, BufReader};
@@ -20,6 +21,24 @@ pub type JobKey = (Option<ClientId>, String);
 #[derive(Debug, Default)]
 pub struct FormatJobs {
     jobs: HashMap<JobKey, Job>,
+}
+
+/// How long a job may go without starting before it is dropped, in
+/// seconds, as tmux's format_job_tidy.
+const UNUSED_SECS: u64 = 3600;
+
+impl FormatJobs {
+    /// The jobs not started for [`UNUSED_SECS`] by `now` dropped, their runs
+    /// stopped; one started after `now` (the clock went back) is kept.
+    fn tidy(&mut self, now: u64) {
+        self.jobs.retain(|_, job| {
+            let keep = job.last > now || now - job.last < UNUSED_SECS;
+            if !keep {
+                job.stop();
+            }
+            keep
+        });
+    }
 }
 
 #[derive(Debug, Default)]
@@ -173,6 +192,13 @@ impl Server {
         }
     }
 
+    /// The jobs unused for an hour dropped, as tmux's format_tidy_jobs.
+    pub fn tidy_format_jobs(&self) {
+        if let Ok(mut jobs) = self.format_jobs.lock() {
+            jobs.tidy(now());
+        }
+    }
+
     /// Client `client`'s jobs dropped, their runs stopped, as tmux frees
     /// them with the client.
     pub fn forget_format_jobs(&self, client: ClientId) {
@@ -216,5 +242,26 @@ impl Server {
             Some(c) => self.mark_client_dirty(c),
             None => self.mark_all_dirty(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tidy_drops_the_jobs_unused_for_an_hour() {
+        let mut jobs = FormatJobs::default();
+        for (cmd, last) in [("old", 100), ("recent", 100 + UNUSED_SECS), ("ahead", 9999)] {
+            let job = Job {
+                last,
+                ..Job::default()
+            };
+            jobs.jobs.insert((None, cmd.to_owned()), job);
+        }
+        jobs.tidy(100 + UNUSED_SECS);
+        let mut left: Vec<&str> = jobs.jobs.keys().map(|(_, c)| c.as_str()).collect();
+        left.sort_unstable();
+        assert_eq!(left, ["ahead", "recent"]);
     }
 }

@@ -962,6 +962,7 @@ impl Server {
         self.write_due_dead_lines();
         self.mark_away_clients();
         self.lock_idle_clients();
+        self.tidy_format_jobs();
         let now = Instant::now();
         // The table a client goes back to once a repeat ends.
         let roots: BTreeMap<SessionId, String> = self
