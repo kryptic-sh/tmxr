@@ -466,9 +466,9 @@ table. What has been verified, and how:
     table of 578 (`tmxr_command::colour::rgb` reads everything else tmux reads,
     compared in the oracle; copying the table is the open choice); a syntax
     error ends the expansion as tmux's for a comparison, `m:` or `R:` without
-    its comma (`format::expand_item`), but not for tmux's other failures, not
-    compared: a loop or `N:` whose lookup fails (`format_loop_*`,
-    `format_window_name` returning none); many of tmux's format variables
+    its comma (`format::expand_item`), and a loop or `N:` whose lookup fails
+    gives what tmux's does (compared by
+    `loops_and_n_whose_lookups_fail_as_tmux`); many of tmux's format variables
     (compare tmux's `format_table` with `vars.rs` for the list; `origin_flag`,
     `wrap_flag`, `insert_flag`, `scroll_region_*`, `alternate_saved_*`,
     `pane_tabs` and `cursor_shape` / `cursor_colour` need terminal state the

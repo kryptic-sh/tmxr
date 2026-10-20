@@ -575,3 +575,18 @@ checks = [
   { screen_contains = "<JOBOUT>", expect = true },
   { format = "[#(echo hi)]" },
 ]
+
+[[cases]]
+name = "loops_and_n_whose_lookups_fail_as_tmux"
+steps = []
+checks = [
+  { command = "display -p 'a#{N:nosuch}b'" },
+  { command = "display -p 'a#{N:0}b'" },
+  { command = "display -p 'a#{N/w:nosuch}b'" },
+  { command = "display -p 'a#{N/s:o}b#{N/s:zz}c'" },
+  { command = "display -p 'a#{W:x#{window_index}}b'" },
+  { command = "display -p 'a#{S:}b'" },
+  { command = "display -p 'a#{P:#{pane_index},}b'" },
+  { command = "display -p 'a#{L:x}b'" },
+  { command = "display -p 'a#{W/zz:x}b'" },
+]
