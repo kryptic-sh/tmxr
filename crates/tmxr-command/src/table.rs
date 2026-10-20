@@ -71,10 +71,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "choose-tree",
         None,
-        "NswyZt:",
+        "F:f:NO:rswyZt:",
         0,
         1,
-        "[-NswyZ] [-t target-pane] [template]"
+        "[-NrswyZ] [-F format] [-f filter] [-O sort-order] [-t target-pane] [template]"
     ),
     cmd!(
         "clear-history",

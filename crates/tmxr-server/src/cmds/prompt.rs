@@ -557,8 +557,20 @@ pub(super) fn run(
                     let found = window_matcher(srv, a, &pos[0])?;
                     Overlay::found_windows(srv, current, found)
                 }
-                _ if a.has('w') => Overlay::window_picker(srv, current),
-                _ => Overlay::session_picker(srv, current.map(|c| c.0)),
+                _ => {
+                    let choose = crate::overlay::Choose {
+                        format: a.value('F'),
+                        filter: a.value('f'),
+                        sort: a.value('O'),
+                        reverse: a.has('r'),
+                        client: Some(c),
+                    };
+                    if a.has('w') {
+                        Overlay::window_picker(srv, current, &choose)
+                    } else {
+                        Overlay::session_picker(srv, current.map(|c| c.0), &choose)
+                    }
+                }
             };
             // A template runs for the chosen item, as tmux's.
             // find-window's argument is its match, and its -N matches names.

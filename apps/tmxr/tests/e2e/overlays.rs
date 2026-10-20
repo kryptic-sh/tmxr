@@ -684,6 +684,79 @@ fn choose_tree_n_has_no_preview_and_y_kills_without_asking() {
 }
 
 #[test]
+fn choose_tree_takes_tmuxs_format_filter_order_and_reverse() {
+    let t = Tmxr::new("choosefo");
+    // Made apart in time, for -O time.
+    for name in ["gamma", "alpha", "beta"] {
+        t.run(&["new-session", "-d", "-s", name]);
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let s = t.attach(&["new", "-s", "omega"]);
+    s.wait_for("status line", |text| text.contains("omega"));
+    let order = |text: &str, names: &[&str]| {
+        let at: Vec<usize> = names
+            .iter()
+            .map(|n| text.find(n).unwrap_or(usize::MAX))
+            .collect();
+        assert!(at.windows(2).all(|w| w[0] < w[1]), "{names:?} in {text}");
+    };
+    // -O name -F -f: by name, each as the format, beta filtered out.
+    let filter = "#{!=:#{session_name},beta}";
+    t.run(&[
+        "choose-tree",
+        "-N",
+        "-O",
+        "name",
+        "-F",
+        "<#{session_name}>",
+        "-f",
+        filter,
+        "set -g @c '%%'",
+    ]);
+    s.wait_for("the picker", |text| text.contains("<alpha>"));
+    order(&s.text(), &["<alpha>", "<gamma>", "<omega>"]);
+    assert!(!s.text().contains("<beta>"), "{}", s.text());
+    // Sorted, it opens on the current session (here not the second).
+    s.send(b"\r");
+    t.wait_run(&["show", "-gv", "@c"], "the template run", |o| {
+        o.trim() == "=omega:"
+    });
+    // -r: the other way round.
+    t.run(&[
+        "choose-tree",
+        "-N",
+        "-r",
+        "-O",
+        "name",
+        "-F",
+        "<#{session_name}>",
+    ]);
+    s.wait_for("the picker", |text| text.contains("<alpha>"));
+    order(&s.text(), &["<omega>", "<gamma>", "<beta>", "<alpha>"]);
+    s.send(b"\x1b");
+    s.wait_for("the picker gone", |text| !text.contains("<alpha>"));
+    // -O time: the most recently active first.
+    t.run(&["choose-tree", "-N", "-O", "time", "-F", "<#{session_name}>"]);
+    s.wait_for("the picker", |text| text.contains("<alpha>"));
+    order(&s.text(), &["<omega>", "<beta>", "<alpha>", "<gamma>"]);
+    s.send(b"\x1b");
+    s.wait_for("the picker gone", |text| !text.contains("<alpha>"));
+    // -w -f: only the windows with a pane that passes.
+    t.run(&["new-window", "-d", "-t", "alpha:5"]);
+    t.run(&[
+        "choose-tree",
+        "-N",
+        "-w",
+        "-F",
+        "[#{session_name}:#{window_index}]",
+        "-f",
+        "#{==:#{window_index},5}",
+    ]);
+    s.wait_for("the window picker", |text| text.contains("[alpha:5]"));
+    assert!(!s.text().contains(":0]"), "{}", s.text());
+}
+
+#[test]
 fn prompt_history_is_kept_recalled_and_cleared() {
     let t = Tmxr::new("phist");
     let s = t.attach(&["new", "-s", "ph"]);

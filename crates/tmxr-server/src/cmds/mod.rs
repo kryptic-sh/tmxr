@@ -312,16 +312,21 @@ fn print_new(
 /// One item of a list command: its `default` line, or `-F`'s format
 /// expanded with the item's variables; `None` when `-f`'s filter expands to
 /// nothing or `0` for it, as tmux's filters.
+/// Whether an expanded format counts as true, as tmux's format_true: it
+/// is not empty and not `0`.
+pub fn format_true(value: &str) -> bool {
+    !value.is_empty() && value != "0"
+}
+
 fn list_item(
     a: &Args,
     vars: &dyn tmxr_command::format::Context,
     default: impl FnOnce() -> String,
 ) -> Option<String> {
-    if let Some(filter) = a.value('f') {
-        let keep = expand(filter, vars);
-        if keep.is_empty() || keep == "0" {
-            return None;
-        }
+    if let Some(filter) = a.value('f')
+        && !format_true(&expand(filter, vars))
+    {
+        return None;
     }
     Some(a.value('F').map_or_else(default, |f| expand(f, vars)))
 }

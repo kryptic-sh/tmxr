@@ -24,6 +24,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`choose-tree -F`, `-f`, `-O` and `-r`**, as tmux's: `-F` sets each row's
+  text, `-f` keeps the sessions and windows with a pane that passes the filter,
+  `-O index`, `name` or `time` sorts them (the picker then opens on the current
+  one), and `-r` turns the order round.
 - **Session groups**, as tmux's: `new-session -t target` makes a session that
   shares the target's windows (or joins the group of that name), named `group-N`
   unless `-s` names it; a window made, killed or moved in one member reaches the

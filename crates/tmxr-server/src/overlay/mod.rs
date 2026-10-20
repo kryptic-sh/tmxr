@@ -10,13 +10,107 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::model::{PaneId, SessionId};
+use crate::model::{ClientId, PaneId, SessionId, WindowId};
 use crate::server::Server;
+use crate::vars::Vars;
 
 pub use boxes::{BoxLook, Lines};
 use picker::{Item, Target, current_first};
 pub use picker::{PickerOverlay, Previewed};
 pub use prompt::Prompt;
+
+/// The orders `choose-tree -O` takes, as tmux's window_tree_sort_list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Sort {
+    Index,
+    Name,
+    /// The most recently active first.
+    Time,
+}
+
+/// `choose-tree`'s -F, -f, -O and -r, as tmux's: each item's text, the
+/// filter (a session or window stays while any of its panes passes, as
+/// tmux's tree keeps them), the order and whether it is turned round.
+/// Without -O the picker keeps its own order.
+#[derive(Debug, Default)]
+pub struct Choose<'a> {
+    pub format: Option<&'a str>,
+    pub filter: Option<&'a str>,
+    /// -O as given; one tmux does not know leaves the order alone, as there.
+    pub sort: Option<&'a str>,
+    pub reverse: bool,
+    /// The client choosing, for the formats' `client_*`.
+    pub client: Option<ClientId>,
+}
+
+impl Sort {
+    /// `sessions` in this order, as tmux's window_tree_cmp_session: by id,
+    /// by name, or the most recently active first and then by name.
+    fn sessions(self, sessions: &mut [&crate::model::Session]) {
+        match self {
+            Self::Index => sessions.sort_by_key(|s| s.id),
+            Self::Name => sessions.sort_by(|a, b| a.name.cmp(&b.name)),
+            Self::Time => {
+                sessions.sort_by(|a, b| {
+                    b.activity
+                        .cmp(&a.activity)
+                        .then_with(|| a.name.cmp(&b.name))
+                });
+            }
+        }
+    }
+}
+
+impl Choose<'_> {
+    fn sort(&self) -> Option<Sort> {
+        let sort = self.sort?;
+        [
+            ("index", Sort::Index),
+            ("name", Sort::Name),
+            ("time", Sort::Time),
+        ]
+        .into_iter()
+        .find(|(name, _)| sort.eq_ignore_ascii_case(name))
+        .map(|(_, s)| s)
+    }
+
+    /// Whether the items are not in the picker's own order, so it opens on
+    /// the current one.
+    fn reorders(&self) -> bool {
+        self.sort().is_some() || self.reverse
+    }
+
+    /// Whether any pane of `windows` (in `session`) passes the filter.
+    fn keeps(
+        &self,
+        srv: &Server,
+        session: SessionId,
+        windows: impl Iterator<Item = WindowId>,
+    ) -> bool {
+        let Some(filter) = self.filter else {
+            return true;
+        };
+        windows
+            .filter_map(|w| srv.windows.get(&w))
+            .flat_map(|w| w.panes().into_iter().map(move |p| (w.id, p)))
+            .any(|(w, p)| {
+                let vars = Vars {
+                    srv,
+                    session: Some(session),
+                    window: Some(w),
+                    pane: Some(p),
+                    client: self.client,
+                };
+                crate::cmds::format_true(&tmxr_command::format::expand(filter, &vars))
+            })
+    }
+
+    /// An item's text: -F expanded for it, else `default`.
+    fn text(&self, vars: &Vars<'_>, default: impl FnOnce() -> String) -> String {
+        self.format
+            .map_or_else(default, |f| tmxr_command::format::expand(f, vars))
+    }
+}
 
 /// What a key did to an overlay.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -144,11 +238,23 @@ impl Overlay {
         matches!(self, Self::Panes { until: Some(until), .. } if *until <= Instant::now())
     }
 
-    /// Every session, `current` (marked) first.
-    pub fn session_picker(srv: &Server, current: Option<SessionId>) -> Self {
-        let mut sessions: Vec<_> = srv.sessions.values().collect();
-        sessions.sort_by_key(|s| std::cmp::Reverse(s.last_used));
-        current_first(&mut sessions, |s| Some(s.id) == current);
+    /// Every session, `current` (marked) first, unless `choose` sorts them.
+    pub fn session_picker(srv: &Server, current: Option<SessionId>, choose: &Choose<'_>) -> Self {
+        let mut sessions: Vec<_> = srv
+            .sessions
+            .values()
+            .filter(|s| choose.keeps(srv, s.id, s.windows.values().copied()))
+            .collect();
+        match choose.sort() {
+            None => {
+                sessions.sort_by_key(|s| std::cmp::Reverse(s.last_used));
+                current_first(&mut sessions, |s| Some(s.id) == current);
+            }
+            Some(sort) => sort.sessions(&mut sessions),
+        }
+        if choose.reverse {
+            sessions.reverse();
+        }
         let items = sessions
             .iter()
             .map(|s| {
@@ -157,25 +263,44 @@ impl Overlay {
                     .values()
                     .any(|c| c.att.as_ref().is_some_and(|a| a.session == s.id));
                 let mark = if Some(s.id) == current { "*" } else { " " };
-                Item {
-                    label: format!(
-                        "{mark} {}: {} windows{}",
+                let window = s.current_window();
+                let vars = Vars {
+                    srv,
+                    session: Some(s.id),
+                    window,
+                    pane: window.and_then(|w| srv.windows.get(&w)).map(|w| w.active),
+                    client: choose.client,
+                };
+                let text = choose.text(&vars, || {
+                    format!(
+                        "{}: {} windows{}",
                         s.name,
                         s.windows.len(),
                         if attached { " (attached)" } else { "" }
-                    ),
+                    )
+                });
+                Item {
+                    label: format!("{mark} {text}"),
                     matches: s.name.clone(),
                     target: Target::Session(s.id, s.name.clone()),
                 }
             })
             .collect();
-        Self::Picker(Box::new(PickerOverlay::new("sessions", items)))
+        let mut picker = PickerOverlay::new("sessions", items);
+        if choose.reorders() {
+            picker.select(sessions.iter().position(|s| Some(s.id) == current));
+        }
+        Self::Picker(Box::new(picker))
     }
 
     /// Every session's windows, `current`'s session first and its window
-    /// marked.
-    pub fn window_picker(srv: &Server, current: Option<(SessionId, u32)>) -> Self {
-        Self::found_windows(srv, current, |_| true)
+    /// marked, unless `choose` sorts them.
+    pub fn window_picker(
+        srv: &Server,
+        current: Option<(SessionId, u32)>,
+        choose: &Choose<'_>,
+    ) -> Self {
+        Self::windows_picker(srv, current, |_| true, choose)
     }
 
     /// The windows `keep` accepts, laid out as [`Overlay::window_picker`]
@@ -185,28 +310,73 @@ impl Overlay {
         current: Option<(SessionId, u32)>,
         keep: impl Fn(&crate::model::Window) -> bool,
     ) -> Self {
+        Self::windows_picker(srv, current, keep, &Choose::default())
+    }
+
+    fn windows_picker(
+        srv: &Server,
+        current: Option<(SessionId, u32)>,
+        keep: impl Fn(&crate::model::Window) -> bool,
+        choose: &Choose<'_>,
+    ) -> Self {
         let (current, current_index) = (current.map(|c| c.0), current.map(|c| c.1));
-        let mut items = Vec::new();
         let mut sessions: Vec<_> = srv.sessions.values().collect();
-        sessions.sort_by_key(|s| (Some(s.id) != current, s.name.clone()));
+        match choose.sort() {
+            None => sessions.sort_by_key(|s| (Some(s.id) != current, s.name.clone())),
+            Some(sort) => sort.sessions(&mut sessions),
+        }
+        let mut rows = Vec::new();
         for s in sessions {
-            for (idx, wid) in &s.windows {
-                let Some(w) = srv.windows.get(wid).filter(|w| keep(w)) else {
-                    continue;
+            let mut windows: Vec<(u32, &crate::model::Window)> = s
+                .windows
+                .iter()
+                .filter_map(|(idx, wid)| Some((*idx, srv.windows.get(wid).filter(|w| keep(w))?)))
+                .filter(|(_, w)| choose.keeps(srv, s.id, std::iter::once(w.id)))
+                .collect();
+            let by_name = |a: &(u32, &crate::model::Window), b: &(u32, &crate::model::Window)| {
+                a.1.name.cmp(&b.1.name)
+            };
+            match choose.sort() {
+                Some(Sort::Name) => windows.sort_by(by_name),
+                Some(Sort::Time) => windows.sort_by(|a, b| {
+                    b.1.last_output
+                        .cmp(&a.1.last_output)
+                        .then_with(|| by_name(a, b))
+                }),
+                Some(Sort::Index) | None => {}
+            }
+            rows.extend(windows.into_iter().map(|(idx, w)| (s, idx, w)));
+        }
+        if choose.reverse {
+            rows.reverse();
+        }
+        let is_current = |s: &crate::model::Session, idx: u32| {
+            Some(s.id) == current && Some(idx) == current_index
+        };
+        let items = rows
+            .iter()
+            .map(|(s, idx, w)| {
+                let mark = if is_current(s, *idx) { "*" } else { " " };
+                let vars = Vars {
+                    srv,
+                    session: Some(s.id),
+                    window: Some(w.id),
+                    pane: Some(w.active),
+                    client: choose.client,
                 };
-                let mark = if Some(s.id) == current && Some(*idx) == current_index {
-                    "*"
-                } else {
-                    " "
-                };
-                items.push(Item {
-                    label: format!("{mark} {}:{idx} {}", s.name, w.name),
+                let text = choose.text(&vars, || format!("{}:{idx} {}", s.name, w.name));
+                Item {
+                    label: format!("{mark} {text}"),
                     matches: format!("{}:{idx} {}", s.name, w.name),
                     target: Target::Window(s.id, *idx, s.name.clone()),
-                });
-            }
+                }
+            })
+            .collect();
+        let mut picker = PickerOverlay::new("windows", items);
+        if choose.reorders() {
+            picker.select(rows.iter().position(|(s, idx, _)| is_current(s, *idx)));
         }
-        Self::Picker(Box::new(PickerOverlay::new("windows", items)))
+        Self::Picker(Box::new(picker))
     }
 
     /// The attached clients; Enter detaches one (`choose-client`).
