@@ -246,6 +246,8 @@ pub struct Server {
     pub next_pipe: u64,
     had_session: bool,
     pub exiting: bool,
+    /// When the socket was last shown as in use ([`SOCKET_REFRESH`]).
+    socket_refreshed: Instant,
     /// When foreground commands were last refreshed.
     last_status: Instant,
     /// Per-pane foreground command cache refreshed on the status interval.
@@ -325,6 +327,11 @@ pub const PASSTHROUGH_UNSUPPORTED: &str = "allow-passthrough: needs the conpty.d
 /// How long one pass of the loop handles queued events before it renders,
 /// so a pane flooding output still repaints.
 const DRAIN_BUDGET: Duration = Duration::from_millis(20);
+
+/// How often the socket is shown as in use (`Endpoint::refresh`): well
+/// within the 10 days after which Arch's systemd-tmpfiles removes an unused
+/// file from `/tmp`.
+const SOCKET_REFRESH: Duration = Duration::from_secs(60 * 60);
 impl Server {
     pub fn new(
         endpoint: Endpoint,
@@ -370,6 +377,7 @@ impl Server {
             next_pipe: 0,
             had_session: false,
             exiting: false,
+            socket_refreshed: Instant::now(),
             last_status: Instant::now(),
             commands: HashMap::new(),
             marked: None,
@@ -1008,6 +1016,12 @@ impl Server {
         self.lock_idle_clients();
         self.tidy_format_jobs();
         let now = Instant::now();
+        if !self.exiting && now.duration_since(self.socket_refreshed) >= SOCKET_REFRESH {
+            self.socket_refreshed = now;
+            if let Err(e) = self.endpoint.refresh() {
+                warn!("could not refresh the socket: {e}");
+            }
+        }
         // The table a client goes back to once a repeat ends.
         let roots: BTreeMap<SessionId, String> = self
             .sessions

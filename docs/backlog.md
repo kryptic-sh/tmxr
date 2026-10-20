@@ -247,12 +247,15 @@ table. What has been verified, and how:
 - **A server whose socket file is removed cannot be reached again**: tmux
   re-creates its socket on SIGUSR1 (`server_create_socket` from its signal
   handler); tmxr has no such signal, so a socket deleted under a running server
-  (`rm`, a `/tmp` cleaner) leaves it unreachable until it is killed by pid. The
-  socket directory moved out of `$XDG_RUNTIME_DIR` on 2026-10-20, as logind
-  deletes that one at the user's last logout (`socket_base`), which was the
-  common way to lose it; checked with `Linger=no` on Arch, where
-  `systemd-user-runtime-dir stop` removes it. Not tried: a real logout with a
-  server running.
+  (`rm`) leaves it unreachable until it is killed by pid. The socket directory
+  moved out of `$XDG_RUNTIME_DIR` on 2026-10-20, as logind deletes that one at
+  the user's last logout (`socket_base`); checked with `Linger=no` on Arch,
+  where `systemd-user-runtime-dir stop` removes it. In `/tmp`, Arch's
+  systemd-tmpfiles removes a file whose newest timestamp is 10 days old, so the
+  server renews the socket's ctime each hour (`Endpoint::refresh`, from
+  `Server::tick`, as tmux's `server_update_socket` chmods it); the refresh is
+  unit-tested, the hourly call is not observed by any test. Not tried: a real
+  logout with a server running, or macOS's own cleaning of `$TMPDIR`.
 - **`display-popup` / `display-menu` gaps.** Placement (`-x` / `-y`, letters,
   numbers and the `popup_*` variables) is transcribed from tmux 3.6's
   `cmd_display_menu_get_pos` and checked against a running tmux

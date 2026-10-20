@@ -11,8 +11,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The Unix socket directory is `/tmp/tmxr-<uid>`** (or under `$TMXR_TMPDIR` or
   `$TMPDIR`), no longer under `$XDG_RUNTIME_DIR`: logind deletes that directory
   when the user's last session ends, so a server left running across a logout
-  could no longer be reached. A server started by an earlier tmxr is reached
-  with `TMXR_TMPDIR=$XDG_RUNTIME_DIR tmxr kill-server`.
+  could no longer be reached. A running server renews its socket's status time
+  each hour, as tmux does, so a cleaner of old files in `/tmp` (systemd-tmpfiles
+  on Arch, after 10 days) leaves it. A server started by an earlier tmxr is
+  reached with `TMXR_TMPDIR=$XDG_RUNTIME_DIR tmxr kill-server`.
 - **`customize-mode` refuses `-a` and `-F`**, which it accepted and ignored:
   tmux's has no `-a`, and its `-F` formats tree lines tmxr's picker does not
   have.

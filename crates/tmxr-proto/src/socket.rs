@@ -118,6 +118,22 @@ impl Endpoint {
         }
     }
 
+    /// Show a running server's socket as in use to a cleaner of old files
+    /// (systemd-tmpfiles ages `/tmp` by each file's newest timestamp): on
+    /// Unix its mode is set again, which renews its ctime, as tmux's
+    /// `server_update_socket` does. A Windows pipe has no file to age.
+    pub fn refresh(&self) -> io::Result<()> {
+        #[cfg(unix)]
+        {
+            let mode = std::fs::metadata(&self.path)?.permissions();
+            std::fs::set_permissions(&self.path, mode)
+        }
+        #[cfg(windows)]
+        {
+            Ok(())
+        }
+    }
+
     /// Whether this is a label's socket, in tmxr's own per-user directory,
     /// which other users cannot reach whatever the socket's own mode.
     pub fn in_private_dir(&self) -> bool {
@@ -439,6 +455,25 @@ mod tests {
         assert_eq!(label.in_private_dir(), cfg!(unix));
         let explicit = Endpoint::resolve(Some(Path::new("/srv/shared/sock")), None).unwrap();
         assert!(!explicit.in_private_dir());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn refreshing_renews_the_sockets_ctime_and_keeps_its_mode() {
+        use std::os::unix::fs::MetadataExt as _;
+        let tmp = tempfile::tempdir().unwrap();
+        let ep = unique_endpoint(tmp.path());
+        let _listener = ep.listen(Access::Users).unwrap();
+        let stat = || std::fs::metadata(&ep.path).unwrap();
+        let before = stat();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        ep.refresh().unwrap();
+        let after = stat();
+        assert!(
+            (after.ctime(), after.ctime_nsec()) > (before.ctime(), before.ctime_nsec()),
+            "ctime not renewed"
+        );
+        assert_eq!(after.mode(), before.mode());
     }
 
     #[cfg(unix)]
