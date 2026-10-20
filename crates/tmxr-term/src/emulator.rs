@@ -33,6 +33,8 @@ pub struct Hooks {
     focus_reports: bool,
     /// Insert mode (`CSI 4 h`, IRM), which vt100 does not keep.
     insert_mode: bool,
+    /// The cursor blinks: an odd DECSCUSR, or `CSI ? 12 h`.
+    cursor_blinking: bool,
     /// Autowrap turned off (`CSI ? 7 l`, DECAWM), which vt100 does not
     /// keep (it always wraps).
     no_wrap: bool,
@@ -87,6 +89,7 @@ impl vt100::Callbacks for Hooks {
                     match mode {
                         1004 => self.focus_reports = c == 'h',
                         7 => self.no_wrap = c == 'l',
+                        12 => self.cursor_blinking = c == 'h',
                         _ => {}
                     }
                 }
@@ -100,6 +103,8 @@ impl vt100::Callbacks for Hooks {
             (Some(b' '), 'q') => {
                 if let Ok(ps @ 0..=6) = u8::try_from(p(0).unwrap_or(0)) {
                     self.cursor_style = ps;
+                    // 1, 3 and 5 blink, as tmux's.
+                    self.cursor_blinking = ps % 2 == 1;
                 }
             }
             // DA1: identify as a VT220 with ANSI colour, as tmux does.
@@ -338,6 +343,8 @@ impl Emulator {
         hooks.cwd = cwd;
         hooks.input_mark = mark;
         hooks.focus_reports = false;
+        // tmux's reset clears the blinking but keeps the cursor's shape.
+        hooks.cursor_blinking = false;
         hooks.kitty_flags.clear();
         self.reset_keys();
         self.count_history();
@@ -516,6 +523,12 @@ impl Emulator {
     pub fn insert_and_wrap(&self) -> (bool, bool) {
         let hooks = self.parser.callbacks();
         (hooks.insert_mode, !hooks.no_wrap)
+    }
+
+    /// Whether the cursor blinks, as the program last set it
+    /// (`#{cursor_blinking}`).
+    pub fn cursor_blinking(&self) -> bool {
+        self.parser.callbacks().cursor_blinking
     }
 
     /// The cursor shape the program asked for, as DECSCUSR's `Ps`: 0 (the

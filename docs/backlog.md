@@ -423,6 +423,14 @@ table. What has been verified, and how:
   unset. Not done: the terminal's own title is not saved and given back on
   detach (`CSI 22;0t` / `CSI 23;0t`), as tmux does not either; a title set while
   a client is attached reaches it with the next frame, as any change.
+- **A terminal resize can go unseen while attached** (reported by the owner
+  2026-10-20, Hyprland with Alacritty): with two windows side by side, closing
+  one grows the Alacritty window holding the client, but tmxr keeps the old size
+  until the window is made floating and docked again. Not reproduced or
+  investigated. It may share a cause with the entry below (crossterm not seeing
+  a SIGWINCH); a start is a log of the client's crossterm events while Hyprland
+  retiles, to tell a missed SIGWINCH from a size crossterm reads wrong, and
+  whether tmux on the same setup sees the resize.
 - **A resize just after attaching can go unseen on Linux** (2026-10-18). In
   `refresh_client_sets_and_clears_client_flags`, a client resized as soon as its
   status line showed kept its old size on the server for the test's 30 s. This
@@ -478,14 +486,16 @@ table. What has been verified, and how:
     gives what tmux's does (compared by
     `loops_and_n_whose_lookups_fail_as_tmux`); many of tmux's format variables
     (compare tmux's `format_table` with `vars.rs` for the list; `origin_flag`,
-    `scroll_region_*`, `alternate_saved_*`, `pane_tabs` and `cursor_shape` /
-    `cursor_colour` need terminal state the `vt100` crate does not expose;
-    `insert_flag` and `wrap_flag` are kept from the sequences vt100 passes on
-    unhandled, but vt100 itself still draws as with insert off and wrap on;
-    `origin_flag` would need vt100's private origin mode, or splitting `CSI ? 6`
-    out as `modes::ModeSplitter` does the alternate screen's); overline, and
-    underline styles and colours (`double-`, `curly-`, `dotted-` and
-    `dashed-underscore` draw as the plain underline).
+    `scroll_region_*`, `alternate_saved_*`, `pane_tabs`, `cursor_colour` and
+    `cursor_very_visible` need terminal state the `vt100` crate does not expose
+    (`cursor_shape` and `cursor_blinking` are kept from DECSCUSR and `CSI ? 12`,
+    but a full reset, `ESC c`, leaves the blinking set, where tmux clears it;
+    not fixed); `insert_flag` and `wrap_flag` are kept from the sequences vt100
+    passes on unhandled, but vt100 itself still draws as with insert off and
+    wrap on; `origin_flag` would need vt100's private origin mode, or splitting
+    `CSI ? 6` out as `modes::ModeSplitter` does the alternate screen's);
+    overline, and underline styles and colours (`double-`, `curly-`, `dotted-`
+    and `dashed-underscore` draw as the plain underline).
   - Options: every status row is drawn from its `status-format` item by
     `format_draw` (the first from tmux's default unless set), which takes tmux's
     `align`, `fill`, `default` / `push-default` / `pop-default`, lists (cut

@@ -895,3 +895,22 @@ checks = [
   { command = "display -p -t o:0 '#{insert_flag} #{wrap_flag}'" },
   { command = "display -p -t o:1 '#{insert_flag} #{wrap_flag}'" },
 ]
+
+[[cases]]
+name = "cursor_shape_and_blinking_as_tmux"
+steps = [
+  { run = "new-window -d -t o:1 'printf \"\\033[1 q\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:2 'printf \"\\033[4 q\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:3 'printf \"\\033[5 q\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:4 'printf \"\\033[?12h\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:5 'printf \"\\033[3 q\\033[?12l\"; exec sleep 1000'" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "display -p -t o:0 '#{cursor_shape} #{cursor_blinking}'" },
+  { command = "display -p -t o:1 '#{cursor_shape} #{cursor_blinking}'" },
+  { command = "display -p -t o:2 '#{cursor_shape} #{cursor_blinking}'" },
+  { command = "display -p -t o:3 '#{cursor_shape} #{cursor_blinking}'" },
+  { command = "display -p -t o:4 '#{cursor_shape} #{cursor_blinking}'" },
+  { command = "display -p -t o:5 '#{cursor_shape} #{cursor_blinking}'" },
+]

@@ -34,8 +34,10 @@ pub const NAMES: &[&str] = &[
     "copy_cursor_word",
     "copy_cursor_x",
     "copy_cursor_y",
+    "cursor_blinking",
     "cursor_character",
     "cursor_flag",
+    "cursor_shape",
     "cursor_x",
     "cursor_y",
     "history_limit",
@@ -852,6 +854,15 @@ impl<'a> Context for Vars<'a> {
                 window?;
                 CELL_HEIGHT_PIXELS.to_string()
             }
+            // The cursor DECSCUSR set, by tmux's names.
+            "cursor_shape" => match pane?.emu.cursor_style() {
+                1 | 2 => "block",
+                3 | 4 => "underline",
+                5 | 6 => "bar",
+                _ => "default",
+            }
+            .to_owned(),
+            "cursor_blinking" => flag(pane?.emu.cursor_blinking()),
             // The modes the pane's program set, as tmux's MODE_INSERT and
             // MODE_WRAP.
             "insert_flag" => flag(pane?.emu.insert_and_wrap().0),

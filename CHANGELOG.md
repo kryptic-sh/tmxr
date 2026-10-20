@@ -24,6 +24,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`#{cursor_shape}` and `#{cursor_blinking}`**, as tmux's: the cursor the
+  pane's program set (`block`, `underline`, `bar` or `default`) and whether it
+  blinks.
 - **`#{insert_flag}` and `#{wrap_flag}`**, as tmux's: insert mode and autowrap
   as the pane's program set them.
 - **`#{window_cell_width}` and `#{window_cell_height}`**, tmux's 16 and 32: the
