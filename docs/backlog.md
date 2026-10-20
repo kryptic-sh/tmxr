@@ -534,15 +534,13 @@ table. What has been verified, and how:
     tmux's; the `choose-*` pickers' tagging and sort keys (tmux's `t`, `T`,
     `O`), which tmxr's picker has no counterpart for; `choose-tree -F` replaces
     the text after a row's mark, where tmux's is the whole tree line;
-    `command-prompt` Tab after `-tname:` (tmux completes a session's windows
-    there, and opens a menu of them when several share no longer start; tmxr
-    completes nothing after the colon; the menus of names and of sessions are
-    tmux's, `prompt_tab_*` in `corpus/keys.toml`), and the `window-target`
-    prompt type's completion, which in tmux is that window menu
-    (`overlay::prompt::completion`; the `target` type completes sessions as
-    tmux's); smaller flags: `source-file -v`, several paths and globs (each load
-    replaces the whole TOML config, so several files have no clear meaning yet);
-    `source-file` of a tmux command file (`%if`, `%hidden`).
+    `command-prompt` Tab completes and offers menus as tmux's (names, sessions,
+    a session's windows, the `target` and `window-target` types; `prompt_tab_*`
+    in `corpus/keys.toml`), though which ten names a long menu keeps was matched
+    by result (the last ten), not read from tmux's code; smaller flags:
+    `source-file -v`, several paths and globs (each load replaces the whole TOML
+    config, so several files have no clear meaning yet); `source-file` of a tmux
+    command file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `client-light-theme` /
     `-dark-theme`. Copy mode lacks `next-prompt` / `previous-prompt` (they need
     a prompt mark on every history line, as tmux keeps per grid line; `Emulator`

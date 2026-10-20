@@ -629,3 +629,139 @@ steps = [
 checks = [
   { screen_contains = ":other:X", expect = true },
 ]
+
+[[cases]]
+name = "prompt_tab_menu_of_windows_after_a_colon_as_tmux"
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "new-window -d -t o:1" },
+  { run = "new-window -d -t o:12 -n zz" },
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "switch-client -to:\u0009" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_find = "┌", expect = "15,8" },
+  { screen_find = "o:12 (zz)", expect = "17,11" },
+]
+
+[[cases]]
+name = "prompt_tab_window_menu_puts_the_target_back_as_tmux"
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "new-window -d -t o:1" },
+  { run = "new-window -d -t o:12 -n zz" },
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "switch-client -to:\u0009" },
+  { sleep = 0.3 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+  { keys = "X" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_contains = ":switch-client -to:0X", expect = true },
+]
+
+[[cases]]
+name = "prompt_tab_window_menu_matches_the_index_as_tmux"
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "new-window -d -t o:1" },
+  { run = "new-window -d -t o:12 -n zz" },
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "switch-client -to:1\u0009" },
+  { sleep = 0.3 },
+  { keys = "1" },
+  { sleep = 0.3 },
+  { keys = "X" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_contains = ":switch-client -to:12X", expect = true },
+]
+
+[[cases]]
+name = "prompt_tab_completes_one_window_as_tmux"
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "new-window -d -t o:1" },
+  { run = "new-window -d -t o:12 -n zz" },
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "switch-client -to:12\u0009" },
+  { sleep = 0.3 },
+  { keys = "X" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_contains = ":switch-client -to:12X", expect = true },
+]
+
+[[cases]]
+name = "prompt_tab_window_menu_in_a_window_target_prompt_as_tmux"
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "new-window -d -t o:1" },
+  { run = "new-window -d -t o:12 -n zz" },
+  { run = "command-prompt -b -T window-target" },
+  { sleep = 0.3 },
+  { keys = "\u0009" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_find = "12 (zz)", expect = "2,11" },
+  { screen_find = "o:12", expect = "none" },
+]
+
+[[cases]]
+name = "prompt_tab_menu_shows_the_last_ten_names_as_tmux"
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "s\u0009" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_find = "switchc", expect = "2,11" },
+  { screen_find = "save-buffer", expect = "none" },
+]
+
+[[cases]]
+name = "prompt_tab_menu_keeps_to_the_rows_it_has_as_tmux"
+size = [60, 9]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "s\u0009" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_find = "switchc", expect = "2,6" },
+  { screen_find = "swapw", expect = "2,4" },
+]

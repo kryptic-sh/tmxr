@@ -12,6 +12,10 @@ use crate::cmds::{Ctx, Outcome};
 use crate::model::{ClientId, PaneId, SessionId};
 use crate::overlay::{Overlay, OverlayAction};
 
+/// The most names a prompt's completion menu shows, as tmux 3.6's (its
+/// items' keys are the digits).
+const MENU_ITEMS: usize = 10;
+
 impl Server {
     pub(super) fn input(&mut self, id: ClientId, ev: TermEvent) {
         let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
@@ -166,9 +170,10 @@ impl Server {
 
     /// Add a submitted prompt entry to its type's history: the same entry
     /// twice in a row is kept once, and the oldest go past the limit.
-    /// The names a prompt's Tab completes from: commands and their aliases,
-    /// option names and layouts, and the sessions.
-    fn prompt_completions(&self) -> crate::overlay::Completions {
+    /// The names client `id`'s prompt's Tab completes from: commands and
+    /// their aliases, option names and layouts, the sessions and their
+    /// windows; and how many items its menu has room for.
+    fn prompt_completions(&self, id: ClientId) -> crate::overlay::Completions {
         let commands = tmxr_command::table::COMMANDS
             .iter()
             .flat_map(|c| std::iter::once(c.name).chain(c.alias))
@@ -187,10 +192,31 @@ impl Server {
             .values()
             .map(|s| (s.name.clone(), s.id))
             .collect();
+        let windows = self
+            .sessions
+            .values()
+            .flat_map(|s| {
+                s.windows.iter().filter_map(|(i, w)| {
+                    let name = self.windows.get(w)?.name.clone();
+                    Some((s.name.clone(), *i, name))
+                })
+            })
+            .collect();
+        let att = self.clients.get(&id).and_then(|c| c.att.as_ref());
+        let current = att
+            .and_then(|a| self.sessions.get(&a.session))
+            .map(|s| s.name.clone());
+        // tmux's: the rows off the status line, less the menu's border.
+        let free = att.map_or(0, |a| {
+            usize::from(a.rows.saturating_sub(self.client_status_rows(id)))
+        });
         crate::overlay::Completions {
             commands,
             others,
             sessions,
+            windows,
+            current,
+            menu_rows: free.saturating_sub(2).min(MENU_ITEMS),
         }
     }
 
@@ -269,7 +295,7 @@ impl Server {
         }
         // What a prompt's Tab completes from, gathered for a Tab alone.
         let completions =
-            (ev.code == crossterm::event::KeyCode::Tab).then(|| self.prompt_completions());
+            (ev.code == crossterm::event::KeyCode::Tab).then(|| self.prompt_completions(id));
         // A prompt's keys, word separators and newest buffer as they are
         // now, as tmux reads them for each key.
         let prompt_env = self

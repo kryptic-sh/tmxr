@@ -69,19 +69,19 @@ pub struct CompletionMenu {
 }
 
 impl CompletionMenu {
-    /// A menu of `names`, the first selected, each with its digit as its
-    /// key while there are digits.
-    fn new(names: &[&str], word: (usize, usize), prefix: &str) -> Self {
-        let items = names
+    /// A menu of `items` (what each shows, and what it puts in the word),
+    /// the first selected, each with its digit as its key.
+    fn new(items: &[(String, String)], word: (usize, usize), prefix: &str) -> Self {
+        let items = items
             .iter()
             .enumerate()
-            .map(|(i, name)| crate::menu::MenuItem::Command {
-                name: (*name).to_owned(),
+            .map(|(i, (label, put))| crate::menu::MenuItem::Command {
+                name: label.clone(),
                 key: u32::try_from(i)
                     .ok()
                     .and_then(|i| char::from_digit(i, 10))
                     .and_then(|d| d.to_string().parse().ok()),
-                cmd: (*name).to_owned(),
+                cmd: put.clone(),
                 disabled: false,
             })
             .collect();
@@ -114,6 +114,14 @@ pub struct Completions {
     pub others: Vec<String>,
     /// Sessions, by name and id, for a `-t` or `-s` word.
     pub sessions: Vec<(String, u32)>,
+    /// Each session's windows: its name, a window's index and name.
+    pub windows: Vec<(String, u32, String)>,
+    /// The client's session, whose windows a `window-target` prompt
+    /// completes.
+    pub current: Option<String>,
+    /// The most items a menu shows: the rows free above or below the
+    /// status line, ten at most, as tmux's.
+    pub menu_rows: usize,
 }
 
 /// The longest start every one of `words` shares, as tmux's
@@ -494,27 +502,84 @@ impl Prompt {
             return;
         }
         let word: String = self.input[first..last].iter().collect();
+        if self.complete_window(&word, (first, last), &names) {
+            return;
+        }
         let target = self.kind == "target";
         if let Some(out) = completion(&word, first == 0, target, &names) {
             self.input.splice(first..last, out.chars());
             self.cursor = first + out.chars().count();
             return;
         }
-        // No further on with several names: a menu of them, as tmux's.
+        // No further on with several names: a menu of them, as tmux's,
+        // the last that fit.
         let flag = (word.starts_with("-t") || word.starts_with("-s")).then(|| &word[..2]);
-        if target || flag.is_some() {
+        let last_fit = |list: Vec<String>| -> Vec<(String, String)> {
+            let skip = list.len().saturating_sub(names.menu_rows);
+            list.into_iter()
+                .skip(skip)
+                .map(|n| (n.clone(), n))
+                .collect()
+        };
+        let (items, prefix) = if target || flag.is_some() {
             let (prefix, s) = flag.map_or(("", word.as_str()), |f| (f, &word[2..]));
-            let list = session_matches(s, &names);
-            if list.len() > 1 && !s.contains(':') {
-                let list: Vec<&str> = list.iter().map(String::as_str).collect();
-                self.menu = Some(CompletionMenu::new(&list, (first, last), prefix));
-            }
+            (last_fit(session_matches(s, &names)), prefix)
         } else if !word.is_empty() {
             let list = word_matches(&word, first == 0, &names);
-            if list.len() > 1 {
-                self.menu = Some(CompletionMenu::new(&list, (first, last), ""));
-            }
+            (last_fit(list.into_iter().map(str::to_owned).collect()), "")
+        } else {
+            return;
+        };
+        if items.len() > 1 {
+            self.menu = Some(CompletionMenu::new(&items, (first, last), prefix));
         }
+    }
+
+    /// Tab on a window: a `window-target` prompt's word, or the part after
+    /// the colon of a `-t` / `-s` word or a `target` prompt's. One window
+    /// whose index starts with it completes it, several open a menu of the
+    /// first that fit, as tmux's status_prompt_complete_window_menu.
+    /// Whether it was a window word.
+    fn complete_window(&mut self, word: &str, at: (usize, usize), names: &Completions) -> bool {
+        let flag = (word.starts_with("-t") || word.starts_with("-s")).then(|| &word[..2]);
+        let (prefix, session, index, own) = if self.kind == "window-target" {
+            let Some(s) = names.current.as_deref() else {
+                return true;
+            };
+            ("", s, word, true)
+        } else if self.kind == "target" || flag.is_some() {
+            let prefix = flag.unwrap_or("");
+            let Some((s, index)) = word[prefix.len()..].split_once(':') else {
+                return false;
+            };
+            (prefix, s, index, false)
+        } else {
+            return false;
+        };
+        let items: Vec<(String, String)> = names
+            .windows
+            .iter()
+            .filter(|(s, i, _)| s == session && i.to_string().starts_with(index))
+            .map(|(s, i, name)| {
+                let put = if own {
+                    i.to_string()
+                } else {
+                    format!("{s}:{i}")
+                };
+                (format!("{put} ({name})"), put)
+            })
+            .take(names.menu_rows.max(1))
+            .collect();
+        match items.as_slice() {
+            [] => {}
+            [(_, put)] => {
+                let out = format!("{prefix}{put}");
+                self.input.splice(at.0..at.1, out.chars());
+                self.cursor = at.0 + out.chars().count();
+            }
+            _ => self.menu = Some(CompletionMenu::new(&items, at, prefix)),
+        }
+        true
     }
 
     /// A key while the completion menu is open: Tab moves down, as tmux's
@@ -822,6 +887,9 @@ mod tests {
             ]),
             others: own(&["status-left", "status-left-length", "even-horizontal"]),
             sessions: vec![("main".into(), 0), ("mail".into(), 3), ("other".into(), 12)],
+            windows: Vec::new(),
+            current: None,
+            menu_rows: 10,
         }
     }
 
