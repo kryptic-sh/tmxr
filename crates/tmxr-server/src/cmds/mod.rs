@@ -15,8 +15,8 @@ mod wait;
 mod window;
 
 pub use binds::bind_line;
-pub(crate) use options::SERVER_OPTIONS;
 pub use options::option_lines;
+pub(crate) use options::{SERVER_OPTIONS, server_option};
 pub use tmxr_command::join_args;
 
 use std::path::PathBuf;

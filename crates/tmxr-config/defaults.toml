@@ -212,6 +212,12 @@ menu-selected-style = "fg=#{@thm_fg},bg=#{@thm_selection}"
 menu-border-style = "fg=#{@thm_blue}"
 menu-border-lines = "single"
 popup-style = "default"
+# tmux's defaults: the panes' and sessions' styles in its second and third
+# status lines.
+pane-status-style = "default"
+pane-status-current-style = "default"
+session-status-style = "default"
+session-status-current-style = "default"
 popup-border-style = "fg=#{@thm_blue}"
 popup-border-lines = "single"
 

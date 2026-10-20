@@ -766,8 +766,31 @@ impl<'a> Context for Vars<'a> {
                     " ".to_owned()
                 }
             }
-            _ => return None,
+            _ => return self.option(name),
         })
+    }
+}
+
+impl Vars<'_> {
+    /// An option's value by name, as tmux's format_find reads one: the
+    /// pane's (with its window's), the window's, the session's, then the
+    /// server's.
+    fn option(&self, name: &str) -> Option<String> {
+        let srv = self.srv;
+        let window = self
+            .pane
+            .map(|p| srv.pane_options(p).show(name))
+            .or_else(|| self.window.map(|w| srv.window_options(w).show(name)))
+            .unwrap_or_else(|| srv.cfg.window.show(name));
+        let session = || {
+            self.session.map_or_else(
+                || srv.cfg.session.show(name),
+                |s| srv.session_options(s).show(name),
+            )
+        };
+        window
+            .or_else(session)
+            .or_else(|| crate::cmds::server_option(srv, name))
     }
 }
 

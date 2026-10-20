@@ -186,31 +186,42 @@ const fn on_off(b: bool) -> &'static str {
     if b { "on" } else { "off" }
 }
 
+/// A server option's value, as a format reads it: unquoted.
+pub fn server_option(srv: &Server, name: &str) -> Option<String> {
+    let c = &srv.cfg;
+    Some(match name {
+        "buffer-limit" => c.buffer_limit.to_string(),
+        "client-away-time" => c.client_away_time.to_string(),
+        "copy-command" => c.copy_command.clone(),
+        "default-terminal" => c.default_terminal.clone(),
+        "escape-time" => c.escape_time.to_string(),
+        "exit-empty" => on_off(c.exit_empty).to_owned(),
+        "exit-unattached" => on_off(c.exit_unattached).to_owned(),
+        "extended-keys" => c.extended_keys.clone(),
+        "focus-events" => on_off(c.focus_events).to_owned(),
+        "history-file" => c.history_file.clone(),
+        "message-limit" => c.message_limit.to_string(),
+        "prefix-timeout" => c.prefix_timeout.to_string(),
+        "prompt-history-limit" => c.prompt_history_limit.to_string(),
+        "rgb-colour" => c.rgb_colour.clone(),
+        "set-clipboard" => c.set_clipboard.clone(),
+        "socket-access" => c.socket_access.clone(),
+        _ => return None,
+    })
+}
+
 /// Each server option as `show-options -s` prints it: `name value`, the
 /// ones tmux types as strings quoted as its.
 fn server_option_lines(srv: &Server) -> Vec<String> {
-    let c = &srv.cfg;
-    let quoted = tmxr_command::escape_arg;
     SERVER_OPTIONS
         .iter()
         .map(|&name| {
+            let value = server_option(srv, name).unwrap_or_default();
             let value = match name {
-                "buffer-limit" => c.buffer_limit.to_string(),
-                "client-away-time" => c.client_away_time.to_string(),
-                "copy-command" => quoted(&c.copy_command),
-                "default-terminal" => quoted(&c.default_terminal),
-                "escape-time" => c.escape_time.to_string(),
-                "exit-empty" => on_off(c.exit_empty).to_owned(),
-                "exit-unattached" => on_off(c.exit_unattached).to_owned(),
-                "extended-keys" => c.extended_keys.clone(),
-                "focus-events" => on_off(c.focus_events).to_owned(),
-                "history-file" => quoted(&c.history_file),
-                "message-limit" => c.message_limit.to_string(),
-                "prefix-timeout" => c.prefix_timeout.to_string(),
-                "prompt-history-limit" => c.prompt_history_limit.to_string(),
-                "rgb-colour" => c.rgb_colour.clone(),
-                "set-clipboard" => c.set_clipboard.clone(),
-                _ => c.socket_access.clone(),
+                "copy-command" | "default-terminal" | "history-file" => {
+                    tmxr_command::escape_arg(&value)
+                }
+                _ => value,
             };
             format!("{name} {value}")
         })

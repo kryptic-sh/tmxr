@@ -470,24 +470,21 @@ table. What has been verified, and how:
     drawn from `status-format` by `format_draw`, which takes tmux's `align`,
     `fill`, `default` / `push-default` / `pop-default` and lists, but not a
     list's markers and focus when it is too long for its room, nor ranges
-    (clicks on those rows reach nothing); tmux's `pane-status-style`,
-    `pane-status-current-style`, `session-status-style` and
-    `session-status-current-style`, which the default formats name, are missing
-    (so empty). With `status off` and `status-position top`, a message or prompt
-    covers the window's first row; tmux's `screen_redraw_set_context` moves the
-    window down a row for it instead; (not tested: `send-keys -M` under a top
-    status line or in a panned view, which now measure from the mouse's window
-    cell, `MouseTarget::col` / `row`, not its client cell); no
-    `window-status-activity-style` / `-bell-style` (tmux's default `reverse`
-    would change tmxr's theme, which shows flags in its window format); colour
-    options (`status-fg` / `-bg`, `display-panes-colour`, `clock-mode-colour`
-    and the rest, all `Word`) keep any text as typed, where tmux 3.6 (seen
-    2026-10-20) refuses `nocolour` or `colour300` with `bad colour` and shows
-    `#ABCDEF` as `#abcdef`; checking them as tmux does was considered and
-    declined for now: tmxr's own defaults put formats in colour options
-    (`display-panes-colour = "#{@thm_blue}"`), which tmux's check would refuse,
-    so it needs those expanded first or the theme moved; server `editor`.
-    `escape-time` is kept but never read.
+    (clicks on those rows reach nothing). With `status off` and
+    `status-position top`, a message or prompt covers the window's first row;
+    tmux's `screen_redraw_set_context` moves the window down a row for it
+    instead; (not tested: `send-keys -M` under a top status line or in a panned
+    view, which now measure from the mouse's window cell, `MouseTarget::col` /
+    `row`, not its client cell); no `window-status-activity-style` /
+    `-bell-style` (tmux's default `reverse` would change tmxr's theme, which
+    shows flags in its window format); colour options (`status-fg` / `-bg`,
+    `display-panes-colour`, `clock-mode-colour` and the rest, all `Word`) keep
+    any text as typed, where tmux 3.6 (seen 2026-10-20) refuses `nocolour` or
+    `colour300` with `bad colour` and shows `#ABCDEF` as `#abcdef`; checking
+    them as tmux does was considered and declined for now: tmxr's own defaults
+    put formats in colour options (`display-panes-colour = "#{@thm_blue}"`),
+    which tmux's check would refuse, so it needs those expanded first or the
+    theme moved; server `editor`. `escape-time` is kept but never read.
   - Commands: `capture-pane -a` (it needs the saved normal screen, which `vt100`
     does not expose). `-e` writes only the attributes `vt100` keeps (bold, dim,
     italics, underline, reverse; not blink, hidden, strikethrough, overline or

@@ -24,6 +24,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Formats read option values**, as tmux's: `#{status-justify}`,
+  `#{E:pane-status-style}` and any other option name give the option's value for
+  the pane, window, session or server. `pane-status-style`,
+  `pane-status-current-style`, `session-status-style` and
+  `session-status-current-style` are added, which tmux's second and third status
+  lines use.
 - **`status 2` to `5` and `status-format`**, as tmux's: `status` takes `off`,
   `on` or 2 to 5 lines, and each line after the first is drawn from its
   `status-format` item (tmux's defaults: the panes, then the sessions), laid out

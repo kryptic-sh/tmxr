@@ -550,3 +550,15 @@ name = "a_full_reset_clears_the_mouse_modes_as_tmux"
 program = 'printf "\033[?1003;1005;1006h\033c"; exec sleep 1000'
 steps = [{ sleep = 0.5 }]
 checks = [{ format = "#{mouse_any_flag} #{mouse_standard_flag} #{mouse_button_flag} #{mouse_all_flag} #{mouse_sgr_flag} #{mouse_utf8_flag}" }]
+
+[[cases]]
+name = "formats_read_option_values_as_tmux"
+steps = [
+  { run = "set -g status-justify centre" },
+  { run = "set -w -t o pane-status-style fg=red" },
+  { run = "set -g escape-time 25" },
+]
+checks = [
+  { format = "[#{status-justify}] [#{E:pane-status-style}] [#{escape-time}] [#{base-index}] [#{pane-status-current-style}] [#{session-status-style}] [#{nosuchoption}]" },
+  { command = "show -gv session-status-current-style" },
+]

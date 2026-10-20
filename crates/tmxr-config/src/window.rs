@@ -499,6 +499,10 @@ options_table! {
     "pane-scrollbars" => pane_scrollbars: Scrollbars,
     "pane-scrollbars-position" => pane_scrollbars_position: ScrollbarPosition,
     "pane-scrollbars-style" => pane_scrollbars_style: String,
+    /// The current pane's and the other panes' styles in tmux's default
+    /// second status line (`status-format[1]`).
+    "pane-status-current-style" => pane_status_current_style: String,
+    "pane-status-style" => pane_status_style: String,
     /// Popups' looks, for a popup whose command gives none.
     "popup-border-lines" => popup_border_lines: BoxLines,
     "popup-border-style" => popup_border_style: String,
@@ -509,6 +513,10 @@ options_table! {
     /// The line written into a pane `remain-on-exit` keeps, after a
     /// linefeed at its bottom; empty, none.
     "remain-on-exit-format" => remain_on_exit_format: String,
+    /// The current session's and the other sessions' styles in tmux's
+    /// default third status line (`status-format[2]`).
+    "session-status-current-style" => session_status_current_style: String,
+    "session-status-style" => session_status_style: String,
     /// Send what is typed in a pane to all of its window's panes.
     "synchronize-panes" => synchronize_panes: bool,
     /// The colours the window's active pane takes where its program sets
