@@ -66,6 +66,40 @@ pub struct Choose<'a> {
     pub reverse: bool,
     /// The client choosing, for the formats' `client_*`.
     pub client: Option<ClientId>,
+    /// -K: each row's key, by its `line`; tmux's default without it.
+    pub key_format: Option<&'a str>,
+}
+
+/// tmux's default -K: the rows' keys 0 to 9, then M-a to M-z.
+const DEFAULT_KEY_FORMAT: &str =
+    "#{?#{e|<:#{line},10},#{line},#{e|<:#{line},36},M-#{a:#{e|+:97,#{e|-:#{line},10}}}}";
+
+/// A picker over `items`, each row's key (if any) shown before it in
+/// brackets, the brackets padded to the longest, as tmux's mode tree.
+fn keyed(title: &'static str, items: Vec<(Item, Option<String>)>) -> PickerOverlay {
+    let width = items
+        .iter()
+        .filter_map(|(_, k)| k.as_ref())
+        .map(|k| k.chars().count() + 2)
+        .max()
+        .unwrap_or(0);
+    let mut keys = Vec::new();
+    let items = items
+        .into_iter()
+        .map(|(mut item, key)| {
+            if width > 0 {
+                let shown = key.as_ref().map_or_else(String::new, |k| format!("({k})"));
+                item.label = format!("{shown:<width$} {}", item.label);
+            }
+            if let Some(k) = key {
+                keys.push((k, item.target.clone()));
+            }
+            item
+        })
+        .collect();
+    let mut picker = PickerOverlay::new(title, items);
+    picker.keys = keys;
+    picker
 }
 
 impl Sort {
@@ -133,6 +167,21 @@ impl Choose<'_> {
                 };
                 crate::cmds::format_true(&tmxr_command::format::expand(filter, &vars))
             })
+    }
+
+    /// Row `line`'s key, from -K expanded for it, as tmux's
+    /// window_tree_get_key: none when it expands to nothing or names no key.
+    fn key(&self, vars: &dyn tmxr_command::format::Context, line: usize) -> Option<String> {
+        let format = self.key_format.unwrap_or(DEFAULT_KEY_FORMAT);
+        let context = |name: &str| {
+            if name == "line" {
+                Some(line.to_string())
+            } else {
+                vars.get(name)
+            }
+        };
+        let key = tmxr_command::format::expand(format, &context);
+        key.parse::<tmxr_command::Key>().ok().map(|k| k.to_string())
     }
 
     /// An item's text: -F expanded for it, else `default`.
@@ -292,7 +341,8 @@ impl Overlay {
         }
         let items = sessions
             .iter()
-            .map(|s| {
+            .enumerate()
+            .map(|(line, s)| {
                 let attached = srv
                     .clients
                     .values()
@@ -314,14 +364,15 @@ impl Overlay {
                         if attached { " (attached)" } else { "" }
                     )
                 });
-                Item {
+                let item = Item {
                     label: format!("{mark} {text}"),
                     matches: s.name.clone(),
                     target: Target::Session(s.id, s.name.clone()),
-                }
+                };
+                (item, choose.key(&vars, line))
             })
             .collect();
-        let mut picker = PickerOverlay::new("sessions", items);
+        let mut picker = keyed("sessions", items);
         if choose.reorders() {
             picker.select(sessions.iter().position(|s| Some(s.id) == current));
         }
@@ -390,7 +441,8 @@ impl Overlay {
         };
         let items = rows
             .iter()
-            .map(|(s, idx, w)| {
+            .enumerate()
+            .map(|(line, (s, idx, w))| {
                 let mark = if is_current(s, *idx) { "*" } else { " " };
                 let vars = Vars {
                     srv,
@@ -400,14 +452,15 @@ impl Overlay {
                     client: choose.client,
                 };
                 let text = choose.text(&vars, || format!("{}:{idx} {}", s.name, w.name));
-                Item {
+                let item = Item {
                     label: format!("{mark} {text}"),
                     matches: format!("{}:{idx} {}", s.name, w.name),
                     target: Target::Window(s.id, *idx, s.name.clone()),
-                }
+                };
+                (item, choose.key(&vars, line))
             })
             .collect();
-        let mut picker = PickerOverlay::new("windows", items);
+        let mut picker = keyed("windows", items);
         if choose.reorders() {
             picker.select(rows.iter().position(|(s, idx, _)| is_current(s, *idx)));
         }
@@ -454,7 +507,8 @@ impl Overlay {
         }
         let items = clients
             .iter()
-            .filter_map(|c| {
+            .enumerate()
+            .filter_map(|(line, c)| {
                 let att = c.att.as_ref()?;
                 let session = srv
                     .sessions
@@ -463,14 +517,15 @@ impl Overlay {
                 let text = choose.text(&vars_of(c), || {
                     format!("{}: {session} [{}x{}]", c.id, att.cols, att.rows)
                 });
-                Some(Item {
+                let item = Item {
                     label: text,
                     matches: format!("{} {session}", c.id),
                     target: Target::Client(c.id),
-                })
+                };
+                Some((item, choose.key(&vars_of(c), line)))
             })
             .collect();
-        Self::Picker(Box::new(PickerOverlay::new("clients", items)))
+        Self::Picker(Box::new(keyed("clients", items)))
     }
 
     /// The paste buffers, newest first; Enter pastes one into the pane.
@@ -506,7 +561,8 @@ impl Overlay {
         }
         let items = buffers
             .iter()
-            .map(|b| {
+            .enumerate()
+            .map(|(line, b)| {
                 let preview: String = b
                     .data
                     .chars()
@@ -516,14 +572,15 @@ impl Overlay {
                 let text = choose.text(&context(b), || {
                     format!("{}: {} bytes: \"{preview}\"", b.name, b.data.len())
                 });
-                Item {
+                let item = Item {
                     label: text,
                     matches: format!("{} {preview}", b.name),
                     target: Target::Buffer(b.name.clone()),
-                }
+                };
+                (item, choose.key(&context(b), line))
             })
             .collect();
-        Self::Picker(Box::new(PickerOverlay::new("buffers", items)))
+        Self::Picker(Box::new(keyed("buffers", items)))
     }
 
     /// `customize-mode`: every option and key bind, as the command that sets

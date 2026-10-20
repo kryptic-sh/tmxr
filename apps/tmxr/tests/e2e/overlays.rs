@@ -830,6 +830,42 @@ fn choose_buffer_and_choose_client_take_tmuxs_format_filter_and_order() {
 }
 
 #[test]
+fn choose_tree_rows_have_keys_that_choose_them() {
+    let t = Tmxr::new("choosekeys");
+    for name in ["alpha", "beta"] {
+        t.run(&["new-session", "-d", "-s", name]);
+    }
+    let s = t.attach(&["new", "-s", "zed"]);
+    s.wait_for("status line", |text| text.contains("zed"));
+    // tmux's default keys: 0, 1, 2 by row; the key chooses its row.
+    t.run(&["choose-tree", "-N", "-O", "name", "set -g @k '%%'"]);
+    s.wait_for("the keys", |text| {
+        text.contains("(0)") && text.contains("(2)")
+    });
+    s.send(b"1");
+    t.wait_run(&["show", "-gv", "@k"], "row 1 chosen", |o| {
+        o.trim() == "=beta:"
+    });
+    // -K: the key a row's format gives, none for the others.
+    let keys = "#{?#{==:#{session_name},zed},z,}";
+    t.run(&[
+        "choose-tree",
+        "-N",
+        "-O",
+        "name",
+        "-K",
+        keys,
+        "set -g @k '%%'",
+    ]);
+    s.wait_for("the z key", |text| text.contains("(z)"));
+    assert!(!s.text().contains("(0)"), "{}", s.text());
+    s.send(b"z");
+    t.wait_run(&["show", "-gv", "@k"], "zed chosen", |o| {
+        o.trim() == "=zed:"
+    });
+}
+
+#[test]
 fn prompt_history_is_kept_recalled_and_cleared() {
     let t = Tmxr::new("phist");
     let s = t.attach(&["new", "-s", "ph"]);

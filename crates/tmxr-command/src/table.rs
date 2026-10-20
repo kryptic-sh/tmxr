@@ -69,26 +69,26 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "choose-buffer",
         None,
-        "F:f:NO:ryZ",
+        "F:f:K:NO:ryZ",
         0,
         1,
-        "[-NryZ] [-F format] [-f filter] [-O sort-order] [template]"
+        "[-NryZ] [-F format] [-f filter] [-K key-format] [-O sort-order] [template]"
     ),
     cmd!(
         "choose-client",
         None,
-        "F:f:NO:ryZ",
+        "F:f:K:NO:ryZ",
         0,
         1,
-        "[-NryZ] [-F format] [-f filter] [-O sort-order] [template]"
+        "[-NryZ] [-F format] [-f filter] [-K key-format] [-O sort-order] [template]"
     ),
     cmd!(
         "choose-tree",
         None,
-        "F:f:NO:rswyZt:",
+        "F:f:K:NO:rswyZt:",
         0,
         1,
-        "[-NrswyZ] [-F format] [-f filter] [-O sort-order] [-t target-pane] [template]"
+        "[-NrswyZ] [-F format] [-f filter] [-K key-format] [-O sort-order] [-t target-pane] [template]"
     ),
     cmd!(
         "clear-history",

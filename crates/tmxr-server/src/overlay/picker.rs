@@ -104,6 +104,8 @@ pub struct PickerOverlay {
     pub no_preview: bool,
     /// `-y`: a kill goes without asking first.
     pub no_confirm: bool,
+    /// Each row's key (`-K`) and what it chooses.
+    pub(super) keys: Vec<(String, Target)>,
 }
 
 /// What the highlighted picker row would show, for the preview.
@@ -143,6 +145,7 @@ impl PickerOverlay {
             template: None,
             no_preview: false,
             no_confirm: false,
+            keys: Vec::new(),
         }
     }
 
@@ -188,31 +191,36 @@ impl PickerOverlay {
         }
         match self.picker.accept() {
             PickerEvent::Select(PickerAction::Custom(any)) => match any.downcast::<Target>() {
-                // A template runs with the item's target, as tmux's
-                // window_tree_get_target writes it.
-                Ok(t) if self.template.is_some() && !matches!(*t, Target::Edit(_)) => {
-                    let target = match *t {
-                        Target::Session(_, name) => format!("={name}:"),
-                        Target::Window(_, i, name) => format!("={name}:{i}."),
-                        Target::Client(id) => id.to_string(),
-                        Target::Buffer(name) | Target::Edit(name) => name,
-                    };
-                    let template = self.template.as_deref().unwrap_or_default();
-                    OverlayAction::Run(tmxr_command::fill_template(template, &[target]))
-                }
-                Ok(t) => match *t {
-                    Target::Session(s, _) => OverlayAction::Switch(s),
-                    Target::Window(s, i, _) => OverlayAction::SwitchWindow(s, i),
-                    Target::Client(id) => OverlayAction::Run(format!("detach-client -t {id}")),
-                    Target::Buffer(name) => {
-                        OverlayAction::Run(format!("paste-buffer -p -b {}", join_args(&[name])))
-                    }
-                    Target::Edit(line) => OverlayAction::Edit(line),
-                },
+                Ok(t) => self.choose_target(*t),
                 Err(_) => OverlayAction::Close,
             },
             PickerEvent::Select(PickerAction::None) | PickerEvent::Cancel => OverlayAction::Close,
             PickerEvent::None => OverlayAction::Keep,
+        }
+    }
+
+    /// What choosing `t` does: the template run with its target, as tmux's
+    /// window_tree_get_target writes it, or the picker's own action.
+    fn choose_target(&self, t: Target) -> OverlayAction {
+        if let Some(template) = self.template.as_deref()
+            && !matches!(t, Target::Edit(_))
+        {
+            let target = match t {
+                Target::Session(_, name) => format!("={name}:"),
+                Target::Window(_, i, name) => format!("={name}:{i}."),
+                Target::Client(id) => id.to_string(),
+                Target::Buffer(name) | Target::Edit(name) => name,
+            };
+            return OverlayAction::Run(tmxr_command::fill_template(template, &[target]));
+        }
+        match t {
+            Target::Session(s, _) => OverlayAction::Switch(s),
+            Target::Window(s, i, _) => OverlayAction::SwitchWindow(s, i),
+            Target::Client(id) => OverlayAction::Run(format!("detach-client -t {id}")),
+            Target::Buffer(name) => {
+                OverlayAction::Run(format!("paste-buffer -p -b {}", join_args(&[name])))
+            }
+            Target::Edit(line) => OverlayAction::Edit(line),
         }
     }
 
@@ -286,6 +294,11 @@ impl PickerOverlay {
     }
 
     fn normal_key(&mut self, ev: &KeyEvent, ctrl: bool) -> OverlayAction {
+        // A row's key chooses it, as tmux's mode tree.
+        let pressed = tmxr_command::Key::from_event(ev).to_string();
+        if let Some((_, target)) = self.keys.iter().find(|(k, _)| *k == pressed) {
+            return self.choose_target(target.clone());
+        }
         match ev.code {
             KeyCode::Char('j') | KeyCode::Down => self.picker.select_next(),
             KeyCode::Char('k') | KeyCode::Up => self.picker.select_prev(),

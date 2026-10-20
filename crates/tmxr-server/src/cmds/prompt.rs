@@ -577,6 +577,7 @@ pub(super) fn run(
                 sort: a.value('O'),
                 reverse: a.has('r'),
                 client: Some(c),
+                key_format: a.value('K'),
             };
             let mut ov = match p.name() {
                 "choose-buffer" if srv.buffers.is_empty() => return Err("no buffers".into()),

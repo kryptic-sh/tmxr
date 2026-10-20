@@ -24,6 +24,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Keys for the `choose-*` rows and `-K`**, as tmux's: each row of
+  `choose-tree`, `choose-client`, `choose-buffer` and `find-window` shows a key
+  (0 to 9, then M-a to M-z, or what `-K` gives it), and that key chooses the row
+  while the query is not being typed.
 - **`#{buffer_full}` and `#{buffer_created}`**, as tmux's.
 - **`#(command)` in formats**, as tmux's: the command runs in the background
   with the session's shell and directory (again at most once a second while a
