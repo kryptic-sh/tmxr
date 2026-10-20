@@ -27,6 +27,9 @@ pub struct Pane {
     /// `pane_current_path` when the process cannot be inspected.
     pub start_cwd: PathBuf,
     pub copy: Option<crate::copy::CopyMode>,
+    /// The last search copy mode made here, kept after it ends, as tmux's
+    /// `wp->searchstr` (`#{pane_search_string}`).
+    pub last_search: Option<crate::copy::Search>,
     /// Which start of this pane the PTY belongs to: `respawn-pane` starts a
     /// new program under the same id, and events from the old one are stale.
     pub spawn: u64,

@@ -418,3 +418,22 @@ steps = [
   { run = "bind F6 display '$HOME'" },
 ]
 checks = [{ command = "list-keys -T prefix F5" }, { command = "list-keys -T prefix F6" }]
+
+[[cases]]
+name = "a_panes_last_search_outlives_copy_mode_as_tmux"
+program = "sleep 0.5; printf 'one\nfoo two\nthree foo\nend\n'; exec sleep 1000"
+steps = [
+  { sleep = 1.0 },
+  { run = "set -g @a '[#{pane_search_string}]'" },
+  { run = "copy-mode -t o" },
+  { run = "send -t o -X history-top" },
+  { run = "send -t o -X search-forward foo" },
+  { run = "send -t o -X cancel" },
+  { run = "copy-mode -t o" },
+  { run = "send -t o -X history-top" },
+  { run = "send -t o -X search-again" },
+]
+checks = [
+  { format = "[#{pane_search_string}]" },
+  { format = "#{copy_cursor_x},#{copy_cursor_y}" },
+]

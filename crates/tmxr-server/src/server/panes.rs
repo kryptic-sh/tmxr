@@ -83,6 +83,7 @@ impl Server {
                 rect: hjkl_layout::LayoutRect::new(0, 0, cols, rows),
                 start_cwd: started.cwd,
                 copy: None,
+                last_search: None,
                 spawn: started.spawn,
                 argv: argv.to_vec(),
                 dead: None,

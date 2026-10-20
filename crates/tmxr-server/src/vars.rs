@@ -78,6 +78,7 @@ pub const NAMES: &[&str] = &[
     "pane_pid",
     "pane_pipe",
     "pane_right",
+    "pane_search_string",
     "pane_start_command",
     "pane_start_path",
     "pane_synchronized",
@@ -780,6 +781,10 @@ impl<'a> Context for Vars<'a> {
             "pane_format" => flag(self.kind == Kind::Pane),
             "window_format" => flag(self.kind == Kind::Window),
             "session_format" => flag(self.kind == Kind::Session),
+            "pane_search_string" => pane?
+                .last_search
+                .as_ref()
+                .map_or_else(String::new, |s| s.needle.clone()),
             "pane_tty" => pane?
                 .pty
                 .tty_name()

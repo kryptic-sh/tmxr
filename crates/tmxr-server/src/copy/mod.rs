@@ -49,6 +49,10 @@ pub struct CopyMode {
     pub rows: u16,
     pub cols: u16,
     pub search: Option<Search>,
+    /// The pane's last search from an earlier copy mode, which
+    /// `search-again` / `search-reverse` repeat upwards until this mode
+    /// makes its own, as tmux's window_copy_common_init takes it.
+    pub inherited_search: Option<Search>,
     /// Where an incremental search started (cursor and view top), which
     /// each change of its text searches from again, as tmux's searchx /
     /// searchy / searcho; any other command forgets it.
@@ -250,6 +254,7 @@ impl CopyMode {
             rows,
             cols,
             search: None,
+            inherited_search: None,
             search_origin: None,
             count: 0,
             pending_jump: None,
@@ -281,6 +286,7 @@ impl CopyMode {
         self.sel_end = old.sel_end.map(clamp);
         self.kind = old.kind;
         self.search.clone_from(&old.search);
+        self.inherited_search.clone_from(&old.inherited_search);
         self.mark = old.mark.map(clamp);
         self.last_jump = old.last_jump;
         self.scroll_exit = old.scroll_exit;
@@ -1179,13 +1185,21 @@ impl CopyMode {
                 }
             }
             "search-again" | "search-reverse" => {
-                if let Some(search) = self.search.clone() {
+                let inherited = || {
+                    let search = self.inherited_search.clone()?;
+                    Some(Search {
+                        forward: false,
+                        ..search
+                    })
+                };
+                if let Some(search) = self.search.clone().or_else(inherited) {
                     let forward = if name == "search-again" {
                         search.forward
                     } else {
                         !search.forward
                     };
                     self.find(&search.needle, forward, search.regex, true);
+                    self.search = Some(search);
                 }
             }
             _ => return false,

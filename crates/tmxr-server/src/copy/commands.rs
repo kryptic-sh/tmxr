@@ -40,8 +40,11 @@ fn snapshot_for(srv: &mut Server, pane: PaneId, source: PaneId) -> Option<CopyMo
 pub fn enter_from(srv: &mut Server, pane: PaneId, source: PaneId, page_up: bool) {
     let entered = srv.panes.get(&pane).is_some_and(|p| p.copy.is_none());
     if entered {
-        let cm = snapshot_for(srv, pane, source);
+        let mut cm = snapshot_for(srv, pane, source);
         if let Some(p) = srv.panes.get_mut(&pane) {
+            if let Some(cm) = cm.as_mut() {
+                cm.inherited_search.clone_from(&p.last_search);
+            }
             p.copy = cm;
         }
     }
@@ -149,8 +152,25 @@ impl<'a> CopyArgs<'a> {
     }
 }
 
-/// `send-keys -X <name>` in a copy-mode pane.
+/// `send-keys -X <name>` in a copy-mode pane; a search it makes is kept
+/// with the pane, as tmux's window_copy_search keeps `wp->searchstr`.
 pub fn command(
+    srv: &mut Server,
+    ctx: &Ctx,
+    pane: PaneId,
+    name: &str,
+    args: &[String],
+) -> Result<(), String> {
+    let result = run_command(srv, ctx, pane, name, args);
+    if let Some(p) = srv.panes.get_mut(&pane)
+        && let Some(search) = p.copy.as_ref().and_then(|cm| cm.search.clone())
+    {
+        p.last_search = Some(search);
+    }
+    result
+}
+
+fn run_command(
     srv: &mut Server,
     ctx: &Ctx,
     pane: PaneId,

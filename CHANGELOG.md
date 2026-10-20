@@ -24,6 +24,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A pane keeps its last copy-mode search**, as tmux's: `#{pane_search_string}`
+  shows it after copy mode ends, and in the next copy mode `search-again` (`n`)
+  repeats it upwards.
 - **`#{tree_mode_format}`, `#{buffer_mode_format}` and
   `#{client_mode_format}`**, tmux 3.6's default `choose-*` formats, so
   `#{E:tree_mode_format}` expands as tmux's.
