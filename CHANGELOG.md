@@ -480,6 +480,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`select-word` takes a word across a wrapped line**, as tmux's: the whole
+  word, where it took only the part on the cursor's row.
 - **Paste buffers as tmux's**: `#{buffer_sample}` is the first 200 bytes with
   control characters escaped (`\n`, `\t`, octal), cut with `...`, where it was
   50 characters with newlines as spaces; and setting a named buffer that exists

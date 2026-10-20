@@ -364,3 +364,18 @@ checks = [
   { format = "#{copy_cursor_x},#{copy_cursor_y}" },
   { command = "send -t o -X copy-selection-no-clear ; show-buffer" },
 ]
+
+[[cases]]
+name = "select_word_takes_a_word_across_a_wrapped_line_as_tmux"
+program = "sleep 0.5; printf 'x aaaaaaaaaaaaaaaaaaaabbbbbbbbbb y\n'; exec sleep 1000"
+steps = [
+  { run = "resize-window -t o -x 20 -y 8" },
+  { sleep = 1.0 },
+  { run = "copy-mode -t o" },
+  { run = "send -t o -X history-top" },
+  { run = "send -t o -X cursor-down" },
+  { run = "send -t o -X -N 3 cursor-right" },
+  { run = "send -t o -X select-word" },
+  { run = "send -t o -X copy-selection" },
+]
+checks = [{ command = "show-buffer" }]

@@ -734,19 +734,50 @@ impl CopyMode {
         (self.cy, self.cx) = self.prev_word_pos((self.cy, self.cx), big);
     }
 
+    /// The cell before `(y, x)`, across the end of a wrapped line above, as
+    /// tmux's grid reader steps.
+    fn cell_before(&self, (y, x): (usize, usize)) -> Option<(usize, usize)> {
+        if x > 0 {
+            return Some((y, x - 1));
+        }
+        let above = y.checked_sub(1)?;
+        let line = self.lines.get(above).filter(|l| l.wrapped)?;
+        Some((above, line.cells.len().checked_sub(1)?))
+    }
+
+    /// The cell after `(y, x)`, on to the next line when this one wraps.
+    fn cell_after(&self, (y, x): (usize, usize)) -> Option<(usize, usize)> {
+        let line = self.lines.get(y)?;
+        if x + 1 < line.cells.len() {
+            return Some((y, x + 1));
+        }
+        (line.wrapped && y + 1 < self.lines.len()).then_some((y + 1, 0))
+    }
+
+    /// The first and last cells of the run of `(y, x)`'s class around it,
+    /// across wrapped lines.
+    fn class_run(&self, at: (usize, usize)) -> ((usize, usize), (usize, usize)) {
+        let class = self.class(at.0, at.1, false);
+        let same = |p: &(usize, usize)| self.class(p.0, p.1, false) == class;
+        let mut start = at;
+        while let Some(p) = self.cell_before(start).filter(same) {
+            start = p;
+        }
+        let mut end = at;
+        while let Some(p) = self.cell_after(end).filter(same) {
+            end = p;
+        }
+        (start, end)
+    }
+
     /// The start of the word at `(y, x)`, or on a blank the previous word's,
     /// as tmux's grid_reader_cursor_previous_word without `already` (what
-    /// word selection snaps back to). It keeps to the line.
+    /// word selection snaps back to), across wrapped lines.
     fn word_start_pos(&self, (y, x): (usize, usize)) -> (usize, usize) {
-        let class = self.class(y, x, false);
-        if class == 0 {
+        if self.class(y, x, false) == 0 {
             return self.prev_word_pos((y, x), false);
         }
-        let mut x = x;
-        while x > 0 && self.class(y, x - 1, false) == class {
-            x -= 1;
-        }
-        (y, x)
+        self.class_run((y, x)).0
     }
 
     /// Where `previous-word` from `(y, x)` lands.
@@ -979,29 +1010,20 @@ impl CopyMode {
             }
             "select-word" => {
                 // The run of same-class cells (word, punctuation or blank)
-                // under the cursor, on its line; not a rectangle.
+                // under the cursor, across wrapped lines as tmux's grid
+                // reader; not a rectangle.
                 self.rect = false;
-                let class = self.class(self.cy, self.cx, false);
-                let len = self.line_len(self.cy).max(self.cx + 1);
-                let start = (0..self.cx)
-                    .rev()
-                    .take_while(|&x| self.class(self.cy, x, false) == class)
-                    .last()
-                    .unwrap_or(self.cx);
-                let end = (self.cx..len)
-                    .take_while(|&x| self.class(self.cy, x, false) == class)
-                    .last()
-                    .unwrap_or(self.cx);
-                self.selflag = SelFlag::Word;
                 let origin = (self.cy, self.cx);
-                self.anchor = Some((self.cy, start));
+                let (start, end) = self.class_run(origin);
+                self.selflag = SelFlag::Word;
+                self.anchor = Some(start);
                 self.sel_end = None;
                 self.kind = SelKind::Char;
-                self.cx = end;
-                self.sel_reset = ((self.cy, start), (self.cy, end));
-                self.sel_made_at = (self.cy, self.cx);
+                (self.cy, self.cx) = end;
+                self.sel_reset = (start, end);
+                self.sel_made_at = end;
                 // As tmux's: where it was made, kept within the word.
-                self.sel_origin = origin.min((self.cy, end));
+                self.sel_origin = origin.min(end);
             }
             // How the selection grows as the cursor moves, as tmux's
             // window_copy_cmd_selection_mode.
