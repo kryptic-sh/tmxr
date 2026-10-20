@@ -301,6 +301,20 @@ fn navigator_regex(pattern: &str) -> Result<regex::Regex, String> {
     regex::Regex::new(&format!("^(?:{pattern})$")).map_err(|e| format!("navigator.pattern: {e}"))
 }
 
+/// The size tmux gives a client whose terminal it cannot ask (tmux's
+/// `tty_resize`, and a command client's size for `new-session`).
+pub const DEFAULT_CLIENT_SIZE: (u16, u16) = (80, 24);
+
+/// A client terminal's size as tmux's `tty_resize` takes it: a side the
+/// terminal reports as 0 is the side of [`DEFAULT_CLIENT_SIZE`].
+pub(crate) fn terminal_size(cols: u16, rows: u16) -> (u16, u16) {
+    let (default_cols, default_rows) = DEFAULT_CLIENT_SIZE;
+    (
+        if cols == 0 { default_cols } else { cols },
+        if rows == 0 { default_rows } else { rows },
+    )
+}
+
 /// Why `allow-passthrough` does nothing on this platform.
 pub const PASSTHROUGH_UNSUPPORTED: &str = "allow-passthrough: needs the conpty.dll and \
      OpenConsole.exe tmxr's Windows release ships beside tmxr.exe (Windows' own ConPTY drops \
@@ -564,7 +578,7 @@ impl Server {
 
     fn client_msg(&mut self, id: ClientId, msg: ClientMsg) {
         match msg {
-            ClientMsg::Hello(hello) => {
+            ClientMsg::Hello(mut hello) => {
                 let ok = hello.protocol == PROTOCOL_VERSION;
                 self.send(
                     id,
@@ -586,6 +600,9 @@ impl Server {
                         )),
                     );
                     return;
+                }
+                if let Some(t) = hello.terminal.as_mut() {
+                    (t.cols, t.rows) = terminal_size(t.cols, t.rows);
                 }
                 if let Some(c) = self.clients.get_mut(&id) {
                     c.hello = Some(hello);

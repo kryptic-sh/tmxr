@@ -1288,6 +1288,23 @@ fn keys_typed_faster_than_the_client_reads_all_arrive() {
     }
 }
 
+/// A terminal that reports a size of 0 is taken as 80x24, as tmux's
+/// `tty_resize` takes it, not as a one-cell window. Unix only: ConPTY takes
+/// no size of 0.
+#[cfg(unix)]
+#[test]
+fn a_terminal_with_no_size_is_taken_as_80_by_24() {
+    let t = Tmxr::new("nosize");
+    let s = t.attach(&["new", "-s", "nosize"]);
+    s.wait_for("the status line", |text| text.contains("nosize"));
+    s.resize(0, 0);
+    t.wait_run(
+        &["list-clients", "-F", "#{client_width}x#{client_height}"],
+        "the client taken as 80x24",
+        |o| o.trim() == "80x24",
+    );
+}
+
 #[test]
 fn refresh_client_sets_and_clears_client_flags() {
     let t = Tmxr::new("clientflags");

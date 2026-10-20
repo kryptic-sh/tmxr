@@ -235,7 +235,7 @@ fn client_size(srv: &Server, ctx: &Ctx) -> (u16, u16) {
                 .map(|t| (t.cols, t.rows))
         })
     });
-    let (cols, rows) = from_client.unwrap_or((80, 24));
+    let (cols, rows) = from_client.unwrap_or(crate::server::DEFAULT_CLIENT_SIZE);
     let status = ctx.client.map_or_else(
         || srv.cfg.session.status.rows(),
         |c| srv.client_status_rows(c),

@@ -536,6 +536,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A terminal that reports a size of 0 is taken as 80x24**, as tmux takes it,
+  where tmxr made it a window of one cell (a pty nobody sized, some CI runners).
 - **A pane one row tall no longer takes the server down**: text that wrapped in
   it made the terminal emulator (`vt100`, now 0.18) panic, and the server with
   it, in release builds too.

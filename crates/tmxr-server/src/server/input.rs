@@ -58,8 +58,7 @@ impl Server {
             }
             TermEvent::Resize(cols, rows) => {
                 if let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
-                    att.cols = cols.max(1);
-                    att.rows = rows.max(1);
+                    (att.cols, att.rows) = super::terminal_size(cols, rows);
                     att.full_redraw = true;
                     att.dirty = true;
                     if let Some(t) = att.term.as_mut() {
