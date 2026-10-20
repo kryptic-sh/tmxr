@@ -482,6 +482,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Copy mode's word moves and `select-word` take wide characters as tmux's**: a
+  wide character's second cell counts as part of the word, where it split the
+  word as a blank (`select-word` on `日本語xy` took one character).
 - **`select-word` takes a word across a wrapped line**, as tmux's: the whole
   word, where it took only the part on the cursor's row.
 - **Paste buffers as tmux's**: `#{buffer_sample}` is the first 200 bytes with

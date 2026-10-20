@@ -385,3 +385,23 @@ steps = [
   { run = "send -t o -X copy-selection" },
 ]
 checks = [{ command = "show-buffer" }]
+
+[[cases]]
+name = "select_word_on_a_line_of_wide_characters_as_tmux"
+program = "sleep 0.5; printf 'ab \\346\\227\\245\\346\\234\\254\\350\\252\\236xy cd\n'; exec sleep 1000"
+steps = [
+  { sleep = 1.0 },
+  { run = "copy-mode -t o" },
+  { run = "send -t o -X history-top" },
+  { run = "send -t o -X -N 5 cursor-right" },
+  { run = "send -t o -X select-word" },
+  { run = "send -t o -X copy-selection" },
+  { run = "send -t o -X select-line" },
+  { run = "send -t o -X cursor-left" },
+  { run = "send -t o -X copy-selection" },
+]
+checks = [
+  { command = "show-buffer -b buffer0" },
+  { command = "show-buffer -b buffer1" },
+  { format = "#{copy_cursor_x},#{copy_cursor_y}" },
+]

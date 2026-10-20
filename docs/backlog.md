@@ -535,9 +535,7 @@ table. What has been verified, and how:
     the marks would have to be counted alongside the history as it scrolls). In
     word and line selection, the selection is as made only while the cursor
     stays where `select-word` / `select-line` left it, where tmux snaps again if
-    the cursor comes back there. Not compared with tmux: word and line selection
-    on lines holding wide characters (the cursor's moves under `select-line`
-    are, in the oracle).
+    the cursor comes back there.
 
 - **`server did not start` under a full `cargo test`** (Windows, three times on
   2026-10-20: `lock_hands_the_keys_to_the_lock_command`, then

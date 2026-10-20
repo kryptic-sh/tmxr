@@ -623,7 +623,11 @@ impl CopyMode {
     /// every non-blank the same class.
     fn class(&self, y: usize, x: usize, big: bool) -> u8 {
         // Blanks, word characters and separators, as tmux's
-        // `window_copy_in_set` reads `word-separators`.
+        // `window_copy_in_set` reads `word-separators`. A wide character's
+        // padding is in neither set there, so it counts as a word character.
+        if self.padding(y, x) {
+            return 1;
+        }
         let c = self.char_at(y, x);
         if c.is_whitespace() {
             0
