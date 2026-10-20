@@ -115,13 +115,13 @@ table. What has been verified, and how:
   Unix parser read `ESC ESC` as a plain Escape, so Alt+Escape lost its Alt
   (upstream as crossterm-rs/crossterm#1143, branch `fix-alt-escape` of
   kryptic-sh/crossterm); and its mio event source, which mio wakes
-  edge-triggered, lost input in two ways (both fixed 2026-10-20, not yet offered
-  upstream, where `try_read` still has them): it returned on the first tty event
-  of a poll's batch, so a SIGWINCH ready in the same wakeup as a key was never
-  seen, and it stopped reading once a read that filled its 1024-byte buffer gave
-  an event, so the rest of a burst waited for the next key (now read on while
-  `FIONREAD` says bytes wait). tmxr builds against all three on 0.29.0 (branch
-  `alt-escape-0.29`, pinned by `rev` in the root `Cargo.toml`'s
+  edge-triggered, lost input in two ways (both fixed 2026-10-20, offered
+  upstream as crossterm-rs/crossterm#1154 and #1155): it returned on the first
+  tty event of a poll's batch, so a SIGWINCH ready in the same wakeup as a key
+  was never seen, and it stopped reading once a read that filled its 1024-byte
+  buffer gave an event, so the rest of a burst waited for the next key (now read
+  on while `FIONREAD` says bytes wait). tmxr builds against all three on 0.29.0
+  (branch `alt-escape-0.29`, pinned by `rev` in the root `Cargo.toml`'s
   `[patch.crates-io]`, and allowed in `deny.toml`); each event-source fix has an
   e2e test that fails without it (run on Linux)
   (`a_resize_and_a_key_arriving_together_both_reach_the_server`,
