@@ -832,3 +832,21 @@ steps = [
   { sleep = 0.3 },
 ]
 checks = [{ screen_find = "LEFT" }, { screen_find = "RL", expect = "58,5" }]
+
+[[cases]]
+name = "pane_border_formats_take_alignment_as_tmux"
+size = [60, 10]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "split-window -h -t o 'exec sleep 1000'" },
+  { run = "set -g pane-border-status top" },
+  { run = "set -g pane-border-format 'PL#{pane_index}#[align=right]PR#{pane_index}'" },
+  { sleep = 0.5 },
+]
+checks = [
+  { screen_find = "PL0", expect = "2,0" },
+  { screen_find = "PR0", expect = "27,0" },
+  { screen_find = "PR1", expect = "57,0" },
+]

@@ -479,10 +479,9 @@ table. What has been verified, and how:
     (compare tmux's `format_table` with `vars.rs` for the list; `origin_flag`,
     `wrap_flag`, `insert_flag`, `scroll_region_*`, `alternate_saved_*`,
     `pane_tabs` and `cursor_shape` / `cursor_colour` need terminal state the
-    `vt100` crate does not expose); styles `align=` `fill=` `list=` `range=`
-    `push-default` / `pop-default` in pane border formats, overline, and
-    underline styles and colours (`double-`, `curly-`, `dotted-` and
-    `dashed-underscore` draw as the plain underline).
+    `vt100` crate does not expose); overline, and underline styles and colours
+    (`double-`, `curly-`, `dotted-` and `dashed-underscore` draw as the plain
+    underline).
   - Options: every status row is drawn from its `status-format` item by
     `format_draw` (the first from tmux's default unless set), which takes tmux's
     `align`, `fill`, `default` / `push-default` / `pop-default`, lists (cut

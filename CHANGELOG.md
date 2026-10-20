@@ -519,7 +519,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The first status line is drawn from `status-format[0]` always**, as tmux's:
   `align=`, `fill=`, `list=` and ranges in `status-left`, `status-right` and the
   window formats now take effect there, where tmxr drew that line by its own
-  rules unless `status-format[0]` was changed.
+  rules unless `status-format[0]` was changed; `pane-border-format` is laid out
+  the same way, over the border line.
 - **`=` and `p` take their count from a format, and `=` cuts around styles**, as
   tmux's: `#{=/#{status-left-length}:status-left}` expands the length, where it
   stayed as text, and a `#[…]` style in the value takes no room in the count.

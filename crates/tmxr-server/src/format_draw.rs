@@ -274,6 +274,8 @@ impl Screen {
 /// The line being drawn: its buffer, row, width and the ranges placed.
 struct Target<'a> {
     buf: &'a mut Buffer,
+    /// The line's first column on the buffer.
+    x0: u16,
     y: u16,
     cols: u16,
     spans: Vec<(u16, u16, Range)>,
@@ -288,7 +290,7 @@ impl Target<'_> {
             if x >= self.cols || from >= s.width {
                 break;
             }
-            if let Some(cell) = self.buf.cell_mut((x, self.y)) {
+            if let Some(cell) = self.buf.cell_mut((self.x0 + x, self.y)) {
                 *cell = s.buf[(from, 0)].clone();
             }
         }
@@ -300,7 +302,7 @@ impl Target<'_> {
             let (a, b) = (a.max(start) - start + offset, b.min(end) - start + offset);
             let (a, b) = (a.min(self.cols), b.min(self.cols));
             if b > a {
-                self.spans.push((a, b, range));
+                self.spans.push((self.x0 + a, self.x0 + b, range));
             }
         }
     }
@@ -355,12 +357,29 @@ pub fn draw(
     base: Style,
     text: &str,
 ) -> Vec<(u16, u16, Range)> {
+    draw_at(buf, (0, y), cols, base, text, true)
+}
+
+/// [`draw`] in `cols` cells from `(x, y)`. With `clear` the cells are
+/// blanked in `base` first, as tmux clears a status line; without it only
+/// the text is drawn, over what is there (a pane's border line), unless a
+/// `#[fill=…]` paints the rest, as tmux's format_draw does.
+pub fn draw_at(
+    buf: &mut Buffer,
+    (x0, y): (u16, u16),
+    cols: u16,
+    base: Style,
+    text: &str,
+    clear: bool,
+) -> Vec<(u16, u16, Range)> {
     let (runs, fill, layout) = runs(text, base);
-    let line = fill.unwrap_or(base);
-    buf.set_style(Rect::new(0, y, cols, 1), line);
-    for x in 0..cols {
-        if let Some(c) = buf.cell_mut((x, y)) {
-            c.set_symbol(" ");
+    if clear || fill.is_some() {
+        let line = fill.unwrap_or(base);
+        buf.set_style(Rect::new(x0, y, cols, 1), line);
+        for x in x0..x0.saturating_add(cols) {
+            if let Some(c) = buf.cell_mut((x, y)) {
+                c.set_symbol(" ");
+            }
         }
     }
     let parts = Parts {
@@ -375,6 +394,7 @@ pub fn draw(
     };
     let mut target = Target {
         buf,
+        x0,
         y,
         cols,
         spans: Vec::new(),

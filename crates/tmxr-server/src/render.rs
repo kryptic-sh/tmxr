@@ -487,7 +487,8 @@ fn draw_window(
             let x = cell.x + 2;
             let end = (cell.x + cell.w).min(w);
             if x < end {
-                draw_runs(buf, x, y, end, style, &text);
+                // Laid out as tmux's format_draw, over the border line.
+                crate::format_draw::draw_at(buf, (x, y), end - x, style, &text, false);
             }
         }
     }
