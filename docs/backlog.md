@@ -535,7 +535,9 @@ table. What has been verified, and how:
     unhandled, but vt100 itself still draws as with insert off and wrap on;
     `origin_flag` from `CSI ? 6`, split out by `modes::ModeSplitter` and passed
     on to vt100); overline, and underline styles and colours (`double-`,
-    `curly-`, `dotted-` and `dashed-underscore` draw as the plain underline).
+    `curly-`, `dotted-` and `dashed-underscore` draw as the plain underline;
+    vt100 0.18, re-checked 2026-10-21, still keeps one on/off underline in
+    `Attrs` and no overline).
   - Options: every status row is drawn from its `status-format` item by
     `format_draw` (the first from tmux's default unless set), which takes tmux's
     `align`, `fill`, `default` / `push-default` / `pop-default`, lists (cut
@@ -574,14 +576,16 @@ table. What has been verified, and how:
     and a key that arrive together as Meta and the key, so only keys arriving
     apart are joined there (tmxr's default is 0, tmux's 10).
   - Commands: `capture-pane -a` (it needs the saved normal screen, which `vt100`
-    does not expose). `-e` writes only the attributes `vt100` keeps (bold, dim,
-    italics, underline, reverse; not blink, hidden, strikethrough, overline or
-    the underline styles and colour), and `38;5;n` for n below 16 as the plain
-    or bright code, as `vt100` stores both alike. A line's allocation (what
-    `-N`, `-e` and a plain capture run to) is worked out from what was written
-    (`allocated` in `cmds/pane.rs`, as `grid_expand_line` rounds), where tmux's
-    comes from the line's whole history, so a line written long and then cut
-    short differs; an erased cell counts as unwritten (known divergence
+    does not expose; 0.18, re-checked 2026-10-21, still keeps the inactive grid
+    private, with only `Screen::alternate_screen()` to say which is shown). `-e`
+    writes only the attributes `vt100` keeps (bold, dim, italics, underline,
+    reverse; not blink, hidden, strikethrough, overline or the underline styles
+    and colour), and `38;5;n` for n below 16 as the plain or bright code, as
+    `vt100` stores both alike. A line's allocation (what `-N`, `-e` and a plain
+    capture run to) is worked out from what was written (`allocated` in
+    `cmds/pane.rs`, as `grid_expand_line` rounds), where tmux's comes from the
+    line's whole history, so a line written long and then cut short differs; an
+    erased cell counts as unwritten (known divergence
     `capture_pane_t_counts_an_erased_cell_as_written`). The oracle cannot catch
     a difference on a capture's last line, as it trims the output's end. tmux
     also keeps a tab as the tab character, where `vt100` keeps the spaces it
