@@ -564,3 +564,68 @@ checks = [
   { screen_find = "┌", expect = "13,9" },
   { screen_find = "kill-session (1)", expect = "15,11" },
 ]
+
+[[cases]]
+name = "prompt_tab_menu_of_sessions_after_t_as_tmux"
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "new-session -d -s other" },
+  { run = "new-session -d -s ox" },
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "switch-client -to\u0009" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_find = "┌", expect = "15,8" },
+  { screen_find = "other: (1)", expect = "17,10" },
+]
+
+[[cases]]
+name = "prompt_tab_session_menu_puts_the_t_back_as_tmux"
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "new-session -d -s other" },
+  { run = "new-session -d -s ox" },
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "switch-client -to\u0009" },
+  { sleep = 0.3 },
+  { keys = "1" },
+  { sleep = 0.3 },
+  { keys = "X" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_contains = ":switch-client -tother:X", expect = true },
+]
+
+[[cases]]
+name = "prompt_tab_session_menu_in_a_target_prompt_as_tmux"
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "new-session -d -s other" },
+  { run = "new-session -d -s ox" },
+  { run = "command-prompt -b -T target" },
+  { sleep = 0.3 },
+  { keys = "o\u0009" },
+  { sleep = 0.3 },
+  { keys = "\u001b[B" },
+  { sleep = 0.3 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+  { keys = "X" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_contains = ":other:X", expect = true },
+]

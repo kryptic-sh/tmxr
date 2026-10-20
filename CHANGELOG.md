@@ -26,7 +26,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **The command prompt's Tab opens a menu of the names a word could be**, as
   tmux's, when they share no longer start: under the word, picked with Tab, the
-  arrows, a digit or Enter, Escape keeping the word.
+  arrows, a digit or Enter, Escape keeping the word; after `-t` / `-s` and in a
+  `target` prompt, a menu of the sessions.
 - **strftime's week numbers and the C locale's date and time** in formats: `%U`,
   `%W`, ISO `%V` / `%G` / `%g`, `%x`, `%X` and the zone's offset `%z`, as tmux's
   (glibc's), where they were kept as written.

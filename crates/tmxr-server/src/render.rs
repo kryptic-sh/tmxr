@@ -1062,7 +1062,7 @@ fn draw_overlay(
                 let mut menu = open.menu.clone();
                 menu.look.lines = crate::overlay::Lines::of(opts.menu_border_lines);
                 let lead: String = p.input[..open.word.0].iter().collect();
-                let word_x = Line::raw(format!("{}{lead}", p.prompt)).width() as u16;
+                let word_x = Line::raw(format!("{}{lead}{}", p.prompt, open.prefix)).width() as u16;
                 let row = status_row(srv, att, rows);
                 let (_, h) = menu.size();
                 let top_row = if srv.status_at_top(att.session) {

@@ -59,17 +59,19 @@ pub struct Prompt {
     pub menu: Option<CompletionMenu>,
 }
 
-/// A menu of completions and the word it replaces (start and end).
+/// A menu of completions, the word it replaces (start and end) and what a
+/// chosen name goes after in it (`-t` for a session).
 #[derive(Debug, Clone)]
 pub struct CompletionMenu {
     pub menu: crate::menu::Menu,
     pub word: (usize, usize),
+    pub prefix: String,
 }
 
 impl CompletionMenu {
     /// A menu of `names`, the first selected, each with its digit as its
     /// key while there are digits.
-    fn new(names: &[&str], word: (usize, usize)) -> Self {
+    fn new(names: &[&str], word: (usize, usize), prefix: &str) -> Self {
         let items = names
             .iter()
             .enumerate()
@@ -94,7 +96,11 @@ impl CompletionMenu {
             mouse_mode: false,
             stay_open: false,
         };
-        Self { menu, word }
+        Self {
+            menu,
+            word,
+            prefix: prefix.to_owned(),
+        }
     }
 }
 
@@ -133,7 +139,12 @@ fn session_completion(s: &str, names: &Completions) -> Option<String> {
     if s.contains(':') {
         return None;
     }
-    let list: Vec<String> = names
+    common_prefix(&session_matches(s, names))
+}
+
+/// The sessions `s` names the start of, as `name:` (or `$id:`), sorted.
+fn session_matches(s: &str, names: &Completions) -> Vec<String> {
+    let mut list: Vec<String> = names
         .sessions
         .iter()
         .filter_map(|(name, id)| {
@@ -146,7 +157,8 @@ fn session_completion(s: &str, names: &Completions) -> Option<String> {
             }
         })
         .collect();
-    common_prefix(&list)
+    list.sort_unstable();
+    list
 }
 
 /// What tmux's status_prompt_complete gives for `word`: one name it starts
@@ -488,13 +500,19 @@ impl Prompt {
             self.cursor = first + out.chars().count();
             return;
         }
-        // No further on with several names: a menu of them, as tmux's
-        // (not yet for sessions, which tmux also offers in one).
-        let sessions = target || word.starts_with("-t") || word.starts_with("-s");
-        if !sessions && !word.is_empty() {
+        // No further on with several names: a menu of them, as tmux's.
+        let flag = (word.starts_with("-t") || word.starts_with("-s")).then(|| &word[..2]);
+        if target || flag.is_some() {
+            let (prefix, s) = flag.map_or(("", word.as_str()), |f| (f, &word[2..]));
+            let list = session_matches(s, &names);
+            if list.len() > 1 && !s.contains(':') {
+                let list: Vec<&str> = list.iter().map(String::as_str).collect();
+                self.menu = Some(CompletionMenu::new(&list, (first, last), prefix));
+            }
+        } else if !word.is_empty() {
             let list = word_matches(&word, first == 0, &names);
             if list.len() > 1 {
-                self.menu = Some(CompletionMenu::new(&list, (first, last)));
+                self.menu = Some(CompletionMenu::new(&list, (first, last), ""));
             }
         }
     }
@@ -515,8 +533,9 @@ impl Prompt {
         match open.menu.key(&ev) {
             OverlayAction::Run(name) => {
                 let (first, last) = open.word;
-                self.input.splice(first..last, name.chars());
-                self.cursor = first + name.chars().count();
+                let out = format!("{}{name}", open.prefix);
+                self.input.splice(first..last, out.chars());
+                self.cursor = first + out.chars().count();
                 self.menu = None;
             }
             OverlayAction::Keep => {}
