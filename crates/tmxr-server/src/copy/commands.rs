@@ -25,7 +25,7 @@ pub fn enter(srv: &mut Server, pane: PaneId, page_up: bool) {
 
 /// A snapshot of `source`'s screen and history, sized to `pane`'s view.
 fn snapshot_for(srv: &mut Server, pane: PaneId, source: PaneId) -> Option<CopyMode> {
-    let (rows, cols) = srv.panes.get(&pane)?.emu.screen().size();
+    let (rows, cols) = tmxr_term::screen_size(srv.panes.get(&pane)?.emu.screen());
     let mut cm = CopyMode::new(srv.panes.get_mut(&source)?.emu.screen_mut());
     if source != pane {
         cm.source = Some(source);

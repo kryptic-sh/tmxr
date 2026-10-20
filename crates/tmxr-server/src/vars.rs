@@ -486,7 +486,7 @@ impl<'a> Context for Vars<'a> {
 
     fn pane_lines(&self) -> Option<Vec<String>> {
         let screen = self.srv.panes.get(&self.pane?)?.emu.screen();
-        Some(screen.rows(0, screen.size().1).collect())
+        Some(screen.rows(0, tmxr_term::screen_size(screen).1).collect())
     }
 
     fn get(&self, name: &str) -> Option<String> {

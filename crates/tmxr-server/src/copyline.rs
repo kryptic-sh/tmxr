@@ -46,7 +46,7 @@ impl CopyLine {
 fn marked_input(emu: &tmxr_term::Emulator) -> Option<String> {
     let (row, col) = emu.input_start()?;
     let screen = emu.screen();
-    let (rows, cols) = screen.size();
+    let (rows, cols) = tmxr_term::screen_size(screen);
     let mut end = screen.cursor_position().0.max(row);
     while end + 1 < rows && screen.row_wrapped(end) {
         end += 1;

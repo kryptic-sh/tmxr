@@ -318,7 +318,8 @@ impl Client {
         let writer = Arc::new(Mutex::new(
             pair.master.take_writer().map_err(|e| e.to_string())?,
         ));
-        let parser = Arc::new(Mutex::new(vt100::Parser::new(rows, cols, 0)));
+        let size = |n| std::num::NonZeroU16::new(n).ok_or("a client size of 0");
+        let parser = Arc::new(Mutex::new(vt100::Parser::new(size(rows)?, size(cols)?, 0)));
         let feed = Arc::clone(&parser);
         let answer = Arc::clone(&writer);
         std::thread::spawn(move || {
@@ -405,7 +406,7 @@ impl Client {
             At::Cell([col, row]) => Ok((*col, *row)),
             At::Text { text, row, dx } => {
                 let p = self.lock();
-                let (rows, cols) = p.screen().size();
+                let (rows, cols) = tmxr_term::screen_size(p.screen());
                 let only = row.map(|r| {
                     if r < 0 {
                         u16::try_from(i32::from(self.rows) + r).unwrap_or(0)

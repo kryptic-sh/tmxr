@@ -4,10 +4,11 @@
 //! for `alternate-screen off`), the mouse (9, 1000 to 1003, 1005 and 1006,
 //! `Emulator::mouse_mode`) and origin (6, kept for `#{origin_flag}` and
 //! passed on), a full reset (`ESC c`), which clears what the emulator keeps
-//! of them, and the CSIs tmux's input_csi_table has and vt100 lacks: HVP
-//! (`f`) and HPA (`` ` ``) as the CUP and CHA vt100 does take, SCP and RCP
-//! (`s`, `u`) as `ESC 7` and `ESC 8`, and REP (`b`) and CBT (`Z`), which
-//! need the emulator's cursor.
+//! of them, and CSIs from tmux's input_csi_table that vt100 lacks or makes
+//! differently: SCP and RCP (`s`, `u`) as `ESC 7` and `ESC 8`, REP (`b`),
+//! which repeats only a character printed just before, CBT (`Z`), which
+//! needs the emulator's cursor, and DECSCUSR (`SP q`), whose shape and
+//! blinking the emulator keeps itself.
 
 /// The DEC private modes split out.
 const SPLIT_MODES: [u32; 11] = [6, 9, 47, 1000, 1001, 1002, 1003, 1005, 1006, 1047, 1049];
@@ -38,11 +39,13 @@ pub enum Piece {
     },
     /// CBT: the cursor back `count` tab stops.
     BackTab(u32),
+    /// DECSCUSR: the cursor shape `Ps` asks for.
+    CursorStyle(u32),
 }
 
 /// Splits the split modes out of DEC private mode sets and resets
 /// (`ESC [ ? … h` / `l`), keeping any other mode the same sequence sets, in
-/// order, `ESC c` out of the text, and the CSIs vt100 lacks. A sequence
+/// order, `ESC c` out of the text, and the CSIs the emulator makes. A sequence
 /// split across reads is held until its end arrives.
 #[derive(Debug, Default)]
 pub struct ModeSplitter {
@@ -61,12 +64,12 @@ enum Scan {
     /// `ESC c`.
     Reset,
     /// A CSI `len` bytes long: its private marker (`<` to `?`), its
-    /// parameters, whether it has intermediate bytes, and its final byte.
+    /// parameters, its intermediate bytes, and its final byte.
     Csi {
         len: usize,
         marker: Option<u8>,
         params: Vec<u8>,
-        intermediates: bool,
+        intermediates: Vec<u8>,
         last: u8,
     },
 }
@@ -118,7 +121,7 @@ fn scan_csi(bytes: &[u8]) -> Scan {
             len: i + 1,
             marker,
             params: bytes[start..end].to_vec(),
-            intermediates: i > end,
+            intermediates: bytes[end..i].to_vec(),
             last,
         },
         Some(_) => Scan::Other(1),
@@ -134,6 +137,16 @@ fn count(params: &[u8]) -> Option<u32> {
     }
     let n: u32 = std::str::from_utf8(first).ok()?.parse().ok()?;
     Some(n.max(1))
+}
+
+/// A CSI's first parameter as tmux's input_get reads a value: 0 if it is
+/// missing, `None` (the sequence is ignored) if it is not a number.
+fn value(params: &[u8]) -> Option<u32> {
+    let first = params.split(|&b| b == b';').next().unwrap_or_default();
+    if first.is_empty() {
+        return Some(0);
+    }
+    std::str::from_utf8(first).ok()?.parse().ok()
 }
 
 /// The character `tail` ends with, unless it ends with a control or a
@@ -226,25 +239,26 @@ impl ModeSplitter {
                     last,
                 } => {
                     let seq = &input[i..i + len];
-                    match (marker, intermediates, last) {
-                        (Some(b'?'), false, b'h' | b'l') if !params.contains(&b':') => {
+                    match (marker, intermediates.as_slice(), last) {
+                        (Some(b'?'), [], b'h' | b'l') if !params.contains(&b':') => {
                             split_modes(&mut pieces, &params, last);
                         }
-                        (None, false, b'f' | b'`') => {
-                            push_text(&mut pieces, &seq[..len - 1]);
-                            push_text(&mut pieces, if last == b'f' { b"H" } else { b"G" });
-                        }
-                        (None, false, b's') => push_text(&mut pieces, b"\x1b7"),
-                        (None, false, b'u') => push_text(&mut pieces, b"\x1b8"),
-                        (None, false, b'b') => {
+                        (None, [], b's') => push_text(&mut pieces, b"\x1b7"),
+                        (None, [], b'u') => push_text(&mut pieces, b"\x1b8"),
+                        (None, [], b'b') => {
                             if let (Some(count), Some(ch)) = (count(&params), last_char(&self.tail))
                             {
                                 pieces.push(Piece::Repeat { ch, count });
                             }
                         }
-                        (None, false, b'Z') => {
+                        (None, [], b'Z') => {
                             if let Some(count) = count(&params) {
                                 pieces.push(Piece::BackTab(count));
+                            }
+                        }
+                        (None, b" ", b'q') => {
+                            if let Some(ps) = value(&params) {
+                                pieces.push(Piece::CursorStyle(ps));
                             }
                         }
                         _ => push_text(&mut pieces, seq),
@@ -282,9 +296,11 @@ mod tests {
             .into_iter()
             .filter_map(|p| match p {
                 Piece::Text(t) => Some(t),
-                Piece::Mode { .. } | Piece::Reset | Piece::Repeat { .. } | Piece::BackTab(_) => {
-                    None
-                }
+                Piece::Mode { .. }
+                | Piece::Reset
+                | Piece::Repeat { .. }
+                | Piece::BackTab(_)
+                | Piece::CursorStyle(_) => None,
             })
             .flatten()
             .collect()
@@ -379,15 +395,18 @@ mod tests {
     }
 
     #[test]
-    fn csis_vt100_lacks_become_ones_it_takes() {
+    fn csis_the_emulator_makes_split_out() {
         let mut f = ModeSplitter::default();
-        assert_eq!(text(f.split(b"\x1b[3;5fX\x1b[f")), b"\x1b[3;5HX\x1b[H");
-        assert_eq!(text(f.split(b"\x1b[10`")), b"\x1b[10G");
         assert_eq!(text(f.split(b"\x1b[s\x1b[u")), b"\x1b7\x1b8");
-        // With a marker or an intermediate they are other sequences.
+        // With a marker or an intermediate they are other sequences, as
+        // are the ones vt100 makes as tmux does.
         assert_eq!(
-            text(f.split(b"\x1b[?5f\x1b[>1u\x1b[1 f")),
-            b"\x1b[?5f\x1b[>1u\x1b[1 f"
+            text(f.split(b"\x1b[?5s\x1b[>1u\x1b[1 u\x1b[3;5f")),
+            b"\x1b[?5s\x1b[>1u\x1b[1 u\x1b[3;5f"
+        );
+        assert_eq!(
+            f.split(b"\x1b[5 q\x1b[ q\x1b[1:2 q"),
+            vec![Piece::CursorStyle(5), Piece::CursorStyle(0)]
         );
         assert_eq!(f.split(b"\x1b[2Z"), vec![Piece::BackTab(2)]);
         assert_eq!(

@@ -246,7 +246,7 @@ impl Server {
         let Some(p) = self.panes.get_mut(&pid) else {
             return;
         };
-        let (rows, cols) = p.emu.screen().size();
+        let (rows, cols) = tmxr_term::screen_size(p.emu.screen());
         let mut bytes = format!("\x1b[r\x1b[{rows};1H\n").into_bytes();
         bytes.extend(crate::backend::styled_bytes(&text, cols));
         bytes.extend(b"\x1b[0m\x1b[?25l");

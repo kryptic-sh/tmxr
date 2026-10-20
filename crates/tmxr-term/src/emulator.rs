@@ -1,5 +1,6 @@
 //! A pane's terminal emulator: `vt100` plus what vt100 hands to its host.
 
+use std::num::NonZeroU16;
 use std::path::PathBuf;
 
 use crate::dcs::DcsSplitter;
@@ -14,6 +15,18 @@ const KITTY_STACK_LIMIT: usize = 16;
 /// The columns between vt100's tab stops, which it keeps fixed (its
 /// `Grid::col_tab`): a program's own stops (HTS, TBC) are not kept.
 const TAB_WIDTH: u16 = 8;
+
+/// `screen`'s rows and columns, which vt100 keeps nonzero, as numbers.
+pub fn screen_size(screen: &vt100::Screen) -> (u16, u16) {
+    let (rows, cols) = screen.size();
+    (rows.get(), cols.get())
+}
+
+/// A screen dimension as vt100 takes it: at least 1, as tmux's
+/// `PANE_MINIMUM`.
+fn dimension(n: u16) -> NonZeroU16 {
+    NonZeroU16::new(n).unwrap_or(NonZeroU16::MIN)
+}
 
 /// Side-channel state collected while parsing a pane's output.
 #[derive(Debug, Default)]
@@ -60,6 +73,18 @@ fn history_lines(screen: &mut vt100::Screen) -> usize {
     lines
 }
 
+impl Hooks {
+    /// DECSCUSR, split out before vt100 (which keeps its own): a cursor
+    /// shape, 0 to 6; others leave it as it was, as tmux's.
+    fn set_cursor_style(&mut self, ps: u32) {
+        if let Ok(ps @ 0..=6) = u8::try_from(ps) {
+            self.cursor_style = ps;
+            // 1, 3 and 5 blink, as tmux's.
+            self.cursor_blinking = ps % 2 == 1;
+        }
+    }
+}
+
 impl vt100::Callbacks for Hooks {
     fn audible_bell(&mut self, _: &mut vt100::Screen) {
         self.bell = true;
@@ -101,15 +126,6 @@ impl vt100::Callbacks for Hooks {
             // Insert mode, as tmux keeps it.
             (None, 'h' | 'l') if params.iter().any(|v| v.first() == Some(&4)) => {
                 self.insert_mode = c == 'h';
-            }
-            // DECSCUSR: a cursor shape, 0 to 6; others leave it as it was,
-            // as tmux's.
-            (Some(b' '), 'q') => {
-                if let Ok(ps @ 0..=6) = u8::try_from(p(0).unwrap_or(0)) {
-                    self.cursor_style = ps;
-                    // 1, 3 and 5 blink, as tmux's.
-                    self.cursor_blinking = ps % 2 == 1;
-                }
             }
             // DA1: identify as a VT220 with ANSI colour, as tmux does.
             (None, 'c') if p(0).unwrap_or(0) == 0 => self.replies.extend(b"\x1b[?62;22c"),
@@ -265,7 +281,12 @@ pub struct Emulator {
 impl Emulator {
     pub fn new(rows: u16, cols: u16, scrollback: usize) -> Self {
         Self {
-            parser: vt100::Parser::new_with_callbacks(rows, cols, scrollback, Hooks::default()),
+            parser: vt100::Parser::new_with_callbacks(
+                dimension(rows),
+                dimension(cols),
+                scrollback,
+                Hooks::default(),
+            ),
             dcs: DcsSplitter::default(),
             passthrough: Vec::new(),
             rename: None,
@@ -310,16 +331,9 @@ impl Emulator {
     }
 
     /// Drop the history above the screen (tmux's `clear-history`), keeping
-    /// the screen, cursor and modes. vt100 has no way to empty its
-    /// scrollback, so a fresh parser replays the old screen's state; the
-    /// hooks (title, directory, pending output) move over as they are.
+    /// the screen, cursor and modes.
     pub fn clear_history(&mut self) {
-        let (rows, cols) = self.parser.screen().size();
-        let state = self.parser.screen().state_formatted();
-        let hooks = std::mem::take(self.parser.callbacks_mut());
-        let mut fresh = vt100::Parser::new_with_callbacks(rows, cols, self.scrollback, hooks);
-        fresh.process(&state);
-        self.parser = fresh;
+        self.parser.screen_mut().clear_scrollback();
         self.count_history();
     }
 
@@ -408,6 +422,7 @@ impl Emulator {
                 }
                 Piece::Repeat { ch, count } => self.repeat(ch, count),
                 Piece::BackTab(count) => self.back_tab(count),
+                Piece::CursorStyle(ps) => self.parser.callbacks_mut().set_cursor_style(ps),
             }
         }
     }
@@ -416,7 +431,11 @@ impl Emulator {
     /// than the columns left of the cursor's row.
     fn repeat(&mut self, ch: char, count: u32) {
         let screen = self.parser.screen();
-        let left = screen.size().1.saturating_sub(screen.cursor_position().1);
+        let left = screen
+            .size()
+            .1
+            .get()
+            .saturating_sub(screen.cursor_position().1);
         let times = count.min(u32::from(left)) as usize;
         self.parser.process(ch.to_string().repeat(times).as_bytes());
     }
@@ -425,10 +444,7 @@ impl Emulator {
     /// which are vt100's, every `TAB_WIDTH` columns.
     fn back_tab(&mut self, count: u32) {
         let screen = self.parser.screen();
-        let mut col = screen
-            .cursor_position()
-            .1
-            .min(screen.size().1.saturating_sub(1));
+        let mut col = screen.cursor_position().1.min(screen.size().1.get() - 1);
         for _ in 0..count {
             if col == 0 {
                 break;
@@ -538,24 +554,15 @@ impl Emulator {
         self.parser.screen_mut()
     }
 
-    /// Resize the screen. Fewer rows go as tmux 3.6's `screen_resize_y`
-    /// takes them: the rows below the cursor first, then rows off the top,
-    /// into the history on the main screen. (vt100 alone cuts rows off the
-    /// bottom, the cursor's among them.) More rows come in blank at the
-    /// bottom; tmux would first take back the rows a shrink pushed into the
-    /// history, which vt100 cannot.
+    /// Resize the screen, as tmux 3.6's `screen_resize_y` on the main
+    /// screen: fewer rows take the rows below the cursor first, then push
+    /// rows off the top into the history; more rows take rows back from the
+    /// history first, then come in blank at the bottom. (tmux takes back only
+    /// rows scrolled since the screen was last cleared, vt100 any it has.)
     pub fn resize(&mut self, rows: u16, cols: u16) {
-        let rows = rows.max(1);
-        let (old_rows, _) = self.parser.screen().size();
-        let (cursor_row, _) = self.parser.screen().cursor_position();
-        let below = old_rows.saturating_sub(cursor_row + 1);
-        let off_top = old_rows.saturating_sub(rows).saturating_sub(below);
-        if off_top > 0 {
-            // Scroll them up (SU), the cursor with them (CUU).
-            let scroll = format!("\x1b[{off_top}S\x1b[{off_top}A");
-            self.parser.process(scroll.as_bytes());
-        }
-        self.parser.screen_mut().set_size(rows, cols.max(1));
+        self.parser
+            .screen_mut()
+            .set_size(dimension(rows), dimension(cols));
         self.count_history();
     }
 
@@ -821,6 +828,31 @@ mod tests {
         assert_eq!(e.history_size(), 0);
         assert_eq!((row(&e, 0), row(&e, 1)), ("one".into(), "$ ".into()));
         assert_eq!(e.screen().cursor_position(), (1, 2));
+    }
+
+    #[test]
+    fn growing_takes_back_the_rows_a_shrink_pushed_as_tmux_does() {
+        let row = |e: &Emulator, r: u16| e.screen().contents_between(r, 0, r, 20);
+        let mut e = Emulator::new(4, 20, 100);
+        e.process(b"one\r\ntwo\r\nthree\r\n$ ");
+        e.resize(2, 20);
+        assert_eq!(e.history_size(), 2);
+        e.resize(4, 20);
+        assert_eq!(e.history_size(), 0);
+        assert_eq!(
+            (0..4).map(|r| row(&e, r)).collect::<Vec<_>>(),
+            ["one", "two", "three", "$ "]
+        );
+        assert_eq!(e.screen().cursor_position(), (3, 2));
+    }
+
+    #[test]
+    fn one_row_wraps_without_a_panic() {
+        // vt100 0.16 panicked here, taking the server with it.
+        let mut e = Emulator::new(1, 5, 100);
+        e.process(b"abcdefgh");
+        assert_eq!(e.screen().contents(), "fgh");
+        assert_eq!(e.history_size(), 1);
     }
 
     #[test]

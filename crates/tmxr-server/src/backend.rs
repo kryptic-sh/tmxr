@@ -331,7 +331,8 @@ mod tests {
         .unwrap();
         let bytes = term.backend_mut().take();
 
-        let mut vt = vt100::Parser::new(3, 20, 0);
+        let size = |n| std::num::NonZeroU16::new(n).unwrap();
+        let mut vt = vt100::Parser::new(size(3), size(20), 0);
         vt.process(&bytes);
         let s = vt.screen();
         assert_eq!(s.contents_between(0, 0, 0, 20).trim_end(), "hello");

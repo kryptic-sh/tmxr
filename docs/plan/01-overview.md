@@ -88,7 +88,7 @@ are MVP.
 | ----------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------- |
 | Process model     | tmux-style server + client, server spawned on demand   | Requested; detach/attach is the point of a multiplexer                                |
 | Who renders       | **Server** composes each client's frame, client blits  | Same as tmux; keeps the client trivial and every platform identical                   |
-| Terminal emulator | `vt100` 0.16 per pane                                  | Org precedent (hjkl/gpur/hrdr tests); exposes cells, modes, scrollback, OSC callbacks |
+| Terminal emulator | `vt100` 0.18 per pane                                  | Org precedent (hjkl/gpur/hrdr tests); exposes cells, modes, scrollback, OSC callbacks |
 | PTY               | `portable-pty` 0.9 (openpty / ConPTY)                  | Org precedent; one API on all three platforms                                         |
 | IPC transport     | `interprocess` 2 local sockets (UDS / named pipe)      | Org precedent (`buffr` single-instance); one API on all three platforms               |
 | Wire encoding     | length-prefixed `postcard` frames (serde)              | Org precedent (`hjkl-app`); compact for frame data, no JSON-escaping of raw bytes     |

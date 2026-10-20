@@ -25,6 +25,6 @@ pub mod modes;
 pub mod process;
 pub mod pty;
 
-pub use emulator::Emulator;
+pub use emulator::{Emulator, screen_size};
 pub use encode::{ExtendedKeys, InputModes, conpty_key, encode_key, encode_paste};
 pub use pty::{Pty, PtyEvent, SpawnSpec};

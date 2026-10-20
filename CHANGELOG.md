@@ -536,6 +536,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A pane one row tall no longer takes the server down**: text that wrapped in
+  it made the terminal emulator (`vt100`, now 0.18) panic, and the server with
+  it, in release builds too.
+- **A pane made taller gets back the rows a shrink pushed into its history**, as
+  tmux's does, where tmxr added blank rows at the bottom: a split then closed
+  leaves the screen as it was.
 - **Keys typed faster than the client reads them all reach the pane** (Linux and
   macOS): once a read of the terminal filled crossterm's buffer, the rest of the
   input waited for the next key press, so a burst of more than 1024 bytes (a

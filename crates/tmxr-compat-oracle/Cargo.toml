@@ -16,7 +16,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 tempfile = "3.27.0"
 tmxr-term.workspace = true
 toml = "1.1.7"
-vt100 = "0.16.2"
+vt100 = "0.18.1"
 
 [lints]
 workspace = true

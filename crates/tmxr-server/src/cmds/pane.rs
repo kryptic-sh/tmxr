@@ -657,7 +657,7 @@ fn capture(
     flags: CaptureFlags,
 ) -> String {
     let lines = crate::copy::snapshot(screen);
-    let rows = usize::from(screen.size().0);
+    let rows = usize::from(tmxr_term::screen_size(screen).0);
     let history = lines.len().saturating_sub(rows);
     let last = lines.len().saturating_sub(1);
     let line = |value: Option<&str>, dash: usize, default: usize| match value {
@@ -671,7 +671,7 @@ fn capture(
     let top = line(start, 0, history);
     let bottom = line(end, last, last);
     let (top, bottom) = (top.min(bottom), top.max(bottom));
-    let width = usize::from(screen.size().1);
+    let width = usize::from(tmxr_term::screen_size(screen).1);
     let mut out = String::new();
     // As tmux's, the last cell's style carries over from line to line.
     let mut last = Style::default();

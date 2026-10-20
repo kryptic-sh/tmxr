@@ -47,9 +47,6 @@ table. What has been verified, and how:
   patched, `[patch.crates-io]` on a kryptic-sh branch) to keep a cell's link; or
   move to tmxr's own grid, a much larger change. Both are a dependency decision;
   nothing was started.
-- **A pane made taller again gets blank rows** (see below): the same choice, a
-  `vt100` fork that can move history rows back onto the screen, or tmxr's own
-  grid.
 - **`detach-on-destroy`** (`Server::kill_session`): tmxr always moves a client
   whose session is destroyed to the most recently used other session, tmux's
   `detach-on-destroy off`; tmux's default is `on`, which detaches it. Options:
@@ -78,15 +75,21 @@ table. What has been verified, and how:
 
 ## Known gaps and follow-ups
 
-- **CSIs vt100 lacks are made beside it** (`modes::ModeSplitter`, from tmux's
-  `input_csi_table`): HVP, HPA, SCP / RCP, REP and CBT; btop's boxes, which
-  broke for want of HVP, matched tmux 3.8 on every row by their box-drawing
-  cells (2026-10-20, 120x40, Linux). Not compared: btop's colours
-  (`capture-pane -e` differs run to run with its live graphs). SCP / RCP go
-  through vt100's `ESC 7` / `ESC 8`, which save the attributes too, as tmux's
-  `input_save_state` does. CBT and HT use vt100's fixed tab stops every 8
-  columns: a program's own (HTS, `CSI g`) are not kept, where tmux keeps them.
-  CHT (`CSI n I`) is ignored, as tmux 3.8 ignores it (probed the same day).
+- **CSIs the emulator makes beside vt100** (`modes::ModeSplitter`, from tmux's
+  `input_csi_table`): SCP / RCP, REP (only right after a printed character, as
+  tmux's), CBT and DECSCUSR (the shape and blinking tmxr keeps); HVP and HPA are
+  vt100's own since 0.18. btop's boxes, which broke for want of HVP (vt100
+  0.16), matched tmux 3.8 on every row by their box-drawing cells (2026-10-20,
+  120x40, Linux). Not compared: btop's colours (`capture-pane -e` differs run to
+  run with its live graphs). SCP / RCP go through vt100's `ESC 7` / `ESC 8`,
+  which save the attributes too, as tmux's `input_save_state` does. CBT and HT
+  use vt100's fixed tab stops every 8 columns: a program's own (HTS, `CSI g`)
+  are not kept, where tmux keeps them. CHT (`CSI n I`) is ignored, as tmux 3.8
+  ignores it (probed the same day). Still different: IL and DL (`CSI L` /
+  `CSI M`) with the cursor outside the scroll region do nothing in vt100 0.18,
+  where tmux 3.6 inserts or deletes from the cursor to the bottom of the screen
+  (`screen_write_insertline`; probed 2026-10-20, a 2-4 region with the cursor on
+  rows 6 and 8; vt100 0.16 moved the region's rows instead, also unlike tmux).
 - **Mouse use as in the owner's tmux config** (asked for 2026-10-11). The tmux
   compatibility oracle (`crates/tmxr-compat-oracle`, `corpus/mouse.toml`) drives
   a tmux 3.6 client and a tmxr client with the same SGR mouse events in CI and
@@ -198,14 +201,14 @@ table. What has been verified, and how:
     clock-mode case are tested end to end, each shown to fail without its check.
     The dead-pane case is not tested: a dead pane has no program to read input,
     so nothing shows whether it was sent.
-- **A pane made taller again gets blank rows at the bottom**: tmux 3.6
-  (`screen_resize_y`) first takes back the rows a shrink pushed into the history
-  (`hscrolled`), so a split then closed restores the screen; tmxr's
-  `Emulator::resize` cannot, as vt100 has no way to move history rows back onto
-  the screen. Shrinking does follow tmux (it scrolls the rows off with CSI S,
-  which also means a program's own scroll region, if set, scrolls instead of the
-  whole screen). Fixing growth needs a vt100 change (a fork, as with crossterm)
-  or tmxr's own grid.
+- **A pane made taller takes rows back from the history** as tmux 3.6's
+  `screen_resize_y` does, through vt100 0.18's `set_size`
+  (`growing_takes_back_the_rows_a_shrink_pushed_as_tmux_does`). Still different:
+  tmux takes back only the rows scrolled since the screen was last cleared
+  (`hscrolled`, which `CSI 2 J` and `clear-history` reset), vt100 any row its
+  history has; and once the history has dropped rows at its limit, vt100 brings
+  blank rows back in their place, where tmux brings none. Neither is compared
+  with tmux.
 - **Windows: an Enter sent before the shell's first read can stall**
   (2026-10-10). Probing with the real binary, `new-window -d` then at once
   `send-keys 'echo markN' Enter`, about 1 in 100 cmd panes showed the text but
