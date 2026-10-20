@@ -494,17 +494,18 @@ table. What has been verified, and how:
     `capture_pane_t_counts_an_erased_cell_as_written`). The oracle cannot catch
     a difference on a capture's last line, as it trims the output's end. tmux
     also keeps a tab as the tab character, where `vt100` keeps the spaces it
-    moved over; `split-window -I` and `display-message -I` (both need empty
-    panes, which tmxr does not have: tmux's window_pane_start_input refuses a
-    pane running a program); `display-message -v`; `display-message -a` lists
-    tmxr's variables (`vars::NAMES`), fewer than tmux's; `-K` on the `choose-*`
-    pickers, tagging and sort keys; `buffer_created` and `buffer_full` (tmxr's
-    buffers keep no creation time, so `-O time` is their newest-first order);
-    `choose-tree -F` replaces the text after a row's mark, where tmux's is the
-    whole tree line; `command-prompt` completion (Tab); smaller flags:
-    `source-file -v`, several paths and globs (each load replaces the whole TOML
-    config, so several files have no clear meaning yet); `source-file` of a tmux
-    command file (`%if`, `%hidden`).
+    moved over; `split-window -I` and `display-message -I` read the client's
+    whole input before showing it, where tmux shows it as it arrives (tmxr's
+    client sends standard input ahead of the command); an empty pane is saved by
+    resurrect as a pane running the shell; `display-message -v`;
+    `display-message -a` lists tmxr's variables (`vars::NAMES`), fewer than
+    tmux's; `-K` on the `choose-*` pickers, tagging and sort keys;
+    `buffer_created` and `buffer_full` (tmxr's buffers keep no creation time, so
+    `-O time` is their newest-first order); `choose-tree -F` replaces the text
+    after a row's mark, where tmux's is the whole tree line; `command-prompt`
+    completion (Tab); smaller flags: `source-file -v`, several paths and globs
+    (each load replaces the whole TOML config, so several files have no clear
+    meaning yet); `source-file` of a tmux command file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `client-light-theme` /
     `-dark-theme`. Copy mode lacks `next-prompt` / `previous-prompt` (they need
     a prompt mark on every history line, as tmux keeps per grid line; `Emulator`
@@ -518,10 +519,13 @@ table. What has been verified, and how:
     `select-line` (tmux's `lineflag` moves the cursor to a line's end or start
     on up / down), and on lines holding wide characters.
 
-- **`lock_hands_the_keys_to_the_lock_command` failed once** (Windows, full
-  `cargo test`, 2026-10-20): the client reported `server did not start` on its
-  pipe. The test alone and the next full e2e run passed; a guess is the server's
-  start timing out under the whole workspace's load.
+- **`server did not start` under a full `cargo test`** (Windows, three times on
+  2026-10-20: `lock_hands_the_keys_to_the_lock_command`, then
+  `layout_matches_tmux` and `option_scopes_match_tmux` in one run): a client
+  gave up waiting for its server's pipe (`wait_for_server` in `tmxr-client`,
+  `SPAWN_TIMEOUT`). Each passed alone and in the next full run. A guess is the
+  server's start outlasting the timeout under the whole workspace's load; not
+  investigated, and the timeout not raised on a guess.
 - **`word_separators_and_wrap_search_reach_copy_mode` failed once** (Windows,
   full e2e suite, 2026-10-18) at its first `#{copy_cursor_word}` check; four
   runs alone and the next full run passed. The failure output was not kept, so

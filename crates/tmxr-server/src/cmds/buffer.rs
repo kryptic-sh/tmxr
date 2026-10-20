@@ -138,10 +138,7 @@ pub(super) fn run(
         "load-buffer" => {
             // -: the command client's standard input, which it sent ahead.
             let bytes = if pos[0] == "-" {
-                ctx.client
-                    .and_then(|c| srv.clients.get_mut(&c))
-                    .and_then(|c| c.stdin.take())
-                    .ok_or("load-buffer: no standard input")?
+                super::take_stdin(srv, ctx).ok_or("load-buffer: no standard input")?
             } else {
                 let path = resolve(ctx, &pos[0]);
                 std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?

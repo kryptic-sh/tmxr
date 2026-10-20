@@ -698,3 +698,46 @@ fn allow_set_title_off_keeps_programs_from_titling_panes() {
         |o| o.trim() == "prog-title",
     );
 }
+
+#[test]
+fn split_window_i_shows_its_input_in_an_empty_pane() {
+    let t = Tmxr::new("emptypane");
+    t.run(&["new-session", "-d", "-s", "e"]);
+    let out = t.output_with_stdin(&["split-window", "-I", "-t", "e"], b"first\nsecond\n");
+    assert!(out.status.success(), "{out:?}");
+    // Each newline starts a line, as in tmux's empty pane.
+    t.wait_run(
+        &["capture-pane", "-p", "-t", "e.1"],
+        "the input shown",
+        |o| o.starts_with("first\nsecond\n"),
+    );
+    // display-message -I shows more in it.
+    let more = t.output_with_stdin(&["display-message", "-I", "-t", "e.1"], b"third\n");
+    assert!(more.status.success(), "{more:?}");
+    t.wait_run(
+        &["capture-pane", "-p", "-t", "e.1"],
+        "more input shown",
+        |o| o.starts_with("first\nsecond\nthird\n"),
+    );
+    // Not in a pane running a program.
+    let refused = t.output_with_stdin(&["display-message", "-I", "-t", "e.0"], b"x");
+    assert!(!refused.status.success(), "{refused:?}");
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains("pane is not empty"),
+        "{refused:?}"
+    );
+    // No program: no pid, dead, and the cursor hidden, as tmux's.
+    let vars = t.run(&[
+        "display",
+        "-p",
+        "-t",
+        "e.1",
+        "#{pane_pid} #{pane_dead} #{cursor_flag}",
+    ]);
+    assert_eq!(vars.trim(), "0 1 0");
+    // Typing goes nowhere.
+    t.run(&["send-keys", "-t", "e.1", "typed", "Enter"]);
+    std::thread::sleep(Duration::from_millis(200));
+    let shown = t.run(&["capture-pane", "-p", "-t", "e.1"]);
+    assert!(!shown.contains("typed"), "{shown}");
+}

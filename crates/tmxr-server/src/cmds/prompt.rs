@@ -318,6 +318,19 @@ pub(super) fn run(
             if let Some((sid, _, _)) = target {
                 vars.session = Some(sid);
             }
+            // -I: the client's input shown in an empty pane, and nothing
+            // else, as tmux's window_pane_start_input.
+            if a.has('I') {
+                let Some((_, _, pane)) = target else {
+                    return Ok(true);
+                };
+                if let Some(bytes) = super::take_stdin(srv, ctx) {
+                    srv.feed_empty_pane(pane, &bytes)?;
+                } else if srv.panes.get(&pane).is_some_and(|p| !p.pty.is_empty()) {
+                    return Err("pane is not empty".into());
+                }
+                return Ok(true);
+            }
             // -a: every variable with a value, as tmux's format_each.
             if a.has('a') {
                 for name in crate::vars::NAMES {

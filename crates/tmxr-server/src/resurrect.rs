@@ -574,7 +574,7 @@ fn restore_session(
                 false,
                 None,
                 existing_dir(&p.cwd, missing),
-                argv(p),
+                Some(argv(p)),
                 &[],
                 false,
             )?;

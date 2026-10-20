@@ -31,6 +31,10 @@ pub(super) fn run(
             // -Z: the window zoomed on the active pane after, zoomed before
             // or not, as tmux's.
             let zoom = srv.push_zoom(wid, true, a.has('Z'));
+            // -I with no command, or an empty command: an empty pane, as
+            // tmux's SPAWN_EMPTY; -I shows the client's input in it.
+            let input = a.has('I') && pos.is_empty();
+            let empty = input || matches!(pos, [only] if only.is_empty());
             let new = srv.split(
                 pid,
                 a.has('h'),
@@ -38,11 +42,14 @@ pub(super) fn run(
                 a.has('f'),
                 size,
                 cwd,
-                pos.to_vec(),
+                (!empty).then(|| pos.to_vec()),
                 &super::env_flags(a)?,
                 !a.has('d'),
             )?;
             srv.pop_zoom(wid, zoom);
+            if input && let Some(bytes) = super::take_stdin(srv, ctx) {
+                srv.feed_empty_pane(new, &bytes)?;
+            }
             super::print_new(srv, ctx, a, out, sid, Some(new), super::NEW_PANE_TEMPLATE);
         }
         "kill-pane" => {

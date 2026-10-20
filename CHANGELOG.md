@@ -24,6 +24,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Empty panes, `split-window -I` and `display-message -I`**, as tmux's:
+  `split-window ''` or `split-window -I` makes a pane with no program (no pid,
+  `#{pane_dead}` 1, the cursor hidden, typed keys going nowhere), and `-I` shows
+  what was piped into the command in it, each newline starting a line;
+  `display-message -I` shows more there and refuses a pane running a program.
 - **`display-message -a`**, as tmux's: every format variable with a value, as
   `name=value` lines sorted by name.
 - **`capture-pane -T`**, and `-N` and `-J` as tmux's: each line runs to what

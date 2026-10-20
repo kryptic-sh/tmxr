@@ -95,6 +95,20 @@ impl Tmxr {
             .unwrap()
     }
 
+    /// Run a command client with `input` piped into it.
+    fn output_with_stdin(&self, rest: &[&str], input: &[u8]) -> std::process::Output {
+        let mut child = tmxr_term::child::command(env!("CARGO_BIN_EXE_tmxr"))
+            .args(self.args(rest))
+            .envs(self.env())
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        std::io::Write::write_all(&mut child.stdin.take().unwrap(), input).unwrap();
+        child.wait_with_output().unwrap()
+    }
+
     /// Run a command client against the server at `socket` (`-S`) in place
     /// of the test's label.
     fn output_at(&self, socket: &str, rest: &[&str]) -> std::process::Output {

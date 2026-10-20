@@ -167,10 +167,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "display-message",
         Some("display"),
-        "aCc:d:F:lNpt:",
+        "aCc:d:F:IlNpt:",
         0,
         1,
-        "[-aClNp] [-c target-client] [-d delay] [-F format] [-t target-pane] [message]"
+        "[-aCIlNp] [-c target-client] [-d delay] [-F format] [-t target-pane] [message]"
     ),
     cmd!(
         "display-panes",
@@ -633,10 +633,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "split-window",
         Some("splitw"),
-        "bc:de:F:fhl:p:Pt:vZ",
+        "bc:de:F:fhIl:p:Pt:vZ",
         0,
         ANY,
-        "[-bdfhPvZ] [-c start-directory] [-e environment] [-F format] [-l size] [-p percentage] [-t target-pane] [command]"
+        "[-bdfhIPvZ] [-c start-directory] [-e environment] [-F format] [-l size] [-p percentage] [-t target-pane] [command]"
     ),
     cmd!("start-server", Some("start"), "", 0, 0, ""),
     cmd!(
@@ -755,7 +755,14 @@ impl Parsed {
 pub fn reads_stdin(argv: &[String]) -> bool {
     argv.split(|w| w == ";").any(|cmd| {
         parse(cmd).is_ok_and(|p| {
-            p.name() == "load-buffer" && p.args.positional().first().is_some_and(|f| f == "-")
+            let pos = p.args.positional();
+            match p.name() {
+                "load-buffer" => pos.first().is_some_and(|f| f == "-"),
+                // -I: the input shown in an empty pane.
+                "split-window" => p.args.has('I') && pos.is_empty(),
+                "display-message" => p.args.has('I'),
+                _ => false,
+            }
         })
     })
 }

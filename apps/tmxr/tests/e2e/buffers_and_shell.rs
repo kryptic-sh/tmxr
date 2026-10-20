@@ -175,21 +175,7 @@ fn buffers_save_to_and_load_from_files() {
     assert_eq!(t.run(&["show-buffer", "-b", "two"]), "from a file\n");
 
     // -: what was piped into the command, as tmux's.
-    let mut piped = tmxr_term::child::command(env!("CARGO_BIN_EXE_tmxr"))
-        .args(t.args(&["load-buffer", "-b", "three", "-"]))
-        .envs(t.env())
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
-    piped
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(b"from a pipe\n")
-        .unwrap();
-    let out = piped.wait_with_output().unwrap();
+    let out = t.output_with_stdin(&["load-buffer", "-b", "three", "-"], b"from a pipe\n");
     assert!(out.status.success(), "{out:?}");
     assert_eq!(t.run(&["show-buffer", "-b", "three"]), "from a pipe\n");
 }

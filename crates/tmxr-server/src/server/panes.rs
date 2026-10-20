@@ -42,19 +42,36 @@ impl Server {
         }
     }
 
+    /// Start a pane running `argv`, or with `argv` None an empty one (no
+    /// program; its cursor hidden, as tmux's PANE_EMPTY).
     #[allow(clippy::too_many_arguments)]
     pub fn spawn_pane(
         &mut self,
         pid: PaneId,
         window: WindowId,
         session: SessionId,
-        argv: &[String],
+        argv: Option<&[String]>,
         cwd: PathBuf,
         env: &[(String, String)],
         cols: u16,
         rows: u16,
     ) -> Result<(), String> {
-        let started = self.start_pty(pid, session, argv, cwd, env, cols, rows)?;
+        let started = match argv {
+            Some(argv) => self.start_pty(pid, session, argv, cwd, env, cols, rows)?,
+            None => {
+                let spawn = self.next_spawn;
+                self.next_spawn += 1;
+                self.next_pane = self.next_pane.max(pid + 1);
+                Started {
+                    pty: Pty::empty(),
+                    output: crate::output::OutputHandle::default(),
+                    spawn,
+                    cwd,
+                }
+            }
+        };
+        let empty = argv.is_none();
+        let argv = argv.unwrap_or_default();
         let history_limit = self.session_options(session).history_limit;
         self.panes.insert(
             pid,
@@ -81,6 +98,31 @@ impl Server {
                 options: tmxr_config::OwnOptions::default(),
             },
         );
+        if empty && let Some(p) = self.panes.get_mut(&pid) {
+            p.emu.process(b"\x1b[?25l");
+        }
+        Ok(())
+    }
+
+    /// Show `bytes` in empty pane `pid` as if a program printed them, each
+    /// newline starting a line as tmux's MODE_CRLF does for an empty pane
+    /// (`split-window -I`, `display-message -I`).
+    pub fn feed_empty_pane(&mut self, pid: PaneId, bytes: &[u8]) -> Result<(), String> {
+        let p = self.panes.get_mut(&pid).ok_or("no such pane")?;
+        if !p.pty.is_empty() {
+            return Err("pane is not empty".into());
+        }
+        let mut text = Vec::with_capacity(bytes.len());
+        for &b in bytes {
+            if b == b'\n' {
+                text.push(b'\r');
+            }
+            text.push(b);
+        }
+        // Answers to queries in it go nowhere: an empty pane has no program.
+        drop(p.emu.process(&text));
+        let window = p.window;
+        self.mark_window_dirty(window);
         Ok(())
     }
 
@@ -235,7 +277,7 @@ impl Server {
             hooks = std::mem::take(&mut old.hooks);
         }
         self.commands.remove(&pid);
-        if let Err(e) = self.spawn_pane(pid, wid, session, &argv, cwd, env, rect.w, rect.h) {
+        if let Err(e) = self.spawn_pane(pid, wid, session, Some(&argv), cwd, env, rect.w, rect.h) {
             // The old program is gone: take its cell out of the layout too.
             self.remove_pane_from_window(wid, pid);
             return Err(e);
@@ -249,8 +291,8 @@ impl Server {
 
     /// Split `target` and start a new pane. `horizontal` is tmux's `-h`
     /// (side by side); `before` is `-b`; `full` is `-f` (the whole window
-    /// splits, not the target); `size` is the new pane's cells; `env` is
-    /// added to its environment (`-e`).
+    /// splits, not the target); `size` is the new pane's cells; `argv` None
+    /// makes an empty pane; `env` is added to its environment (`-e`).
     #[allow(clippy::too_many_arguments)]
     pub fn split(
         &mut self,
@@ -260,13 +302,13 @@ impl Server {
         full: bool,
         size: Option<SplitSize>,
         cwd: PathBuf,
-        argv: Vec<String>,
+        argv: Option<Vec<String>>,
         env: &[(String, String)],
         focus: bool,
     ) -> Result<PaneId, String> {
         let wid = self.panes.get(&target).ok_or("no such pane")?.window;
         let session = self.session_of_window(wid).ok_or("window has no session")?;
-        let argv = self.new_pane_argv(session, argv);
+        let argv = argv.map(|argv| self.new_pane_argv(session, argv));
         let new = self.next_pane;
         self.insert_leaf(target, new, horizontal, before, full, size)?;
         let win = self.windows.get_mut(&wid).ok_or("no such window")?;
@@ -276,7 +318,7 @@ impl Server {
             .find(|(p, _)| *p == new)
             .map(|(_, r)| *r)
             .unwrap_or_default();
-        if let Err(e) = self.spawn_pane(new, wid, session, &argv, cwd, env, r.w, r.h) {
+        if let Err(e) = self.spawn_pane(new, wid, session, argv.as_deref(), cwd, env, r.w, r.h) {
             if let Some(win) = self.windows.get_mut(&wid) {
                 let _ = win.layout.remove_leaf(new as usize);
             }

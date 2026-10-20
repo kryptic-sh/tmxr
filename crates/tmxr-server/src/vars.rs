@@ -647,7 +647,9 @@ impl<'a> Context for Vars<'a> {
                 )
             }
             "pane_synchronized" => flag(srv.pane_options(pane?.id).synchronize_panes),
-            "pane_dead" => flag(pane?.dead.is_some()),
+            // An empty pane has no program, so counts as dead, as tmux's
+            // (its fd is -1).
+            "pane_dead" => flag(pane?.dead.is_some() || pane?.pty.is_empty()),
             "pane_start_path" => pane?.start_cwd.display().to_string(),
             // Each word quoted as tmux's args_escape, as its
             // cmd_stringify_argv joins them.
@@ -688,7 +690,15 @@ impl<'a> Context for Vars<'a> {
                     .or_else(|| tmxr_term::process::foreground_command(&p.pty))
                     .unwrap_or_default()
             }
-            "pane_pid" => pane?.pty.pid()?.to_string(),
+            // 0 for an empty pane, as tmux's.
+            "pane_pid" => {
+                let p = pane?;
+                if p.pty.is_empty() {
+                    "0".to_owned()
+                } else {
+                    p.pty.pid()?.to_string()
+                }
+            }
             "copy_cursor_word" => pane?.copy.as_ref()?.cursor_word(),
             // tmux's: the column, and the row in the view.
             "copy_cursor_x" => pane?.copy.as_ref()?.cx.to_string(),

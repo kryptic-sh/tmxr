@@ -312,6 +312,12 @@ fn print_new(
 /// One item of a list command: its `default` line, or `-F`'s format
 /// expanded with the item's variables; `None` when `-f`'s filter expands to
 /// nothing or `0` for it, as tmux's filters.
+/// The command client's standard input, which it sent ahead for a command
+/// that reads it ([`tmxr_command::reads_stdin`]).
+fn take_stdin(srv: &mut Server, ctx: &Ctx) -> Option<Vec<u8>> {
+    srv.clients.get_mut(&ctx.client?)?.stdin.take()
+}
+
 /// Whether an expanded format counts as true, as tmux's format_true: it
 /// is not empty and not `0`.
 pub fn format_true(value: &str) -> bool {

@@ -150,7 +150,7 @@ impl Server {
                 hooks: crate::hooks::HookTable::new(),
             },
         );
-        if let Err(e) = self.spawn_pane(pid, wid, session, &argv, cwd, env, cols, rows) {
+        if let Err(e) = self.spawn_pane(pid, wid, session, Some(&argv), cwd, env, cols, rows) {
             self.windows.remove(&wid);
             return Err(e);
         }

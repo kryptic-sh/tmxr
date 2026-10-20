@@ -44,13 +44,19 @@ pub enum PtyEvent {
 /// (which ends the program's output stream) but does not kill the program;
 /// call [`Pty::kill`] for that.
 pub struct Pty {
+    /// The terminal and its program; none for an empty pane.
+    live: Option<Live>,
+    pid: Option<u32>,
+}
+
+/// A started program's terminal.
+struct Live {
     master: Box<dyn MasterPty + Send>,
     /// Bytes for the program, written by the pane's writer thread: a
     /// program that does not read its input blocks that thread, never the
     /// caller.
     input: Sender<Vec<u8>>,
     killer: Box<dyn ChildKiller + Send + Sync>,
-    pid: Option<u32>,
 }
 
 impl Pty {
@@ -138,23 +144,45 @@ impl Pty {
             })?;
 
         Ok(Self {
-            master: pair.master,
-            input,
-            killer,
+            live: Some(Live {
+                master: pair.master,
+                input,
+                killer,
+            }),
             pid,
         })
+    }
+
+    /// No terminal and no program, as tmux's empty pane (`split-window -I`
+    /// or `''`): what is written to it goes nowhere, and it never exits.
+    pub fn empty() -> Self {
+        Self {
+            live: None,
+            pid: None,
+        }
+    }
+
+    /// Whether this is an [`Pty::empty`] one.
+    pub fn is_empty(&self) -> bool {
+        self.live.is_none()
     }
 
     /// Queue bytes for the program, in order. An error means the writer
     /// has stopped: a write before this one failed.
     pub fn write(&mut self, bytes: &[u8]) -> io::Result<()> {
-        self.input
+        let Some(live) = &self.live else {
+            return Ok(());
+        };
+        live.input
             .send(bytes.to_vec())
             .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "the pane's input is closed"))
     }
 
     pub fn resize(&self, rows: u16, cols: u16) -> io::Result<()> {
-        self.master
+        let Some(live) = &self.live else {
+            return Ok(());
+        };
+        live.master
             .resize(PtySize {
                 rows: rows.max(1),
                 cols: cols.max(1),
@@ -172,14 +200,19 @@ impl Pty {
     /// The terminal's foreground process group (Unix only).
     #[cfg(unix)]
     pub fn foreground_pgrp(&self) -> Option<u32> {
-        self.master
+        self.live
+            .as_ref()?
+            .master
             .process_group_leader()
             .and_then(|p| u32::try_from(p).ok())
     }
 
     /// Kill the program started in the pane.
     pub fn kill(&mut self) -> io::Result<()> {
-        self.killer.kill()
+        match &mut self.live {
+            Some(live) => live.killer.kill(),
+            None => Ok(()),
+        }
     }
 }
 
