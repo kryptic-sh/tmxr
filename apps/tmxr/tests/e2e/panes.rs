@@ -770,7 +770,11 @@ fn pane_tty_is_the_terminal_the_program_sees() {
     #[cfg(windows)]
     {
         t.run(&["new-session", "-d", "-s", "pt"]);
-        let pane_tty = t.run(&["display-message", "-p", "-t", "pt", "[#{pane_tty}]"]);
-        assert_eq!(pane_tty.trim(), "[]");
+        // Read once the pane is there: a ConPTY under load starts late.
+        t.wait_run(
+            &["display-message", "-p", "-t", "pt", "[#{pane_tty}]"],
+            "an empty pane_tty",
+            |o| o.trim() == "[]",
+        );
     }
 }
