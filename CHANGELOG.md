@@ -24,6 +24,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`escape-time`** takes effect, as tmux's: set above 0, an Escape with a key
+  pressed within it is Meta and that key, and a lone Escape goes once it is up.
+  tmxr's default stays 0.
 - **The command prompt's Tab opens a menu of the names a word could be**, as
   tmux's, when they share no longer start: under the word, picked with Tab, the
   arrows, a digit or Enter, Escape keeping the word; after `-t` / `-s` and in a

@@ -49,6 +49,7 @@ impl Server {
             full_redraw: true,
             locked: false,
             last_input: Instant::now(),
+            pending_escape: None,
             key_at: None,
             assume_pasting: false,
             drag: None,

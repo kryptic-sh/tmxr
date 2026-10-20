@@ -2,7 +2,7 @@
 
 use std::time::{Duration, Instant};
 
-use crossterm::event::{Event as TermEvent, KeyEvent, KeyEventKind};
+use crossterm::event::{Event as TermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::layout::Rect;
 use tmxr_command::Key;
 use tmxr_term::{conpty_key, encode_key, encode_paste};
@@ -37,6 +37,9 @@ impl Server {
                     ..
                 })
         );
+        let Some(ev) = self.escape_time(id, ev) else {
+            return;
+        };
         match ev {
             TermEvent::Key(k) if k.kind != KeyEventKind::Release => self.client_key(id, k, false),
             TermEvent::Key(_) => {}
@@ -572,6 +575,68 @@ impl Server {
         self.send_key_to_pane(pane, ev);
     }
 
+    /// `escape-time`, as tmux's: a lone Escape is held that long, and a key
+    /// pressed before it is up goes as Meta and that key; anything else
+    /// sends the Escape first. Returns the event to handle, none while one
+    /// is held. (A key's release, which the kitty protocol and Windows
+    /// send, changes nothing.)
+    fn escape_time(&mut self, id: ClientId, ev: TermEvent) -> Option<TermEvent> {
+        let wait = Duration::from_millis(self.cfg.escape_time);
+        let att = self.clients.get_mut(&id)?.att.as_mut()?;
+        let press = match &ev {
+            TermEvent::Key(k) if k.kind == KeyEventKind::Release => return Some(ev),
+            TermEvent::Key(k) => Some(*k),
+            _ => None,
+        };
+        let now = Instant::now();
+        if let Some(deadline) = att.pending_escape.take() {
+            match press {
+                Some(mut k) if now < deadline && !k.modifiers.contains(KeyModifiers::ALT) => {
+                    k.modifiers |= KeyModifiers::ALT;
+                    return Some(TermEvent::Key(k));
+                }
+                _ => self.client_key(id, escape_key(), false),
+            }
+        }
+        let lone = press.is_some_and(|k| k.code == KeyCode::Esc && k.modifiers.is_empty());
+        if lone && !wait.is_zero() {
+            let att = self.clients.get_mut(&id)?.att.as_mut()?;
+            att.pending_escape = Some(now + wait);
+            return None;
+        }
+        Some(ev)
+    }
+
+    /// Escapes whose `escape-time` is up, sent as Escape.
+    pub(super) fn flush_escapes(&mut self) {
+        let now = Instant::now();
+        let due: Vec<ClientId> = self
+            .clients
+            .values()
+            .filter(|c| {
+                c.att
+                    .as_ref()
+                    .and_then(|a| a.pending_escape)
+                    .is_some_and(|d| d <= now)
+            })
+            .map(|c| c.id)
+            .collect();
+        for id in due {
+            if let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
+                att.pending_escape = None;
+            }
+            self.client_key(id, escape_key(), false);
+        }
+    }
+
+    /// The soonest a held Escape is due, for the server loop to wake.
+    pub(super) fn next_escape(&self) -> Option<Instant> {
+        self.clients
+            .values()
+            .filter_map(|c| c.att.as_ref()?.pending_escape)
+            .min()
+    }
+
     /// The `extended-keys` option.
     pub fn extended_keys(&self) -> tmxr_term::ExtendedKeys {
         tmxr_term::ExtendedKeys::from_option(&self.cfg.extended_keys)
@@ -668,4 +733,9 @@ impl Server {
             _ => vec![pane],
         }
     }
+}
+
+/// An Escape key press.
+fn escape_key() -> KeyEvent {
+    KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)
 }

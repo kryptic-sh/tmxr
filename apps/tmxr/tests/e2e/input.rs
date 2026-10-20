@@ -558,3 +558,48 @@ fn the_wheel_on_the_status_line_and_a_middle_click_do_what_tmuxs_do() {
     s.click(1, 5, 2);
     s.wait_for("the paste", |text| text.contains("middle-pasted"));
 }
+
+/// `escape-time`, as tmux's: an Escape with a key soon after is Meta and
+/// that key, and a lone Escape goes once the time is up; at 0, an Escape
+/// is a key of its own.
+#[test]
+fn escape_time_makes_escape_and_a_key_meta() {
+    let t = Tmxr::new("esctime");
+    let s = t.attach(&["new", "-s", "et"]);
+    s.wait_for("status line", |text| text.contains("et"));
+    t.run(&["bind", "-n", "M-x", "set", "-g", "@meta", "yes"]);
+    t.run(&["bind", "-n", "Escape", "set", "-g", "@esc", "yes"]);
+    t.run(&["set", "-s", "escape-time", "300"]);
+    s.send(b"\x1b");
+    std::thread::sleep(Duration::from_millis(50));
+    s.send(b"x");
+    t.wait_run(&["show", "-gv", "@meta"], "Escape and x as M-x", |o| {
+        o.trim() == "yes"
+    });
+    assert_eq!(
+        t.run(&["show", "-gv", "@esc"]).trim(),
+        "",
+        "no Escape of its own"
+    );
+    // Alone, it goes as Escape when the time is up.
+    s.send(b"\x1b");
+    t.wait_run(&["show", "-gv", "@esc"], "the lone Escape", |o| {
+        o.trim() == "yes"
+    });
+    // At 0 the Escape is a key at once, and x after it is just x.
+    t.run(&["set", "-s", "escape-time", "0"]);
+    t.run(&["set", "-gu", "@meta"]);
+    t.run(&["set", "-gu", "@esc"]);
+    s.send(b"\x1b");
+    t.wait_run(&["show", "-gv", "@esc"], "the Escape at once", |o| {
+        o.trim() == "yes"
+    });
+    std::thread::sleep(Duration::from_millis(50));
+    s.send(b"x");
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(
+        t.run(&["show", "-gv", "@meta"]).trim(),
+        "",
+        "x alone is not M-x"
+    );
+}

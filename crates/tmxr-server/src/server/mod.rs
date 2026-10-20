@@ -114,6 +114,9 @@ pub struct Attached {
     /// Running the lock command (`lock-client`) until it reports back.
     pub locked: bool,
     pub last_input: Instant,
+    /// A lone Escape held for `escape-time`: a key before this goes as
+    /// Meta and that key, as tmux's tty_keys_next.
+    pub pending_escape: Option<Instant>,
     /// When the last key reached the key tables (not an overlay), and
     /// whether keys are being taken as pasted (`assume-paste-time`).
     pub key_at: Option<Instant>,
@@ -400,6 +403,7 @@ impl Server {
                 .into_iter()
                 .chain(self.copy_line.map(|c| c.due()))
                 .chain(self.next_dead_line())
+                .chain(self.next_escape())
                 .min();
             let wait = due.map_or(tick, |due| {
                 due.saturating_duration_since(Instant::now()).min(tick)
@@ -959,6 +963,7 @@ impl Server {
 
     fn tick(&mut self) {
         crate::mouse::fire_double_clicks(self);
+        self.flush_escapes();
         self.advance_copy_line();
         self.write_due_dead_lines();
         self.mark_away_clients();
