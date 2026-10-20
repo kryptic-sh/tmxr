@@ -259,6 +259,7 @@ impl From<File> for Config {
                 display_panes_time: f.display_panes_time,
                 display_time: f.display_time,
                 status: s.status,
+                status_format: s.format.into_iter().collect(),
                 status_bg: Word(s.bg),
                 status_fg: Word(s.fg),
                 history_limit: f.history_limit,
@@ -335,7 +336,9 @@ pub struct Navigator {
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 struct StatusFile {
-    status: bool,
+    status: StatusLines,
+    /// `status-format`: each status line's format, by line.
+    format: Vec<String>,
     style: String,
     fg: String,
     bg: String,
@@ -386,6 +389,65 @@ pub struct Resurrect {
 
 /// `destroy-unattached`: whether a session no client is attached to goes,
 /// as tmux's. tmxr has no session groups, so `keep-last` keeps every
+/// `status`: how many status lines a client shows, as tmux's: `off`, `on`
+/// (one) or 2 to 5.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StatusLines(u8);
+
+impl StatusLines {
+    /// The most status lines tmux takes.
+    const MAX: u8 = 5;
+
+    pub const NAMES: &str = "off, on, 2, 3, 4 or 5";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "off" => Some(Self(0)),
+            "on" => Some(Self(1)),
+            n => n
+                .parse::<u8>()
+                .ok()
+                .filter(|n| (2..=Self::MAX).contains(n))
+                .map(Self),
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self.0 {
+            0 => "off",
+            1 => "on",
+            2 => "2",
+            3 => "3",
+            4 => "4",
+            _ => "5",
+        }
+    }
+
+    /// The rows they take.
+    pub const fn rows(self) -> u16 {
+        self.0 as u16
+    }
+}
+
+impl<'de> Deserialize<'de> for StatusLines {
+    /// A name as `set-option` takes it, or (as tmxr's file once had it) a
+    /// flag.
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Raw {
+            Flag(bool),
+            Name(String),
+        }
+        match Raw::deserialize(d)? {
+            Raw::Flag(on) => Ok(Self(u8::from(on))),
+            Raw::Name(n) => Self::parse(&n).ok_or_else(|| {
+                serde::de::Error::custom(format!("unknown status: {n} ({})", Self::NAMES))
+            }),
+        }
+    }
+}
+
 /// `status-position`: the client's row the status line takes, as tmux's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]

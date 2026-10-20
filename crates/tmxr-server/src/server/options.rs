@@ -31,7 +31,7 @@ impl Server {
     /// The rows `session`'s status line takes: one, or none with `status`
     /// off.
     pub fn status_rows(&self, session: SessionId) -> u16 {
-        u16::from(self.session_options(session).status)
+        self.session_options(session).status.rows()
     }
 
     /// Each visible pane's area in window `w`: its layout cell less a row
@@ -85,7 +85,7 @@ impl Server {
     /// The rows client `client`'s status line takes, by its session's (the
     /// global) `status`.
     pub fn client_status_rows(&self, client: ClientId) -> u16 {
-        u16::from(self.client_session_options(client).status)
+        self.client_session_options(client).status.rows()
     }
 
     pub fn client_session_options(&self, client: ClientId) -> Cow<'_, SessionOptions> {

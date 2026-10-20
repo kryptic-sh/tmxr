@@ -68,7 +68,7 @@ fn colour(c: Colour) -> Color {
 }
 
 /// Apply a parsed tmux style on top of `base`.
-fn apply(base: Style, s: &format::Style) -> Style {
+pub(crate) fn apply(base: Style, s: &format::Style) -> Style {
     let mut out = base;
     if let Some(fg) = s.fg {
         out = out.fg(colour(fg));
@@ -771,6 +771,15 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
         }
     }
     let base = style_option(&spec, &vars);
+    // The lines after the first, each its status-format item expanded and
+    // laid out as tmux's format_draw; they stay under a message or prompt.
+    for line in 1..lines {
+        let item = tmxr_config::OptionValue::items(&opts.status_format)
+            .and_then(|items| items.get(&u32::from(line)))
+            .map_or("", String::as_str);
+        let text = format::expand_time(item, &vars);
+        crate::format_draw::draw(buf, y + line, cols, base, &text);
+    }
     buf.set_style(Rect::new(0, y, cols, 1), base);
     for x in 0..cols {
         if let Some(c) = buf.cell_mut((x, y)) {

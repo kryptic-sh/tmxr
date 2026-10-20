@@ -464,14 +464,20 @@ table. What has been verified, and how:
     `vt100` crate does not expose); styles `align=` `fill=` `list=` `range=`
     `push-default` / `pop-default`, strikethrough, blink, overline, curly and
     coloured underlines.
-  - Options: the status line is one row, at the bottom or
-    (`status-position top`) the top, or none with `status off`
-    (`Server::status_rows`, `Server::window_top`): no `status` `2`–`5`,
-    `status-format`. With `status off` and `status-position top`, a message or
-    prompt covers the window's first row; tmux's `screen_redraw_set_context`
-    moves the window down a row for it instead; (not tested: `send-keys -M`
-    under a top status line or in a panned view, which now measure from the
-    mouse's window cell, `MouseTarget::col` / `row`, not its client cell); no
+  - Options: the status line's first row is tmxr's own (`render::draw_status`,
+    from `status-left`, the window list and `status-right`), so a changed
+    `status-format[0]` is not drawn; the rows after it (`status 2` to `5`) are
+    drawn from `status-format` by `format_draw`, which takes tmux's `align`,
+    `fill`, `default` / `push-default` / `pop-default` and lists, but not a
+    list's markers and focus when it is too long for its room, nor ranges
+    (clicks on those rows reach nothing); tmux's `pane-status-style`,
+    `pane-status-current-style`, `session-status-style` and
+    `session-status-current-style`, which the default formats name, are missing
+    (so empty). With `status off` and `status-position top`, a message or prompt
+    covers the window's first row; tmux's `screen_redraw_set_context` moves the
+    window down a row for it instead; (not tested: `send-keys -M` under a top
+    status line or in a panned view, which now measure from the mouse's window
+    cell, `MouseTarget::col` / `row`, not its client cell); no
     `window-status-activity-style` / `-bell-style` (tmux's default `reverse`
     would change tmxr's theme, which shows flags in its window format); colour
     options (`status-fg` / `-bg`, `display-panes-colour`, `clock-mode-colour`

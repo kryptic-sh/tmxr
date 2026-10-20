@@ -294,7 +294,18 @@ fn locate(
         row >= att.rows.saturating_sub(lines)
     };
     if lines > 0 && on_status {
-        let (location, idx) = att.status_ranges.at(col);
+        // The first line's ranges only: the lines after it are drawn from
+        // status-format, whose ranges tmxr does not keep.
+        let first = if srv.status_at_top(session) {
+            0
+        } else {
+            att.rows.saturating_sub(lines)
+        };
+        let (location, idx) = if row == first {
+            att.status_ranges.at(col)
+        } else {
+            (MouseLocation::StatusDefault, None)
+        };
         t.location = location;
         t.window = idx.and_then(|i| Some((i, *sess.windows.get(&i)?)));
         return Some(t);

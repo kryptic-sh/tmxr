@@ -24,6 +24,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`status 2` to `5` and `status-format`**, as tmux's: `status` takes `off`,
+  `on` or 2 to 5 lines, and each line after the first is drawn from its
+  `status-format` item (tmux's defaults: the panes, then the sessions), laid out
+  by `align`, `fill` and the `default` styles. The config file's
+  `[status] status` takes those names (still `true` / `false`) and gains
+  `format`.
 - **Tab completion in the command prompt**, as tmux's: the word at the cursor
   completes to a command name or alias (and after the first word an option name
   or layout) with a space after when one matches, or as far as the matches

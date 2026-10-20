@@ -3,7 +3,9 @@
 //! `show-options` under tmux's names.
 
 use crate::table::{Array, Word, options_table};
-use crate::{AlertAction, DestroyUnattached, ModeKeys, StatusJustify, StatusPosition, Visual};
+use crate::{
+    AlertAction, DestroyUnattached, ModeKeys, StatusJustify, StatusLines, StatusPosition, Visual,
+};
 
 options_table! {
     /// The session options every session has unless it sets its own: tmux's
@@ -64,15 +66,17 @@ options_table! {
     "set-titles" => set_titles: bool,
     "set-titles-string" => set_titles_string: String,
     "silence-action" => silence_action: AlertAction,
-    /// Whether the status line is drawn; off gives its row to the panes.
-    /// (tmux's 2 to 5 rows are not taken.)
-    "status" => status: bool,
+    /// How many status lines are drawn: off gives their rows to the panes.
+    "status" => status: StatusLines,
     /// The status line's background over `status-style`'s, unless
     /// `default`. (Deprecated in tmux for `status-style`.)
     "status-bg" => status_bg: Word,
     /// The status line's foreground over `status-style`'s, unless
     /// `default`. (Deprecated in tmux for `status-style`.)
     "status-fg" => status_fg: Word,
+    /// Each status line's format, by line: the first is drawn by tmxr's own
+    /// status line from the options its default names, the rest expanded.
+    "status-format" => status_format: Array,
     /// Seconds between status line redraws.
     "status-interval" => status_interval: u64,
     /// Where the window list sits: left, centre, right or absolute-centre.

@@ -233,7 +233,7 @@ fn client_size(srv: &Server, ctx: &Ctx) -> (u16, u16) {
     });
     let (cols, rows) = from_client.unwrap_or((80, 24));
     let status = ctx.client.map_or_else(
-        || u16::from(srv.cfg.session.status),
+        || srv.cfg.session.status.rows(),
         |c| srv.client_status_rows(c),
     );
     (cols.max(2), rows.saturating_sub(status).max(2))

@@ -487,3 +487,23 @@ steps = [
   { sleep = 0.5 },
 ]
 checks = [{ format = "[#{@ca}]" }]
+
+[[cases]]
+name = "status_takes_on_off_and_2_to_5_as_tmux"
+steps = [{ run = "set -g status 4" }]
+checks = [
+  { command = "show -gv status" },
+  { command = "show -g status-format" },
+  { command = "show -gv status-format[2]" },
+]
+
+[[cases]]
+name = "status_3_draws_the_pane_and_session_lines_as_tmux"
+attach = true
+unix_only = true
+steps = [{ run = "set -g status 3" }, { sleep = 0.5 }]
+checks = [
+  { format = "#{window_height} #{pane_height}" },
+  { screen_contains = " P: 0[", expect = true },
+  { screen_contains = " S: o*", expect = true },
+]
