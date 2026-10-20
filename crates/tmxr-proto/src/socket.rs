@@ -1,8 +1,8 @@
 //! Where a server listens and who may open it.
 //!
 //! - Unix: a socket file named after the label inside a per-user directory
-//!   `<base>/tmxr-<uid>`, where `<base>` is `$TMXR_TMPDIR`, `$XDG_RUNTIME_DIR`,
-//!   `$TMPDIR` or `/tmp` (first set wins). The directory is created `0700` and
+//!   `<base>/tmxr-<uid>`, where `<base>` is `$TMXR_TMPDIR`, `$TMPDIR` or
+//!   `/tmp` (first set wins, [`socket_base`]). The directory is created `0700` and
 //!   refused unless it is a real directory owned by us with no group/other
 //!   access. A `-S` socket's directory is the user's choice, as in tmux.
 //! - Windows: the named pipe `\\.\pipe\tmxr-<user>-<label>`, created with a
@@ -245,12 +245,22 @@ fn validate_label(label: &str) -> io::Result<()> {
 
 #[cfg(unix)]
 fn label_path(label: &str) -> io::Result<PathBuf> {
-    let base = ["TMXR_TMPDIR", "XDG_RUNTIME_DIR", "TMPDIR"]
-        .iter()
-        .filter_map(std::env::var_os)
-        .find(|v| !v.is_empty())
-        .map_or_else(|| PathBuf::from("/tmp"), PathBuf::from);
+    let base = socket_base(|k| std::env::var_os(k));
     Ok(base.join(format!("tmxr-{}", current_uid())).join(label))
+}
+
+/// The directory a label's socket directory is made in, reading the
+/// environment through `var`: `$TMXR_TMPDIR`, else `$TMPDIR`, else `/tmp`.
+/// Not `$XDG_RUNTIME_DIR`, as tmux does not use it either: logind removes it
+/// when the user's last session ends, and with it the socket of a server
+/// still running detached.
+#[cfg(unix)]
+fn socket_base(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> PathBuf {
+    ["TMXR_TMPDIR", "TMPDIR"]
+        .into_iter()
+        .filter_map(var)
+        .find(|v| !v.is_empty())
+        .map_or_else(|| PathBuf::from("/tmp"), PathBuf::from)
 }
 
 #[cfg(windows)]
@@ -429,6 +439,26 @@ mod tests {
         assert_eq!(label.in_private_dir(), cfg!(unix));
         let explicit = Endpoint::resolve(Some(Path::new("/srv/shared/sock")), None).unwrap();
         assert!(!explicit.in_private_dir());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_socket_directory_is_not_the_runtime_directory() {
+        let base = |vars: &[(&str, &str)]| {
+            socket_base(|k| {
+                vars.iter()
+                    .find(|(name, _)| *name == k)
+                    .map(|(_, v)| v.into())
+            })
+        };
+        let runtime = ("XDG_RUNTIME_DIR", "/run/user/1000");
+        assert_eq!(base(&[runtime]), Path::new("/tmp"));
+        assert_eq!(base(&[runtime, ("TMPDIR", "/var/t")]), Path::new("/var/t"));
+        assert_eq!(
+            base(&[("TMPDIR", "/var/t"), ("TMXR_TMPDIR", "/x")]),
+            Path::new("/x")
+        );
+        assert_eq!(base(&[("TMXR_TMPDIR", ""), runtime]), Path::new("/tmp"));
     }
 
     #[cfg(unix)]

@@ -214,6 +214,15 @@ table. What has been verified, and how:
   connecting and being checked is refused. A label's socket on Unix sits in
   tmxr's private directory, unreachable by other users whatever `socket-access`
   says; `server-access -a` then says to use `-S`, as tmux documents.
+- **A server whose socket file is removed cannot be reached again**: tmux
+  re-creates its socket on SIGUSR1 (`server_create_socket` from its signal
+  handler); tmxr has no such signal, so a socket deleted under a running server
+  (`rm`, a `/tmp` cleaner) leaves it unreachable until it is killed by pid. The
+  socket directory moved out of `$XDG_RUNTIME_DIR` on 2026-10-20, as logind
+  deletes that one at the user's last logout (`socket_base`), which was the
+  common way to lose it; checked with `Linger=no` on Arch, where
+  `systemd-user-runtime-dir stop` removes it. Not tried: a real logout with a
+  server running.
 - **`display-popup` / `display-menu` gaps.** Placement (`-x` / `-y`, letters,
   numbers and the `popup_*` variables) is transcribed from tmux 3.6's
   `cmd_display_menu_get_pos` and checked against a running tmux
@@ -455,7 +464,10 @@ table. What has been verified, and how:
   report the e2e key-log fixture lost in about one full Linux run in four when
   it arrived before the fixture's first crossterm `read` (none in twelve once
   the fixture polled first, `key_log_fixture`), or the one the "Pane focus"
-  entry describes.
+  entry describes. A standalone probe the same day (a program sleeping in raw
+  mode while `CSI I` was written, then reading with crossterm) lost none of 20,
+  with the old crossterm, so input that comes before the reader exists is not
+  lost by itself.
 - **From a code review by a sub-agent (2026-10-18).** Found by reading code and
   tmux 3.6's source; nothing was run. Items marked _checked_ were confirmed by
   reading the code again; the rest are as reported.

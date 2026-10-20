@@ -4,11 +4,15 @@
 
 `interprocess::local_socket`:
 
-| Platform | Endpoint                                                                                         |
-| -------- | ------------------------------------------------------------------------------------------------ |
-| Linux    | `$TMXR_TMPDIR` or `$XDG_RUNTIME_DIR/tmxr` or `$TMPDIR/tmxr-<uid>` (dir `0700`), socket `<label>` |
-| macOS    | `$TMXR_TMPDIR` or `$TMPDIR/tmxr-<uid>` (dir `0700`), socket `<label>`                            |
-| Windows  | named pipe `\\.\pipe\tmxr-<username>-<label>`                                                    |
+| Platform | Endpoint                                                                                |
+| -------- | --------------------------------------------------------------------------------------- |
+| Linux    | `$TMXR_TMPDIR` or `$TMPDIR` or `/tmp`, then `tmxr-<uid>` (dir `0700`), socket `<label>` |
+| macOS    | `$TMXR_TMPDIR` or `$TMPDIR/tmxr-<uid>` (dir `0700`), socket `<label>`                   |
+| Windows  | named pipe `\\.\pipe\tmxr-<username>-<label>`                                           |
+
+Not `$XDG_RUNTIME_DIR`, as tmux does not use it either: logind removes it when
+the user's last session ends, taking the socket of a detached server that
+outlives the logout.
 
 `-L <label>` picks the label (default `default`); `-S <path>` gives an explicit
 socket path (on Windows, a pipe name). Precedence: `-S`, then `-L`, then the
