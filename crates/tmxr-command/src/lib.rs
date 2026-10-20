@@ -6,6 +6,7 @@
 //! - [`args`]: getopt-style flag parsing.
 //! - [`keys`]: tmux key names.
 //! - [`bind_key`]: what a key table binds, keys or mouse keys.
+//! - [`colour`]: colour names as tmux reads them, in RGB.
 //! - [`format`]: `#{…}` format expansion and `#[…]` style runs.
 //! - [`template`]: answers put into a command template's `%%` and `%1`.
 //!
@@ -13,6 +14,7 @@
 
 pub mod args;
 pub mod bind_key;
+pub mod colour;
 pub mod format;
 pub mod keys;
 pub mod localtime;

@@ -598,6 +598,10 @@ fn expand_item(body: &str, ctx: &dyn Context, pass: Pass) -> String {
             .map(|c| char::from(c).to_string())
             .unwrap_or_default();
     }
+    if let Some(text) = body.strip_prefix("c:") {
+        // `c`: the colour it names as six hex digits, as tmux's.
+        return crate::colour::rgb(&ex(text)).map_or_else(String::new, |c| format!("{c:06x}"));
+    }
     if let Some((args, rest)) = body.strip_prefix('e').and_then(expression_args) {
         let parts = split_top(rest);
         let left = ex(parts.first().copied().unwrap_or_default());
@@ -1302,6 +1306,13 @@ mod tests {
         assert_eq!(x("#{e|^|:1,1}"), "", "no such operator");
         assert_eq!(x("#{a:65}"), "A");
         assert_eq!(x("#{a:#{e|+|:96,1}}"), "a");
+        assert_eq!(x("#{c:colour110}"), "87afd7");
+        assert_eq!(
+            x("#{c:#{e|+|:200,10}}"),
+            "",
+            "a number past 97 names no colour"
+        );
+        assert_eq!(x("#{c:nonsense}"), "");
         assert_eq!(x("#{a:10}"), "", "not printable");
     }
 

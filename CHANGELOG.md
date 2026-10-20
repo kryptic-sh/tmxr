@@ -24,6 +24,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The `c:` format modifier**, as tmux's: `#{c:colour110}` gives the colour's
+  RGB as six hex digits (`87afd7`), for `#rrggbb`, `colourN`, the eight colour
+  names and their `bright` forms, and `greyN`; X11's colour names are not read
+  yet.
 - **`capture-pane -e`**, as tmux's: each change of colour or attribute in the
   capture is written as the SGR escape tmux writes for it (with `-C`, as
   `\033`).

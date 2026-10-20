@@ -450,19 +450,19 @@ table. What has been verified, and how:
   `cmd-*.c`, `options-table.c` and `format.c`, not run):
   - Formats: `#(shell)` in status formats (tmux's default `status-right` uses
     it); modifiers `w:` (it needs a display-width measure `tmxr-command` does
-    not have, unicode-width being a new dependency), `c:` (a colour as hex RGB:
-    needs a 256-colour-to-RGB table, which tmxr does not have — `backend.rs`
-    maps only RGB to the 256 and the 256 to 16 — and tmux's `colour.c`, not
-    read, decides which colour names it takes); a syntax error ends tmux's whole
-    expansion (2026-10-18, tmux 3.6: `A#{==:a}B`, `A#{m:a}B` and `A#{R:x}B` all
-    print `A`) where tmxr expands only that item (`==:` compares against an
-    empty right side); many of tmux's format variables (compare tmux's
-    `format_table` with `vars.rs` for the list; `origin_flag`, `wrap_flag`,
-    `insert_flag`, `scroll_region_*`, `alternate_saved_*`, `pane_tabs` and
-    `cursor_shape` / `cursor_colour` need terminal state the `vt100` crate does
-    not expose); styles `align=` `fill=` `list=` `range=` `push-default` /
-    `pop-default`, strikethrough, blink, overline, curly and coloured
-    underlines.
+    not have, unicode-width being a new dependency); `c:` gives no colour for
+    X11's names (`orchid`, `navy blue`), which tmux 3.6's colour_byname takes
+    from a table of 578 (`tmxr_command::colour::rgb` reads everything else tmux
+    reads, compared in the oracle; copying the table is the open choice); a
+    syntax error ends tmux's whole expansion (2026-10-18, tmux 3.6: `A#{==:a}B`,
+    `A#{m:a}B` and `A#{R:x}B` all print `A`) where tmxr expands only that item
+    (`==:` compares against an empty right side); many of tmux's format
+    variables (compare tmux's `format_table` with `vars.rs` for the list;
+    `origin_flag`, `wrap_flag`, `insert_flag`, `scroll_region_*`,
+    `alternate_saved_*`, `pane_tabs` and `cursor_shape` / `cursor_colour` need
+    terminal state the `vt100` crate does not expose); styles `align=` `fill=`
+    `list=` `range=` `push-default` / `pop-default`, strikethrough, blink,
+    overline, curly and coloured underlines.
   - Options: the status line is one row, at the bottom or
     (`status-position top`) the top, or none with `status off`
     (`Server::status_rows`, `Server::window_top`): no `status` `2`–`5`,
