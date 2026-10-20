@@ -794,3 +794,63 @@ checks = [
   { command = "list-keys -T prefix F9" },
   { command = "show-hooks -g after-new-window" },
 ]
+
+[[cases]]
+name = "word_selection_back_where_it_was_made_as_tmux"
+program = "sleep 0.5; printf 'one two three four\nfive six seven\n'; exec sleep 1000"
+steps = [
+  { sleep = 1.0 },
+  { run = "copy-mode -t o" },
+  { run = "send -t o -X history-top" },
+  { run = "send -t o -X -N 5 cursor-right" },
+  { run = "send -t o -X select-word" },
+  { run = "send -t o -X -N 6 cursor-right" },
+  { run = "send -t o -X -N 6 cursor-left" },
+  { run = "send -t o -X copy-selection" },
+]
+checks = [{ command = "show-buffer" }, { format = "#{copy_cursor_x},#{copy_cursor_y}" }]
+
+[[cases]]
+name = "word_selection_back_by_words_as_tmux"
+program = "sleep 0.5; printf 'one two three four\nfive six seven\n'; exec sleep 1000"
+steps = [
+  { sleep = 1.0 },
+  { run = "copy-mode -t o" },
+  { run = "send -t o -X history-top" },
+  { run = "send -t o -X -N 5 cursor-right" },
+  { run = "send -t o -X select-word" },
+  { run = "send -t o -X next-word" },
+  { run = "send -t o -X previous-word" },
+  { run = "send -t o -X copy-selection" },
+]
+checks = [{ command = "show-buffer" }, { format = "#{copy_cursor_x},#{copy_cursor_y}" }]
+
+[[cases]]
+name = "line_selection_back_where_it_was_made_as_tmux"
+program = "sleep 0.5; printf 'one two three four\nfive six seven\n'; exec sleep 1000"
+steps = [
+  { sleep = 1.0 },
+  { run = "copy-mode -t o" },
+  { run = "send -t o -X history-top" },
+  { run = "send -t o -X -N 5 cursor-right" },
+  { run = "send -t o -X select-line" },
+  { run = "send -t o -X cursor-down" },
+  { run = "send -t o -X cursor-up" },
+  { run = "send -t o -X copy-selection" },
+]
+checks = [{ command = "show-buffer" }, { format = "#{copy_cursor_x},#{copy_cursor_y}" }]
+
+[[cases]]
+name = "word_selection_back_from_the_left_as_tmux"
+program = "sleep 0.5; printf 'one two three four\nfive six seven\n'; exec sleep 1000"
+steps = [
+  { sleep = 1.0 },
+  { run = "copy-mode -t o" },
+  { run = "send -t o -X history-top" },
+  { run = "send -t o -X -N 5 cursor-right" },
+  { run = "send -t o -X select-word" },
+  { run = "send -t o -X -N 3 cursor-left" },
+  { run = "send -t o -X -N 3 cursor-right" },
+  { run = "send -t o -X copy-selection" },
+]
+checks = [{ command = "show-buffer" }, { format = "#{copy_cursor_x},#{copy_cursor_y}" }]

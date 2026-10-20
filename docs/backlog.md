@@ -553,10 +553,11 @@ table. What has been verified, and how:
     `-dark-theme`. Copy mode lacks `next-prompt` / `previous-prompt` (they need
     a prompt mark on every history line, as tmux keeps per grid line; `Emulator`
     keeps only the last OSC 133 input mark, and vt100's lines carry no flags, so
-    the marks would have to be counted alongside the history as it scrolls). In
-    word and line selection, the selection is as made only while the cursor
-    stays where `select-word` / `select-line` left it, where tmux snaps again if
-    the cursor comes back there.
+    the marks would have to be counted alongside the history as it scrolls).
+    Word and line selection moving away and back to where `select-word` /
+    `select-line` left the cursor (by characters, words and lines) is compared
+    with tmux (`*_selection_back_*` in `corpus/keys.toml`); other paths back
+    were not.
 
 - **`server did not start` under a full `cargo test`** (Windows, three times on
   2026-10-20: `lock_hands_the_keys_to_the_lock_command`, then
