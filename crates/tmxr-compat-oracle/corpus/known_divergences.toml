@@ -36,3 +36,9 @@ name = "show_hooks_g_lists_the_hooks_tmxr_fires"
 # set-hook refuses them. The rest are in tmux's order.
 steps = [{ run = "set-hook -g after-new-window 'display hi'" }]
 checks = [{ command = "show-hooks -g" }]
+
+[[cases]]
+name = "sixel_support_is_0_in_tmxr"
+# tmux built with sixel says 1; tmxr draws no sixel images.
+steps = []
+checks = [{ format = "#{sixel_support}" }]

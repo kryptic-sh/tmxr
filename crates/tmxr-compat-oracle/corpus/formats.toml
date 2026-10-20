@@ -850,3 +850,18 @@ checks = [
   { screen_find = "PR0", expect = "27,0" },
   { screen_find = "PR1", expect = "57,0" },
 ]
+
+[[cases]]
+name = "pane_colours_as_tmux"
+steps = [
+  { run = "split-window -d -t o" },
+  { run = "set -gF @a '#{pane_fg} #{pane_bg}'" },
+  { run = "set -g window-style 'fg=red,bg=colour196'" },
+  { run = "set -g window-active-style 'fg=#ff0000,bg=blue'" },
+  { run = "set -p -t o.1 window-style 'fg=green'" },
+]
+checks = [
+  { format = "#{@a}", expect = "default default" },
+  { command = "display -p -t o.0 '#{pane_active} #{pane_fg} #{pane_bg}'" },
+  { command = "display -p -t o.1 '#{pane_active} #{pane_fg} #{pane_bg}'" },
+]

@@ -57,6 +57,7 @@ pub const NAMES: &[&str] = &[
     "pane_at_left",
     "pane_at_right",
     "pane_at_top",
+    "pane_bg",
     "pane_bottom",
     "pane_current_command",
     "pane_current_path",
@@ -64,6 +65,7 @@ pub const NAMES: &[&str] = &[
     "pane_dead_signal",
     "pane_dead_status",
     "pane_dead_time",
+    "pane_fg",
     "pane_format",
     "pane_height",
     "pane_id",
@@ -114,6 +116,7 @@ pub const NAMES: &[&str] = &[
     "session_path",
     "session_stack",
     "session_windows",
+    "sixel_support",
     "socket_path",
     "start_time",
     "tree_mode_format",
@@ -813,6 +816,20 @@ impl<'a> Context for Vars<'a> {
             "pane_format" => flag(self.kind == Kind::Pane),
             "window_format" => flag(self.kind == Kind::Window),
             "session_format" => flag(self.kind == Kind::Session),
+            // The pane's default colours, as tmux's tty_default_colours.
+            "pane_fg" | "pane_bg" => {
+                let colours = crate::render::pane_default_colours(srv, pane?.id);
+                let c = if name == "pane_fg" {
+                    colours.fg
+                } else {
+                    colours.bg
+                };
+                tmxr_command::format::colour_name(
+                    c.unwrap_or(tmxr_command::format::Colour::Default),
+                )
+            }
+            // tmxr draws no sixel images.
+            "sixel_support" => "0".to_owned(),
             "pane_unseen_changes" => flag(pane?.copy.as_ref().is_some_and(|c| c.unseen_changes)),
             "pane_search_string" => pane?
                 .last_search

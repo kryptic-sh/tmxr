@@ -24,6 +24,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`#{pane_fg}`, `#{pane_bg}` and `#{sixel_support}`**: a pane's default
+  colours from `window-style` and, for the active pane, `window-active-style`,
+  named as tmux's; `sixel_support` is 0, as tmxr draws no sixel images.
 - **`#{pane_unseen_changes}`**, as tmux's: 1 once the pane prints while in copy
   mode, through `refresh-from-pane`, until copy mode ends.
 - **The `editor` server option and `choose-buffer`'s `e`**, as tmux's: the

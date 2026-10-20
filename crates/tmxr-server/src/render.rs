@@ -675,24 +675,40 @@ fn draw_pane(
 /// active pane, where that sets a colour, else `window-style`'s. Only the
 /// foreground and background.
 fn pane_default_style(srv: &Server, pid: PaneId) -> Style {
-    let Some(pane) = srv.panes.get(&pid) else {
-        return Style::default();
-    };
-    let options = srv.pane_options(pid);
-    let vars = Vars::for_pane(srv, Some(pid), None);
-    let inactive = style_option(&options.window_style, &vars);
-    let active = srv
-        .windows
-        .get(&pane.window)
-        .is_some_and(|w| w.active == pid)
-        .then(|| style_option(&options.window_active_style, &vars));
-    let set = |c: Option<Color>| c.filter(|c| *c != Color::Reset);
-    let fg = active.and_then(|a| set(a.fg)).or_else(|| set(inactive.fg));
-    let bg = active.and_then(|a| set(a.bg)).or_else(|| set(inactive.bg));
+    let colours = pane_default_colours(srv, pid);
+    let fg = colours.fg.map(colour);
+    let bg = colours.bg.map(colour);
     Style {
         fg,
         bg,
         ..Style::default()
+    }
+}
+
+/// [`pane_default_style`]'s colours as tmux's: none where it is the
+/// terminal's default (`#{pane_fg}` / `#{pane_bg}`).
+pub(crate) fn pane_default_colours(srv: &Server, pid: PaneId) -> format::Style {
+    let Some(pane) = srv.panes.get(&pid) else {
+        return format::Style::default();
+    };
+    let options = srv.pane_options(pid);
+    let vars = Vars::for_pane(srv, Some(pid), None);
+    let parse = |spec: &str| {
+        let mut s = format::Style::default();
+        s.apply(&format::expand(spec, &vars));
+        s
+    };
+    let inactive = parse(&options.window_style);
+    let active = srv
+        .windows
+        .get(&pane.window)
+        .is_some_and(|w| w.active == pid)
+        .then(|| parse(&options.window_active_style));
+    let set = |c: Option<Colour>| c.filter(|c| *c != Colour::Default);
+    format::Style {
+        fg: active.and_then(|a| set(a.fg)).or_else(|| set(inactive.fg)),
+        bg: active.and_then(|a| set(a.bg)).or_else(|| set(inactive.bg)),
+        ..format::Style::default()
     }
 }
 

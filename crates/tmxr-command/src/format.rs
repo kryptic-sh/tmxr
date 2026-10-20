@@ -1288,6 +1288,22 @@ pub enum Colour {
     Rgb(u8, u8, u8),
 }
 
+/// A colour as tmux's colour_tostring names it: `default`, the eight names
+/// and their `bright` forms for 0 to 15, `colourN` above, `#rrggbb`. (tmux
+/// also says `colour1` for one given that way; tmxr keeps no difference.)
+pub fn colour_name(c: Colour) -> String {
+    const NAMES: [&str; 8] = [
+        "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white",
+    ];
+    match c {
+        Colour::Default => "default".to_owned(),
+        Colour::Indexed(i @ 0..=7) => NAMES[usize::from(i)].to_owned(),
+        Colour::Indexed(i @ 8..=15) => format!("bright{}", NAMES[usize::from(i - 8)]),
+        Colour::Indexed(i) => format!("colour{i}"),
+        Colour::Rgb(r, g, b) => format!("#{r:02x}{g:02x}{b:02x}"),
+    }
+}
+
 /// Attributes set by a `#[…]` run; `None` leaves the base style alone.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Style {
