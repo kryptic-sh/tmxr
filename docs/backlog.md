@@ -453,10 +453,14 @@ table. What has been verified, and how:
   - Performance: entering copy mode copies every history row into
     `copy::snapshot` (a String per cell) on the server thread; Windows takes two
     process snapshots per pane per second in `util::refresh_commands`;
-    `#{pane_current_path}` inspects the process on each expansion. Not measured.
-    (`#{m:…}` and `s/…/` keep their compiled patterns, `format::compiled`: 89 µs
-    an expansion with two patterns before, 7 µs after, release build,
-    2026-10-20.)
+    `#{pane_current_path}` inspects the process on each expansion: on Windows, a
+    release build showed no measurable cost against `#{pane_index}` (40 calls of
+    20 expansions each, 2026-10-20; a debug build took about 28 ms an
+    expansion). Not cached, as a cache would give
+    `split-window -c '#{pane_current_path}'` a directory from before a `cd`. The
+    process snapshots of `util::refresh_commands` were not measured. (`#{m:…}`
+    and `s/…/` keep their compiled patterns, `format::compiled`: 89 µs an
+    expansion with two patterns before, 7 µs after, release build, 2026-10-20.)
   - A message over `MAX_FRAME` from the client (`load-buffer -` of more than 16
     MiB) fails on the client before it is sent; the server turns a reply that
     large into an error (`conn.rs`).
