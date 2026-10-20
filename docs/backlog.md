@@ -453,8 +453,10 @@ table. What has been verified, and how:
   - Performance: entering copy mode copies every history row into
     `copy::snapshot` (a String per cell) on the server thread; Windows takes two
     process snapshots per pane per second in `util::refresh_commands`;
-    `#{pane_current_path}` inspects the process on each expansion; `#{m:…}`
-    compiles its regex on each expansion. Not measured.
+    `#{pane_current_path}` inspects the process on each expansion. Not measured.
+    (`#{m:…}` and `s/…/` keep their compiled patterns, `format::compiled`: 89 µs
+    an expansion with two patterns before, 7 µs after, release build,
+    2026-10-20.)
   - A message over `MAX_FRAME` from the client (`load-buffer -` of more than 16
     MiB) fails on the client before it is sent; the server turns a reply that
     large into an error (`conn.rs`).

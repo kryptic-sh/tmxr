@@ -1089,10 +1089,7 @@ fn apply_modifiers(mods: &[Mod<'_>], inner: &str, ctx: &dyn Context, pass: Pass)
 /// expression replaced, `\1` and the like naming its groups; `i` in `flags`
 /// ignores case. A pattern that does not compile leaves the text alone.
 fn substitute(text: &str, pattern: &str, replacement: &str, flags: &str) -> String {
-    let Ok(re) = regex::RegexBuilder::new(pattern)
-        .case_insensitive(flags.contains('i'))
-        .build()
-    else {
+    let Some(re) = compiled(pattern, flags.contains('i')) else {
         return text.to_owned();
     };
     // `\N` as the regex crate writes a group, `$` kept as itself.
@@ -1207,10 +1204,34 @@ fn format_match(flags: &str, pattern: &str, text: &str) -> bool {
     } else {
         glob_regex(pattern)
     };
-    regex::RegexBuilder::new(&regex)
-        .case_insensitive(flags.contains('i'))
-        .build()
-        .is_ok_and(|r| r.is_match(text))
+    compiled(&regex, flags.contains('i')).is_some_and(|r| r.is_match(text))
+}
+
+/// The most patterns [`compiled`] keeps before starting afresh.
+const COMPILED_LIMIT: usize = 256;
+
+/// `pattern` compiled, case-insensitive with `icase`; `None` when it does
+/// not compile. Kept for the next expansion that asks, as a status line
+/// expands the same patterns on every draw and compiling dwarfs matching.
+fn compiled(pattern: &str, icase: bool) -> Option<regex::Regex> {
+    type Cache = std::collections::HashMap<(String, bool), Option<regex::Regex>>;
+    thread_local! {
+        static CACHE: std::cell::RefCell<Cache> = std::cell::RefCell::default();
+    }
+    CACHE.with_borrow_mut(|cache| {
+        if let Some(re) = cache.get(&(pattern.to_owned(), icase)) {
+            return re.clone();
+        }
+        if cache.len() >= COMPILED_LIMIT {
+            cache.clear();
+        }
+        let re = regex::RegexBuilder::new(pattern)
+            .case_insensitive(icase)
+            .build()
+            .ok();
+        cache.insert((pattern.to_owned(), icase), re.clone());
+        re
+    })
 }
 
 /// fnmatch(3) with no flags as an anchored regex: `*` any run (`/`
@@ -1465,6 +1486,15 @@ pub fn styled(text: &str) -> Vec<(Style, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn compiled_patterns_are_kept_apart_by_case() {
+        // The same pattern asked for with and without `i`, either way round.
+        assert!(format_match("ri", "ABC", "abc"));
+        assert!(!format_match("r", "ABC", "abc"));
+        assert!(format_match("ri", "ABC", "abc"));
+        assert!(!format_match("r", "[", "x"), "one that does not compile");
+    }
 
     #[test]
     fn limits_count_no_room_for_styles_as_tmux() {
