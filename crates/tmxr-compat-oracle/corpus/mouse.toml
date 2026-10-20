@@ -220,3 +220,25 @@ checks = [
   { screen_contains = "THEEND", expect = true },
   { format = "#{window_index}", expect = "1" },
 ]
+
+[[cases]]
+name = "a_second_status_lines_ranges_take_no_clicks_as_tmux"
+# tmux 3.6 reports a click on a later status line's window range as
+# StatusDefault: only the first line's ranges are clicked on.
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "set -g mouse on" },
+  { run = "new-window -d -t o:1" },
+  { run = "set -g status 2" },
+  { run = "set -g status-format[1] 'X#[range=window|1]ONE'" },
+  { run = "bind -n MouseDown1Status set -g @m Status" },
+  { run = "bind -n MouseDown1StatusLeft set -g @m StatusLeft" },
+  { run = "bind -n MouseDown1StatusRight set -g @m StatusRight" },
+  { run = "bind -n MouseDown1StatusDefault set -g @m StatusDefault" },
+  { sleep = 0.5 },
+  { mouse = { action = "click", at = { text = "ONE" } } },
+  { sleep = 0.5 },
+]
+checks = [{ format = "#{@m}", expect = "StatusDefault" }]
