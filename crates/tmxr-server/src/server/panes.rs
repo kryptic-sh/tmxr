@@ -560,6 +560,11 @@ impl Server {
                 let alternate = p.emu.screen().alternate_screen();
                 let title = p.emu.title().map(str::to_owned);
                 let replies = p.emu.process(&bytes);
+                // Output copy mode does not show, as tmux's
+                // PANE_UNSEENCHANGES.
+                if let Some(cm) = p.copy.as_mut() {
+                    cm.unseen_changes = true;
+                }
                 // allow-set-title off: the program's OSC 0 / 2 is ignored.
                 if !allow_title && p.emu.title() != title.as_deref() {
                     match title {

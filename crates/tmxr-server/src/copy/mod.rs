@@ -53,6 +53,8 @@ pub struct CopyMode {
     /// `search-again` / `search-reverse` repeat upwards until this mode
     /// makes its own, as tmux's window_copy_common_init takes it.
     pub inherited_search: Option<Search>,
+    /// The pane printed since copy mode began (`#{pane_unseen_changes}`).
+    pub unseen_changes: bool,
     /// Where an incremental search started (cursor and view top), which
     /// each change of its text searches from again, as tmux's searchx /
     /// searchy / searcho; any other command forgets it.
@@ -255,6 +257,7 @@ impl CopyMode {
             cols,
             search: None,
             inherited_search: None,
+            unseen_changes: false,
             search_origin: None,
             count: 0,
             pending_jump: None,
@@ -287,6 +290,7 @@ impl CopyMode {
         self.kind = old.kind;
         self.search.clone_from(&old.search);
         self.inherited_search.clone_from(&old.inherited_search);
+        self.unseen_changes = old.unseen_changes;
         self.mark = old.mark.map(clamp);
         self.last_jump = old.last_jump;
         self.scroll_exit = old.scroll_exit;

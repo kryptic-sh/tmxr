@@ -854,3 +854,19 @@ steps = [
   { run = "send -t o -X copy-selection" },
 ]
 checks = [{ command = "show-buffer" }, { format = "#{copy_cursor_x},#{copy_cursor_y}" }]
+
+[[cases]]
+name = "pane_unseen_changes_as_tmux"
+program = "sleep 1.5; echo late; exec sleep 1000"
+steps = [
+  { run = "copy-mode -t o" },
+  { run = "set -gF @before '#{pane_unseen_changes}'" },
+  { sleep = 2.5 },
+  { run = "set -gF @during '#{pane_unseen_changes}'" },
+  { run = "send -t o -X refresh-from-pane" },
+  { run = "set -gF @refreshed '#{pane_unseen_changes}'" },
+  { run = "send -t o -X cancel" },
+]
+checks = [
+  { format = "#{@before} #{@during} #{@refreshed} #{pane_unseen_changes}", expect = "0 1 1 0" },
+]

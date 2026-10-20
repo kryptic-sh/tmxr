@@ -24,6 +24,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`#{pane_unseen_changes}`**, as tmux's: 1 once the pane prints while in copy
+  mode, through `refresh-from-pane`, until copy mode ends.
 - **The `editor` server option and `choose-buffer`'s `e`**, as tmux's: the
   highlighted buffer opens in `editor` (`$VISUAL`, else `$EDITOR`, else
   `/usr/bin/vi`; Notepad on Windows) in a popup, and what the editor saves is

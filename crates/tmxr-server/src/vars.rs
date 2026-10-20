@@ -86,6 +86,7 @@ pub const NAMES: &[&str] = &[
     "pane_title",
     "pane_top",
     "pane_tty",
+    "pane_unseen_changes",
     "pane_width",
     "pid",
     "scroll_position",
@@ -812,6 +813,7 @@ impl<'a> Context for Vars<'a> {
             "pane_format" => flag(self.kind == Kind::Pane),
             "window_format" => flag(self.kind == Kind::Window),
             "session_format" => flag(self.kind == Kind::Session),
+            "pane_unseen_changes" => flag(pane?.copy.as_ref().is_some_and(|c| c.unseen_changes)),
             "pane_search_string" => pane?
                 .last_search
                 .as_ref()
