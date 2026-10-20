@@ -28,15 +28,16 @@ pub fn tokenize(
     line: &str,
     env: &dyn Fn(&str) -> Option<String>,
 ) -> Result<Vec<Vec<String>>, TokenizeError> {
-    Ok(tokenize_commands(line, env)?
+    Ok(tokenize_lines(line, env)?
         .into_iter()
         .map(|c| c.words)
         .collect())
 }
 
-/// A command as [`tokenize_commands`] reads it.
-#[derive(Debug, Default)]
-pub(crate) struct Command {
+/// A command as [`tokenize_lines`] reads it: its words, and which of them
+/// were a `{ … }` block, which tmux keeps as a command list.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Line {
     pub words: Vec<String>,
     /// Which of the words were a `{ … }` block.
     pub blocks: Vec<bool>,
@@ -45,26 +46,38 @@ pub(crate) struct Command {
     pub new_group: bool,
 }
 
+impl From<Vec<String>> for Line {
+    /// Words with no block among them (an argv from a shell).
+    fn from(words: Vec<String>) -> Self {
+        let blocks = vec![false; words.len()];
+        Self {
+            words,
+            blocks,
+            new_group: false,
+        }
+    }
+}
+
 /// [`tokenize`], keeping which words were blocks and where command groups
 /// start.
-pub(crate) fn tokenize_commands(
+pub fn tokenize_lines(
     line: &str,
     env: &dyn Fn(&str) -> Option<String>,
-) -> Result<Vec<Command>, TokenizeError> {
-    let mut commands: Vec<Command> = Vec::new();
-    let mut command = Command::default();
+) -> Result<Vec<Line>, TokenizeError> {
+    let mut commands: Vec<Line> = Vec::new();
+    let mut command = Line::default();
     let mut word = String::new();
     let mut in_word = false;
     let mut chars = line.chars().peekable();
 
-    let end_word = |command: &mut Command, word: &mut String, in_word: &mut bool| {
+    let end_word = |command: &mut Line, word: &mut String, in_word: &mut bool| {
         if *in_word {
             command.words.push(std::mem::take(word));
             command.blocks.push(false);
             *in_word = false;
         }
     };
-    let end_command = |command: &mut Command, commands: &mut Vec<Command>| {
+    let end_command = |command: &mut Line, commands: &mut Vec<Line>| {
         if command.words.is_empty() {
             command.new_group |= !commands.is_empty();
         } else {

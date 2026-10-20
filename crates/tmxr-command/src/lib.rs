@@ -26,8 +26,8 @@ pub use args::Args;
 pub use bind_key::{BindKey, MouseAction, MouseKey, MouseLocation};
 pub use keys::Key;
 pub use table::{
-    CommandError, CommandSpec, Parsed, lookup, parse, print_block, print_command_list, reads_stdin,
-    split_arguments,
+    CommandError, CommandSpec, Parsed, lookup, parse, parse_line, print_block, print_command_list,
+    reads_stdin, split_arguments, split_line,
 };
 pub use template::{fill_template, template_replace};
-pub use tokenize::{escape_arg, join_args, tokenize};
+pub use tokenize::{Line, escape_arg, join_args, tokenize, tokenize_lines};

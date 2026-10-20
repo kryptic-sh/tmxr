@@ -436,7 +436,7 @@ pub(super) fn show(
         print(out, n);
     }
     if a.has('H') {
-        show_hooks(srv, scope, a, out);
+        show_hooks(srv, scope, a, out, None);
     }
     Ok(())
 }
@@ -524,11 +524,29 @@ pub(super) fn show_hooks_command(
     out: &mut Outcome,
 ) -> Result<(), String> {
     let scope = scope(srv, ctx, a, false, None)?;
-    show_hooks(srv, scope, a, out);
+    // One hook (or one of its commands, `name[i]`), as tmux's; a name
+    // tmxr does not fire is an unknown option there.
+    let only = match a.positional().first() {
+        Some(arg) => {
+            let (name, index) = split_index(arg)?;
+            if !crate::hooks::known(name) {
+                return Err(format!("invalid option: {arg}"));
+            }
+            Some((name, index))
+        }
+        None => None,
+    };
+    show_hooks(srv, scope, a, out, only);
     Ok(())
 }
 
-fn show_hooks(srv: &Server, scope: Scope, a: &Args, out: &mut Outcome) {
+fn show_hooks(
+    srv: &Server,
+    scope: Scope,
+    a: &Args,
+    out: &mut Outcome,
+    only: Option<(&str, Option<u32>)>,
+) {
     let mut hooks: BTreeMap<&str, (&str, &[String])> = hooks_at(srv, scope)
         .into_iter()
         .map(|(name, cmds)| (name, ("", cmds)))
@@ -561,6 +579,9 @@ fn show_hooks(srv: &Server, scope: Scope, a: &Args, out: &mut Outcome) {
     // Set hooks outside tmux's table (an `after-` hook for a command it
     // has none for) go last, by name.
     names.extend(hooks.keys().copied().filter(|n| !table.contains(n)));
+    if let Some((name, _)) = only {
+        names = vec![name];
+    }
     for name in names {
         let Some(&(mark, cmds)) = hooks.get(name) else {
             if !a.has('v') {
@@ -569,8 +590,12 @@ fn show_hooks(srv: &Server, scope: Scope, a: &Args, out: &mut Outcome) {
             continue;
         };
         for (i, cmd) in cmds.iter().enumerate() {
-            // Re-parsed, as tmux's cmd_list_print gives it back.
-            let cmd = tmxr_command::print_command_list(cmd).unwrap_or_else(|| cmd.clone());
+            if only.is_some_and(|(_, index)| index.is_some_and(|n| n as usize != i)) {
+                continue;
+            }
+            // Re-parsed and unescaped, as tmux's options_to_string gives a
+            // command list back.
+            let cmd = tmxr_command::print_block(cmd).unwrap_or_else(|| cmd.clone());
             if a.has('v') {
                 let _ = writeln!(out.stdout, "{cmd}");
             } else {

@@ -42,7 +42,7 @@ pub struct Job {
     /// names it), as tmux runs a job for its target session.
     pub session: Option<SessionId>,
     /// The commands after the `run-shell` in its list, run once it is done.
-    pub rest: Vec<Vec<String>>,
+    pub rest: Vec<tmxr_command::Line>,
 }
 
 /// Where a finished job's output goes.

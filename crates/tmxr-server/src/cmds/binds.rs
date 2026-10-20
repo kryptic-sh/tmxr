@@ -27,13 +27,32 @@ pub(super) fn run(
                 .parse()
                 .map_err(|e: tmxr_command::keys::UnknownKey| e.to_string())?;
             // A lone `;` word (`\;` in a command line) separates the bound
-            // list's commands, as tmux's.
+            // list's commands, as tmux's; a `{ … }` block argument is kept
+            // in braces, so it runs and prints as one.
             let cmd = if pos.len() == 2 && pos[1].contains(' ') {
                 pos[1].clone()
             } else {
-                tmxr_command::split_arguments(&pos[1..])
+                let bound = tmxr_command::Line {
+                    words: pos[1..].to_vec(),
+                    blocks: (1..pos.len()).map(|j| a.is_block(j)).collect(),
+                    new_group: false,
+                };
+                tmxr_command::split_line(&bound)
                     .iter()
-                    .map(|c| join_args(c))
+                    .map(|c| {
+                        c.words
+                            .iter()
+                            .zip(&c.blocks)
+                            .map(|(w, &block)| {
+                                if block {
+                                    format!("{{ {w} }}")
+                                } else {
+                                    join_args(std::slice::from_ref(w))
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    })
                     .collect::<Vec<_>>()
                     .join(" ; ")
             };

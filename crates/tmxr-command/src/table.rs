@@ -601,8 +601,8 @@ pub const COMMANDS: &[CommandSpec] = &[
         None,
         "gpt:w",
         0,
-        0,
-        "[-gpw] [-t target-session]"
+        1,
+        "[-gpw] [-t target-pane] [hook]"
     ),
     cmd!("show-messages", Some("showmsgs"), "", 0, 0, ""),
     cmd!(
@@ -772,34 +772,46 @@ pub fn reads_stdin(argv: &[String]) -> bool {
 /// `;` dropped, and the word too if nothing is left), unless the `;` follows
 /// a backslash, which makes the word end in a literal `;` instead.
 pub fn split_arguments(words: &[String]) -> Vec<Vec<String>> {
+    split_line(&crate::Line::from(words.to_vec()))
+        .into_iter()
+        .map(|line| line.words)
+        .collect()
+}
+
+/// [`split_arguments`] for a line that may hold blocks: a block is one
+/// word, which no `;` ends.
+pub fn split_line(line: &crate::Line) -> Vec<crate::Line> {
     let mut commands = Vec::new();
-    let mut command = Vec::new();
-    for word in words {
-        let Some(rest) = word.strip_suffix(';') else {
-            command.push(word.clone());
+    let mut command = crate::Line::default();
+    let push = |command: &mut crate::Line, word: String, block: bool| {
+        command.words.push(word);
+        command.blocks.push(block);
+    };
+    for (i, word) in line.words.iter().enumerate() {
+        let block = line.blocks.get(i).copied().unwrap_or(false);
+        let Some(rest) = word.strip_suffix(';').filter(|_| !block) else {
+            push(&mut command, word.clone(), block);
             continue;
         };
         if let Some(literal) = rest.strip_suffix('\\') {
-            command.push(format!("{literal};"));
+            push(&mut command, format!("{literal};"), false);
             continue;
         }
         if !rest.is_empty() {
-            command.push(rest.to_owned());
+            push(&mut command, rest.to_owned(), false);
         }
         commands.push(std::mem::take(&mut command));
     }
     commands.push(command);
-    commands.retain(|c| !c.is_empty());
+    commands.retain(|c| !c.words.is_empty());
     commands
 }
 
 /// `line` as tmux's cmd_list_print gives a command list back, escaped:
 /// each command by its full name and its arguments (args_print), joined by
 /// ` \; ` (` \;\; ` where a new group starts), a `{ … }` block in braces.
-/// `$VAR` is kept as written (tmux has expanded it already). A bind keeps
-/// its commands as quoted words, so a block given to `bind-key` prints as
-/// a quoted string here, where tmux prints it in braces. `None` when the
-/// line does not parse.
+/// `$VAR` is kept as written (tmux has expanded it already). `None` when
+/// the line does not parse.
 pub fn print_command_list(line: &str) -> Option<String> {
     print_list(line, true)
 }
@@ -812,7 +824,7 @@ pub fn print_block(line: &str) -> Option<String> {
 
 fn print_list(line: &str, escaped: bool) -> Option<String> {
     let keep = |name: &str| Some(format!("${{{name}}}"));
-    let commands = crate::tokenize::tokenize_commands(line, &keep).ok()?;
+    let commands = crate::tokenize::tokenize_lines(line, &keep).ok()?;
     let mut out = String::new();
     for (i, command) in commands.iter().enumerate() {
         if i > 0 {
@@ -844,6 +856,17 @@ fn print_list(line: &str, escaped: bool) -> Option<String> {
         }
     }
     Some(out)
+}
+
+/// [`parse`] for a tokenized line, its arguments knowing which were
+/// blocks.
+pub fn parse_line(line: &crate::Line) -> Result<Parsed, CommandError> {
+    let mut parsed = parse(&line.words)?;
+    let start = line.words.len() - parsed.args.positional().len();
+    parsed
+        .args
+        .set_blocks(line.blocks.get(start..).unwrap_or_default().to_vec());
+    Ok(parsed)
 }
 
 /// Resolve `argv[0]` and parse the rest against its flag spec.

@@ -25,6 +25,8 @@ pub struct Args {
     /// Every value a flag was given, in order (`-e A=1 -e B=2`).
     values: BTreeMap<char, Vec<String>>,
     positional: Vec<String>,
+    /// Which positional arguments were a `{ … }` block.
+    blocks: Vec<bool>,
 }
 
 impl Args {
@@ -90,6 +92,16 @@ impl Args {
 
     pub fn value(&self, flag: char) -> Option<&str> {
         self.flags.get(&flag).and_then(|v| v.as_deref())
+    }
+
+    /// Whether positional argument `i` was a `{ … }` block.
+    pub fn is_block(&self, i: usize) -> bool {
+        self.blocks.get(i).copied().unwrap_or(false)
+    }
+
+    /// Mark which positional arguments were blocks.
+    pub(crate) fn set_blocks(&mut self, blocks: Vec<bool>) {
+        self.blocks = blocks;
     }
 
     pub fn positional(&self) -> &[String] {

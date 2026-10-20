@@ -91,14 +91,14 @@ pub fn run_line(srv: &mut Server, ctx: &Ctx, line: &str) -> Outcome {
     }
 }
 
-fn tokenize(line: &str) -> Result<Vec<Vec<String>>, String> {
+fn tokenize(line: &str) -> Result<Vec<tmxr_command::Line>, String> {
     let env = |k: &str| std::env::var(k).ok();
-    tmxr_command::tokenize(line, &env).map_err(|e| e.to_string())
+    tmxr_command::tokenize_lines(line, &env).map_err(|e| e.to_string())
 }
 
 /// Run commands with no command client waiting on them: a `run-shell` job
 /// goes on by itself, its output shown on `ctx.client`.
-pub fn run_detached(srv: &mut Server, ctx: &Ctx, cmds: &[Vec<String>]) -> Outcome {
+pub fn run_detached(srv: &mut Server, ctx: &Ctx, cmds: &[tmxr_command::Line]) -> Outcome {
     let mut out = run_list(srv, ctx, cmds);
     if let Some(job) = out.job.take() {
         srv.start_job(
@@ -115,14 +115,18 @@ pub fn run_detached(srv: &mut Server, ctx: &Ctx, cmds: &[Vec<String>]) -> Outcom
 /// Run an argv from the command line, separated into commands as tmux's
 /// cmd_parse_from_arguments ([`tmxr_command::split_arguments`]).
 pub fn run_argv_list(srv: &mut Server, ctx: &Ctx, argv: &[String]) -> Outcome {
-    run_list(srv, ctx, &tmxr_command::split_arguments(argv))
+    let cmds: Vec<tmxr_command::Line> = tmxr_command::split_arguments(argv)
+        .into_iter()
+        .map(Into::into)
+        .collect();
+    run_list(srv, ctx, &cmds)
 }
 
 /// Run commands in order, stopping at the first error.
-pub fn run_list(srv: &mut Server, ctx: &Ctx, cmds: &[Vec<String>]) -> Outcome {
+pub fn run_list(srv: &mut Server, ctx: &Ctx, cmds: &[tmxr_command::Line]) -> Outcome {
     let mut out = Outcome::default();
-    for (i, argv) in cmds.iter().enumerate() {
-        let parsed = match tmxr_command::parse(argv) {
+    for (i, line) in cmds.iter().enumerate() {
+        let parsed = match tmxr_command::parse_line(line) {
             Ok(p) => p,
             Err(e) => {
                 out.status = 1;

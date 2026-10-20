@@ -596,19 +596,14 @@ table. What has been verified, and how:
   its pane modes; tmxr's pickers are full-screen overlays). Separately,
   `source-file` replaces the config path and reloads everything, where tmux runs
   the file's commands.
-- **`list-keys` prints a `{ … }` block as a quoted string**: tmux prints a
-  bind's commands re-parsed (`cmd_list_print`), as tmxr now does
-  (`print_command_list`), and a `{ … }` block is kept as tmux keeps it (its
-  commands printed back, `print_block`, compared by
-  `a_block_is_kept_as_tmux_prints_it`), but a bind keeps its command as quoted
-  words, so a block given to `bind-key` prints as a quoted string where tmux
-  prints `{ … }` (carrying which words were blocks through the server's command
-  pipeline would fix it); A bind made by a command has its `$VAR` expanded when
-  it is made, as tmux's (compared by
-  `a_binds_variables_print_expanded_as_tmux`); one from tmxr's TOML config keeps
-  it, to expand when it runs, and prints it as `${VAR}`. tmxr's own default
-  binds and their notes also differ from tmux's, so only binds made in a test
-  compare.
+- **What `list-keys` prints of a bind**: its commands re-parsed and its `{ … }`
+  blocks in braces, as tmux's (`blocks_print_in_braces_as_tmux`; a
+  `tmxr_command::Line` carries which words were blocks to `bind-key`). A bind
+  made by a command has its `$VAR` expanded when it is made, as tmux's (compared
+  by `a_binds_variables_print_expanded_as_tmux`); one from tmxr's TOML config
+  keeps it, to expand when it runs, and prints it as `${VAR}`. tmxr's own
+  default binds and their notes also differ from tmux's, so only binds made in a
+  test compare.
 - **The full e2e suite kills its `wsl.exe` session** (2026-10-18): run as
   `wsl.exe -e bash -lc 'cargo test -p tmxr-cli --test e2e …'`, output stops and
   nothing after the run prints, though a log file shows every test finished.

@@ -596,3 +596,16 @@ checks = [
   { format = "#{client_flags}" },
   { command = "display -p '#{client_session} #{client_readonly}'" },
 ]
+
+[[cases]]
+name = "show_hooks_shows_one_hook_as_tmux"
+steps = [
+  { run = "set-hook -g after-new-window 'display a'" },
+  { run = "set-hook -ga after-new-window 'display b'" },
+]
+checks = [
+  { command = "show-hooks -g after-new-window" },
+  { command = "show-hooks -g 'after-new-window[1]'" },
+  { command = "show-hooks -g after-kill-pane" },
+  { command = "show-hooks -gw pane-died" },
+]

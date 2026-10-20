@@ -765,3 +765,32 @@ checks = [
   { screen_find = "switchc", expect = "2,6" },
   { screen_find = "swapw", expect = "2,4" },
 ]
+
+[[cases]]
+name = "blocks_print_in_braces_as_tmux"
+attach = true
+unix_only = true
+steps = [
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "bind F7 command-prompt { display \"%%\" }\u000d" },
+  { sleep = 0.3 },
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "bind F8 if -F 1 { display a; display b } { display c }\u000d" },
+  { sleep = 0.3 },
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "bind F9 if -F 1 { if -F 1 { display deep } }\u000d" },
+  { sleep = 0.3 },
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "set-hook -g after-new-window { display hooked; display twice }\u000d" },
+  { sleep = 0.3 },
+]
+checks = [
+  { command = "list-keys -T prefix F7" },
+  { command = "list-keys -T prefix F8" },
+  { command = "list-keys -T prefix F9" },
+  { command = "show-hooks -g after-new-window" },
+]

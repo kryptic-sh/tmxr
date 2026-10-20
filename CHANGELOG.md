@@ -509,6 +509,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`list-keys` prints a bind's `{ … }` blocks in braces**, as tmux's, where it
+  printed them as quoted strings; `show-hooks` prints a hook's commands joined
+  by `;`, as tmux's, and takes a hook's name (or `name[i]`) to show that hook
+  alone.
 - **A status-format list too long for its room is cut as tmux's**: around its
   focused item (`#[list=focus]`), with its `<` / `>` markers, the text after it
   (`#[nolist]`) beside it; the parts are trimmed in tmux's order and the centre
