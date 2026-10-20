@@ -361,9 +361,10 @@ mod tests {
             bind("prefix", "x").unwrap().cmd,
             "split-window -h ; select-pane -L"
         );
+        // A block as tmux keeps it: printed back, a new line after ` ;; `.
         assert_eq!(
             bind("prefix", "y").unwrap().cmd,
-            "display -p one ; display -p two"
+            "display-message -p one ;; display-message -p two"
         );
         // A word with characters the tokenizer reads is quoted again, and
         // reads back the same.

@@ -98,8 +98,10 @@ impl Args {
 
     /// The flags as tmux's args_print gives them: those taking no value,
     /// in flag order, each as often as it was given, then each value of
-    /// those that take one.
-    pub fn print(&self) -> String {
+    /// those that take one. `block` prints a value its own way (a `{ … }`
+    /// block), else it is escaped.
+    pub fn print(&self, block: &dyn Fn(&str) -> Option<String>) -> String {
+        let print_value = |v: &str| block(v).unwrap_or_else(|| crate::escape_arg(v));
         let mut out = String::new();
         for (&flag, &count) in &self.counts {
             if self.values.contains_key(&flag) {
@@ -118,14 +120,14 @@ impl Args {
                 out.push('-');
                 out.push(flag);
                 out.push(' ');
-                out.push_str(&crate::escape_arg(value));
+                out.push_str(&print_value(value));
             }
         }
         for word in &self.positional {
             if !out.is_empty() {
                 out.push(' ');
             }
-            out.push_str(&crate::escape_arg(word));
+            out.push_str(&print_value(word));
         }
         out
     }

@@ -7,8 +7,8 @@
 //! and `$VAR` / `${VAR}` expands; `~` at the start of a word is `$HOME`. A `;` ending a word (or standing alone)
 //! separates commands; `\;` is a literal `;`. A word starting with `#` (other
 //! than a `#{format}`) starts a comment. `{ … }` is one word holding the
-//! commands inside, joined by ` ; `, as tmux passes a block of commands to
-//! `if-shell`, `bind-key` and the like.
+//! commands inside as tmux prints them back (`crate::print_block`), as tmux
+//! passes a block of commands to `if-shell`, `bind-key` and the like.
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum TokenizeError {
@@ -28,35 +28,62 @@ pub fn tokenize(
     line: &str,
     env: &dyn Fn(&str) -> Option<String>,
 ) -> Result<Vec<Vec<String>>, TokenizeError> {
-    let mut commands = Vec::new();
-    let mut words: Vec<String> = Vec::new();
+    Ok(tokenize_commands(line, env)?
+        .into_iter()
+        .map(|c| c.words)
+        .collect())
+}
+
+/// A command as [`tokenize_commands`] reads it.
+#[derive(Debug, Default)]
+pub(crate) struct Command {
+    pub words: Vec<String>,
+    /// Which of the words were a `{ … }` block.
+    pub blocks: Vec<bool>,
+    /// An empty command (`;;`) came before it: tmux's next command group,
+    /// as a block's next line is.
+    pub new_group: bool,
+}
+
+/// [`tokenize`], keeping which words were blocks and where command groups
+/// start.
+pub(crate) fn tokenize_commands(
+    line: &str,
+    env: &dyn Fn(&str) -> Option<String>,
+) -> Result<Vec<Command>, TokenizeError> {
+    let mut commands: Vec<Command> = Vec::new();
+    let mut command = Command::default();
     let mut word = String::new();
     let mut in_word = false;
     let mut chars = line.chars().peekable();
 
-    let end_command = |words: &mut Vec<String>, commands: &mut Vec<Vec<String>>| {
-        if !words.is_empty() {
-            commands.push(std::mem::take(words));
+    let end_word = |command: &mut Command, word: &mut String, in_word: &mut bool| {
+        if *in_word {
+            command.words.push(std::mem::take(word));
+            command.blocks.push(false);
+            *in_word = false;
+        }
+    };
+    let end_command = |command: &mut Command, commands: &mut Vec<Command>| {
+        if command.words.is_empty() {
+            command.new_group |= !commands.is_empty();
+        } else {
+            commands.push(std::mem::take(command));
         }
     };
 
     while let Some(c) = chars.next() {
         match c {
-            c if c.is_whitespace() => {
-                if in_word {
-                    words.push(std::mem::take(&mut word));
-                    in_word = false;
-                }
-            }
+            c if c.is_whitespace() => end_word(&mut command, &mut word, &mut in_word),
             '#' if !in_word && chars.peek() != Some(&'{') => break,
-            '{' if !in_word => words.push(block(&mut chars)?),
+            '{' if !in_word => {
+                command.words.push(block(&mut chars)?);
+                command.blocks.push(true);
+            }
             ';' => {
                 // `;` ends the current word and the command.
-                if in_word {
-                    words.push(std::mem::take(&mut word));
-                    in_word = false;
-                }
-                end_command(&mut words, &mut commands);
+                end_word(&mut command, &mut word, &mut in_word);
+                end_command(&mut command, &mut commands);
             }
             '\\' => {
                 in_word = true;
@@ -108,10 +135,8 @@ pub fn tokenize(
             }
         }
     }
-    if in_word {
-        words.push(word);
-    }
-    end_command(&mut words, &mut commands);
+    end_word(&mut command, &mut word, &mut in_word);
+    end_command(&mut command, &mut commands);
     Ok(commands)
 }
 
@@ -198,9 +223,9 @@ pub fn escape_arg(word: &str) -> String {
 }
 
 /// The commands in a `{ … }` block, its `{` already read, up to the
-/// matching `}`: one per line or `;`, joined by ` ; ` to be parsed again
-/// when they run. Quotes, escapes and nested braces (`#{format}` among them)
-/// are kept as written.
+/// matching `}`: one per line or `;`, printed back as tmux stores a block
+/// (`crate::print_block`), to be parsed again when they run. A block that
+/// does not parse is kept as written, its lines joined by ` ;; `.
 fn block(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Result<String, TokenizeError> {
     let mut lines = Vec::new();
     let mut line = String::new();
@@ -240,12 +265,13 @@ fn block(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Result<String,
         }
     }
     lines.push(line);
-    Ok(lines
+    let raw = lines
         .iter()
         .map(|l| l.trim())
         .filter(|l| !l.is_empty())
         .collect::<Vec<_>>()
-        .join(" ; "))
+        .join(" ;; ");
+    Ok(crate::print_block(&raw).unwrap_or(raw))
 }
 
 /// The escape after a backslash, as tmux 3.6's `yylex_token_escape` reads
@@ -389,23 +415,39 @@ mod tests {
 
     #[test]
     fn a_block_is_one_word_of_commands() {
-        // What tmux 3.6 stores for the same blocks.
+        // What tmux 3.6 stores for the same blocks (`show -v` of an option
+        // set to one): the commands printed back, a new line's after ` ;; `.
         assert_eq!(
             t("if-shell -F 1 { display -p A ; display -p B }"),
-            vec![w(&["if-shell", "-F", "1", "display -p A ; display -p B"])]
+            vec![w(&[
+                "if-shell",
+                "-F",
+                "1",
+                "display-message -p A ; display-message -p B"
+            ])]
         );
         assert_eq!(
             t("bind -n F11 {\n  display -p one\n\n  display -p two\n}"),
-            vec![w(&["bind", "-n", "F11", "display -p one ; display -p two"])]
+            vec![w(&[
+                "bind",
+                "-n",
+                "F11",
+                "display-message -p one ;; display-message -p two"
+            ])]
         );
-        // Quotes, nested braces and formats inside are kept as written.
+        // Nested braces and formats inside survive, requoted as tmux's.
         assert_eq!(
             t(r#"set @z { display -p "q { x }" ; display '#{session_name}' }"#),
             vec![w(&[
                 "set",
                 "@z",
-                r#"display -p "q { x }" ; display '#{session_name}'"#
+                r##"display-message -p "q { x }" ; display-message "#{session_name}""##
             ])]
+        );
+        // One that does not parse is kept as written.
+        assert_eq!(
+            t("set @y { nosuchcommand a\n nosuch b }"),
+            vec![w(&["set", "@y", "nosuchcommand a ;; nosuch b"])]
         );
         // A block ends its word; a `;` after it ends the command.
         assert_eq!(t("a {b} ; c"), vec![w(&["a", "b"]), w(&["c"])]);

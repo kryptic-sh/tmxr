@@ -795,25 +795,55 @@ pub fn split_arguments(words: &[String]) -> Vec<Vec<String>> {
 
 /// `line` as tmux's cmd_list_print gives a command list back, escaped:
 /// each command by its full name and its arguments (args_print), joined by
-/// ` \; `. `$VAR` is kept as written (tmux has expanded it already), and a
-/// `{ … }` block is printed as the string tmxr keeps it as. `None` when the
+/// ` \; ` (` \;\; ` where a new group starts), a `{ … }` block in braces.
+/// `$VAR` is kept as written (tmux has expanded it already). A bind keeps
+/// its commands as quoted words, so a block given to `bind-key` prints as
+/// a quoted string here, where tmux prints it in braces. `None` when the
 /// line does not parse.
 pub fn print_command_list(line: &str) -> Option<String> {
+    print_list(line, true)
+}
+
+/// A block's commands as tmux keeps them (cmd_list_print unescaped): joined
+/// by ` ; `, by ` ;; ` between its lines. `None` when they do not parse.
+pub fn print_block(line: &str) -> Option<String> {
+    print_list(line, false)
+}
+
+fn print_list(line: &str, escaped: bool) -> Option<String> {
     let keep = |name: &str| Some(format!("${{{name}}}"));
-    let commands = crate::tokenize(line, &keep).ok()?;
-    let printed: Option<Vec<String>> = commands
-        .iter()
-        .map(|words| {
-            let p = parse(words).ok()?;
-            let args = p.args.print();
-            Some(if args.is_empty() {
-                p.name().to_owned()
-            } else {
-                format!("{} {args}", p.name())
-            })
-        })
-        .collect();
-    Some(printed?.join(" \\; "))
+    let commands = crate::tokenize::tokenize_commands(line, &keep).ok()?;
+    let mut out = String::new();
+    for (i, command) in commands.iter().enumerate() {
+        if i > 0 {
+            out.push_str(match (escaped, command.new_group) {
+                (true, false) => r" \; ",
+                (true, true) => r" \;\; ",
+                (false, false) => " ; ",
+                (false, true) => " ;; ",
+            });
+        }
+        let p = parse(&command.words).ok()?;
+        let blocks: Vec<&str> = command
+            .words
+            .iter()
+            .zip(&command.blocks)
+            .filter_map(|(w, &b)| b.then_some(w.as_str()))
+            .collect();
+        let block = |v: &str| {
+            blocks
+                .contains(&v)
+                .then(|| print_block(v).map(|b| format!("{{ {b} }}")))
+                .flatten()
+        };
+        out.push_str(p.name());
+        let args = p.args.print(&block);
+        if !args.is_empty() {
+            out.push(' ');
+            out.push_str(&args);
+        }
+    }
+    Some(out)
 }
 
 /// Resolve `argv[0]` and parse the rest against its flag spec.

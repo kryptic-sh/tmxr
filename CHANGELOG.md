@@ -411,6 +411,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **A `{ … }` block is kept as tmux keeps it**: its commands printed back by
+  their full names and requoted, a nested block in braces, `;;` between its
+  lines (`set @z { display -p A }` shows `display-message -p A`, as tmux's). A
+  block that does not parse is kept as written.
 - **`show-hooks` and `show-options -H` list hooks as tmux's**: in tmux's order,
   a global table every hook (the unset ones as a bare name), each command
   printed re-parsed (`display-message hi` for `display hi`).

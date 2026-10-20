@@ -580,11 +580,14 @@ table. What has been verified, and how:
   the file's commands.
 - **`list-keys` prints a `{ … }` block as a quoted string**: tmux prints a
   bind's commands re-parsed (`cmd_list_print`), as tmxr now does
-  (`print_command_list`), but tmxr's tokenizer turns a `{ … }` block into one
-  string word, so a command-prompt template given in braces prints quoted where
-  tmux prints `{ … }`; and `$VAR` prints as written, where tmux expanded it when
-  the bind was made. tmxr's own default binds and their notes also differ from
-  tmux's, so only binds made in a test compare.
+  (`print_command_list`), and a `{ … }` block is kept as tmux keeps it (its
+  commands printed back, `print_block`, compared by
+  `a_block_is_kept_as_tmux_prints_it`), but a bind keeps its command as quoted
+  words, so a block given to `bind-key` prints as a quoted string where tmux
+  prints `{ … }` (carrying which words were blocks through the server's command
+  pipeline would fix it); and `$VAR` prints as written, where tmux expanded it
+  when the bind was made. tmxr's own default binds and their notes also differ
+  from tmux's, so only binds made in a test compare.
 - **The full e2e suite kills its `wsl.exe` session** (2026-10-18): run as
   `wsl.exe -e bash -lc 'cargo test -p tmxr-cli --test e2e …'`, output stops and
   nothing after the run prints, though a log file shows every test finished.

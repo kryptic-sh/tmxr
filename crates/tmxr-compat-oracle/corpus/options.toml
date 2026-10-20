@@ -555,3 +555,19 @@ checks = [
   { command = "show-hooks -gw" },
   { command = "show-hooks -t o" },
 ]
+
+[[cases]]
+name = "a_block_is_kept_as_tmux_prints_it"
+attach = true
+unix_only = true
+steps = [
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "set @z { display -p A ; display 'q { x }' }\u000d" },
+  { sleep = 0.3 },
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "set @y { if -F 1 { display deep } { display \"#{session_name}\" } }\u000d" },
+  { sleep = 0.3 },
+]
+checks = [{ command = "show -v @z" }, { command = "show -v @y" }]
