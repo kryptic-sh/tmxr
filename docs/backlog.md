@@ -64,6 +64,13 @@ table. What has been verified, and how:
 
 ## Known gaps and follow-ups
 
+- **btop's layout breaks in tmxr** (reported by the owner 2026-10-20, seen on
+  Linux; Windows and macOS not tried). Not reproduced or investigated yet: what
+  breaks (boxes, borders, sizes, colours) and which sequences btop sends that
+  tmxr's emulator (`vt100`) or renderer mishandles are unknown. A start: run
+  btop in tmxr and in tmux 3.6 at the same size, compare `capture-pane -e` of
+  both (the oracle can, with `program = "btop"`), and log the bytes btop writes
+  (`pipe-pane -O`) to find the sequence tmxr draws differently.
 - **Mouse use as in the owner's tmux config** (asked for 2026-10-11). The tmux
   compatibility oracle (`crates/tmxr-compat-oracle`, `corpus/mouse.toml`) drives
   a tmux 3.6 client and a tmxr client with the same SGR mouse events in CI and
