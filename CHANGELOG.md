@@ -24,6 +24,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`#{tree_mode_format}`, `#{buffer_mode_format}` and
+  `#{client_mode_format}`**, tmux 3.6's default `choose-*` formats, so
+  `#{E:tree_mode_format}` expands as tmux's.
 - **`#{pane_format}`, `#{window_format}` and `#{session_format}`**, as tmux's: 1
   for the kind of thing a format is expanded for, so a `#{W:…}` row or a
   `list-windows` line is a window though it carries the window's active pane.

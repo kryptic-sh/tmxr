@@ -631,3 +631,14 @@ checks = [
   { command = "list-sessions -F '#{session_format}#{window_format}#{pane_format}'" },
   { command = "list-panes -t o:1 -F '#{session_format}#{window_format}#{pane_format}'" },
 ]
+
+[[cases]]
+name = "mode_formats_as_tmux"
+steps = [{ run = "new-window -d -t o:1 -n second" }]
+checks = [
+  { command = "display -p '#{buffer_mode_format}'" },
+  { command = "display -p '#{client_mode_format}'" },
+  { command = "display -p '#{tree_mode_format}'" },
+  { command = "display -p -t o '#{W:#{E:tree_mode_format}|}'" },
+  { command = "display -p '#{S:#{E:tree_mode_format}|}'" },
+]

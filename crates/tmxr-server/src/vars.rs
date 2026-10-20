@@ -11,12 +11,14 @@ use crate::server::{Attached, Server};
 pub const NAMES: &[&str] = &[
     "active_window_index",
     "alternate_on",
+    "buffer_mode_format",
     "client_activity",
     "client_created",
     "client_flags",
     "client_height",
     "client_key_table",
     "client_last_session",
+    "client_mode_format",
     "client_name",
     "client_pid",
     "client_prefix",
@@ -110,6 +112,7 @@ pub const NAMES: &[&str] = &[
     "session_windows",
     "socket_path",
     "start_time",
+    "tree_mode_format",
     "uid",
     "user",
     "version",
@@ -142,6 +145,15 @@ pub const NAMES: &[&str] = &[
     "window_width",
     "window_zoomed_flag",
 ];
+
+/// tmux 3.6's default `choose-buffer` format, as its `#{buffer_mode_format}`.
+const BUFFER_MODE_FORMAT: &str = "#{t/p:buffer_created}: #{buffer_sample}";
+
+/// tmux 3.6's default `choose-client` format (`#{client_mode_format}`).
+const CLIENT_MODE_FORMAT: &str = "#{t/p:client_activity}: session #{session_name}";
+
+/// tmux 3.6's default `choose-tree` format (`#{tree_mode_format}`).
+const TREE_MODE_FORMAT: &str = "#{?pane_format,#{?pane_marked,#[reverse],}#{pane_current_command}#{?pane_active,*,}#{?pane_marked,M,}#{?#{&&:#{pane_title},#{!=:#{pane_title},#{host_short}}},: \"#{pane_title}\",},window_format,#{?window_marked_flag,#[reverse],}#{window_name}#{window_flags}#{?#{&&:#{==:#{window_panes},1},#{&&:#{pane_title},#{!=:#{pane_title},#{host_short}}}},: \"#{pane_title}\",},#{session_windows} windows#{?session_grouped, (group #{session_group}: #{session_group_list}),}#{?session_attached, (attached),}}";
 
 /// Variables for one (session, window, pane, client) combination.
 #[derive(Clone, Copy)]
@@ -762,6 +774,9 @@ impl<'a> Context for Vars<'a> {
             }
             // tmux's: whether the format is for a pane, a window or a
             // session (`Kind`).
+            "buffer_mode_format" => BUFFER_MODE_FORMAT.to_owned(),
+            "client_mode_format" => CLIENT_MODE_FORMAT.to_owned(),
+            "tree_mode_format" => TREE_MODE_FORMAT.to_owned(),
             "pane_format" => flag(self.kind == Kind::Pane),
             "window_format" => flag(self.kind == Kind::Window),
             "session_format" => flag(self.kind == Kind::Session),
