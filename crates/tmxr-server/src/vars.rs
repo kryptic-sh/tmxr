@@ -132,6 +132,8 @@ pub const NAMES: &[&str] = &[
     "window_activity",
     "window_activity_flag",
     "window_bell_flag",
+    "window_cell_height",
+    "window_cell_width",
     "window_end_flag",
     "window_flags",
     "window_format",
@@ -163,6 +165,12 @@ const CLIENT_MODE_FORMAT: &str = "#{t/p:client_activity}: session #{session_name
 
 /// tmux 3.6's default `choose-tree` format (`#{tree_mode_format}`).
 const TREE_MODE_FORMAT: &str = "#{?pane_format,#{?pane_marked,#[reverse],}#{pane_current_command}#{?pane_active,*,}#{?pane_marked,M,}#{?#{&&:#{pane_title},#{!=:#{pane_title},#{host_short}}},: \"#{pane_title}\",},window_format,#{?window_marked_flag,#[reverse],}#{window_name}#{window_flags}#{?#{&&:#{==:#{window_panes},1},#{&&:#{pane_title},#{!=:#{pane_title},#{host_short}}}},: \"#{pane_title}\",},#{session_windows} windows#{?session_grouped, (group #{session_group}: #{session_group_list}),}#{?session_attached, (attached),}}";
+
+/// tmux's cell width in pixels for a terminal that reports none.
+const CELL_WIDTH_PIXELS: u32 = 16;
+
+/// tmux's cell height in pixels for a terminal that reports none.
+const CELL_HEIGHT_PIXELS: u32 = 32;
 
 /// Variables for one (session, window, pane, client) combination.
 #[derive(Clone, Copy)]
@@ -831,6 +839,17 @@ impl<'a> Context for Vars<'a> {
             }
             // The command whose formats these are, as tmux's.
             "command" => srv.running?.to_owned(),
+            // A cell's size in pixels: tmux's defaults for a terminal that
+            // reports none (DEFAULT_XPIXEL / DEFAULT_YPIXEL), as tmxr's
+            // client sends no pixel size.
+            "window_cell_width" => {
+                window?;
+                CELL_WIDTH_PIXELS.to_string()
+            }
+            "window_cell_height" => {
+                window?;
+                CELL_HEIGHT_PIXELS.to_string()
+            }
             // tmxr draws no sixel images.
             "sixel_support" => "0".to_owned(),
             "pane_unseen_changes" => flag(pane?.copy.as_ref().is_some_and(|c| c.unseen_changes)),

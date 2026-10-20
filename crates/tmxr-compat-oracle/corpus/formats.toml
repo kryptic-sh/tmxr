@@ -879,3 +879,8 @@ checks = [
   { command = "list-windows -F '#{command}'" },
   { format = "#{@set} #{@hook}" },
 ]
+
+[[cases]]
+name = "window_cell_size_as_tmux"
+steps = []
+checks = [{ format = "#{window_cell_width}x#{window_cell_height}", expect = "16x32" }]
