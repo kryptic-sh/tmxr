@@ -1,16 +1,16 @@
 //! `#(command)` in formats, as tmux's format_job_*: each command a client's
 //! formats name runs in the background (again at most once a second, or at
-//! once when its expanded text changes), and the format shows the last line
-//! it printed, or nothing until it has printed one (`<'command' not ready>`
-//! after a second).
+//! once when its expanded text changes, the run before killed), and the
+//! format shows the last line it printed, or nothing until it has printed
+//! one (`<'command' not ready>` after a second).
 
 use std::collections::HashMap;
 use std::io::{BufRead as _, BufReader};
-use std::path::PathBuf;
+use std::process::{Child, ChildStdout};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::model::ClientId;
-use crate::server::{ChildEnv, Event, Server};
+use crate::server::{Event, Server};
 
 /// Which job: the client whose formats name it (none from a command line),
 /// and the command as written.
@@ -28,13 +28,25 @@ struct Job {
     expanded: String,
     /// What the format shows.
     out: Option<String>,
-    running: bool,
+    /// The run going, if one is.
+    child: Option<Child>,
     /// The second it last started, as tmux's fj->last.
     last: u64,
     /// It printed a whole line in its latest run.
     updated: bool,
     /// Which run it is on, so a run started since tells its events apart.
     run: u64,
+}
+
+impl Job {
+    /// The run going, if any, killed and reaped, as tmux's job_free.
+    fn stop(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            // It may have ended already; either way it is waited for.
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
 }
 
 /// What a job's run reports to the server.
@@ -66,34 +78,64 @@ impl Server {
         let changed = job.expanded != expanded;
         if changed {
             expanded.clone_into(&mut job.expanded);
+            job.stop();
         }
-        if changed || (!job.running && job.last != t) {
-            job.running = true;
+        if changed || (job.child.is_none() && job.last != t) {
             job.last = t;
             job.updated = false;
             job.run += 1;
-            self.start_format_job(key, job.run, expanded.to_owned());
-        } else if job.running && t.saturating_sub(job.last) > 1 && job.out.is_none() {
+            match self.spawn_format_job(&key, expanded) {
+                Ok((child, stdout)) => {
+                    job.child = Some(child);
+                    self.read_format_job(key, job.run, stdout);
+                }
+                Err(_) => job.out = Some(format!("<'{cmd}' didn't start>")),
+            }
+        } else if job.child.is_some() && t.saturating_sub(job.last) > 1 && job.out.is_none() {
             job.out = Some(format!("<'{cmd}' not ready>"));
         }
         job.out.clone().unwrap_or_default()
     }
 
-    /// Run `expanded` with the client's session's shell, in its directory,
-    /// each whole line it prints and then its end reported as events.
-    fn start_format_job(&self, key: JobKey, run: u64, expanded: String) {
+    /// `expanded` started with the client's session's shell, in its
+    /// directory and environment, its output piped.
+    fn spawn_format_job(
+        &self,
+        key: &JobKey,
+        expanded: &str,
+    ) -> std::io::Result<(Child, ChildStdout)> {
         let session = key
             .0
             .and_then(|c| self.clients.get(&c))
             .and_then(|c| c.att.as_ref())
             .map(|a| a.session);
         let shell = session.and_then(|s| self.session_options(s).default_shell.clone());
-        let cwd: Option<PathBuf> = session
+        let argv = crate::util::shell_command(expanded, shell.as_deref());
+        let mut cmd = tmxr_term::child::command(&argv[0]);
+        self.child_env(session).apply(&mut cmd);
+        cmd.args(&argv[1..])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null());
+        if let Some(dir) = session
             .and_then(|s| self.sessions.get(&s))
-            .map(|s| s.cwd.clone());
-        let env: ChildEnv = self.child_env(session);
+            .map(|s| &s.cwd)
+            .filter(|d| d.is_dir())
+        {
+            cmd.current_dir(dir);
+        }
+        let mut child = cmd.spawn()?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| std::io::Error::other("no output pipe"))?;
+        Ok((child, stdout))
+    }
+
+    /// Each whole line the run prints, then its end with what was left,
+    /// reported as events from a thread of its own.
+    fn read_format_job(&self, key: JobKey, run: u64, stdout: ChildStdout) {
         let events = self.events.clone();
-        let name = key.1.clone();
         let label = key.1.clone();
         let spawned = std::thread::Builder::new()
             .name("tmxr-format-job".into())
@@ -107,40 +149,21 @@ impl Server {
                     };
                     let _ = events.send(Event::FormatJob(Box::new(output)));
                 };
-                let argv = crate::util::shell_command(&expanded, shell.as_deref());
-                let mut cmd = tmxr_term::child::command(&argv[0]);
-                env.apply(&mut cmd);
-                cmd.args(&argv[1..])
-                    .stdin(std::process::Stdio::null())
-                    .stdout(std::process::Stdio::piped())
-                    .stderr(std::process::Stdio::null());
-                if let Some(dir) = cwd.filter(|d| d.is_dir()) {
-                    cmd.current_dir(dir);
-                }
-                let Ok(mut child) = cmd.spawn() else {
-                    send(format!("<'{name}' didn't start>"), true);
-                    return;
-                };
+                let mut reader = BufReader::new(stdout);
                 let mut rest = Vec::new();
-                if let Some(stdout) = child.stdout.take() {
-                    let mut reader = BufReader::new(stdout);
-                    let mut line = Vec::new();
-                    loop {
-                        line.clear();
-                        match reader.read_until(b'\n', &mut line) {
-                            Ok(0) | Err(_) => break,
-                            Ok(_) if line.ends_with(b"\n") => {
-                                let text = String::from_utf8_lossy(&line);
-                                let text = text.trim_end_matches(['\n', '\r']);
-                                send(text.to_owned(), false);
-                            }
-                            // The last of it, with no newline after.
-                            Ok(_) => rest.extend_from_slice(&line),
+                let mut line = Vec::new();
+                loop {
+                    line.clear();
+                    match reader.read_until(b'\n', &mut line) {
+                        Ok(0) | Err(_) => break,
+                        Ok(_) if line.ends_with(b"\n") => {
+                            let text = String::from_utf8_lossy(&line);
+                            send(text.trim_end_matches(['\n', '\r']).to_owned(), false);
                         }
+                        // The last of it, with no newline after.
+                        Ok(_) => rest.extend_from_slice(&line),
                     }
                 }
-                // Reaped only: tmux shows no exit status for a job.
-                let _ = child.wait();
                 send(String::from_utf8_lossy(&rest).into_owned(), true);
             });
         if let Err(e) = spawned {
@@ -150,18 +173,24 @@ impl Server {
         }
     }
 
-    /// Client `client`'s jobs dropped, as tmux frees them with the client;
-    /// a run still going reports to nothing.
+    /// Client `client`'s jobs dropped, their runs stopped, as tmux frees
+    /// them with the client.
     pub fn forget_format_jobs(&self, client: ClientId) {
         if let Ok(mut jobs) = self.format_jobs.lock() {
-            jobs.jobs.retain(|(c, _), _| *c != Some(client));
+            jobs.jobs.retain(|(c, _), job| {
+                let keep = *c != Some(client);
+                if !keep {
+                    job.stop();
+                }
+                keep
+            });
         }
     }
 
     /// A line or the end from a job's run, as tmux's format_job_update and
     /// format_job_complete: a line becomes what the format shows; at the
-    /// end, what was left does too unless it is empty after a line. The
-    /// client's status line is drawn again.
+    /// end, what was left does too unless it is empty after a line, and the
+    /// run is reaped. The client's status line is drawn again.
     pub fn format_job_output(&mut self, output: JobOutput) {
         let Ok(mut jobs) = self.format_jobs.lock() else {
             return;
@@ -174,7 +203,7 @@ impl Server {
             return;
         };
         if output.done {
-            job.running = false;
+            job.stop();
             if !output.text.is_empty() || !job.updated {
                 job.out = Some(output.text);
             }

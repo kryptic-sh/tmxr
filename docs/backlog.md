@@ -448,10 +448,11 @@ table. What has been verified, and how:
     large into an error (`conn.rs`).
 - **tmux 3.6 features tmxr lacks** (the same review; compared against tmux's
   `cmd-*.c`, `options-table.c` and `format.c`, not run):
-  - Formats: `#()` jobs run as tmux's (`format_jobs.rs`), but a job made to run
-    again by a change in its expanded text leaves its earlier run going where
-    tmux kills it, and a client's jobs are kept until it goes, where tmux also
-    drops ones unused for an hour (format_job_tidy); modifiers `w:` (it needs a
+  - Formats: `#()` jobs run as tmux's (`format_jobs.rs`), but a client's jobs
+    are kept until it goes, where tmux also drops ones unused for an hour
+    (format_job_tidy); a job's run is stopped by killing its own process
+    (SIGKILL), where tmux sends SIGTERM, and in both a command's own children
+    outlive it unless the shell `exec`s them; modifiers `w:` (it needs a
     display-width measure `tmxr-command` does not have, unicode-width being a
     new dependency); `c:` gives no colour for X11's names (`orchid`,
     `navy blue`), which tmux 3.6's colour_byname takes from a table of 578

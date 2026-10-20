@@ -1426,3 +1426,34 @@ fn a_job_in_status_right_shows_its_last_line() {
     t.run(&["set", "-g", "status-right", job]);
     s.wait_for("the job's last line", |text| text.contains("<JOBOUT>"));
 }
+
+/// A job whose expanded command changes runs again, its run before
+/// killed, as tmux's format_job_get frees it. (tmux, too, kills the job's
+/// own process, which `exec` makes the sleep here.)
+#[cfg(unix)]
+#[test]
+fn a_job_whose_command_changes_stops_its_old_run() {
+    let t = Tmxr::new("jobkill");
+    let s = t.attach(&["new", "-s", "jk"]);
+    s.wait_for("the status line", |text| text.contains("jk"));
+    let running = |pattern: &str| {
+        std::process::Command::new("pgrep")
+            .args(["-f", pattern])
+            .output()
+            .is_ok_and(|o| o.status.success())
+    };
+    t.run(&["set", "-g", "@v", "1"]);
+    t.run(&["set", "-g", "status-right", "#(exec sleep 31#{@v})"]);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !running("sleep 311") && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert!(running("sleep 311"), "the first run started");
+    t.run(&["set", "-g", "@v", "2"]);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while (running("sleep 311") || !running("sleep 312")) && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert!(!running("sleep 311"), "the first run was killed");
+    assert!(running("sleep 312"), "the second run started");
+}

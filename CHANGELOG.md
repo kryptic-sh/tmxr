@@ -33,9 +33,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`#{buffer_full}` and `#{buffer_created}`**, as tmux's.
 - **`#(command)` in formats**, as tmux's: the command runs in the background
   with the session's shell and directory (again at most once a second while a
-  format names it, at once when its expanded text changes), and the format shows
-  the last line it printed: in the status line, the line once it has printed
-  one.
+  format names it, at once when its expanded text changes, the run before
+  stopped), and the format shows the last line it printed: in the status line,
+  the line once it has printed one.
 - **`window-status-bell-style` and `window-status-activity-style`**, as tmux's:
   a window's entry with a bell alert takes the bell style, else with an activity
   or silence alert the activity style, unless `default` (tmxr's defaults, where
