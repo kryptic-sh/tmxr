@@ -503,9 +503,13 @@ table. What has been verified, and how:
     `buffer_created` and `buffer_full` (tmxr's buffers keep no creation time, so
     `-O time` is their newest-first order); `choose-tree -F` replaces the text
     after a row's mark, where tmux's is the whole tree line; `command-prompt`
-    completion (Tab); smaller flags: `source-file -v`, several paths and globs
-    (each load replaces the whole TOML config, so several files have no clear
-    meaning yet); `source-file` of a tmux command file (`%if`, `%hidden`).
+    Tab's menus (tmux opens a menu of the matches when several share no longer
+    start, and of a session's windows after `-tname:`; tmxr completes as far as
+    they agree and stops), and the `target` / `window-target` prompt types'
+    completion (`overlay::prompt::completion`); smaller flags: `source-file -v`,
+    several paths and globs (each load replaces the whole TOML config, so
+    several files have no clear meaning yet); `source-file` of a tmux command
+    file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `client-light-theme` /
     `-dark-theme`. Copy mode lacks `next-prompt` / `previous-prompt` (they need
     a prompt mark on every history line, as tmux keeps per grid line; `Emulator`
@@ -523,9 +527,17 @@ table. What has been verified, and how:
   2026-10-20: `lock_hands_the_keys_to_the_lock_command`, then
   `layout_matches_tmux` and `option_scopes_match_tmux` in one run): a client
   gave up waiting for its server's pipe (`wait_for_server` in `tmxr-client`,
-  `SPAWN_TIMEOUT`). Each passed alone and in the next full run. A guess is the
-  server's start outlasting the timeout under the whole workspace's load; not
-  investigated, and the timeout not raised on a guess.
+  `SPAWN_TIMEOUT`). Each passed alone and in the next full run. The servers did
+  start, only late: after the third, two `__server` processes for the failed
+  run's pipes (`oracle-58296-44`, `-45`) were still running 20 minutes on with
+  no session, so the client's wait elapsed before the server opened its pipe.
+  Such a server never exits: `Server::check_exit` waits for a first session
+  (`had_session`, there because tmxr's server starts apart from its client,
+  unlike tmux's forked one) and none comes. Options, neither taken: the server
+  exits with no session and no client once a startup grace longer than
+  `SPAWN_TIMEOUT` has passed (a test of it waits out the grace), or the client
+  keeps the spawned `Child` and kills it when it gives up (the child is dropped
+  at once today). Why the start took so long under load is not known.
 - **`word_separators_and_wrap_search_reach_copy_mode` failed once** (Windows,
   full e2e suite, 2026-10-18) at its first `#{copy_cursor_word}` check; four
   runs alone and the next full run passed. The failure output was not kept, so

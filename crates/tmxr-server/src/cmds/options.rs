@@ -162,7 +162,7 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed) -> Res {
 
 /// The server options `set-option` takes, as tmux's server table holds
 /// them (and tmxr's `rgb-colour` and `socket-access`).
-const SERVER_OPTIONS: &[&str] = &[
+pub const SERVER_OPTIONS: &[&str] = &[
     "buffer-limit",
     "client-away-time",
     "copy-command",

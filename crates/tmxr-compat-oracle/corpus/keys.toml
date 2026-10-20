@@ -282,3 +282,53 @@ steps = [
   { sleep = 0.3 },
 ]
 checks = [{ format = "#{copy_cursor_x},#{copy_cursor_y}" }]
+
+[[cases]]
+name = "command_prompt_tab_completes_as_tmux"
+attach = true
+unix_only = true
+steps = [
+  { run = "command-prompt -b \"set -g @a '%%'\"" },
+  { sleep = 0.3 },
+  { keys = "new-w\u0009" },
+  { sleep = 0.2 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+  { run = "command-prompt -b \"set -g @b '%%'\"" },
+  { sleep = 0.3 },
+  { keys = "sel\u0009" },
+  { sleep = 0.2 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+  { run = "command-prompt -b \"set -g @c '%%'\"" },
+  { sleep = 0.3 },
+  { keys = "set -g status-l\u0009" },
+  { sleep = 0.2 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+  { run = "command-prompt -b \"set -g @d '%%'\"" },
+  { sleep = 0.3 },
+  { keys = "switch-client -t o\u0009" },
+  { sleep = 0.2 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+  { run = "command-prompt -b \"set -g @e '%%'\"" },
+  { sleep = 0.3 },
+  { keys = "x even-h\u0009" },
+  { sleep = 0.2 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+  { run = "command-prompt -b \"set -g @f '%%'\"" },
+  { sleep = 0.3 },
+  { keys = "pane-bor\u0009" },
+  { sleep = 0.2 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+  { run = "command-prompt -b \"set -g @g '%%'\"" },
+  { sleep = 0.3 },
+  { keys = "switch-client -to\u0009" },
+  { sleep = 0.2 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+]
+checks = [{ format = "[#{@a}] [#{@b}] [#{@c}] [#{@d}] [#{@e}] [#{@f}] [#{@g}]" }]

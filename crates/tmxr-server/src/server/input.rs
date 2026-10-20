@@ -166,6 +166,34 @@ impl Server {
 
     /// Add a submitted prompt entry to its type's history: the same entry
     /// twice in a row is kept once, and the oldest go past the limit.
+    /// The names a prompt's Tab completes from: commands and their aliases,
+    /// option names and layouts, and the sessions.
+    fn prompt_completions(&self) -> crate::overlay::Completions {
+        let commands = tmxr_command::table::COMMANDS
+            .iter()
+            .flat_map(|c| std::iter::once(c.name).chain(c.alias))
+            .map(str::to_owned)
+            .collect();
+        let others = crate::cmds::SERVER_OPTIONS
+            .iter()
+            .chain(tmxr_config::SessionOptions::NAMES)
+            .chain(tmxr_config::WindowOptions::NAMES)
+            .chain(tmxr_config::PANE_OPTIONS)
+            .chain(crate::layout::PRESETS)
+            .map(|n| (*n).to_owned())
+            .collect();
+        let sessions = self
+            .sessions
+            .values()
+            .map(|s| (s.name.clone(), s.id))
+            .collect();
+        crate::overlay::Completions {
+            commands,
+            others,
+            sessions,
+        }
+    }
+
     pub fn remember_prompt(&mut self, kind: &str, entry: String) {
         if entry.is_empty() {
             return;
@@ -239,6 +267,9 @@ impl Server {
         {
             s.activity = std::time::SystemTime::now();
         }
+        // What a prompt's Tab completes from, gathered for a Tab alone.
+        let completions =
+            (ev.code == crossterm::event::KeyCode::Tab).then(|| self.prompt_completions());
         // A prompt's keys, word separators and newest buffer as they are
         // now, as tmux reads them for each key.
         let prompt_env = self
@@ -265,6 +296,7 @@ impl Server {
         if let Some(mut ov) = att.overlay.take() {
             if let (Overlay::Prompt(p), Some((vi, separators, paste))) = (&mut ov, prompt_env) {
                 (p.vi, p.separators, p.paste) = (vi, separators, paste);
+                p.completions = completions;
             }
             let action = ov.key(&ev);
             // display-panes -N: the overlay stays and the key goes on.

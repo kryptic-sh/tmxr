@@ -52,6 +52,83 @@ pub struct Prompt {
     pub(super) saved: Option<Vec<char>>,
     /// After `C-v`: the next key is typed as it is.
     pub(super) quote_next: bool,
+    /// What Tab completes from, given before a Tab is handled.
+    pub completions: Option<Completions>,
+}
+
+/// The names the prompt's Tab completes from, as tmux's
+/// status_prompt_complete_list and status_prompt_complete_session.
+#[derive(Debug, Clone, Default)]
+pub struct Completions {
+    /// Command names and aliases, completed anywhere.
+    pub commands: Vec<String>,
+    /// Option names and layouts, completed after the first word.
+    pub others: Vec<String>,
+    /// Sessions, by name and id, for a `-t` or `-s` word.
+    pub sessions: Vec<(String, u32)>,
+}
+
+/// The longest start every one of `words` shares, as tmux's
+/// status_prompt_complete_prefix.
+fn common_prefix<S: AsRef<str>>(words: &[S]) -> Option<String> {
+    let (first, rest) = words.split_first()?;
+    let mut prefix: Vec<char> = first.as_ref().chars().collect();
+    for w in rest {
+        let shared = prefix
+            .iter()
+            .zip(w.as_ref().chars())
+            .take_while(|(a, b)| **a == *b)
+            .count();
+        prefix.truncate(shared);
+    }
+    Some(prefix.into_iter().collect())
+}
+
+/// What tmux's status_prompt_complete gives for `word`: one name it starts
+/// (with a space after) or what all of them share; for a `-t` or `-s` word
+/// the sessions as `-tname:`. `None` when that is no further on (tmux then
+/// opens a menu of them, which tmxr does not) or there is nothing.
+fn completion(word: &str, at_start: bool, names: &Completions) -> Option<String> {
+    if word.is_empty() {
+        return None;
+    }
+    let out = if let Some(s) = word.strip_prefix("-t").or_else(|| word.strip_prefix("-s")) {
+        // tmux opens a menu of the session's windows after a colon.
+        if s.contains(':') {
+            return None;
+        }
+        let flag = word.chars().nth(1)?;
+        let list: Vec<String> = names
+            .sessions
+            .iter()
+            .filter_map(|(name, id)| {
+                if s.is_empty() || name.starts_with(s) {
+                    Some(format!("{name}:"))
+                } else {
+                    let id = id.to_string();
+                    let n = s.strip_prefix('$')?;
+                    id.starts_with(n).then(|| format!("${id}:"))
+                }
+            })
+            .collect();
+        common_prefix(&list).map(|p| format!("-{flag}{p}"))
+    } else {
+        let mut list: Vec<&str> = names
+            .commands
+            .iter()
+            .chain(names.others.iter().filter(|_| !at_start))
+            .map(String::as_str)
+            .filter(|n| n.starts_with(word))
+            .collect();
+        list.sort_unstable();
+        list.dedup();
+        match list.as_slice() {
+            [] => None,
+            [one] => Some(format!("{one} ")),
+            _ => common_prefix(&list),
+        }
+    };
+    out.filter(|o| o != word)
 }
 
 /// What a key does to the input, as tmux 3.6's status_prompt_key does it.
@@ -89,6 +166,8 @@ enum Edit {
     Submit,
     Cancel,
     QuoteNext,
+    /// Tab: the word at the cursor completed.
+    Complete,
     Type(char),
     Ignore,
 }
@@ -107,6 +186,7 @@ fn emacs(ev: &KeyEvent) -> Edit {
         KeyCode::Right => Edit::Right,
         KeyCode::Home => Edit::Home,
         KeyCode::End => Edit::End,
+        KeyCode::Tab => Edit::Complete,
         KeyCode::Backspace => Edit::Backspace,
         KeyCode::Delete => Edit::Delete,
         KeyCode::Up => Edit::Older,
@@ -310,6 +390,43 @@ impl Prompt {
         OverlayAction::Run(self.command())
     }
 
+    /// Tab: the word at the cursor replaced by its completion, found as
+    /// tmux's status_prompt_replace_complete finds it (the word holding the
+    /// character before the cursor), the cursor after it.
+    fn complete(&mut self) {
+        let Some(names) = self.completions.take() else {
+            return;
+        };
+        let space = |i: usize| self.input.get(i) == Some(&' ');
+        let filled = |i: usize| i < self.input.len();
+        let at = self.cursor.saturating_sub(1);
+        let mut first = at;
+        while first > 0 && !space(first) {
+            first -= 1;
+        }
+        while filled(first) && space(first) {
+            first += 1;
+        }
+        let mut last = at;
+        while filled(last) && !space(last) {
+            last += 1;
+        }
+        while last > 0 && space(last) {
+            last -= 1;
+        }
+        if filled(last) {
+            last += 1;
+        }
+        if last < first {
+            return;
+        }
+        let word: String = self.input[first..last].iter().collect();
+        if let Some(out) = completion(&word, first == 0, &names) {
+            self.input.splice(first..last, out.chars());
+            self.cursor = first + out.chars().count();
+        }
+    }
+
     /// The text typed, for the history once the prompt is submitted.
     pub fn text(&self) -> String {
         self.input.iter().collect()
@@ -384,6 +501,7 @@ impl Prompt {
         let len = self.input.len();
         match edit {
             Edit::Submit => return self.submit(),
+            Edit::Complete => self.complete(),
             Edit::Cancel => return OverlayAction::Close,
             Edit::Left => self.cursor = self.cursor.saturating_sub(1),
             Edit::Right => self.cursor = (self.cursor + 1).min(len),
@@ -568,5 +686,46 @@ impl Prompt {
             }
         }
         idx
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn names() -> Completions {
+        let own = |list: &[&str]| list.iter().map(|s| (*s).to_owned()).collect();
+        Completions {
+            commands: own(&[
+                "new-window",
+                "neww",
+                "select-pane",
+                "selectp",
+                "select-window",
+            ]),
+            others: own(&["status-left", "status-left-length", "even-horizontal"]),
+            sessions: vec![("main".into(), 0), ("mail".into(), 3), ("other".into(), 12)],
+        }
+    }
+
+    #[test]
+    fn tab_completes_as_tmux() {
+        let n = names();
+        let c = |word: &str, at_start: bool| completion(word, at_start, &n);
+        // One match, with a space after; several, what they share.
+        assert_eq!(c("new-w", true).as_deref(), Some("new-window "));
+        assert_eq!(c("sel", true).as_deref(), Some("select"));
+        // Options and layouts only after the first word.
+        assert_eq!(c("status-l", true), None);
+        assert_eq!(c("status-l", false).as_deref(), Some("status-left"));
+        assert_eq!(c("even", false).as_deref(), Some("even-horizontal "));
+        // Sessions after -t / -s, ended by a colon; $ takes an id.
+        assert_eq!(c("-tma", false).as_deref(), Some("-tmai"));
+        assert_eq!(c("-sot", false).as_deref(), Some("-sother:"));
+        assert_eq!(c("-t$1", false).as_deref(), Some("-t$12:"));
+        // Nothing further on, nothing to complete, or a window after a colon.
+        assert_eq!(c("select", true), None);
+        assert_eq!(c("", true), None);
+        assert_eq!(c("-tmain:", false), None);
     }
 }

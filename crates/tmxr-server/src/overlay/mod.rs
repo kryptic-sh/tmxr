@@ -17,7 +17,7 @@ use crate::vars::Vars;
 pub use boxes::{BoxLook, Lines};
 use picker::{Item, Target, current_first};
 pub use picker::{PickerOverlay, Previewed};
-pub use prompt::Prompt;
+pub use prompt::{Completions, Prompt};
 
 /// The orders `-O` names, for the `choose-*` pickers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -225,6 +225,7 @@ impl Overlay {
             paste: None,
             saved: None,
             quote_next: false,
+            completions: None,
         }))
     }
 
