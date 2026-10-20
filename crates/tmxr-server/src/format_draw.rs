@@ -51,27 +51,22 @@ fn runs(text: &str, base: Style) -> (Vec<Run>, Option<Style>) {
     // Inside a list's left or right marker: shown by tmux only when the
     // list is too long, so left out here.
     let mut marker = false;
-    let mut rest = text;
-    loop {
-        let (chunk, after) = match rest.find("#[") {
-            Some(at) => (&rest[..at], Some(&rest[at + 2..])),
-            None => (rest, None),
+    for piece in format::draw_pieces(text) {
+        let spec = match piece {
+            format::Piece::Text(text) => {
+                if !marker {
+                    runs.push(Run {
+                        text,
+                        style: current,
+                        align,
+                        range,
+                    });
+                }
+                continue;
+            }
+            format::Piece::Style(spec) => spec,
         };
-        if !chunk.is_empty() && !marker {
-            runs.push(Run {
-                text: chunk.to_owned(),
-                style: current,
-                align,
-                range,
-            });
-        }
-        let Some(after) = after else {
-            break;
-        };
-        let Some(end) = after.find(']') else {
-            break;
-        };
-        for item in after[..end].split([',', ' ']).filter(|i| !i.is_empty()) {
+        for item in spec.split([',', ' ']).filter(|i| !i.is_empty()) {
             match item {
                 "default" | "none" => current = default,
                 "push-default" => default = current,
@@ -107,7 +102,6 @@ fn runs(text: &str, base: Style) -> (Vec<Run>, Option<Style>) {
                 }
             }
         }
-        rest = &after[end + 1..];
     }
     (runs, fill)
 }

@@ -496,6 +496,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   its URLs under `on_macos`, so `brew tap kryptic-sh/tap` failed with "invalid
   syntax in tap" and no kryptic-sh tool could be installed. The URLs moved out
   of `on_macos` and `depends_on :macos` keeps the formula macOS-only.
+- **The status line draws runs of `#` as tmux's**: `##` is one `#`, and `##[` a
+  literal `#[` rather than a style, so a window named `a##b` shows `a#b`.
+  `#{window_flags}` escapes the activity flag as `##`, as tmux's, and
+  `#{window_raw_flags}` is added for the flags as they are.
 - **A command run from a shell expands `client_*` for the best client**, as
   tmux's: `display-message`, `set -F` and the other formats a command expands
   took no client, so `#{client_flags}` or `#{client_session}` came out empty.

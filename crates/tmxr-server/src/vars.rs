@@ -132,6 +132,7 @@ pub const NAMES: &[&str] = &[
     "window_marked_flag",
     "window_name",
     "window_panes",
+    "window_raw_flags",
     "window_silence_flag",
     "window_start_flag",
     "window_visible_layout",
@@ -653,16 +654,23 @@ impl<'a> Context for Vars<'a> {
                 let s = session?;
                 flag(s.last.is_some() && s.last == s.index_of(window?.id))
             }
-            "window_flags" => {
+            // tmux's window_printable_flags: escaped for a format drawn
+            // after (`##` for activity), and raw.
+            "window_flags" | "window_raw_flags" => {
                 let s = session?;
                 let w = window?;
                 let idx = s.index_of(w.id);
-                w.flags(
+                let flags = w.flags(
                     s.id,
                     idx == Some(s.current),
                     idx.is_some() && idx == s.last,
                     srv.window_is_marked(w.id),
-                )
+                );
+                if name == "window_flags" {
+                    flags.replace('#', "##")
+                } else {
+                    flags
+                }
             }
             "pane_synchronized" => flag(srv.pane_options(pane?.id).synchronize_panes),
             // An empty pane has no program, so counts as dead, as tmux's

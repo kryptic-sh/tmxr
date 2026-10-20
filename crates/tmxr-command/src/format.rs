@@ -1253,25 +1253,66 @@ pub fn parse_colour(s: &str) -> Option<Colour> {
     None
 }
 
-/// Split expanded text into `(style, text)` runs. Each `#[…]` updates the
-/// running style; text before the first one has the default (empty) style.
-/// A `#[` with no `]` ends the text there, as tmux's `format_draw` stops.
+/// A piece of expanded text as tmux's `format_draw` reads it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Piece<'a> {
+    /// Text drawn as it is.
+    Text(String),
+    /// What is inside a `#[…]`.
+    Style(&'a str),
+}
+
+/// `text` in pieces as tmux's `format_draw` reads it: a run of `#` draws as
+/// half of them, rounded up (`##` is one `#`); before a `[`, an even run is
+/// half of them and a literal `[`, an odd one half the rest and then a
+/// style. A `#[` with no `]` ends the text there, as `format_draw` stops.
+pub fn draw_pieces(text: &str) -> Vec<Piece<'_>> {
+    let mut pieces = Vec::new();
+    let mut literal = String::new();
+    let mut rest = text;
+    while let Some(at) = rest.find('#') {
+        literal.push_str(&rest[..at]);
+        let hashes = rest[at..].bytes().take_while(|&b| b == b'#').count();
+        let after = &rest[at + hashes..];
+        let Some(style) = after.strip_prefix('[') else {
+            literal.extend(std::iter::repeat_n('#', hashes.div_ceil(2)));
+            rest = after;
+            continue;
+        };
+        literal.extend(std::iter::repeat_n('#', hashes / 2));
+        if hashes % 2 == 0 {
+            literal.push('[');
+            rest = style;
+            continue;
+        }
+        let Some(end) = style.find(']') else {
+            rest = "";
+            break;
+        };
+        if !literal.is_empty() {
+            pieces.push(Piece::Text(std::mem::take(&mut literal)));
+        }
+        pieces.push(Piece::Style(&style[..end]));
+        rest = &style[end + 1..];
+    }
+    literal.push_str(rest);
+    if !literal.is_empty() {
+        pieces.push(Piece::Text(literal));
+    }
+    pieces
+}
+
+/// Split expanded text into `(style, text)` runs, read as
+/// [`draw_pieces`]: each `#[…]` updates the running style; text before the
+/// first one has the default (empty) style.
 pub fn styled(text: &str) -> Vec<(Style, String)> {
     let mut runs = Vec::new();
     let mut style = Style::default();
-    let mut rest = text;
-    while let Some(at) = rest.find("#[") {
-        if at > 0 {
-            runs.push((style, rest[..at].to_owned()));
+    for piece in draw_pieces(text) {
+        match piece {
+            Piece::Text(text) => runs.push((style, text)),
+            Piece::Style(spec) => style.apply(spec),
         }
-        let Some(end) = rest[at..].find(']') else {
-            return runs;
-        };
-        style.apply(&rest[at + 2..at + end]);
-        rest = &rest[at + end + 1..];
-    }
-    if !rest.is_empty() {
-        runs.push((style, rest.to_owned()));
     }
     runs
 }
@@ -1279,6 +1320,21 @@ pub fn styled(text: &str) -> Vec<(Style, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn draw_pieces_read_hashes_as_tmuxs_format_draw() {
+        let text = |t: &str| Piece::Text(t.to_owned());
+        assert_eq!(draw_pieces("a##b#c###"), [text("a#b#c##")]);
+        // Before `[`: even, half and a literal `[`; odd, half and a style.
+        assert_eq!(draw_pieces("x##[y"), [text("x#[y")]);
+        assert_eq!(
+            draw_pieces("x###[fg=red]y"),
+            [text("x#"), Piece::Style("fg=red"), text("y")]
+        );
+        assert_eq!(draw_pieces("#[bold]"), [Piece::Style("bold")]);
+        // A style with no `]` ends the text.
+        assert_eq!(draw_pieces("a#[bold"), [text("a")]);
+    }
 
     fn ctx(name: &str) -> Option<String> {
         Some(

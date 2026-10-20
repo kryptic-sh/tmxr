@@ -590,3 +590,31 @@ checks = [
   { command = "display -p 'a#{L:x}b'" },
   { command = "display -p 'a#{W/zz:x}b'" },
 ]
+
+[[cases]]
+name = "window_flags_escape_the_activity_flag_as_tmux"
+steps = [
+  { run = "new-window -d -t o:1 'sleep 1; echo busy; exec sleep 1000'" },
+  { run = "set -w -t o:1 monitor-activity on" },
+  { sleep = 2.0 },
+]
+checks = [
+  { command = "display -p -t o:1 '[#{window_flags}] [#{window_raw_flags}] [#F]'" },
+  { command = "list-windows -t o -F '#{window_index}#{window_flags}'" },
+]
+
+[[cases]]
+name = "a_status_line_draws_runs_of_hashes_as_tmux"
+attach = true
+unix_only = true
+steps = [
+  { run = "rename-window -t o aa##bb" },
+  { run = "set -g @l 'x##[y'" },
+  { run = "set -g status-left '#{@l} '" },
+  { sleep = 0.5 },
+]
+checks = [
+  { screen_contains = "aa#bb", expect = true },
+  { screen_contains = "aa##bb", expect = false },
+  { screen_contains = "x#[y", expect = true },
+]
