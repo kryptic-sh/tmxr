@@ -79,6 +79,8 @@ impl Server {
                 last_used: Instant::now(),
                 activity: SystemTime::now(),
                 last_attached: None,
+                key_at: None,
+                pasting: false,
             },
         );
         if let Err(e) = self.new_window(id, None, window_name, Some(cwd), argv, &[], size, true) {

@@ -646,12 +646,8 @@ table. What has been verified, and how:
   tmxr reads the signal itself on Unix (`wait_exit` in `tmxr-term/src/pty.rs`,
   `waitpid`), which no dynamic-analysis tool covers: CI runs none, and Miri
   cannot run the call.
-- **`assume-paste-time` is kept per client**, where tmux keeps its paste state
-  per session (`SESSION_PASTING`, timed from the session's activity by any
-  client); one client typing while another clicks is timed apart in tmxr. Keys
-  and mouse events both count toward it, as tmux's
-  (`a_key_after_a_click_counts_toward_a_paste_as_tmux`). The e2e harness sets
-  `assume-paste-time = 0`, as its tests type whole key sequences in one write.
+- **The e2e harness sets `assume-paste-time = 0`**, as its tests type whole key
+  sequences in one write; the tests that time pastes set it themselves.
 - **A dead pane's line waits for quiet output, not unread bytes**: tmux writes
   `remain-on-exit-format` once the pane's terminal has no unread bytes
   (`window_pane_destroy_ready`, `FIONREAD`); tmxr's exit and output come from

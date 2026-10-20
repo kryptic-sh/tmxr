@@ -628,3 +628,29 @@ fn a_key_right_after_a_click_counts_toward_a_paste() {
         "the second was pasted"
     );
 }
+
+/// assume-paste-time is timed per session, as tmux's SESSION_PASTING: one
+/// client's click counts toward a paste typed by another in the session.
+#[test]
+fn a_paste_is_timed_across_the_sessions_clients() {
+    let t = Tmxr::new("pastesess");
+    let a = t.attach(&["new", "-s", "ps"]);
+    a.wait_for("status line", |text| text.contains("ps"));
+    let b = t.attach(&["attach", "-t", "ps"]);
+    b.wait_for("status line", |text| text.contains("ps"));
+    t.run(&["set", "-g", "mouse", "on"]);
+    t.run(&["set", "-g", "assume-paste-time", "500"]);
+    t.run(&["bind", "-n", "x", "set", "-ga", "@hits", "x"]);
+    std::thread::sleep(Duration::from_millis(600));
+    a.click(0, 2, 2);
+    for _ in 0..2 {
+        std::thread::sleep(Duration::from_millis(50));
+        b.send(b"x");
+    }
+    std::thread::sleep(Duration::from_millis(400));
+    assert_eq!(
+        t.run(&["show", "-gv", "@hits"]).trim(),
+        "x",
+        "the second was pasted"
+    );
+}

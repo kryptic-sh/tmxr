@@ -299,6 +299,11 @@ pub struct Session {
     /// When a client last attached or switched to it, none before one has
     /// (`#{session_last_attached}`).
     pub last_attached: Option<std::time::SystemTime>,
+    /// When a client last gave it a key or mouse event, or attached, and
+    /// whether keys are being taken as pasted: `assume-paste-time`, kept
+    /// per session as tmux's SESSION_PASTING.
+    pub key_at: Option<Instant>,
+    pub pasting: bool,
 }
 
 impl Session {

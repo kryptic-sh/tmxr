@@ -50,8 +50,6 @@ impl Server {
             locked: false,
             last_input: Instant::now(),
             pending_escape: None,
-            key_at: None,
-            assume_pasting: false,
             drag: None,
             press: None,
             click: None,
@@ -287,6 +285,7 @@ impl Server {
     pub fn touch_session(&mut self, session: SessionId) {
         if let Some(s) = self.sessions.get_mut(&session) {
             s.last_used = Instant::now();
+            s.key_at = Some(s.last_used);
             s.activity = std::time::SystemTime::now();
             s.last_attached = Some(s.activity);
         }

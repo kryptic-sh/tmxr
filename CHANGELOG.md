@@ -523,8 +523,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- **`assume-paste-time` counts a mouse event as input**, as tmux's: a key right
-  after a click is timed from the click, where it was timed from the key before.
+- **`assume-paste-time` counts a mouse event as input and is kept per session**,
+  as tmux's: a key right after a click (or attaching) is timed from it,
+  whichever of the session's clients it came from, where it was timed from the
+  same client's key before.
 - **The first status line is drawn from `status-format[0]` always**, as tmux's:
   `align=`, `fill=`, `list=` and ranges in `status-left`, `status-right` and the
   window formats now take effect there, where tmxr drew that line by its own

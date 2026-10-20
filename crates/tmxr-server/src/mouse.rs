@@ -102,8 +102,9 @@ pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
     let press = att.press;
     // A mouse event is input as a key is, for assume-paste-time's gap, as
     // tmux's server_client_key_callback times both.
-    if let Some(att) = srv.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
-        att.key_at = Some(std::time::Instant::now());
+    let session = att.session;
+    if let Some(s) = srv.sessions.get_mut(&session) {
+        s.key_at = Some(std::time::Instant::now());
     }
     if follow_drag(srv, id, m) {
         return;

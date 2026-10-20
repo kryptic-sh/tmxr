@@ -394,8 +394,12 @@ impl Server {
         let key = Key::from_event(&ev);
         let session = att.session;
         let now = Instant::now();
-        let since = att.key_at.replace(now).map(|t| now.duration_since(t));
-        if !sent && self.assume_paste(id, session, since) {
+        let since = self
+            .sessions
+            .get_mut(&session)
+            .and_then(|s| s.key_at.replace(now))
+            .map(|t| now.duration_since(t));
+        if !sent && self.assume_paste(session, since) {
             self.paste_key(id, session, &ev);
             return;
         }
@@ -544,18 +548,18 @@ impl Server {
     /// server_client_is_assume_paste: the first key within
     /// `assume-paste-time` of the one before starts assuming a paste and is
     /// still a key, each one after it is pasted, and a slower key ends it.
-    fn assume_paste(&mut self, id: ClientId, session: SessionId, since: Option<Duration>) -> bool {
+    fn assume_paste(&mut self, session: SessionId, since: Option<Duration>) -> bool {
         let t = self.session_options(session).assume_paste_time;
-        let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
+        let Some(s) = self.sessions.get_mut(&session) else {
             return false;
         };
         if t == 0 {
             return false;
         }
         if since.is_some_and(|d| d < Duration::from_millis(t)) {
-            std::mem::replace(&mut att.assume_pasting, true)
+            std::mem::replace(&mut s.pasting, true)
         } else {
-            att.assume_pasting = false;
+            s.pasting = false;
             false
         }
     }
