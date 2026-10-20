@@ -123,13 +123,17 @@ fn imp(epoch: i64) -> Option<LocalTime> {
     })
 }
 
+/// Whether `year` has a 29 February, in the Gregorian calendar.
+pub(crate) fn is_leap(year: i32) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+}
+
 /// Days since 1 January, 0 for that day, in the Gregorian calendar.
 #[cfg(any(windows, test))]
 fn day_of_year(year: i32, month: u8, day: u8) -> u16 {
     const BEFORE: [u16; 12] = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
-    let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
     let month = usize::from(month.clamp(1, 12));
-    BEFORE[month - 1] + u16::from(leap && month > 2) + u16::from(day) - 1
+    BEFORE[month - 1] + u16::from(is_leap(year) && month > 2) + u16::from(day) - 1
 }
 
 #[cfg(test)]

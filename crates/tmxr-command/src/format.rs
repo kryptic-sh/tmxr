@@ -252,6 +252,27 @@ const MONTHS: [&str; 12] = [
 /// `fmt` with C's `strftime` conversions filled in from `t`, in the C
 /// locale: `%a %A %b %B %c %C %d %D %e %F %h %H %I %j %k %l %m %M %n %p %P %r
 /// %R %s %S %t %T %u %w %y %Y %%`. Any other `%` sequence is kept as it is.
+/// The ISO 8601 week-based year and the days into its week 1 of `t`, as
+/// glibc's strftime works them out for `%G` / `%V` (its iso_week_days,
+/// transcribed): weeks start on Monday, and week 1 holds the first
+/// Thursday.
+fn iso_week(t: &crate::localtime::LocalTime) -> (i32, i32) {
+    // Days from `yday`'s week-1 Monday; the 7 * 54 keeps `%` nonnegative.
+    let days = |yday: i32| yday - (yday - i32::from(t.weekday) + 4 + 7 * 54) % 7 + 3;
+    let year_len = |y: i32| 365 + i32::from(crate::localtime::is_leap(y));
+    let yday = i32::from(t.yearday);
+    let here = days(yday);
+    if here < 0 {
+        return (t.year - 1, days(yday + year_len(t.year - 1)));
+    }
+    let next = days(yday - year_len(t.year));
+    if next >= 0 {
+        (t.year + 1, next)
+    } else {
+        (t.year, here)
+    }
+}
+
 pub fn strftime(fmt: &str, t: &crate::localtime::LocalTime) -> String {
     let day = DAYS[usize::from(t.weekday % 7)];
     let month = MONTHS[usize::from(t.month.clamp(1, 12) - 1)];
@@ -311,6 +332,19 @@ pub fn strftime(fmt: &str, t: &crate::localtime::LocalTime) -> String {
             'S' => format!("{:02}", t.second),
             't' => "\t".to_owned(),
             'T' => format!("{:02}:{:02}:{:02}", t.hour, t.minute, t.second),
+            // Weeks of the year from its first Sunday (`%U`) or Monday
+            // (`%W`), week 0 before it, as C's strftime.
+            'U' => format!("{:02}", (t.yearday + 7 - u16::from(t.weekday)) / 7),
+            'W' => format!(
+                "{:02}",
+                (t.yearday + 7 - u16::from((t.weekday + 6) % 7)) / 7
+            ),
+            'V' => format!("{:02}", iso_week(t).1 / 7 + 1),
+            'G' => iso_week(t).0.to_string(),
+            'g' => format!("{:02}", iso_week(t).0.rem_euclid(100)),
+            // The C locale's date and time.
+            'x' => format!("{:02}/{:02}/{:02}", t.month, t.day, t.year.rem_euclid(100)),
+            'X' => format!("{:02}:{:02}:{:02}", t.hour, t.minute, t.second),
             'u' => match t.weekday {
                 0 => 7,
                 d => d,
@@ -1320,6 +1354,57 @@ pub fn styled(text: &str) -> Vec<(Style, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn strftime_gives_week_numbers_and_the_c_locales_date_as_glibc() {
+        // Expected values from glibc's strftime (Python's, on Linux).
+        let at = |year, month, day, weekday, yearday| crate::localtime::LocalTime {
+            year,
+            month,
+            day,
+            hour: 7,
+            minute: 8,
+            second: 9,
+            weekday,
+            yearday,
+            epoch: 0,
+        };
+        let f = "%U %W %V %G %g %x";
+        assert_eq!(
+            strftime(f, &at(2021, 1, 1, 5, 0)),
+            "00 00 53 2020 20 01/01/21"
+        );
+        assert_eq!(
+            strftime(f, &at(2024, 12, 30, 1, 364)),
+            "52 53 01 2025 25 12/30/24"
+        );
+        assert_eq!(
+            strftime(f, &at(2026, 10, 20, 2, 292)),
+            "42 42 43 2026 26 10/20/26"
+        );
+        assert_eq!(
+            strftime(f, &at(2027, 1, 3, 0, 2)),
+            "01 00 53 2026 26 01/03/27"
+        );
+        assert_eq!(
+            strftime(f, &at(2020, 12, 31, 4, 365)),
+            "52 52 53 2020 20 12/31/20"
+        );
+        assert_eq!(
+            strftime(f, &at(2026, 1, 4, 0, 3)),
+            "01 00 01 2026 26 01/04/26"
+        );
+        // A year starting on a Sunday, then on a Monday: week 1 at once.
+        assert_eq!(
+            strftime(f, &at(2023, 1, 1, 0, 0)),
+            "01 00 52 2022 22 01/01/23"
+        );
+        assert_eq!(
+            strftime(f, &at(2024, 1, 1, 1, 0)),
+            "00 01 01 2024 24 01/01/24"
+        );
+        assert_eq!(strftime("%X", &at(2026, 1, 4, 0, 3)), "07:08:09");
+    }
 
     #[test]
     fn draw_pieces_read_hashes_as_tmuxs_format_draw() {

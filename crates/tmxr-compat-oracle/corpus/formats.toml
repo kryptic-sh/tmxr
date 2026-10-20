@@ -642,3 +642,8 @@ checks = [
   { command = "display -p -t o '#{W:#{E:tree_mode_format}|}'" },
   { command = "display -p '#{S:#{E:tree_mode_format}|}'" },
 ]
+
+[[cases]]
+name = "strftime_week_numbers_as_tmux"
+steps = []
+checks = [{ command = "display -p '%U %W %V %G %g %x'" }]

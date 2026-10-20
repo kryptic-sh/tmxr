@@ -24,6 +24,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **strftime's week numbers and the C locale's date and time** in formats: `%U`,
+  `%W`, ISO `%V` / `%G` / `%g`, `%x` and `%X`, as tmux's (glibc's), where they
+  were kept as written.
 - **A pane keeps its last copy-mode search**, as tmux's: `#{pane_search_string}`
   shows it after copy mode ends, and in the next copy mode `search-again` (`n`)
   repeats it upwards.
