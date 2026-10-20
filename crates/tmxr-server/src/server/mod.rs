@@ -446,6 +446,7 @@ impl Server {
         for p in self.panes.values_mut() {
             let _ = p.pty.kill();
         }
+        self.stop_format_jobs();
         info!("server exiting");
     }
 

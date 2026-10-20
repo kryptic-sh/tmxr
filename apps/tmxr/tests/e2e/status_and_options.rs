@@ -1446,7 +1446,7 @@ fn a_job_whose_command_changes_stops_its_old_run() {
     let s = t.attach(&["new", "-s", "jk"]);
     s.wait_for("the status line", |text| text.contains("jk"));
     let running = |pattern: &str| {
-        std::process::Command::new("pgrep")
+        tmxr_term::child::command("pgrep")
             .args(["-f", pattern])
             .output()
             .is_ok_and(|o| o.status.success())
@@ -1465,4 +1465,12 @@ fn a_job_whose_command_changes_stops_its_old_run() {
     }
     assert!(!running("sleep 311"), "the first run was killed");
     assert!(running("sleep 312"), "the second run started");
+    // The server's exit stops it too.
+    drop(s);
+    drop(t);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while running("sleep 312") && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert!(!running("sleep 312"), "the server's exit stopped the run");
 }

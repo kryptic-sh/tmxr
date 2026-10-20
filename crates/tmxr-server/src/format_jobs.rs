@@ -213,6 +213,16 @@ impl Server {
         }
     }
 
+    /// Every job dropped, its run stopped, as tmux frees each client's jobs
+    /// when the server exits.
+    pub fn stop_format_jobs(&self) {
+        if let Ok(mut jobs) = self.format_jobs.lock() {
+            for (_, mut job) in jobs.jobs.drain() {
+                job.stop();
+            }
+        }
+    }
+
     /// A line or the end from a job's run, as tmux's format_job_update and
     /// format_job_complete: a line becomes what the format shows; at the
     /// end, what was left does too unless it is empty after a line, and the

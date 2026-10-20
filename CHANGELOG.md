@@ -36,7 +36,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   format names it, at once when its expanded text changes, the run before
   stopped), and the format shows the last line it printed: in the status line,
   the line once it has printed one. A job no format has started for an hour is
-  dropped.
+  dropped, and the server's exit stops every run.
 - **`window-status-bell-style` and `window-status-activity-style`**, as tmux's:
   a window's entry with a bell alert takes the bell style, else with an activity
   or silence alert the activity style, unless `default` (tmxr's defaults, where
