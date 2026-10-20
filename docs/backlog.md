@@ -480,11 +480,11 @@ table. What has been verified, and how:
     (compare tmux's `format_table` with `vars.rs` for the list; `origin_flag`,
     `wrap_flag`, `insert_flag`, `scroll_region_*`, `alternate_saved_*`,
     `pane_tabs` and `cursor_shape` / `cursor_colour` need terminal state the
-    `vt100` crate does not expose; the three mode flags could be kept beside
-    vt100 by splitting their sequences out as `modes::ModeSplitter` does the
-    alternate screen's and passing them on, though `insert_flag`'s IRM is not a
-    DEC private mode the splitter reads and a soft reset, `CSI ! p`, clears all
-    three); overline, and underline styles and colours (`double-`, `curly-`,
+    `vt100` crate does not expose; `insert_flag` and `wrap_flag` are kept from
+    the sequences vt100 passes on unhandled, but vt100 itself still draws as
+    with insert off and wrap on; `origin_flag` would need vt100's private origin
+    mode, or splitting `CSI ? 6` out as `modes::ModeSplitter` does the alternate
+    screen's); overline, and underline styles and colours (`double-`, `curly-`,
     `dotted-` and `dashed-underscore` draw as the plain underline).
   - Options: every status row is drawn from its `status-format` item by
     `format_draw` (the first from tmux's default unless set), which takes tmux's

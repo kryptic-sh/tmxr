@@ -884,3 +884,14 @@ checks = [
 name = "window_cell_size_as_tmux"
 steps = []
 checks = [{ format = "#{window_cell_width}x#{window_cell_height}", expect = "16x32" }]
+
+[[cases]]
+name = "insert_and_wrap_flags_as_tmux"
+steps = [
+  { run = "new-window -d -t o:1 'printf \"\\033[4h\\033[?7l\"; exec sleep 1000'" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "display -p -t o:0 '#{insert_flag} #{wrap_flag}'" },
+  { command = "display -p -t o:1 '#{insert_flag} #{wrap_flag}'" },
+]

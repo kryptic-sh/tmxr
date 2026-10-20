@@ -24,6 +24,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`#{insert_flag}` and `#{wrap_flag}`**, as tmux's: insert mode and autowrap
+  as the pane's program set them.
 - **`#{window_cell_width}` and `#{window_cell_height}`**, tmux's 16 and 32: the
   pixel size tmux gives a cell when the terminal reports none.
 - **`#{command}`**, as tmux's: the name of the command whose formats are

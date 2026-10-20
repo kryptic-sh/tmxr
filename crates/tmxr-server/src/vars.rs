@@ -42,6 +42,7 @@ pub const NAMES: &[&str] = &[
     "history_size",
     "host",
     "host_short",
+    "insert_flag",
     "keypad_cursor_flag",
     "keypad_flag",
     "last_window_index",
@@ -155,6 +156,7 @@ pub const NAMES: &[&str] = &[
     "window_visible_layout",
     "window_width",
     "window_zoomed_flag",
+    "wrap_flag",
 ];
 
 /// tmux 3.6's default `choose-buffer` format, as its `#{buffer_mode_format}`.
@@ -850,6 +852,10 @@ impl<'a> Context for Vars<'a> {
                 window?;
                 CELL_HEIGHT_PIXELS.to_string()
             }
+            // The modes the pane's program set, as tmux's MODE_INSERT and
+            // MODE_WRAP.
+            "insert_flag" => flag(pane?.emu.insert_and_wrap().0),
+            "wrap_flag" => flag(pane?.emu.insert_and_wrap().1),
             // tmxr draws no sixel images.
             "sixel_support" => "0".to_owned(),
             "pane_unseen_changes" => flag(pane?.copy.as_ref().is_some_and(|c| c.unseen_changes)),

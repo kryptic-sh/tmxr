@@ -31,6 +31,11 @@ pub struct Hooks {
     kitty_flags: Vec<u8>,
     /// The program asked for focus reports (`CSI ? 1004 h`).
     focus_reports: bool,
+    /// Insert mode (`CSI 4 h`, IRM), which vt100 does not keep.
+    insert_mode: bool,
+    /// Autowrap turned off (`CSI ? 7 l`, DECAWM), which vt100 does not
+    /// keep (it always wraps).
+    no_wrap: bool,
     /// The cursor shape the program asked for (`CSI Ps SP q`, DECSCUSR):
     /// 0 for the terminal's own.
     cursor_style: u8,
@@ -75,9 +80,20 @@ impl vt100::Callbacks for Hooks {
     ) {
         let p = |i: usize| params.get(i).and_then(|v| v.first()).copied();
         match (i1, c) {
-            // A mode vt100 does not keep: focus reports.
-            (Some(b'?'), 'h' | 'l') if params.iter().any(|v| v.first() == Some(&1004)) => {
-                self.focus_reports = c == 'h';
+            // DEC private modes vt100 does not keep: focus reports and
+            // autowrap.
+            (Some(b'?'), 'h' | 'l') => {
+                for mode in params.iter().filter_map(|v| v.first()) {
+                    match mode {
+                        1004 => self.focus_reports = c == 'h',
+                        7 => self.no_wrap = c == 'l',
+                        _ => {}
+                    }
+                }
+            }
+            // Insert mode, as tmux keeps it.
+            (None, 'h' | 'l') if params.iter().any(|v| v.first() == Some(&4)) => {
+                self.insert_mode = c == 'h';
             }
             // DECSCUSR: a cursor shape, 0 to 6; others leave it as it was,
             // as tmux's.
@@ -495,6 +511,13 @@ impl Emulator {
         self.parser.callbacks().focus_reports
     }
 
+    /// Insert mode and autowrap as the program set them (`#{insert_flag}`,
+    /// `#{wrap_flag}`); vt100 draws as with insert off and wrap on.
+    pub fn insert_and_wrap(&self) -> (bool, bool) {
+        let hooks = self.parser.callbacks();
+        (hooks.insert_mode, !hooks.no_wrap)
+    }
+
     /// The cursor shape the program asked for, as DECSCUSR's `Ps`: 0 (the
     /// terminal's own) until it asks.
     pub fn cursor_style(&self) -> u8 {
@@ -595,6 +618,21 @@ fn hex(b: u8) -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn insert_and_wrap_modes_are_kept() {
+        let mut e = Emulator::new(4, 20, 0);
+        assert_eq!(e.insert_and_wrap(), (false, true));
+        e.process(b"\x1b[4h\x1b[?7l");
+        assert_eq!(e.insert_and_wrap(), (true, false));
+        // With another mode in the same sequence.
+        e.process(b"\x1b[?1004;7h\x1b[4l");
+        assert_eq!(e.insert_and_wrap(), (false, true));
+        assert!(e.focus_reports());
+        e.process(b"\x1b[4h\x1b[?7l");
+        e.reset();
+        assert_eq!(e.insert_and_wrap(), (false, true));
+    }
 
     #[test]
     fn reset_clears_the_screen_and_modes_but_keeps_the_history() {
