@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    AlertAction, BoxLines, ClockModeStyle, CursorStyle, DestroyUnattached, ModeKeys,
+    AlertAction, BoxLines, ClockModeStyle, CursorStyle, DestroyUnattached, MessageLine, ModeKeys,
     PaneIndicators, PaneLines, PaneStatus, ScrollbarPosition, Scrollbars, StatusJustify,
     StatusLines, StatusPosition, Visual, WindowSize,
 };
@@ -247,6 +247,7 @@ macro_rules! choice {
 }
 
 choice!(
+    MessageLine,
     StatusLines,
     StatusJustify,
     StatusPosition,

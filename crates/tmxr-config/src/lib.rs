@@ -269,6 +269,7 @@ impl From<File> for Config {
                 history_limit: f.history_limit,
                 lock_after_time: f.lock_after_time,
                 lock_command: f.lock_command,
+                message_line: s.message_line,
                 message_style: s.message_style,
                 message_command_style: s.message_command_style,
                 mouse: f.mouse,
@@ -343,6 +344,7 @@ struct StatusFile {
     status: StatusLines,
     /// `status-format`: each status line's format, by line.
     format: Vec<String>,
+    message_line: MessageLine,
     style: String,
     fg: String,
     bg: String,
@@ -453,6 +455,56 @@ impl<'de> Deserialize<'de> for StatusLines {
                 serde::de::Error::custom(format!("unknown status: {n} ({})", Self::NAMES))
             }),
         }
+    }
+}
+
+/// `message-line`: which status line a message or prompt takes, as tmux's:
+/// 0 to 4, the last there is when there are fewer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MessageLine(u8);
+
+impl MessageLine {
+    /// The last line tmux names.
+    const MAX: u8 = 4;
+
+    pub const NAMES: &str = "0, 1, 2, 3 or 4";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        s.parse::<u8>().ok().filter(|n| *n <= Self::MAX).map(Self)
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self.0 {
+            0 => "0",
+            1 => "1",
+            2 => "2",
+            3 => "3",
+            _ => "4",
+        }
+    }
+
+    /// The line, from the status line's first.
+    pub const fn line(self) -> u16 {
+        self.0 as u16
+    }
+}
+
+impl<'de> Deserialize<'de> for MessageLine {
+    /// A name as `set-option` takes it, or a number.
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Raw {
+            Number(u8),
+            Name(String),
+        }
+        let name = match Raw::deserialize(d)? {
+            Raw::Number(n) => n.to_string(),
+            Raw::Name(n) => n,
+        };
+        Self::parse(&name).ok_or_else(|| {
+            serde::de::Error::custom(format!("unknown message-line: {name} ({})", Self::NAMES))
+        })
     }
 }
 

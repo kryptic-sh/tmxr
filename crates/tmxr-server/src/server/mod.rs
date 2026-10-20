@@ -102,6 +102,8 @@ pub struct Attached {
     /// Keys leave the message up (`display-message -N`), for one that
     /// goes by itself.
     pub message_keep: bool,
+    /// The message's `#[…]` are styles (`display-message`'s), not text.
+    pub message_styled: bool,
     pub last_session: Option<SessionId>,
     pub dirty: bool,
     /// The last frame was dropped (slow client); repaint everything.
@@ -661,19 +663,28 @@ impl Server {
     }
 
     pub fn show_message(&mut self, id: ClientId, msg: String) {
-        self.show_message_for(id, msg, None, false);
+        self.show_message_for(id, msg, None, false, false);
     }
 
     /// Show `msg` on client `id` for `delay` milliseconds, else for the
     /// session's `display-time`; 0 keeps it until a key, as tmux's. With
     /// `keep`, a key does not take a timed message down
-    /// (`display-message -N`).
-    pub fn show_message_for(&mut self, id: ClientId, msg: String, delay: Option<u64>, keep: bool) {
+    /// (`display-message -N`). A `styled` message's `#[…]` are styles,
+    /// as tmux's for `display-message`; others' are text.
+    pub fn show_message_for(
+        &mut self,
+        id: ClientId,
+        msg: String,
+        delay: Option<u64>,
+        keep: bool,
+        styled: bool,
+    ) {
         self.log_message(msg.clone());
         let time = delay.unwrap_or_else(|| self.client_session_options(id).display_time);
         let until = (time > 0).then(|| Instant::now() + Duration::from_millis(time));
         if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
             a.message_keep = keep && until.is_some();
+            a.message_styled = styled;
             a.message = Some((msg, until));
             a.dirty = true;
         }

@@ -24,6 +24,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`message-line` and styled messages**, as tmux's: a message or the prompt
+  takes the status line `message-line` names (0 to 4, the last there is when
+  fewer), and `display-message`'s text is laid out by its `#[…]` styles rather
+  than showing them; other messages stay plain text.
 - **Formats read option values**, as tmux's: `#{status-justify}`,
   `#{E:pane-status-style}` and any other option name give the option's value for
   the pane, window, session or server. `pane-status-style`,

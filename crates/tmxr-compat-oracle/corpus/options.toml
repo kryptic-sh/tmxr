@@ -507,3 +507,38 @@ checks = [
   { screen_contains = " P: 0[", expect = true },
   { screen_contains = " S: o*", expect = true },
 ]
+
+[[cases]]
+name = "message_line_puts_a_message_on_that_status_line_as_tmux"
+attach = true
+unix_only = true
+steps = [
+  { run = "set -g status 3" },
+  { run = "set -g message-line 2" },
+  { sleep = 0.3 },
+  { run = "display-message -d 0 '#[fg=red]STYLEDMSG'" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_contains = "STYLEDMSG", expect = true },
+  { screen_contains = "#[fg", expect = false },
+  { screen_contains = " P: 0[", expect = true },
+  { screen_contains = " S: o*", expect = false },
+  { command = "show -gv message-line" },
+]
+
+[[cases]]
+name = "message_line_past_the_last_line_takes_the_last_as_tmux"
+attach = true
+unix_only = true
+steps = [
+  { run = "set -g status 2" },
+  { run = "set -g message-line 4" },
+  { sleep = 0.3 },
+  { run = "display-message -d 0 LASTLINEMSG" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_contains = "LASTLINEMSG", expect = true },
+  { screen_contains = " P: 0[", expect = false },
+]

@@ -359,7 +359,7 @@ pub(super) fn run(
                     out.stdout.push_str(&msg);
                     out.stdout.push('\n');
                 }
-                Some(c) => srv.show_message_for(c, msg, delay, a.has('N')),
+                Some(c) => srv.show_message_for(c, msg, delay, a.has('N'), true),
                 None => {}
             }
         }

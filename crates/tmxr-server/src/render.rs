@@ -782,39 +782,13 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
         let text = format::expand_time(item(line), &vars);
         crate::format_draw::draw(buf, y + line, cols, base, &text);
     }
-    buf.set_style(Rect::new(0, y, cols, 1), base);
-    for x in 0..cols {
-        if let Some(c) = buf.cell_mut((x, y)) {
-            c.set_symbol(" ");
-        }
-    }
+    clear_row(buf, y, cols, base);
 
-    // A message or prompt replaces the status line, as in tmux.
-    let message_style = style_option(&opts.message_style, &vars);
-    if let Some((msg, _)) = &att.message {
-        buf.set_style(Rect::new(0, y, cols, 1), message_style);
-        buf.set_stringn(0, y, msg, usize::from(cols), message_style);
+    // A message or prompt takes message-line's line (the last there is if
+    // fewer), as tmux's: over the first, it is all that line shows.
+    let ask_row = y + opts.message_line.line().min(lines.saturating_sub(1));
+    if draw_ask(buf, att, &opts, &vars, ask_row, cols) && ask_row == y {
         return ranges;
-    }
-    match &att.overlay {
-        Some(Overlay::Prompt(p)) => {
-            // vi's command mode takes message-command-style, as tmux's.
-            let style = if p.command_mode {
-                style_option(&opts.message_command_style, &vars)
-            } else {
-                message_style
-            };
-            buf.set_style(Rect::new(0, y, cols, 1), style);
-            let text = format!("{}{}", p.prompt, p.input.iter().collect::<String>());
-            buf.set_stringn(0, y, &text, usize::from(cols), style);
-            return ranges;
-        }
-        Some(Overlay::Confirm { prompt, .. }) => {
-            buf.set_style(Rect::new(0, y, cols, 1), message_style);
-            buf.set_stringn(0, y, prompt, usize::from(cols), message_style);
-            return ranges;
-        }
-        _ => {}
     }
 
     // A first line set apart from tmux's default is drawn from its format,
@@ -925,6 +899,51 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
     let right_base = base.patch(style_option(&opts.status_right_style, &vars));
     draw_runs(buf, right_x, y, right_x + right_w, right_base, &right);
     ranges
+}
+
+/// `row` cleared to blanks in `style`.
+fn clear_row(buf: &mut Buffer, row: u16, cols: u16, style: Style) {
+    buf.set_style(Rect::new(0, row, cols, 1), style);
+    for x in 0..cols {
+        if let Some(c) = buf.cell_mut((x, row)) {
+            c.set_symbol(" ");
+        }
+    }
+}
+
+/// `att`'s message, prompt or y/n question drawn on `row`, if it has one:
+/// a `display-message` text laid out by its styles as tmux's, any other as
+/// it is, in message-style (message-command-style in vi's command mode).
+fn draw_ask(
+    buf: &mut Buffer,
+    att: &crate::server::Attached,
+    opts: &tmxr_config::SessionOptions,
+    vars: &Vars<'_>,
+    row: u16,
+    cols: u16,
+) -> bool {
+    let message_style = style_option(&opts.message_style, vars);
+    let (style, text, styled) = match (&att.message, &att.overlay) {
+        (Some((msg, _)), _) => (message_style, msg.clone(), att.message_styled),
+        (None, Some(Overlay::Prompt(p))) => {
+            let style = if p.command_mode {
+                style_option(&opts.message_command_style, vars)
+            } else {
+                message_style
+            };
+            let text = format!("{}{}", p.prompt, p.input.iter().collect::<String>());
+            (style, text, false)
+        }
+        (None, Some(Overlay::Confirm { prompt, .. })) => (message_style, prompt.clone(), false),
+        _ => return false,
+    };
+    if styled {
+        crate::format_draw::draw(buf, row, cols, style, &text);
+    } else {
+        clear_row(buf, row, cols, style);
+        buf.set_stringn(0, row, &text, usize::from(cols), style);
+    }
+    true
 }
 
 /// tmux's default first status line, which tmxr's own status line draws.

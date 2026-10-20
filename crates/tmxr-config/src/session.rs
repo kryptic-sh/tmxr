@@ -4,7 +4,8 @@
 
 use crate::table::{Array, Word, options_table};
 use crate::{
-    AlertAction, DestroyUnattached, ModeKeys, StatusJustify, StatusLines, StatusPosition, Visual,
+    AlertAction, DestroyUnattached, MessageLine, ModeKeys, StatusJustify, StatusLines,
+    StatusPosition, Visual,
 };
 
 options_table! {
@@ -51,6 +52,8 @@ options_table! {
     "lock-command" => lock_command: String,
     /// The command prompt's style in vi's command mode (`status-keys vi`).
     "message-command-style" => message_command_style: String,
+    /// Which status line a message or the prompt takes, from the first.
+    "message-line" => message_line: MessageLine,
     "message-style" => message_style: String,
     "mouse" => mouse: bool,
     /// The prefix key, by tmux key name.

@@ -43,6 +43,7 @@ impl Server {
             overlay: None,
             message: None,
             message_keep: false,
+            message_styled: false,
             last_session: None,
             dirty: true,
             full_redraw: true,
