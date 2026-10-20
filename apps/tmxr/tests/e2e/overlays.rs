@@ -1729,6 +1729,10 @@ fn choose_buffer_e_edits_the_buffer_in_the_editor() {
     t.wait_run(&["show-buffer", "-b", "mybuf"], "the edited buffer", |o| {
         o == "new text"
     });
+    // The picker is back, its row made afresh, as tmux's buffer mode stays.
+    s.wait_for("the picker again", |text| {
+        text.contains("mybuf") && text.contains("new text")
+    });
     // An editor that changes the file and fails leaves the buffer as it
     // was.
     let fail = if cfg!(windows) {
@@ -1741,9 +1745,10 @@ fn choose_buffer_e_edits_the_buffer_in_the_editor() {
         format!("sh {}", script.display())
     };
     t.run(&["set", "-s", "editor", &fail]);
-    t.run(&["choose-buffer"]);
-    s.wait_for("the buffer picker", |text| text.contains("mybuf"));
     s.send(b"e");
     std::thread::sleep(Duration::from_millis(1500));
     assert_eq!(t.run(&["show-buffer", "-b", "mybuf"]), "new text");
+    s.wait_for("the picker after a failed edit", |text| {
+        text.contains("mybuf")
+    });
 }

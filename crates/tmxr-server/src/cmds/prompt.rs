@@ -583,6 +583,10 @@ pub(super) fn run(
                 // -N: no preview; -y: no question before a kill.
                 picker.no_preview = a.has('N');
                 picker.no_confirm = a.has('y');
+                // What opens it again with its rows made afresh (after an
+                // edit in `editor`).
+                let args = a.print(&|_| None);
+                picker.reopen = Some(format!("{} {args}", p.name()).trim_end().to_owned());
             }
             if let Some(att) = srv.clients.get_mut(&c).and_then(|c| c.att.as_mut()) {
                 att.overlay = Some(ov);

@@ -47,6 +47,9 @@ pub struct Popup {
 pub struct BufferEdit {
     pub name: String,
     pub path: std::path::PathBuf,
+    /// The picker's command, run again once the editor is done, as tmux's
+    /// buffer mode stays under the editor.
+    pub reopen: Option<String>,
 }
 
 impl Drop for BufferEdit {
@@ -211,8 +214,13 @@ impl Server {
         {
             att.overlay = None;
         }
-        if let Some(edit) = edit.filter(|_| code == Some(0)) {
-            self.finish_buffer_edit(&edit);
+        if let Some(edit) = edit {
+            if code == Some(0) {
+                self.finish_buffer_edit(&edit);
+            }
+            if let Some(cmd) = &edit.reopen {
+                self.run_bind(client, cmd, None);
+            }
         }
         self.mark_client_dirty(client);
     }
@@ -256,7 +264,12 @@ impl Server {
     /// `choose-buffer`'s `e`, as tmux's window_buffer_start_edit and
     /// popup_editor: buffer `name` written to a file, which `editor` opens
     /// in a popup nine tenths of the client's size, closing when it exits.
-    pub fn edit_buffer(&mut self, client: ClientId, name: &str) -> Result<(), String> {
+    pub fn edit_buffer(
+        &mut self,
+        client: ClientId,
+        name: &str,
+        reopen: Option<String>,
+    ) -> Result<(), String> {
         static EDITS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let data = self
             .buffers
@@ -281,6 +294,7 @@ impl Server {
         let edit = BufferEdit {
             name: name.to_owned(),
             path,
+            reopen,
         };
         let (w, h) = (cols * 9 / 10, rows * 9 / 10);
         let lines = self.client_window_options(client).popup_border_lines;

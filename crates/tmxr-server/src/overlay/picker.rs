@@ -106,6 +106,8 @@ pub struct PickerOverlay {
     pub no_confirm: bool,
     /// Each row's key (`-K`) and what it chooses.
     pub(super) keys: Vec<(String, Target)>,
+    /// The command that opens this picker again, rows made afresh.
+    pub reopen: Option<String>,
 }
 
 /// What the highlighted picker row would show, for the preview.
@@ -146,6 +148,7 @@ impl PickerOverlay {
             no_preview: false,
             no_confirm: false,
             keys: Vec::new(),
+            reopen: None,
         }
     }
 
@@ -314,7 +317,7 @@ impl PickerOverlay {
             // tmux's choose-buffer: the buffer in `editor`.
             KeyCode::Char('e') if self.picker.title() == "buffers" => {
                 if let Some(Target::Buffer(name)) = self.selected_target() {
-                    return OverlayAction::EditBuffer(name);
+                    return OverlayAction::EditBuffer(name, self.reopen.clone());
                 }
             }
             KeyCode::Char('i' | 'I' | 'a' | 'A' | '/') => {

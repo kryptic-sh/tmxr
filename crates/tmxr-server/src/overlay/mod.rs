@@ -216,8 +216,9 @@ pub enum OverlayAction {
     /// Keep the overlay and let the key go on as if it were not there
     /// (`display-panes -N`).
     Pass,
-    /// Edit this paste buffer in `editor` (`choose-buffer`'s `e`).
-    EditBuffer(String),
+    /// Edit this paste buffer in `editor` (`choose-buffer`'s `e`), then
+    /// run the command that opens the picker again.
+    EditBuffer(String, Option<String>),
 }
 
 pub enum Overlay {

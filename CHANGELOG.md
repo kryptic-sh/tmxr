@@ -34,7 +34,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The `editor` server option and `choose-buffer`'s `e`**, as tmux's: the
   highlighted buffer opens in `editor` (`$VISUAL`, else `$EDITOR`, else
   `/usr/bin/vi`; Notepad on Windows) in a popup, and what the editor saves is
-  the buffer once it exits successfully.
+  the buffer once it exits successfully; the picker is back after, its rows
+  showing the edit.
 - **`escape-time`** takes effect, as tmux's: set above 0, an Escape with a key
   pressed within it is Meta and that key, and a lone Escape goes once it is up.
   tmxr's default stays 0.

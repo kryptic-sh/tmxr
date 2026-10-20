@@ -513,9 +513,10 @@ table. What has been verified, and how:
     put formats in colour options (`display-panes-colour = "#{@thm_blue}"`),
     which tmux's check would refuse, so it needs those expanded first or the
     theme moved. `editor` edits a buffer from `choose-buffer` (`e`) in a popup,
-    as tmux's popup_editor, but the popup takes the picker's place (tmxr's
-    overlay is one at a time), so the picker is not there again after the edit,
-    where tmux's buffer mode is; on Windows, where tmux has no default, `editor`
+    as tmux's popup_editor, the popup taking the picker's place (tmxr's overlay
+    is one at a time) and the picker opened again by its command once the editor
+    is done, so it comes back on its first row, where tmux's buffer mode keeps
+    the buffer highlighted; on Windows, where tmux has no default, `editor`
     falls back to `notepad` (a choice, not tmux's). `escape-time` holds a lone
     Escape on the server (`Server::escape_time`), where tmux's client reads its
     terminal with the wait; tmxr's client reads through crossterm, which already
