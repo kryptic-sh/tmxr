@@ -47,6 +47,7 @@ pub const NAMES: &[&str] = &[
     "mouse_button_flag",
     "mouse_sgr_flag",
     "mouse_standard_flag",
+    "mouse_utf8_flag",
     "next_session_id",
     "pane_active",
     "pane_at_bottom",
@@ -734,6 +735,7 @@ impl<'a> Context for Vars<'a> {
                     _ => mode == AnyMotion,
                 })
             }
+            "mouse_utf8_flag" => flag(pane?.emu.mouse_utf8()),
             "mouse_sgr_flag" => flag(
                 pane?.emu.screen().mouse_protocol_encoding() == vt100::MouseProtocolEncoding::Sgr,
             ),

@@ -637,14 +637,6 @@ table. What has been verified, and how:
   window they place (2026-10-18, tmux 3.6): `server_link_window` moves
   `marked_pane.wl` to the new link but keeps `marked_pane.s`, so the mark no
   longer validates. tmxr keeps the mark; not copied, as it reads as a tmux bug.
-- **Mouse modes follow `vt100`, not tmux, at the edges** (`vars.rs`
-  `mouse_*_flag`, read from both sources, the common cases compared by the
-  oracle): `vt100` takes `?9h` (X10) as a mouse mode, so `#{mouse_any_flag}` is
-  1 where tmux, which ignores 9, says 0; resetting 1000/1002/1003 clears the
-  mode only when it is the one set, where tmux clears any; and the 1005 and 1006
-  encodings replace each other in `vt100` but are separate bits in tmux. Fixing
-  them needs tmxr to track the modes itself (from the bytes, as `dcs.rs` does
-  for its sequences) or a `vt100` change.
 - **tmux's `session_bell_flag`, `session_activity_flag` and
   `session_silence_flag` do not ask the session** (tmux 3.6 `format.c`, read,
   not run): the loop over the session's windows returns on its first pass, so

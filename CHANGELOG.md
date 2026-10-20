@@ -444,6 +444,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Mouse modes as tmux's**: a program's `ESC [ ? 9 h` (X10) is ignored,
+  resetting any of modes 1000 to 1003 clears the one set, and the UTF-8 (1005)
+  and SGR (1006) encodings are kept apart, SGR winning for the events sent;
+  `ESC c` clears them. `#{mouse_utf8_flag}` is added.
 - **The alternate screen keeps the cursor where it was**, as tmux's: a program
   switching with `ESC [ ? 1049 h` now prints where its cursor stood, not at the
   top left; mode 1047 switches screens (it was ignored) and 47 clears the

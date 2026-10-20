@@ -221,6 +221,10 @@ pub struct Emulator {
     modes: ModeSplitter,
     /// Cleared with `alternate-screen off`: the switches are dropped.
     alt_allowed: bool,
+    /// The mouse encodings the program set, apart as tmux keeps them (vt100
+    /// keeps one).
+    mouse_utf8: bool,
+    mouse_sgr: bool,
     /// The history limit, for a fresh parser.
     scrollback: usize,
     /// Lines of history above the screen, counted whenever they can change
@@ -238,6 +242,8 @@ impl Emulator {
             split: passthrough_supported(),
             modes: ModeSplitter::default(),
             alt_allowed: true,
+            mouse_utf8: false,
+            mouse_sgr: false,
             scrollback,
             history: 0,
         }
@@ -295,6 +301,7 @@ impl Emulator {
     pub fn reset(&mut self) {
         self.dcs = DcsSplitter::default();
         self.modes.flush();
+        (self.mouse_utf8, self.mouse_sgr) = (false, false);
         // CAN ends whatever sequence is in progress, but vte acts on an OSC
         // it cuts off: what that could change is put back, as tmux's
         // input_clear drops the sequence.
@@ -329,10 +336,61 @@ impl Emulator {
         for piece in self.modes.split(text) {
             match piece {
                 Piece::Text(text) => self.parser.process(&text),
-                Piece::Switch { .. } if !self.alt_allowed => {}
-                Piece::Switch { mode, on } => self.switch_screen(mode, on),
+                Piece::Mode {
+                    mode: 47 | 1047 | 1049,
+                    ..
+                } if !self.alt_allowed => {}
+                Piece::Mode {
+                    mode: mode @ (47 | 1047 | 1049),
+                    on,
+                } => self.switch_screen(mode, on),
+                Piece::Mode { mode, on } => self.mouse_mode(mode, on),
+                Piece::Reset => {
+                    (self.mouse_utf8, self.mouse_sgr) = (false, false);
+                    self.parser.process(b"\x1bc");
+                }
             }
         }
+    }
+
+    /// A mouse mode set or reset as tmux's input_csi_dispatch_sm_private /
+    /// _rm_private, not as vt100 would: 9 (X10) is ignored, resetting any of
+    /// 1000 to 1003 clears whichever is set (vt100 clears only the one
+    /// named), and 1005 / 1006 are kept apart.
+    fn mouse_mode(&mut self, mode: u32, on: bool) {
+        match (mode, on) {
+            (1000 | 1002 | 1003, true) => {
+                self.parser.process(format!("\x1b[?{mode}h").as_bytes());
+            }
+            (1000..=1003, false) => self.parser.process(b"\x1b[?1000l\x1b[?1002l\x1b[?1003l"),
+            (1005, on) => {
+                self.mouse_utf8 = on;
+                self.mouse_encoding();
+            }
+            (1006, on) => {
+                self.mouse_sgr = on;
+                self.mouse_encoding();
+            }
+            // 9, and setting 1001, which tmux takes neither.
+            _ => {}
+        }
+    }
+
+    /// The one encoding vt100 keeps, from the two the program set: SGR
+    /// before UTF-8, as tmux's input_key_get_mouse picks.
+    fn mouse_encoding(&mut self) {
+        self.parser.process(b"\x1b[?1005l\x1b[?1006l");
+        if self.mouse_sgr {
+            self.parser.process(b"\x1b[?1006h");
+        } else if self.mouse_utf8 {
+            self.parser.process(b"\x1b[?1005h");
+        }
+    }
+
+    /// Whether the program set the UTF-8 mouse encoding (1005), set or not
+    /// beside SGR, as tmux's MODE_MOUSE_UTF8.
+    pub fn mouse_utf8(&self) -> bool {
+        self.mouse_utf8
     }
 
     /// Switch to or from the alternate screen as tmux's screen_alternate_on

@@ -520,3 +520,33 @@ checks = [
   { command = "capture-pane -p -J -N -E 3" },
   { command = "capture-pane -p -N -e -E 3" },
 ]
+
+[[cases]]
+name = "x10_mouse_mode_9_is_ignored_as_tmux"
+program = 'printf "\033[?9h"; exec sleep 1000'
+steps = [{ sleep = 0.5 }]
+checks = [{ format = "#{mouse_any_flag} #{mouse_standard_flag} #{mouse_button_flag} #{mouse_all_flag} #{mouse_sgr_flag} #{mouse_utf8_flag}" }]
+
+[[cases]]
+name = "resetting_any_mouse_mode_clears_the_one_set_as_tmux"
+program = 'printf "\033[?1002h\033[?1000l"; exec sleep 1000'
+steps = [{ sleep = 0.5 }]
+checks = [{ format = "#{mouse_any_flag} #{mouse_standard_flag} #{mouse_button_flag} #{mouse_all_flag} #{mouse_sgr_flag} #{mouse_utf8_flag}" }]
+
+[[cases]]
+name = "utf8_and_sgr_mouse_encodings_are_kept_apart_as_tmux"
+program = 'printf "\033[?1000;1006;1005h"; exec sleep 1000'
+steps = [{ sleep = 0.5 }]
+checks = [{ format = "#{mouse_any_flag} #{mouse_standard_flag} #{mouse_button_flag} #{mouse_all_flag} #{mouse_sgr_flag} #{mouse_utf8_flag}" }]
+
+[[cases]]
+name = "resetting_sgr_leaves_the_utf8_encoding_as_tmux"
+program = 'printf "\033[?1000;1005;1006h\033[?1006l"; exec sleep 1000'
+steps = [{ sleep = 0.5 }]
+checks = [{ format = "#{mouse_any_flag} #{mouse_standard_flag} #{mouse_button_flag} #{mouse_all_flag} #{mouse_sgr_flag} #{mouse_utf8_flag}" }]
+
+[[cases]]
+name = "a_full_reset_clears_the_mouse_modes_as_tmux"
+program = 'printf "\033[?1003;1005;1006h\033c"; exec sleep 1000'
+steps = [{ sleep = 0.5 }]
+checks = [{ format = "#{mouse_any_flag} #{mouse_standard_flag} #{mouse_button_flag} #{mouse_all_flag} #{mouse_sgr_flag} #{mouse_utf8_flag}" }]
