@@ -1483,40 +1483,61 @@ fn sigusr1_binds_a_removed_socket_again() {
     );
 }
 
-/// An attached client that nothing happens to sleeps, as tmux's does: its
-/// input thread waits for an event instead of polling, which matters on a
-/// laptop's battery. Linux only: it counts context switches in `/proc`.
+/// Context switches of every thread of `pid`, from `/proc`; with `main_only`
+/// of its main thread alone.
+#[cfg(target_os = "linux")]
+fn context_switches(pid: u32, main_only: bool) -> u64 {
+    let tasks = std::fs::read_dir(format!("/proc/{pid}/task")).unwrap();
+    tasks
+        .flatten()
+        .filter(|task| !main_only || task.file_name() == pid.to_string().as_str())
+        .filter_map(|task| std::fs::read_to_string(task.path().join("status")).ok())
+        .flat_map(|status| {
+            status
+                .lines()
+                .filter(|l| l.contains("ctxt_switches"))
+                .filter_map(|l| l.split_whitespace().nth(1)?.parse::<u64>().ok())
+                .collect::<Vec<_>>()
+        })
+        .sum()
+}
+
+/// An attached client and its server that nothing happens to sleep, as
+/// tmux's do, which matters on a laptop's battery: the client's input
+/// thread waits for an event instead of polling, and the server waits until
+/// its next timed duty instead of ticking. Linux only: it counts context
+/// switches in `/proc`.
 #[cfg(target_os = "linux")]
 #[test]
-fn an_idle_client_does_not_wake() {
+fn an_idle_client_and_server_do_not_wake() {
     const IDLE: Duration = Duration::from_secs(3);
-    // Room for a status line redraw or two; the poll this replaced woke the
-    // client several times as often.
+    // Room for a status line redraw or two; the polls these replaced woke
+    // each several times as often.
     const MOST_SWITCHES: u64 = 10;
+    const MOST_SERVER_SWITCHES: u64 = 6;
     let t = Tmxr::new("idleclient");
     let s = t.attach(&["new", "-s", "idle"]);
     s.wait_for("the status line", |text| text.contains("idle"));
     t.wait_prompt("idle");
-    let pid = s.child.process_id().unwrap();
-    let switches = || -> u64 {
-        let tasks = std::fs::read_dir(format!("/proc/{pid}/task")).unwrap();
-        tasks
-            .flatten()
-            .filter_map(|task| std::fs::read_to_string(task.path().join("status")).ok())
-            .flat_map(|status| {
-                status
-                    .lines()
-                    .filter(|l| l.contains("ctxt_switches"))
-                    .filter_map(|l| l.split_whitespace().nth(1)?.parse::<u64>().ok())
-                    .collect::<Vec<_>>()
-            })
-            .sum()
-    };
-    let before = switches();
+    let client = s.child.process_id().unwrap();
+    let server: u32 = t
+        .run(&["display-message", "-p", "#{pid}"])
+        .trim()
+        .parse()
+        .unwrap();
+    let before = (
+        context_switches(client, false),
+        context_switches(server, true),
+    );
     std::thread::sleep(IDLE);
-    let woke = switches() - before;
+    let woke = context_switches(client, false) - before.0;
+    let server_woke = context_switches(server, true) - before.1;
     assert!(
         woke <= MOST_SWITCHES,
         "the idle client woke {woke} times in {IDLE:?}"
+    );
+    assert!(
+        server_woke <= MOST_SERVER_SWITCHES,
+        "the idle server woke {server_woke} times in {IDLE:?}"
     );
 }

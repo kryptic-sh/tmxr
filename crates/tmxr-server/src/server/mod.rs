@@ -420,21 +420,74 @@ impl Server {
         self.watched = crate::notify::Watched::of(self);
     }
 
+    /// When the soonest of [`Server::tick`]'s timed duties falls due, so the
+    /// server sleeps until then rather than waking on a timer, as tmux's does
+    /// (on a laptop, battery spent for nothing).
+    fn next_due(&self, now: Instant) -> Instant {
+        let secs = Duration::from_secs;
+        let mut due: Vec<Instant> = crate::mouse::next_double_click(self)
+            .into_iter()
+            .chain(self.copy_line.map(|c| c.due()))
+            .chain(self.next_dead_line())
+            .chain(self.next_escape())
+            .collect();
+        if !self.exiting {
+            due.push(self.socket_refreshed + SOCKET_REFRESH);
+        }
+        let away = self.cfg.client_away_time;
+        for c in self.clients.values() {
+            let Some(a) = c.att.as_ref() else {
+                continue;
+            };
+            due.extend(a.message.as_ref().and_then(|(_, t)| *t));
+            due.extend(a.repeat_until);
+            due.extend(a.overlay.as_ref().and_then(|o| o.next_tick(now)));
+            if away != 0 && !a.away {
+                due.push(a.last_input + secs(away));
+            }
+            let opts = self.session_options(a.session);
+            if opts.status_interval != 0 {
+                due.push(a.status_at + secs(opts.status_interval));
+            }
+            let lock = self.client_session_options(c.id);
+            if lock.lock_after_time != 0 && !lock.lock_command.is_empty() && !a.locked {
+                due.push(a.last_input + secs(lock.lock_after_time));
+            }
+        }
+        let every = self.cfg.resurrect.auto_save_minutes;
+        if every > 0 && !self.sessions.is_empty() {
+            due.push(self.last_save + secs(every * 60));
+        }
+        for w in self.windows.values() {
+            let silence = self.window_options(w.id).monitor_silence;
+            if silence > 0 && !w.silence_raised {
+                due.push(w.last_output + secs(silence));
+            }
+        }
+        if self.panes.values().any(|p| p.clock) {
+            // The clock shows seconds: the next one, on the wall clock.
+            let into_second = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(Duration::ZERO, |d| {
+                    Duration::from_nanos(d.subsec_nanos().into())
+                });
+            due.push(now + (secs(1) - into_second));
+        }
+        let interval = self
+            .sessions
+            .keys()
+            .map(|&s| self.session_options(s).status_interval)
+            .min()
+            .unwrap_or(self.cfg.session.status_interval);
+        due.push(self.last_status + secs(interval.max(1)));
+        due.into_iter().min().unwrap_or(now + SOCKET_REFRESH)
+    }
+
     /// Process events until the server should exit.
     pub fn run(mut self, rx: Receiver<Event>) {
-        let tick = Duration::from_millis(250);
         loop {
-            // Wake for a pending DoubleClick or command-line copy on time,
-            // not at the next tick.
-            let due = crate::mouse::next_double_click(&self)
-                .into_iter()
-                .chain(self.copy_line.map(|c| c.due()))
-                .chain(self.next_dead_line())
-                .chain(self.next_escape())
-                .min();
-            let wait = due.map_or(tick, |due| {
-                due.saturating_duration_since(Instant::now()).min(tick)
-            });
+            let now = Instant::now();
+            let wait = self.next_due(now).saturating_duration_since(now);
             match rx.recv_timeout(wait) {
                 Ok(ev) => {
                     self.handle(ev);

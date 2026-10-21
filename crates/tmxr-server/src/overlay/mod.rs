@@ -36,6 +36,10 @@ pub enum Sort {
 
 /// The orders each picker takes, as tmux's window_tree_sort_list,
 /// window_client_sort_list and window_buffer_sort_list.
+/// How often an open picker is ticked: its matching runs in the background
+/// (hjkl-picker), and its results are collected on each tick.
+const PICKER_TICK: Duration = Duration::from_millis(250);
+
 const TREE_SORTS: &[(&str, Sort)] = &[
     ("index", Sort::Index),
     ("name", Sort::Name),
@@ -319,6 +323,17 @@ impl Overlay {
             until: (!time.is_zero()).then(|| Instant::now() + time),
             template,
             keys,
+        }
+    }
+
+    /// When the overlay next needs [`Overlay::expired`] or [`Overlay::tick`]
+    /// checked: `display-panes`' timeout, and while a picker is open,
+    /// [`PICKER_TICK`] from `now`.
+    pub fn next_tick(&self, now: Instant) -> Option<Instant> {
+        match self {
+            Self::Panes { until, .. } => *until,
+            Self::Picker(_) => Some(now + PICKER_TICK),
+            _ => None,
         }
     }
 

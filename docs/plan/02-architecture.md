@@ -76,9 +76,11 @@ mutation is sequential without locks.
 - **Parsing.** The state thread feeds `Output` into the pane's
   `tmxr_term::Emulator` (`vt100` plus reply/OSC hooks) and marks the pane's
   window dirty.
-- **Timers.** The state thread waits on the channel with a 250 ms timeout and
-  runs `tick` after every wake: message and key-repeat expiry, overlay timers,
-  resurrect auto-save.
+- **Timers.** The state thread waits on the channel until the soonest of
+  `tick`'s timed duties falls due (`Server::next_due`: message and key-repeat
+  expiry, overlay timers, the status line's interval, resurrect auto-save and
+  the rest) and runs `tick` after every wake, so an idle server sleeps instead
+  of waking on a fixed tick.
 - **Rendering.** After draining every queued event the state thread renders each
   attached client whose view is dirty. There is no fixed frame interval: a burst
   of output that arrives together is coalesced by the drain, not by a timer. See

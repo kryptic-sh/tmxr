@@ -367,17 +367,18 @@ table. What has been verified, and how:
   `terminal-overrides ",*:RGB"` does. The 16 are sent as `90`–`97` for the
   bright ones; there is no 8-colour mode (bold for bright, as tmux uses on a
   terminal with 8).
-- **The server wakes four times a second when idle** (`Server::run` waits on its
-  channel with a 250 ms timeout, then `tick`s), where tmux's server sleeps until
-  something is due: measured 2026-10-21 on the Arch laptop, an attached session
-  doing nothing cost the tmxr server about 5 context switches a second and the
-  tmux 3.8 server 0.1 (the client, which polled 20 times a second, now sleeps:
-  `an_idle_client_does_not_wake`). Making it sleep needs a deadline for each
-  timed duty `tick` runs: message and key-repeat expiry, `lock-after-time`,
-  `monitor-silence` alerts, clock mode, the status line's `status-interval` and
-  with it `util::refresh_commands` (every pane's foreground process, for
-  automatic renames, where tmux checks a name when the pane prints), resurrect's
-  auto-save, `#()` job tidying and the hourly socket refresh.
+- **Idle cost** (measured 2026-10-21 on the Arch laptop, an attached session
+  doing nothing, context switches a second): tmxr's client 0.2 and server 0.8,
+  tmux 3.8's 0.0 and 0.1, from tmxr's 20.2 and 4.5 before the client waited for
+  input and the server for its next deadline (`Server::next_due`,
+  `an_idle_client_and_server_do_not_wake`). What is left is the status line:
+  tmxr's `status-interval` is 5 where tmux's is 15, and `util::refresh_commands`
+  (every pane's foreground process, for automatic renames, where tmux checks a
+  name when the pane prints) runs on its own timer at the same interval, so the
+  two wake apart. `Server::next_due` must name every timed duty `tick` runs; one
+  added to `tick` without a deadline there runs only when something else wakes
+  the server. Windows' client still polls (crossterm's console reader cannot be
+  woken), measured nowhere.
 - **No frame-rate cap**: the server renders after each pass of its loop, and a
   pass stops handling events after `DRAIN_BUDGET` so a flood still repaints.
   Each pane's output waits in a bounded queue (`output::QUEUE_LIMIT`) that
