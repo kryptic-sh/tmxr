@@ -26,8 +26,11 @@ table. What has been verified, and how:
 - **Seen in a real terminal** (2026-10-10, Windows Terminal 1.24, by
   screenshot): two panes, the vertical border and the catppuccin status line
   draw as the tests expect. hjkl's own handoff to tmxr was checked too (see
-  Cross-repo work). Not looked at in any other terminal, nor with vim in front
-  of the navigator.
+  Cross-repo work). Alacritty 0.17 (2026-10-21, on Arch, in a Hyprland nested in
+  `kwin_wayland --virtual`, screenshot with `grim`): two panes, the border with
+  tmux's half-coloured active indicator, bold red, underline, accented letters,
+  CJK wide characters and the status line draw right. Not looked at in any other
+  terminal, nor with vim in front of the navigator.
 - **Not run on macOS locally**: the `cfg(unix)` arms (socket dir checks, peer
   uid, `setsid` spawn, `/proc` and `proc_pidinfo` inspection, the client's
   `/bin/sh` lock command) are tested by CI on every push to `main`. Linux ones
@@ -57,8 +60,10 @@ table. What has been verified, and how:
   terminfo or `terminal-features` says so (decided by the owner, 2026-10-21).
   Keys typed in the few milliseconds the probe reads are read by it and lost.
   Windows' client does not ask (its console hands over input records). Tested
-  end to end against the harness's terminal answering DECRQM; not looked at in a
-  real terminal.
+  end to end against the harness's terminal answering DECRQM. Alacritty 0.17
+  answers the probe with `CSI ? 2026 ; 2 $ y` then DA1 `CSI ? 6 c` (2026-10-21),
+  so the client turns them on there, and its frames looked right in the
+  screenshot above; tearing without them was not compared.
 - **The local clipboard follows the copying client** (`clipboard::Local`): the
   display and SSH variables come from that client's environment, or the attached
   client last typed in, and on Linux and the BSDs each copy runs
@@ -66,12 +71,15 @@ table. What has been verified, and how:
   the server is gone. Seen on Hyprland (2026-10-20): a server started without
   `WAYLAND_DISPLAY` copied to the Wayland clipboard through an attached client
   (the build before this copied nothing), one helper at a time, gone within its
-  second once the server was. Not tested in CI, which has no display; not tried
-  on X11 or with a compositor restart, nor the macOS and Windows arms (they set
-  the clipboard in the server, as before). A selection another program takes
-  over leaves the helper running, holding nothing, until the next tmxr copy.
-  Idle cost (2026-10-21, Hyprland): the helper's own thread sleeps on Linux
-  (`wait_for_server`, `PR_SET_PDEATHSIG`; 1.0 wakeups a second before, 0.0
+  second once the server was. On X11 (2026-10-21, a client with only `DISPLAY`,
+  the Xwayland of a Hyprland nested in `kwin_wayland --virtual`): the helper
+  owned the X `CLIPBOARD` and an X11 client read back what `set-buffer -w`
+  copied; the helper was gone after `kill-server`. Not tested in CI, which has
+  no display; not tried with a compositor restart, nor the macOS and Windows
+  arms (they set the clipboard in the server, as before). A selection another
+  program takes over leaves the helper running, holding nothing, until the next
+  tmxr copy. Idle cost (2026-10-21, Hyprland): the helper's own thread sleeps on
+  Linux (`wait_for_server`, `PR_SET_PDEATHSIG`; 1.0 wakeups a second before, 0.0
   after, measured by hand, not by a test), but hjkl-clipboard 0.42's Wayland
   thread polls its socket every 50 ms, 20 wakeups a second for as long as the
   helper holds a copy. Fixed in hjkl (`cab0bebd`,
