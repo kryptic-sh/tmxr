@@ -131,17 +131,22 @@ table. What has been verified, and how:
   `[patch.crates-io]`, and allowed in `deny.toml`); each event-source fix has an
   e2e test that fails without it (run on Linux)
   (`a_resize_and_a_key_arriving_together_both_reach_the_server`,
-  `keys_typed_faster_than_the_client_reads_all_arrive`). Once a crossterm
-  release has them, upgrade and drop both. A `[patch]` applies only to builds
-  from this workspace: the release binaries and packages have the fixes, but
-  `cargo install tmxr` from crates.io builds against crates.io's crossterm
-  without them. Still different from tmux: an Escape and a mouse event in one
-  read (`known_divergences.toml`), as crossterm drops the rest of a read once it
-  has an event. Left as it is in the same `try_read`: a read error other than
-  `WouldBlock` or `Interrupted` (EIO once the terminal hangs up) loops on the
-  read without end; tmxr's client does not get there, as the hangup's SIGHUP
-  ends it first (a pty closed under an attached client, 2026-10-20: the client
-  exited).
+  `keys_typed_faster_than_the_client_reads_all_arrive`). The owner's report of
+  the first in use (2026-10-20, Hyprland with Alacritty: closing the window
+  beside the client's grew it, and tmxr kept the old size) was reproduced
+  2026-10-21 in Hyprland 0.56 nested in a `kwin_wayland --virtual` (nothing on
+  the desktop): with B focused beside A, which runs a client, closing B grows A
+  and focuses it; 0.9.0's client kept its size in 2 of 11 runs, the fixed one in
+  none of 23. Once a crossterm release has them, upgrade and drop both. A
+  `[patch]` applies only to builds from this workspace: the release binaries and
+  packages have the fixes, but `cargo install tmxr` from crates.io builds
+  against crates.io's crossterm without them. Still different from tmux: an
+  Escape and a mouse event in one read (`known_divergences.toml`), as crossterm
+  drops the rest of a read once it has an event. Left as it is in the same
+  `try_read`: a read error other than `WouldBlock` or `Interrupted` (EIO once
+  the terminal hangs up) loops on the read without end; tmxr's client does not
+  get there, as the hangup's SIGHUP ends it first (a pty closed under an
+  attached client, 2026-10-20: the client exited).
 - **tmux default binds**: all of tmux 3.6's 267 are bound (compared with its
   `list-keys`, 2026-10-11) except the 18 digit binds (`1`-`9` in vi, `M-1`-`M-9`
   in emacs) that open a "(repeat)" prompt, declined: tmxr's copy mode takes
@@ -550,18 +555,6 @@ table. What has been verified, and how:
   unset. Not done: the terminal's own title is not saved and given back on
   detach (`CSI 22;0t` / `CSI 23;0t`), as tmux does not either; a title set while
   a client is attached reaches it with the next frame, as any change.
-- **A terminal resize can go unseen while attached** (reported by the owner
-  2026-10-20, Hyprland with Alacritty, tmxr 0.9.0): with two windows side by
-  side, closing one grows the Alacritty window holding the client, but tmxr kept
-  the old size until the window was made floating and docked again. Probable
-  cause, fixed 2026-10-21: Hyprland gives the grown window the focus as it
-  resizes it, so Alacritty writes a focus report (`focus-events` is on by
-  default) in the same wakeup as the SIGWINCH, which 0.9.0's crossterm dropped
-  (see "crossterm is patched"); floating and docking resizes without a focus
-  change. `a_resize_and_a_key_arriving_together_both_reach_the_server` sends a
-  resize with a `CSI I` and fails with 0.9.0's crossterm, passes with the fix.
-  Not confirmed in Hyprland itself: try the owner's steps on a build with the
-  fix.
 - **A resize just after attaching went unseen on Linux** (2026-10-18), in
   `refresh_client_sets_and_clears_client_flags` under load (CI run 39064458482):
   the client's log showed the `x` typed after the resize but no `Resize` event.
