@@ -12,10 +12,10 @@ on the [hjkl](https://github.com/kryptic-sh/hjkl) crates. Part of the
 
 ## Status
 
-**Early: v0.1.0 is the first release.** The MVP in
-[the plan](docs/plan/00-index.md) is implemented and tested end to end on Linux,
-macOS and Windows in CI. What is missing or behaves differently from tmux is
-listed in [docs/backlog.md](docs/backlog.md).
+**Early: 0.x releases.** The MVP in [the plan](docs/plan/00-index.md) is
+implemented and tested end to end on Linux, macOS and Windows in CI. What is
+missing or behaves differently from tmux is listed in
+[docs/backlog.md](docs/backlog.md).
 
 ## What it does
 
@@ -143,6 +143,20 @@ function prompt {
 Shells that emit OSC 7 (`file://host/path`) work too. What a shell announces
 wins over what tmxr reads from the process.
 
+## Linux and macOS
+
+- **The socket** is `/tmp/tmxr-<uid>/<label>`, or under `$TMXR_TMPDIR` (else
+  `$TMPDIR`) when set, not under `$XDG_RUNTIME_DIR`, which systemd removes at
+  your last logout. A running server keeps its socket fresh against `/tmp`
+  cleaners; if something deletes it anyway, `kill -USR1 <server pid>` binds it
+  again, as with tmux.
+- **The clipboard**: a copy goes to every client by OSC 52, and to the desktop
+  clipboard (Wayland or X11) of the client you copied from, whatever environment
+  the server started in; a client over SSH gets OSC 52 alone.
+- **Panes start your shell as a login shell**, as tmux's do, so it reads your
+  profile. Set `default-command = "/bin/bash"` (your shell) in the config to
+  start it as a plain shell instead.
+
 ## Installing
 
 ```sh
@@ -174,6 +188,11 @@ ConPTY (MIT, `ConPTY-LICENSE.txt`); keep them beside `tmxr.exe`. Windows' own
 ConPTY drops the end of a program's tmux passthrough, so without them inline
 images stay off. The Scoop package includes them; tmxr built from source
 (`cargo install tmxr-cli`) uses Windows' own.
+
+`cargo install tmxr-cli` builds against crates.io's crossterm, without the fixes
+the release binaries and packages carry (a resize lost when it arrives with a
+key or a focus change, a burst of input over 1024 bytes cut short); prefer a
+release or a build from this repository.
 
 Shell completions and the man page come from the binary itself:
 `tmxr --completions <bash|zsh|fish|powershell|elvish|nushell>` and `tmxr --man`.
