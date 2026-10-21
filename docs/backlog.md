@@ -388,6 +388,22 @@ table. What has been verified, and how:
   added to `tick` without a deadline there runs only when something else wakes
   the server. Windows' client still polls (crossterm's console reader cannot be
   woken), measured nowhere.
+- **A pane's output costs about five times tmux's CPU** (measured 2026-10-21 on
+  the Arch laptop, an i7-1355U; a pane printing `seq 1 2000000` with a 120x40
+  client attached): the tmux 3.8 server spent 0.58 s of CPU, tmxr's 2.9 to 3.4
+  s, all of it on its main thread, in handling the output (rendering took 10 ms,
+  settling under 1 ms; timed by hand around `Server::run`'s phases, not
+  committed). The emulator alone, outside the server, took 1.25 s on that output
+  with 2000 lines of history and 1.62 s with the default `history-limit` of
+  50000, bare vt100 0.18 1.28 s: tmxr's own layer (`Emulator`, `ModeSplitter`,
+  `DcsSplitter`) adds next to nothing, and chunk size does not matter. The chip
+  is hybrid (two performance cores, eight efficiency cores) and the same run
+  took 1.5 times as long pinned to an efficiency core (`taskset`), which the
+  scheduler may pick for the server. Bringing it near tmux's means a faster
+  vt100 (its per-line scroll and history), a fork or upstream work, the same
+  choice as the OSC 8 decision above; not started. No profiler was available
+  (`perf` needs installing, `perf_event_paranoid` is 2), so where vt100 spends
+  it is not known.
 - **No frame-rate cap**: the server renders after each pass of its loop, and a
   pass stops handling events after `DRAIN_BUDGET` so a flood still repaints.
   Each pane's output waits in a bounded queue (`output::QUEUE_LIMIT`) that
