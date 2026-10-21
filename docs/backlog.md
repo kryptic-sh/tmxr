@@ -55,6 +55,16 @@ table. What has been verified, and how:
   relies on staying attached), or defaulting to `off` as tmxr behaves now
   (matches tmux only where a config sets it off). Either makes
   `-f no-detach-on-destroy` possible.
+- **Synchronized updates** (DEC mode 2026, `CSI ? 2026 h` / `l` around a frame,
+  so the terminal shows it whole rather than half drawn): tmxr never sends them.
+  tmux 3.6 does when the client terminal's terminfo has `Sync` or
+  `terminal-features` names `sync` (by default only for iTerm2, from its
+  XTVERSION). On the owner's machine (2026-10-21) the terminal is Alacritty
+  0.17, which supports the mode, with no `alacritty` terminfo installed, so its
+  TERM is `xterm-256color`, which has no `Sync`: tmux would not send them there
+  either. Options: follow tmux (a `terminal-features`-like setting, off unless a
+  terminal is named); or ask each client's terminal with DECRQM
+  (`CSI ? 2026 $ p`) and use them where it answers, which goes beyond tmux.
 - **Fuzzing the command parser and the frame codec** (`docs/plan/14`, a weekly
   cron job): needs `cargo-fuzz` and `libfuzzer-sys`, new dependencies on a
   nightly toolchain, or `proptest`-style property tests on stable, also new.
