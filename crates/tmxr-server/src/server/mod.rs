@@ -337,6 +337,17 @@ const DRAIN_BUDGET: Duration = Duration::from_millis(20);
 /// within the 10 days after which Arch's systemd-tmpfiles removes an unused
 /// file from `/tmp`.
 const SOCKET_REFRESH: Duration = Duration::from_secs(60 * 60);
+
+/// When foreground commands need a wakeup of their own to refresh, `every`
+/// after `last` did: none when a status line is redrawn (at one of
+/// `status_due`) within half an interval of it, as `tick` refreshes them
+/// along with a redraw from half their interval on, so an idle server wakes
+/// once for both.
+fn refresh_deadline(last: Instant, every: Duration, status_due: &[Instant]) -> Option<Instant> {
+    let refresh = last + every;
+    let near = |&s: &Instant| s + every / 2 >= refresh && s <= refresh + every / 2;
+    (!status_due.iter().any(near)).then_some(refresh)
+}
 impl Server {
     pub fn new(
         endpoint: Endpoint,
@@ -438,6 +449,7 @@ impl Server {
             due.push(self.socket_refreshed + SOCKET_REFRESH);
         }
         let away = self.cfg.client_away_time;
+        let mut status_due = Vec::new();
         for c in self.clients.values() {
             let Some(a) = c.att.as_ref() else {
                 continue;
@@ -450,7 +462,7 @@ impl Server {
             }
             let opts = self.session_options(a.session);
             if opts.status_interval != 0 {
-                due.push(a.status_at + secs(opts.status_interval));
+                status_due.push(a.status_at + secs(opts.status_interval));
             }
             let lock = self.client_session_options(c.id);
             if lock.lock_after_time != 0 && !lock.lock_command.is_empty() && !a.locked {
@@ -482,7 +494,12 @@ impl Server {
             .map(|&s| self.session_options(s).status_interval)
             .min()
             .unwrap_or(self.cfg.session.status_interval);
-        due.push(self.last_status + secs(interval.max(1)));
+        due.extend(refresh_deadline(
+            self.last_status,
+            secs(interval.max(1)),
+            &status_due,
+        ));
+        due.extend(status_due);
         due.into_iter().min().unwrap_or(now + SOCKET_REFRESH)
     }
 
@@ -1202,6 +1219,7 @@ impl Server {
                     .then_some(c.id)
             })
             .collect();
+        let status_redrawn = !due.is_empty();
         for id in due {
             if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
                 a.status_at = now;
@@ -1210,13 +1228,17 @@ impl Server {
         }
         // Foreground commands and automatic window names refresh at the
         // shortest `status-interval` any session has, at least each second.
+        // A status line redrawn from half that on refreshes them early, so the
+        // two share a wakeup instead of each waking an idle server.
         let interval = self
             .sessions
             .keys()
             .map(|&s| self.session_options(s).status_interval)
             .min()
             .unwrap_or(self.cfg.session.status_interval);
-        if now.duration_since(self.last_status) >= Duration::from_secs(interval.max(1)) {
+        let every = Duration::from_secs(interval.max(1));
+        let since = now.duration_since(self.last_status);
+        if since >= every || (status_redrawn && since >= every / 2) {
             self.last_status = now;
             crate::util::refresh_commands(self);
         }
@@ -1340,6 +1362,34 @@ pub(crate) fn config_file(source: tmxr_config::ConfigSource) -> Option<PathBuf> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn foreground_commands_wake_the_server_only_away_from_a_status_redraw() {
+        let start = Instant::now();
+        let every = Duration::from_secs(5);
+        let at = |ms: u64| start + Duration::from_millis(ms);
+        // No status line: their own deadline.
+        assert_eq!(refresh_deadline(start, every, &[]), Some(at(5000)));
+        // A redraw just after it, or up to half an interval before or after:
+        // none, the redraw refreshes them.
+        for redraw in [5002, 2500, 7500] {
+            assert_eq!(
+                refresh_deadline(start, every, &[at(redraw)]),
+                None,
+                "{redraw}"
+            );
+        }
+        // A redraw further off: their own again.
+        for redraw in [2499, 7501] {
+            assert_eq!(
+                refresh_deadline(start, every, &[at(redraw)]),
+                Some(at(5000)),
+                "{redraw}"
+            );
+        }
+        // Any of several clients' redraws near it will do.
+        assert_eq!(refresh_deadline(start, every, &[at(9000), at(5100)]), None);
+    }
 
     #[test]
     fn a_bare_tmxr_opens_the_session_named_after_its_directory() {

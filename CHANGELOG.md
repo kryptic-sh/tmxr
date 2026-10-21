@@ -597,9 +597,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   terminal every 50 ms to see whether to pause for a lock command, and the
   server ticked every 250 ms. The client now waits for input, a pause waking it,
   and the server sleeps until its next timed duty (the status line's
-  `status-interval`, a message's expiry and the like). Measured on a laptop, an
-  attached, idle session went from about 25 wakeups a second to about 1, which
-  matters on battery.
+  `status-interval`, a message's expiry and the like), checking panes' commands
+  for automatic renames in the same wakeup as a status redraw. Measured on a
+  laptop, an attached, idle session went from about 25 wakeups a second to about
+  1, which matters on battery.
 - **Copies reach the desktop the copying client is on** (Linux and the BSDs):
   the local clipboard was set with the server's own display, so a server started
   from a TTY, or left running across a logout or a compositor restart, copied
