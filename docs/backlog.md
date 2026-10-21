@@ -74,15 +74,22 @@ table. What has been verified, and how:
   second once the server was. On X11 (2026-10-21, a client with only `DISPLAY`,
   the Xwayland of a Hyprland nested in `kwin_wayland --virtual`): the helper
   owned the X `CLIPBOARD` and an X11 client read back what `set-buffer -w`
-  copied; the helper was gone after `kill-server`. Not tested in CI, which has
-  no display; not tried with a compositor restart, nor the macOS and Windows
-  arms (they set the clipboard in the server, as before). A selection another
-  program takes over leaves the helper running, holding nothing, until the next
-  tmxr copy. Idle cost (2026-10-21, Hyprland): the helper's own thread sleeps on
-  Linux (`wait_for_server`, `PR_SET_PDEATHSIG`; 1.0 wakeups a second before, 0.0
-  after, measured by hand, not by a test), but hjkl-clipboard 0.42's Wayland
-  thread polls its socket every 50 ms, 20 wakeups a second for as long as the
-  helper holds a copy. Fixed in hjkl (`cab0bebd`,
+  copied; the helper was gone after `kill-server`. Across a compositor restart
+  (2026-10-22, the nested Hyprland killed and started again, a client attached
+  in Alacritty each time): the helper whose compositor went stays, idle (no CPU
+  over 5 s) and holding nothing, until the next copy stops it, which then
+  reaches the new compositor; a helper could instead end when its connection
+  does, which hjkl-clipboard does not report. With no client attached a copy
+  (`set-buffer -w` from a script) reaches no local clipboard: the helper gets
+  the server's environment, not the command client's. Not tested in CI, which
+  has no display; nor the macOS and Windows arms (they set the clipboard in the
+  server, as before). A selection another program takes over leaves the helper
+  running, holding nothing, until the next tmxr copy. Idle cost (2026-10-21,
+  Hyprland): the helper's own thread sleeps on Linux (`wait_for_server`,
+  `PR_SET_PDEATHSIG`; 1.0 wakeups a second before, 0.0 after, measured by hand,
+  not by a test), but hjkl-clipboard 0.42's Wayland thread polls its socket
+  every 50 ms, 20 wakeups a second for as long as the helper holds a copy. Fixed
+  in hjkl (`cab0bebd`,
   `perf(hjkl-clipboard): sleep while holding a Wayland selection`; 20.2 to 0.2),
   and its X11 thread likewise (`7b35bca0`, 20.2 to 0.2 on Xwayland, with INCR
   chunks 2 ms apart in `05a6d230`, as Hyprland 0.56's XWayland bridge loses
