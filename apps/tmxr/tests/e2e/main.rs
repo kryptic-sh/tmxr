@@ -214,6 +214,18 @@ impl Tmxr {
         self.spawn_at(self.dir.path(), program, args, vars)
     }
 
+    /// [`Tmxr::attach`] in a terminal that takes synchronized updates: it
+    /// answers DECRQM for mode 2026 as set.
+    fn attach_sync(&self, rest: &[&str]) -> Screen {
+        self.terminal(
+            self.dir.path(),
+            env!("CARGO_BIN_EXE_tmxr"),
+            &self.args(rest),
+            &[],
+            true,
+        )
+    }
+
     /// [`Tmxr::spawn_env`] in directory `cwd`.
     fn spawn_at(
         &self,
@@ -221,6 +233,19 @@ impl Tmxr {
         program: &str,
         args: &[String],
         vars: &[(&str, Option<&str>)],
+    ) -> Screen {
+        self.terminal(cwd, program, args, vars, false)
+    }
+
+    /// [`Tmxr::spawn_at`], the terminal answering DECRQM for mode 2026 as
+    /// set when `sync` (else, as one that does not know it, not at all).
+    fn terminal(
+        &self,
+        cwd: &Path,
+        program: &str,
+        args: &[String],
+        vars: &[(&str, Option<&str>)],
+        sync: bool,
     ) -> Screen {
         let pair = native_pty_system()
             .openpty(PtySize {
@@ -267,6 +292,9 @@ impl Tmxr {
                         break;
                     }
                     raw.lock().unwrap().extend_from_slice(&buf[..n]);
+                    if sync && buf[..n].windows(SYNC_QUERY.len()).any(|w| w == SYNC_QUERY) {
+                        let _ = writer.lock().unwrap().write_all(b"\x1b[?2026;2$y");
+                    }
                     // Answer terminal queries (ConPTY's cursor-position
                     // probe, crossterm's capability probes) like a terminal.
                     let replies = emu.lock().unwrap().process(&buf[..n]);
@@ -489,6 +517,9 @@ fn console_window_probe() {
     let window = unsafe { GetConsoleWindow() };
     println!("console-window={}", !window.is_null());
 }
+
+/// DECRQM for synchronized updates (mode 2026), which the client asks.
+const SYNC_QUERY: &[u8] = b"\x1b[?2026$p";
 
 /// Where [`key_log_fixture`] logs the keys it reads, when a test starts it.
 const KEY_LOG: &str = "TMXR_E2E_KEY_LOG";

@@ -188,10 +188,13 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                     writer = Some(shared);
                 }
             }
-            ServerMsg::Output(bytes) => {
-                stdout.write_all(&bytes)?;
-                stdout.flush()?;
-            }
+            ServerMsg::Output(bytes) => match &term {
+                Some(t) => t.write_frame(&mut stdout, &bytes)?,
+                None => {
+                    stdout.write_all(&bytes)?;
+                    stdout.flush()?;
+                }
+            },
             ServerMsg::CommandResult {
                 status,
                 stdout: out,

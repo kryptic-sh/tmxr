@@ -37,6 +37,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Synchronized updates** (Linux and macOS): a client asks its terminal at
+  attach whether it takes DEC mode 2026 (DECRQM) and, where it does, writes each
+  frame as one synchronized update, so the terminal never shows a frame half
+  drawn. tmux sends them only where terminfo or `terminal-features` says so.
 - **SIGUSR1 binds the server's socket again** (Unix), as tmux's does: a server
   whose socket file was removed is reached again after `kill -USR1 <pid>`, its
   sessions kept.

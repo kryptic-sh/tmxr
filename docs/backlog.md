@@ -47,22 +47,23 @@ table. What has been verified, and how:
   patched, `[patch.crates-io]` on a kryptic-sh branch) to keep a cell's link; or
   move to tmxr's own grid, a much larger change. Both are a dependency decision;
   nothing was started.
-- **Synchronized updates** (DEC mode 2026, `CSI ? 2026 h` / `l` around a frame,
-  so the terminal shows it whole rather than half drawn): tmxr never sends them.
-  tmux 3.6 does when the client terminal's terminfo has `Sync` or
-  `terminal-features` names `sync` (by default only for iTerm2, from its
-  XTVERSION). On the owner's machine (2026-10-21) the terminal is Alacritty
-  0.17, which supports the mode, with no `alacritty` terminfo installed, so its
-  TERM is `xterm-256color`, which has no `Sync`: tmux would not send them there
-  either. Options: follow tmux (a `terminal-features`-like setting, off unless a
-  terminal is named); or ask each client's terminal with DECRQM
-  (`CSI ? 2026 $ p`) and use them where it answers, which goes beyond tmux.
 - **Fuzzing the command parser and the frame codec** (`docs/plan/14`, a weekly
   cron job): needs `cargo-fuzz` and `libfuzzer-sys`, new dependencies on a
   nightly toolchain, or `proptest`-style property tests on stable, also new.
 
 ## Known gaps and follow-ups
 
+- **Synchronized updates are asked for, not configured**
+  (`terminal::probe_sync`): at its first attach a client sends DECRQM for mode
+  2026 and DA1 and reads the answers straight from the terminal (up to
+  `PROBE_WAIT`, which only a terminal that answers neither waits out); where
+  mode 2026 is known it wraps each frame from the server in `CSI ? 2026 h` / `l`
+  (`Guard::write_frame`). This goes beyond tmux, which sends them only where
+  terminfo or `terminal-features` says so (decided by the owner, 2026-10-21).
+  Keys typed in the few milliseconds the probe reads are read by it and lost.
+  Windows' client does not ask (its console hands over input records). Tested
+  end to end against the harness's terminal answering DECRQM; not looked at in a
+  real terminal.
 - **The local clipboard follows the copying client** (`clipboard::Local`): the
   display and SSH variables come from that client's environment, or the attached
   client last typed in, and on Linux and the BSDs each copy runs

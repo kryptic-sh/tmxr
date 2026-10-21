@@ -153,6 +153,8 @@ wins over what tmxr reads from the process.
 - **The clipboard**: a copy goes to every client by OSC 52, and to the desktop
   clipboard (Wayland or X11) of the client you copied from, whatever environment
   the server started in; a client over SSH gets OSC 52 alone.
+- **Frames are synchronized updates** where the terminal takes them (asked at
+  attach), so a busy screen is never shown half drawn.
 - **Panes start your shell as a login shell**, as tmux's do, so it reads your
   profile. Set `default-command = "/bin/bash"` (your shell) in the config to
   start it as a plain shell instead.

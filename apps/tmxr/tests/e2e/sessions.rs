@@ -1541,3 +1541,24 @@ fn an_idle_client_and_server_do_not_wake() {
         "the idle server woke {server_woke} times in {IDLE:?}"
     );
 }
+
+/// A client in a terminal that takes synchronized updates (it answers
+/// DECRQM for mode 2026) writes each frame as one, so the terminal never
+/// shows a frame half drawn; in one that does not, it writes none.
+#[test]
+fn frames_are_synchronized_updates_where_the_terminal_takes_them() {
+    const BEGIN: &str = "\x1b[?2026h";
+    const END: &str = "\x1b[?2026l";
+    let t = Tmxr::new("sync");
+    t.run(&["new-session", "-d", "-s", "sync"]);
+    let synced = t.attach_sync(&["attach", "-t", "sync"]);
+    synced.wait_for("the status line", |text| text.contains("sync"));
+    let plain = t.attach(&["attach", "-t", "sync"]);
+    plain.wait_for("the status line", |text| text.contains("sync"));
+    let raw = |s: &Screen| String::from_utf8_lossy(&s.raw.lock().unwrap()).into_owned();
+    let (synced, plain) = (raw(&synced), raw(&plain));
+    let frames = synced.matches(BEGIN).count();
+    assert!(frames > 0, "no synchronized frame: {synced:?}");
+    assert_eq!(frames, synced.matches(END).count(), "{synced:?}");
+    assert!(!plain.contains(BEGIN), "{plain:?}");
+}

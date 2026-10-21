@@ -2,7 +2,7 @@
 
 use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
 
 use crossterm::event::{
@@ -21,6 +21,85 @@ use tmxr_proto::{ClientMsg, write_msg};
 /// the panic hook installed in [`Guard::enter`]) on panic.
 pub struct Guard {
     kitty: bool,
+    sync: bool,
+}
+
+/// Whether the terminal takes synchronized updates (DEC mode 2026), asked
+/// once, at the first [`Guard::enter`]: a later one runs beside the input
+/// thread, which would take the answer.
+static SYNC: OnceLock<bool> = OnceLock::new();
+
+/// How long the synchronized-update probe waits for the terminal's answers.
+#[cfg(unix)]
+const PROBE_WAIT: Duration = Duration::from_secs(1);
+
+/// What the terminal's answers in `reply` say of synchronized updates:
+/// `None` until its DA1 answer (`CSI ? … c`), which every terminal sends and
+/// comes after DECRPM's, has arrived; then whether DECRPM (`CSI ? 2026 ; Ps
+/// $ y`) said the mode is set, reset or permanently set (`Ps` 1 to 3).
+fn sync_answer(reply: &[u8]) -> Option<bool> {
+    let text = String::from_utf8_lossy(reply);
+    let da1 = text.match_indices("\x1b[?").any(|(i, _)| {
+        let rest = &text[i + 3..];
+        let end = rest.find(|c: char| !(c.is_ascii_digit() || c == ';'));
+        end.is_some_and(|e| rest[e..].starts_with('c'))
+    });
+    if !da1 {
+        return None;
+    }
+    Some(
+        ["1", "2", "3"]
+            .iter()
+            .any(|ps| text.contains(&format!("\x1b[?2026;{ps}$y"))),
+    )
+}
+
+/// Ask the terminal whether it takes synchronized updates, reading its
+/// answers straight from the terminal before crossterm reads it (what is
+/// read here crossterm never sees).
+#[cfg(unix)]
+fn probe_sync(out: &mut impl Write) -> io::Result<bool> {
+    // DECRQM for mode 2026, then DA1 to know when the answers are in.
+    out.write_all(b"\x1b[?2026$p\x1b[c")?;
+    out.flush()?;
+    let deadline = std::time::Instant::now() + PROBE_WAIT;
+    let mut reply = Vec::new();
+    loop {
+        if let Some(sync) = sync_answer(&reply) {
+            return Ok(sync);
+        }
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        if left.is_zero() {
+            return Ok(false);
+        }
+        let mut pfd = libc::pollfd {
+            fd: libc::STDIN_FILENO,
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        let millis = libc::c_int::try_from(left.as_millis() + 1).unwrap_or(libc::c_int::MAX);
+        // SAFETY: polls one live pollfd for at most `millis`.
+        let ready = unsafe { libc::poll(&mut pfd, 1, millis) };
+        if ready < 0 {
+            let e = io::Error::last_os_error();
+            if e.kind() == io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(e);
+        }
+        if ready == 0 {
+            return Ok(false);
+        }
+        let mut buf = [0u8; 256];
+        // SAFETY: reads into a live buffer of its own length; the terminal
+        // is readable, so this does not block.
+        let n = unsafe { libc::read(libc::STDIN_FILENO, buf.as_mut_ptr().cast(), buf.len()) };
+        let n = usize::try_from(n).map_err(|_| io::Error::last_os_error())?;
+        if n == 0 {
+            return Ok(false);
+        }
+        reply.extend_from_slice(&buf[..n]);
+    }
 }
 
 fn restore(kitty: bool) {
@@ -49,6 +128,12 @@ impl Guard {
         // Mouse capture and focus reports wait for the server's `Mouse` and
         // `FocusEvents` (the `mouse` and `focus-events` options).
         execute!(out, EnterAlternateScreen, EnableBracketedPaste)?;
+        // Before crossterm's keyboard probe below starts its reader. The
+        // Windows console hands over input records, so it is not asked.
+        #[cfg(unix)]
+        let sync = *SYNC.get_or_init(|| probe_sync(&mut out).unwrap_or(false));
+        #[cfg(windows)]
+        let sync = *SYNC.get_or_init(|| false);
         // Unambiguous key reports (C-h vs Backspace, C-i vs Tab, Escape vs
         // Alt) where the terminal supports the kitty protocol.
         let kitty = crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false);
@@ -63,7 +148,20 @@ impl Guard {
             restore(kitty);
             prev(info);
         }));
-        Ok(Self { kitty })
+        Ok(Self { kitty, sync })
+    }
+
+    /// Write one frame from the server, as one synchronized update where
+    /// the terminal takes them, so it is never shown half drawn.
+    pub fn write_frame(&self, out: &mut impl Write, frame: &[u8]) -> io::Result<()> {
+        if self.sync {
+            out.write_all(b"\x1b[?2026h")?;
+        }
+        out.write_all(frame)?;
+        if self.sync {
+            out.write_all(b"\x1b[?2026l")?;
+        }
+        out.flush()
     }
 }
 
@@ -372,5 +470,19 @@ mod tests {
         ] {
             assert_eq!(console_key(from.clone()), to, "{from:?}");
         }
+    }
+
+    #[test]
+    fn the_sync_probe_reads_decrpm_once_da1_is_in() {
+        assert_eq!(sync_answer(b""), None);
+        // DECRPM alone: DA1 is still to come.
+        assert_eq!(sync_answer(b"\x1b[?2026;2$y"), None);
+        assert_eq!(sync_answer(b"\x1b[?2026;2$y\x1b[?62;22c"), Some(true));
+        assert_eq!(sync_answer(b"\x1b[?2026;1$y\x1b[?1;2c"), Some(true));
+        // Not recognized, or permanently reset.
+        assert_eq!(sync_answer(b"\x1b[?2026;0$y\x1b[?62c"), Some(false));
+        assert_eq!(sync_answer(b"\x1b[?2026;4$y\x1b[?62c"), Some(false));
+        // A terminal that ignores DECRQM answers DA1 alone.
+        assert_eq!(sync_answer(b"\x1b[?62;22c"), Some(false));
     }
 }
