@@ -76,8 +76,10 @@ table. What has been verified, and how:
   helper holds a copy. Fixed in hjkl (`cab0bebd`,
   `perf(hjkl-clipboard): sleep while holding a Wayland selection`; 20.2 to 0.2),
   not released yet: bump tmxr's hjkl-clipboard once a release carries it. Its
-  X11 thread still polls (`recv_timeout` of 50 ms in `x11_thread.rs`), not
-  changed.
+  X11 thread still polls (`recv_timeout` of 50 ms in `x11_thread.rs`, 20.2
+  wakeups a second on Xwayland): a fix is parked on hjkl's `clipboard-x11-idle`
+  branch, because one 8 MiB paste through Hyprland's XWayland bridge came out
+  truncated with it (hjkl's backlog, section 1.17).
 - **CSIs the emulator makes beside vt100** (`modes::ModeSplitter`, from tmux's
   `input_csi_table`): SCP / RCP, REP (only right after a printed character, as
   tmux's), CBT and DECSCUSR (the shape and blinking tmxr keeps); HVP and HPA are
