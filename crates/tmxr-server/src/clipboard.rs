@@ -33,8 +33,8 @@ const DISPLAY_VARS: [&str; 4] = [
 const SSH_VARS: [&str; 3] = ["SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY"];
 
 /// How often the helper checks that the server that started it is still
-/// there.
-#[cfg(all(unix, not(target_os = "macos")))]
+/// there, where the kernel cannot tell it (not Linux).
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "linux"))))]
 const PARENT_CHECK: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// The server's side: the helper serving the last copy.
@@ -158,10 +158,38 @@ pub fn helper() -> bool {
     if std::io::stdin().read_to_end(&mut text).is_err() || !set_clipboard(&text) {
         return false;
     }
+    wait_for_server(server);
+    true
+}
+
+/// Return once the server that started the helper is gone. Linux ends the
+/// helper with SIGTERM when it is (`PR_SET_PDEATHSIG`; the server starts
+/// helpers from its main thread, whose end is what the kernel watches), so
+/// it sleeps until then without waking.
+#[cfg(target_os = "linux")]
+fn wait_for_server(server: u32) {
+    // SAFETY: `prctl` with `PR_SET_PDEATHSIG` and a signal number only sets
+    // this process's death signal; SIGTERM's default action ends it.
+    if unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) } != 0 {
+        tracing::debug!(
+            error = %std::io::Error::last_os_error(),
+            "clipboard helper cannot follow the server"
+        );
+        return;
+    }
+    // The server may have gone before the death signal was set.
+    while std::os::unix::process::parent_id() == server {
+        std::thread::park();
+    }
+}
+
+/// Return once the server that started the helper is gone, checking each
+/// [`PARENT_CHECK`].
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "linux"))))]
+fn wait_for_server(server: u32) {
     while std::os::unix::process::parent_id() == server {
         std::thread::sleep(PARENT_CHECK);
     }
-    true
 }
 
 /// macOS and Windows copy from the server itself; the helper is refused.

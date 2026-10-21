@@ -72,6 +72,15 @@ table. What has been verified, and how:
   on X11 or with a compositor restart, nor the macOS and Windows arms (they set
   the clipboard in the server, as before). A selection another program takes
   over leaves the helper running, holding nothing, until the next tmxr copy.
+  Idle cost (2026-10-21, Hyprland): the helper's own thread sleeps on Linux
+  (`wait_for_server`, `PR_SET_PDEATHSIG`; 1.0 wakeups a second before, 0.0
+  after, measured by hand, not by a test), but hjkl-clipboard 0.42's Wayland
+  thread polls its socket every 50 ms, 20 wakeups a second for as long as the
+  helper holds a copy. Fixed in hjkl (`cab0bebd`,
+  `perf(hjkl-clipboard): sleep while holding a Wayland selection`; 20.2 to 0.2),
+  not released yet: bump tmxr's hjkl-clipboard once a release carries it. Its
+  X11 thread still polls (`recv_timeout` of 50 ms in `x11_thread.rs`), not
+  changed.
 - **CSIs the emulator makes beside vt100** (`modes::ModeSplitter`, from tmux's
   `input_csi_table`): SCP / RCP, REP (only right after a printed character, as
   tmux's), CBT and DECSCUSR (the shape and blinking tmxr keeps); HVP and HPA are
