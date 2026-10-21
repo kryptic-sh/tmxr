@@ -567,6 +567,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The clipboard helper sleeps while it holds a copy** (Linux): hjkl-clipboard
+  0.43.4, which tmxr now builds with, no longer polls the Wayland socket or the
+  X11 connection every 50 ms; measured on Hyprland, 19.9 wakeups a second while
+  holding a copy before, 0.0 after.
 - **A window's new name or flag shows in every session listing it**: a window
   linked into another session, where it was not the current window, kept its old
   name and activity or bell flag in that session's window list until something

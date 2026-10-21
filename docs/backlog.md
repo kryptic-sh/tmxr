@@ -84,17 +84,13 @@ table. What has been verified, and how:
   the server's environment, not the command client's. Not tested in CI, which
   has no display; nor the macOS and Windows arms (they set the clipboard in the
   server, as before). A selection another program takes over leaves the helper
-  running, holding nothing, until the next tmxr copy. Idle cost (2026-10-21,
-  Hyprland): the helper's own thread sleeps on Linux (`wait_for_server`,
-  `PR_SET_PDEATHSIG`; 1.0 wakeups a second before, 0.0 after, measured by hand,
-  not by a test), but hjkl-clipboard 0.42's Wayland thread polls its socket
-  every 50 ms, 20 wakeups a second for as long as the helper holds a copy. Fixed
-  in hjkl (`cab0bebd`,
-  `perf(hjkl-clipboard): sleep while holding a Wayland selection`; 20.2 to 0.2),
-  and its X11 thread likewise (`7b35bca0`, 20.2 to 0.2 on Xwayland, with INCR
-  chunks 2 ms apart in `05a6d230`, as Hyprland 0.56's XWayland bridge loses
-  chunks sent back to back: hyprwm/Hyprland discussion 16612). Neither is
-  released yet: bump tmxr's hjkl-clipboard once a release carries them.
+  running, holding nothing, until the next tmxr copy. Idle cost: none while it
+  holds a copy (2026-10-22, nested Hyprland, context switches over 10 s: 0.0 a
+  second with hjkl-clipboard 0.43.4, 19.9 with 0.42, whose Wayland thread polled
+  every 50 ms; the helper's own thread sleeps on Linux, `wait_for_server`,
+  `PR_SET_PDEATHSIG`). hjkl-clipboard sends X11 INCR chunks 2 ms apart, as
+  Hyprland 0.56's XWayland bridge loses chunks sent back to back
+  (hyprwm/Hyprland discussion 16612).
 - **CSIs the emulator makes beside vt100** (`modes::ModeSplitter`, from tmux's
   `input_csi_table`): SCP / RCP, REP (only right after a printed character, as
   tmux's), CBT and DECSCUSR (the shape and blinking tmxr keeps); HVP and HPA are
