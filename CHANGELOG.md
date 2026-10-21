@@ -567,6 +567,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a `vt100` with that fixed (offered upstream as doy/vt100-rust#47). On a
   laptop, the server's CPU for a pane printing `seq 1 2000000` went from about 2
   s to about 0.55 s, where tmux 3.8 spends about 0.6 s.
+- **A pane's history takes about a tenth of the memory**: with 50000 lines of
+  history the server held about 193 MiB, and entering copy mode once took it to
+  about 600 MiB for good; now about 20 MiB, and about 30 MiB after copy mode,
+  where tmux 3.8 holds about 23 MiB. The `vt100` tmxr builds against keeps a
+  line of history only as long as its text (doy/vt100-rust#47) and narrows a
+  line again once scrolled past (#49).
 - **Copy mode starts about seven times faster on a long history**: entering it
   copies the pane's history, which on a pane with 50000 lines took about 330 ms
   of the server's CPU, every client waiting meanwhile; now about 45 ms. A copied

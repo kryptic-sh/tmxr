@@ -2746,7 +2746,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 [[package]]
 name = "vt100"
 version = "0.18.1"
-source = "git+https://github.com/kryptic-sh/vt100-rust?rev=f74abb42a03c339b3644537f82e55fb6bf611dbe#f74abb42a03c339b3644537f82e55fb6bf611dbe"
+source = "git+https://github.com/kryptic-sh/vt100-rust?rev=850b837c7741b6431b6989d7b04abb9d96480ca3#850b837c7741b6431b6989d7b04abb9d96480ca3"
 dependencies = [
  "itoa",
  "unicode-width",
