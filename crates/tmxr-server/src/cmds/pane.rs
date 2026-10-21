@@ -657,7 +657,7 @@ fn capture(
     flags: CaptureFlags,
 ) -> String {
     let rows = usize::from(tmxr_term::screen_size(screen).0);
-    let history = crate::copy::history_len(screen);
+    let history = screen.scrollback_len();
     let last = (history + rows).saturating_sub(1);
     let line = |value: Option<&str>, dash: usize, default: usize| match value {
         Some("-") => dash,

@@ -69,16 +69,6 @@ pub struct Hooks {
     input_mark: Option<(usize, u16, u16)>,
 }
 
-/// Lines of history above `screen`, read by moving its view to the top and
-/// back.
-fn history_lines(screen: &mut vt100::Screen) -> usize {
-    let view = screen.scrollback();
-    screen.set_scrollback(usize::MAX);
-    let lines = screen.scrollback();
-    screen.set_scrollback(view);
-    lines
-}
-
 impl Hooks {
     /// DECSCUSR, split out before vt100 (which keeps its own): a cursor
     /// shape, 0 to 6; others leave it as it was, as tmux's.
@@ -191,7 +181,7 @@ impl vt100::Callbacks for Hooks {
             // command runs) and D (it finished) end that input.
             [b"133", b"B", ..] => {
                 let (row, col) = screen.cursor_position();
-                self.input_mark = Some((history_lines(screen), row, col));
+                self.input_mark = Some((screen.scrollback_len(), row, col));
             }
             [b"133", b"A" | b"C" | b"D", ..] => self.input_mark = None,
             // A title holding `;` arrives split, which vt100 leaves alone:
@@ -342,7 +332,7 @@ impl Emulator {
     }
 
     fn count_history(&mut self) {
-        self.history = history_lines(self.parser.screen_mut());
+        self.history = self.parser.screen().scrollback_len();
     }
 
     /// Drop the history above the screen (tmux's `clear-history`), keeping

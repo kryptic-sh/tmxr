@@ -129,17 +129,8 @@ pub fn cell_style(cell: &vt100::Cell) -> Style {
 
 /// Capture every line of history plus the visible screen.
 pub fn snapshot(screen: &mut vt100::Screen) -> Vec<Line> {
-    let total = history_len(screen) + usize::from(tmxr_term::screen_size(screen).0);
+    let total = screen.scrollback_len() + usize::from(tmxr_term::screen_size(screen).0);
     snapshot_lines(screen, 0..total)
-}
-
-/// How many lines of history the pane holds.
-pub fn history_len(screen: &mut vt100::Screen) -> usize {
-    let original = screen.scrollback();
-    screen.set_scrollback(usize::MAX);
-    let history = screen.scrollback();
-    screen.set_scrollback(original);
-    history
 }
 
 /// Capture the lines `range` of history and screen, numbered as
@@ -148,7 +139,7 @@ pub fn history_len(screen: &mut vt100::Screen) -> usize {
 pub fn snapshot_lines(screen: &mut vt100::Screen, range: std::ops::Range<usize>) -> Vec<Line> {
     let (rows, cols) = tmxr_term::screen_size(screen);
     let original = screen.scrollback();
-    let history = history_len(screen);
+    let history = screen.scrollback_len();
     let mut lines: Vec<Option<Line>> = vec![None; range.len()];
     // The screenful whose top row is the range's first line, then each one
     // below it, to the screen itself (offset 0).
