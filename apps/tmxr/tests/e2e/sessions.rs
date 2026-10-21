@@ -1544,7 +1544,10 @@ fn an_idle_client_and_server_do_not_wake() {
 
 /// A client in a terminal that takes synchronized updates (it answers
 /// DECRQM for mode 2026) writes each frame as one, so the terminal never
-/// shows a frame half drawn; in one that does not, it writes none.
+/// shows a frame half drawn; in one that does not, it writes none. Unix
+/// only: a Windows client does not ask, its console handing over input
+/// records rather than the terminal's answers.
+#[cfg(unix)]
 #[test]
 fn frames_are_synchronized_updates_where_the_terminal_takes_them() {
     const BEGIN: &str = "\x1b[?2026h";

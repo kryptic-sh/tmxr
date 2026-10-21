@@ -37,6 +37,7 @@ const PROBE_WAIT: Duration = Duration::from_secs(1);
 /// `None` until its DA1 answer (`CSI ? … c`), which every terminal sends and
 /// comes after DECRPM's, has arrived; then whether DECRPM (`CSI ? 2026 ; Ps
 /// $ y`) said the mode is set, reset or permanently set (`Ps` 1 to 3).
+#[cfg(unix)]
 fn sync_answer(reply: &[u8]) -> Option<bool> {
     let text = String::from_utf8_lossy(reply);
     let da1 = text.match_indices("\x1b[?").any(|(i, _)| {
@@ -472,6 +473,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn the_sync_probe_reads_decrpm_once_da1_is_in() {
         assert_eq!(sync_answer(b""), None);
