@@ -570,6 +570,8 @@ impl Server {
                 if let Some(cm) = p.copy.as_mut() {
                     cm.unseen_changes = true;
                 }
+                // A new title redraws the status line, as tmux's.
+                let retitled = allow_title && p.emu.title() != title.as_deref();
                 // allow-set-title off: the program's OSC 0 / 2 is ignored.
                 if !allow_title && p.emu.title() != title.as_deref() {
                     match title {
@@ -621,7 +623,11 @@ impl Server {
                         self.forward_passthrough(pid, &data, cursor);
                     }
                 }
-                self.mark_window_dirty(wid);
+                if retitled {
+                    self.mark_window_dirty(wid);
+                } else {
+                    self.mark_window_output(wid);
+                }
             }
             PtyEvent::Exited { code, signal } => {
                 debug!(pane = pid, ?code, ?signal, "pane exited");

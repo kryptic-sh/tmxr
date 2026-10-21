@@ -1257,6 +1257,59 @@ fn each_session_redraws_its_status_line_at_its_own_interval() {
     );
 }
 
+/// Pane output redraws the pane, not the status line, as tmux's: a clock in a
+/// status line with no timer stays as drawn while the pane prints, and moves
+/// on once something else asks for the status line (a rename here).
+#[cfg(unix)]
+#[test]
+fn pane_output_leaves_the_status_line_as_drawn() {
+    let stamp = |text: &str| {
+        text.lines()
+            .rev()
+            .find_map(|l| l.split_once("t=").map(|(_, t)| t.trim().to_owned()))
+            .unwrap_or_default()
+    };
+    let t = Tmxr::new("statusoutput");
+    t.run(&["new-session", "-d", "-s", "out"]);
+    t.run(&["set-option", "-t", "out", "status-interval", "0"]);
+    t.run(&["set-option", "-t", "out", "status-right", "t=%H:%M:%S"]);
+    t.run(&["set-option", "-w", "-t", "out", "automatic-rename", "off"]);
+    t.wait_settled("out");
+    let s = t.attach(&["attach", "-t", "out"]);
+    s.wait_for("the status line", |text| !stamp(text).is_empty());
+    let drawn = stamp(&s.text());
+    t.run(&[
+        "send-keys",
+        "-t",
+        "out",
+        "for i in 1 2 3 4 5 6 7 8 9 10; do echo tick-$i; sleep 0.3; done",
+        "Enter",
+    ]);
+    s.wait_for("the pane's output", |text| text.contains("tick-10"));
+    assert_eq!(stamp(&s.text()), drawn, "output redrew the status line");
+    t.run(&["rename-window", "-t", "out", "renamed"]);
+    s.wait_for("the status line redrawn", |text| stamp(text) != drawn);
+}
+
+/// A window renamed where it is not the current window still redraws the
+/// status lines that list it, as tmux's: a window linked into a second session
+/// shows its new name there at once, with no status timer to wait for.
+#[test]
+fn a_renamed_window_redraws_every_status_line_listing_it() {
+    let t = Tmxr::new("linkedname");
+    t.run(&["new-session", "-d", "-s", "one"]);
+    t.run(&["new-session", "-d", "-s", "two"]);
+    t.run(&["link-window", "-s", "one:0", "-t", "two:5"]);
+    t.run(&["set-option", "-t", "two", "status-interval", "0"]);
+    t.wait_settled("two");
+    let s = t.attach(&["attach", "-t", "two:0"]);
+    s.wait_for("the window list", |text| text.contains('5'));
+    t.run(&["rename-window", "-t", "one:0", "shared-name"]);
+    s.wait_for("the new name in the other session", |text| {
+        text.contains("shared-name")
+    });
+}
+
 /// `attach -f ignore-size`: the client's size sizes no window while a client
 /// without the flag is attached, as tmux's; alone, it does.
 #[test]

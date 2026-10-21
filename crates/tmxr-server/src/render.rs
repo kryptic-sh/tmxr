@@ -18,6 +18,16 @@ use crate::overlay::{Overlay, PickerOverlay, Previewed};
 use crate::server::Server;
 use crate::vars::Vars;
 
+/// A status line as drawn: its rows' cells and click ranges, with where it
+/// sat and how wide it was, so a frame drawn only for pane output repeats it.
+#[derive(Debug, Clone)]
+pub struct StatusCache {
+    top: u16,
+    cols: u16,
+    cells: Vec<Vec<ratatui::buffer::Cell>>,
+    ranges: StatusRanges,
+}
+
 /// `(first column, end column, window index)` of each window in the status
 /// line, for mouse clicks.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -229,10 +239,16 @@ pub fn cursor_style(srv: &Server, id: ClientId) -> u8 {
 }
 
 /// Draw the client's frame. Returns the status-line window ranges.
-pub fn draw(srv: &Server, id: ClientId, term: &mut Terminal<AnsiBackend>) -> StatusRanges {
+pub fn draw(
+    srv: &Server,
+    id: ClientId,
+    term: &mut Terminal<AnsiBackend>,
+    status: Option<StatusCache>,
+) -> (StatusRanges, Option<StatusCache>) {
     let mut ranges = StatusRanges::default();
+    let mut drawn = None;
     let Some(att) = srv.clients.get(&id).and_then(|c| c.att.as_ref()) else {
-        return ranges;
+        return (ranges, None);
     };
     let (cols, rows) = (att.cols, att.rows);
     let session = srv.sessions.get(&att.session);
@@ -268,7 +284,17 @@ pub fn draw(srv: &Server, id: ClientId, term: &mut Terminal<AnsiBackend>) -> Sta
                 _ => draw_window(srv, id, wid, buf, cols, pane_rows),
             };
         }
-        ranges = draw_status(srv, id, buf, cols, rows);
+        (ranges, drawn) = match status.filter(|s| still_fits(srv, att, s, cols, rows)) {
+            Some(cache) => {
+                put_status(buf, &cache);
+                (cache.ranges.clone(), Some(cache))
+            }
+            None => {
+                let ranges = draw_status(srv, id, buf, cols, rows);
+                let cache = take_status(srv, att, buf, cols, rows, &ranges);
+                (ranges, cache)
+            }
+        };
         if let Some(c) = draw_overlay(srv, id, buf, cols, rows) {
             cursor = Some(c);
         }
@@ -276,7 +302,63 @@ pub fn draw(srv: &Server, id: ClientId, term: &mut Terminal<AnsiBackend>) -> Sta
             f.set_cursor_position(c);
         }
     });
-    ranges
+    (ranges, drawn)
+}
+
+/// Where the status line sits on a client `rows` high: its first row and how
+/// many it has, none when it is off or the client is too short for it.
+fn status_place(srv: &Server, att: &crate::server::Attached, rows: u16) -> Option<(u16, u16)> {
+    let lines = drawn_status_rows(srv, att);
+    (lines != 0 && rows > lines).then(|| (status_row(srv, att, rows), lines))
+}
+
+/// Whether `cache` still fits the status line's place and width.
+fn still_fits(
+    srv: &Server,
+    att: &crate::server::Attached,
+    cache: &StatusCache,
+    cols: u16,
+    rows: u16,
+) -> bool {
+    cache.cols == cols
+        && status_place(srv, att, rows)
+            .is_some_and(|(top, lines)| cache.top == top && cache.cells.len() == usize::from(lines))
+}
+
+/// The status line just drawn into `buf`, kept for frames drawn for output.
+fn take_status(
+    srv: &Server,
+    att: &crate::server::Attached,
+    buf: &Buffer,
+    cols: u16,
+    rows: u16,
+    ranges: &StatusRanges,
+) -> Option<StatusCache> {
+    let (top, lines) = status_place(srv, att, rows)?;
+    let cells = (top..top + lines)
+        .map(|y| {
+            (0..cols)
+                .filter_map(|x| buf.cell((x, y)).cloned())
+                .collect()
+        })
+        .collect();
+    Some(StatusCache {
+        top,
+        cols,
+        cells,
+        ranges: ranges.clone(),
+    })
+}
+
+/// Draw a kept status line back into `buf`.
+fn put_status(buf: &mut Buffer, cache: &StatusCache) {
+    for (dy, row) in (0u16..).zip(&cache.cells) {
+        for (x, cell) in (0u16..).zip(row) {
+            if let Some(out) = buf.cell_mut((x, cache.top + dy)) {
+                *out = cell.clone();
+            }
+        }
+    }
 }
 
 /// Draw panes and borders. Returns where the cursor belongs, if visible.

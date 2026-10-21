@@ -112,6 +112,12 @@ pub struct Attached {
     pub message_styled: bool,
     pub last_session: Option<SessionId>,
     pub dirty: bool,
+    /// Only pane output needs drawing: the status line is drawn as it was
+    /// (`status_cache`), as tmux redraws its status line on its timer and on
+    /// other events, not on output.
+    pub content_dirty: bool,
+    /// The status line as last drawn, for a frame only output asked for.
+    pub status_cache: Option<crate::render::StatusCache>,
     /// The last frame was dropped (slow client); repaint everything.
     pub full_redraw: bool,
     /// Running the lock command (`lock-client`) until it reports back.
@@ -1099,15 +1105,35 @@ impl Server {
         }
     }
 
+    /// Redraw every client of a session holding `window`: its panes where it
+    /// is the current window, its name and flags in every window list.
     pub fn mark_window_dirty(&mut self, window: WindowId) {
+        let sessions: Vec<SessionId> = self
+            .sessions
+            .values()
+            .filter(|s| s.windows.values().any(|&w| w == window))
+            .map(|s| s.id)
+            .collect();
+        for s in sessions {
+            self.mark_session_dirty(s);
+        }
+    }
+
+    /// Redraw the panes of `window` for its output, on the clients showing
+    /// it, leaving their status lines as drawn.
+    pub fn mark_window_output(&mut self, window: WindowId) {
         let sessions: Vec<SessionId> = self
             .sessions
             .values()
             .filter(|s| s.current_window() == Some(window))
             .map(|s| s.id)
             .collect();
-        for s in sessions {
-            self.mark_session_dirty(s);
+        for c in self.clients.values_mut() {
+            if let Some(a) = c.att.as_mut()
+                && sessions.contains(&a.session)
+            {
+                a.content_dirty = true;
+            }
         }
     }
 
@@ -1248,7 +1274,7 @@ impl Server {
         let ids: Vec<ClientId> = self
             .clients
             .values()
-            .filter(|c| c.att.as_ref().is_some_and(|a| a.dirty))
+            .filter(|c| c.att.as_ref().is_some_and(|a| a.dirty || a.content_dirty))
             .map(|c| c.id)
             .collect();
         for id in ids {
@@ -1259,7 +1285,14 @@ impl Server {
             let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
                 continue;
             };
+            // Output alone keeps the status line as it was drawn.
+            let status = if att.dirty {
+                None
+            } else {
+                att.status_cache.take()
+            };
             att.dirty = false;
+            att.content_dirty = false;
             let tell_mouse = std::mem::replace(&mut att.mouse, mouse) != mouse;
             let tell_focus = std::mem::replace(&mut att.focus_events, focus) != focus;
             let full = std::mem::take(&mut att.full_redraw);
@@ -1269,13 +1302,14 @@ impl Server {
             if full {
                 let _ = term.clear();
             }
-            let ranges = crate::render::draw(self, id, &mut term);
+            let (ranges, status) = crate::render::draw(self, id, &mut term, status);
             let mut bytes = term.backend_mut().take();
             let title = crate::render::title(self, id);
             let cursor_style = crate::render::cursor_style(self, id);
             if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
                 a.term = Some(term);
                 a.status_ranges = ranges;
+                a.status_cache = status;
                 // So does the cursor shape.
                 if a.cursor_style != cursor_style {
                     a.cursor_style = cursor_style;

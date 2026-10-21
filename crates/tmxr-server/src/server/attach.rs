@@ -46,6 +46,8 @@ impl Server {
             message_styled: false,
             last_session: None,
             dirty: true,
+            content_dirty: false,
+            status_cache: None,
             full_redraw: true,
             locked: false,
             last_input: Instant::now(),

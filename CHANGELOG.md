@@ -479,6 +479,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Pane output no longer redraws the status line**, as in tmux: the status line
+  is expanded on its `status-interval` timer and on the events that change it (a
+  window renamed, flagged, added or selected, a key table, a message, a title),
+  and a frame drawn only for a pane's output shows it as last drawn. A format
+  that changes with nothing else happening (a clock in a session with
+  `status-interval 0`) shows the change at the next of those.
 - **A pane given no command runs its shell as a login shell** (Unix), as tmux's
   does: `-` and the shell's name as `argv[0]`, and `SHELL` set to it, so the
   shell reads `~/.profile`, `~/.bash_profile` or `~/.zprofile` as it would in
@@ -561,6 +567,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A window's new name or flag shows in every session listing it**: a window
+  linked into another session, where it was not the current window, kept its old
+  name and activity or bell flag in that session's window list until something
+  else redrew it.
 - **`#{pane_current_command}` names a program as soon as it starts** (Linux,
   macOS): it read the command tmxr keeps for automatic renames, refreshed once
   per `status-interval`, so a script asking just after starting a program (a key
