@@ -319,6 +319,7 @@ impl Server {
     }
 
     pub fn kill_session(&mut self, sid: SessionId) {
+        let on_destroy = self.session_options(sid).detach_on_destroy;
         let Some(s) = self.sessions.remove(&sid) else {
             return;
         };
@@ -343,22 +344,57 @@ impl Server {
                 }
             }
         }
-        // Clients on the dead session move to another one, or detach when
-        // there is none (tmux's detach-on-destroy off / on fallback).
-        let fallback = self
-            .sessions
-            .values()
-            .max_by_key(|s| s.last_used)
-            .map(|s| s.id);
-        let on_it: Vec<ClientId> = self
+        // Where its clients go, as tmux's server_destroy_session.
+        let attached = |id: SessionId| {
+            self.clients
+                .values()
+                .any(|c| c.att.as_ref().is_some_and(|a| a.session == id))
+        };
+        let newest = |unattached_only: bool| {
+            self.sessions
+                .values()
+                .filter(|o| !unattached_only || !attached(o.id))
+                .max_by_key(|o| o.activity)
+                .map(|o| o.id)
+        };
+        let by_name = |next: bool| {
+            let mut names: Vec<(&str, SessionId)> = self
+                .sessions
+                .values()
+                .map(|o| (o.name.as_str(), o.id))
+                .collect();
+            names.sort();
+            let after = names.iter().find(|(n, _)| *n > s.name.as_str());
+            let before = names.iter().rev().find(|(n, _)| *n < s.name.as_str());
+            if next {
+                after.or_else(|| names.first())
+            } else {
+                before.or_else(|| names.last())
+            }
+            .map(|&(_, id)| id)
+        };
+        use tmxr_config::DetachOnDestroy as D;
+        let to = match on_destroy {
+            D::Off => newest(false),
+            D::On => None,
+            D::NoDetached => newest(true),
+            D::Previous => by_name(false),
+            D::Next => by_name(true),
+        };
+        // A client flagged no-detach-on-destroy goes to the session used
+        // last where the option would have detached it.
+        let otherwise = matches!(on_destroy, D::On | D::NoDetached)
+            .then(|| newest(false))
+            .flatten();
+        let on_it: Vec<(ClientId, bool)> = self
             .clients
             .values()
             .filter(|c| c.att.as_ref().is_some_and(|a| a.session == sid))
-            .map(|c| c.id)
+            .map(|c| (c.id, c.no_detach_on_destroy))
             .collect();
-        for c in on_it {
-            match fallback {
-                Some(f) => self.switch_client(c, f),
+        for (c, stay) in on_it {
+            match to.or(if stay { otherwise } else { None }) {
+                Some(next) => self.switch_client(c, next),
                 None => self.detach(c, "exited"),
             }
         }

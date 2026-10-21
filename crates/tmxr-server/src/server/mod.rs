@@ -74,6 +74,9 @@ pub struct Client {
     pub attach_read_only: bool,
     /// It attached with `-f ignore-size`.
     pub ignore_size: bool,
+    /// `-f no-detach-on-destroy`: when its session is destroyed and
+    /// `detach-on-destroy` would detach it, it moves to another session.
+    pub no_detach_on_destroy: bool,
     /// The standard input it sent for `load-buffer -`, until that takes it.
     pub stdin: Option<Vec<u8>>,
     /// When it connected (`#{client_created}`).
@@ -600,6 +603,7 @@ impl Server {
                         user_read_only: read_only,
                         attach_read_only: false,
                         ignore_size: false,
+                        no_detach_on_destroy: false,
                         stdin: None,
                         created: std::time::SystemTime::now(),
                     },

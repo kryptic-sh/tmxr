@@ -47,14 +47,6 @@ table. What has been verified, and how:
   patched, `[patch.crates-io]` on a kryptic-sh branch) to keep a cell's link; or
   move to tmxr's own grid, a much larger change. Both are a dependency decision;
   nothing was started.
-- **`detach-on-destroy`** (`Server::kill_session`): tmxr always moves a client
-  whose session is destroyed to the most recently used other session, tmux's
-  `detach-on-destroy off`; tmux's default is `on`, which detaches it. Options:
-  add the session option with tmux's values (`on`, `off`, `no-detached`,
-  `previous`, `next`) defaulting to `on` as tmux does (a change for whoever
-  relies on staying attached), or defaulting to `off` as tmxr behaves now
-  (matches tmux only where a config sets it off). Either makes
-  `-f no-detach-on-destroy` possible.
 - **Synchronized updates** (DEC mode 2026, `CSI ? 2026 h` / `l` around a frame,
   so the terminal shows it whole rather than half drawn): tmxr never sends them.
   tmux 3.6 does when the client terminal's terminfo has `Sync` or
@@ -335,17 +327,17 @@ table. What has been verified, and how:
   through ConPTY in the e2e tests (raw bytes and win32-input-mode events); not
   tried by hand in Alacritty or VS Code. Fixing it at the source needs the key
   event's character, which crossterm drops for Enter and Backspace.
-- **Client flags** (`cmds::session::client_flags`): `-f` takes `read-only` and
-  `ignore-size`, and refuses tmux's others by name: `no-output`, `pause-after`
-  and `wait-exit` are control-mode flags, and tmxr has no control mode;
-  `active-pane` needs a per-client active pane; `no-detach-on-destroy` needs
-  `detach-on-destroy`, below. `!flag` and `refresh-client -f` / `-F` work as
-  tmux's (`!read-only` leaves a read-only client read-only). `#{client_flags}`
-  lists only what tmxr keeps: `attached`, `focused`, `ignore-size`, `read-only`
-  and `UTF-8` (every client, as tmxr writes nothing else, where tmux's follows
-  the client's locale), not tmux's `suspended`. `#{client_tty}` is the client's
-  terminal on Unix (`terminal::tty_name`, `ttyname_r`, which no dynamic-analysis
-  tool covers: CI runs none, and Miri cannot run the call) and empty on Windows;
+- **Client flags** (`cmds::session::client_flags`): `-f` takes `read-only`,
+  `ignore-size` and `no-detach-on-destroy`, and refuses tmux's others by name:
+  `no-output`, `pause-after` and `wait-exit` are control-mode flags, and tmxr
+  has no control mode; `active-pane` needs a per-client active pane. `!flag` and
+  `refresh-client -f` / `-F` work as tmux's (`!read-only` leaves a read-only
+  client read-only). `#{client_flags}` lists only what tmxr keeps: `attached`,
+  `focused`, `ignore-size`, `no-detach-on-destroy`, `read-only` and `UTF-8`
+  (every client, as tmxr writes nothing else, where tmux's follows the client's
+  locale), not tmux's `suspended`. `#{client_tty}` is the client's terminal on
+  Unix (`terminal::tty_name`, `ttyname_r`, which no dynamic-analysis tool
+  covers: CI runs none, and Miri cannot run the call) and empty on Windows;
   `#{client_name}` is tmxr's client id, where tmux's is the tty (and `-c` takes
   it), not changed: every `-c` target and the e2e tests name clients by id. A
   client is `focused` from attaching, as tmux's, until its terminal reports

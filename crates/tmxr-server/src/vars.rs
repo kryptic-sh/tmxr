@@ -359,6 +359,7 @@ fn client_flags(c: &crate::server::Client) -> String {
         (att.is_some(), "attached"),
         (att.is_some_and(|a| a.focused), "focused"),
         (c.ignore_size, "ignore-size"),
+        (c.no_detach_on_destroy, "no-detach-on-destroy"),
         (c.read_only(), "read-only"),
         (true, "UTF-8"),
     ]

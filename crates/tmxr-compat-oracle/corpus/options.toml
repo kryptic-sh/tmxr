@@ -614,3 +614,92 @@ checks = [
 name = "editor_defaults_as_tmux"
 steps = []
 checks = [{ command = "show -s editor" }, { command = "show -sv editor" }]
+
+[[cases]]
+name = "detach_on_destroy_on_detaches_the_client"
+attach = true
+steps = [
+  { run = "new-session -d -s z" },
+  { run = "new-session -d -s a" },
+  { run = "kill-session -t o" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "list-clients -F '#{client_session}'" },
+  { command = "list-sessions -F '#{session_name}'" },
+]
+
+[[cases]]
+name = "detach_on_destroy_off_moves_to_the_newest_session"
+attach = true
+steps = [
+  { run = "set -g detach-on-destroy off" },
+  { run = "new-session -d -s z" },
+  { run = "new-session -d -s a" },
+  { run = "kill-session -t o" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "list-clients -F '#{client_session}'" },
+  { command = "list-sessions -F '#{session_name}'" },
+]
+
+[[cases]]
+name = "detach_on_destroy_no_detached_moves_to_a_session_without_a_client"
+attach = true
+steps = [
+  { run = "set -g detach-on-destroy no-detached" },
+  { run = "new-session -d -s z" },
+  { run = "new-session -d -s a" },
+  { run = "kill-session -t o" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "list-clients -F '#{client_session}'" },
+  { command = "list-sessions -F '#{session_name}'" },
+]
+
+[[cases]]
+name = "detach_on_destroy_previous_moves_to_the_session_before_by_name"
+attach = true
+steps = [
+  { run = "set -g detach-on-destroy previous" },
+  { run = "new-session -d -s z" },
+  { run = "new-session -d -s a" },
+  { run = "kill-session -t o" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "list-clients -F '#{client_session}'" },
+  { command = "list-sessions -F '#{session_name}'" },
+]
+
+[[cases]]
+name = "detach_on_destroy_next_moves_to_the_session_after_by_name"
+attach = true
+steps = [
+  { run = "set -g detach-on-destroy next" },
+  { run = "new-session -d -s z" },
+  { run = "new-session -d -s a" },
+  { run = "kill-session -t o" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "list-clients -F '#{client_session}'" },
+  { command = "list-sessions -F '#{session_name}'" },
+]
+
+[[cases]]
+name = "a_no_detach_on_destroy_client_moves_where_on_would_detach"
+attach = true
+steps = [
+  { run = "refresh-client -f no-detach-on-destroy" },
+  { run = "new-session -d -s z" },
+  { run = "new-session -d -s a" },
+  { run = "kill-session -t o" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "list-clients -F '#{client_session}'" },
+  { command = "list-sessions -F '#{session_name}'" },
+]

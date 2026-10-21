@@ -42,6 +42,7 @@ client-away-time = 300
 # tmux's default: the prefix waits for its next key however long it takes.
 prefix-timeout = 0
 destroy-unattached = "off"
+detach-on-destroy = "on"
 escape-time = 0
 # tmux-sensible's, where tmux's default is off: panes are told of focus.
 focus-events = true

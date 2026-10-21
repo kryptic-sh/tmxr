@@ -4,8 +4,8 @@
 
 use crate::table::{Array, Word, options_table};
 use crate::{
-    AlertAction, DestroyUnattached, MessageLine, ModeKeys, StatusJustify, StatusLines,
-    StatusPosition, Visual,
+    AlertAction, DestroyUnattached, DetachOnDestroy, MessageLine, ModeKeys, StatusJustify,
+    StatusLines, StatusPosition, Visual,
 };
 
 options_table! {
@@ -34,6 +34,8 @@ options_table! {
     "default-size" => default_size: String,
     /// Whether the session goes once no client is attached to it.
     "destroy-unattached" => destroy_unattached: DestroyUnattached,
+    /// Where the session's clients go when it is destroyed.
+    "detach-on-destroy" => detach_on_destroy: DetachOnDestroy,
     /// `display-panes` number colour for the active pane, and the others.
     "display-panes-active-colour" => display_panes_active_colour: Word,
     "display-panes-colour" => display_panes_colour: Word,

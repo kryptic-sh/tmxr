@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Breaking
 
+- **A client whose session is destroyed detaches**, as tmux's does by default:
+  tmxr always moved it to the session used last. The new `detach-on-destroy`
+  session option takes tmux's values (`on`, `off`, `no-detached`, `previous`,
+  `next`); `set -g detach-on-destroy off` keeps the old behaviour, and the
+  client flag `no-detach-on-destroy` (`attach -f`, `refresh-client -f`) keeps
+  one client attached where `on` would detach it.
 - **The Unix socket directory is `/tmp/tmxr-<uid>`** (or under `$TMXR_TMPDIR` or
   `$TMPDIR`), no longer under `$XDG_RUNTIME_DIR`: logind deletes that directory
   when the user's last session ends, so a server left running across a logout

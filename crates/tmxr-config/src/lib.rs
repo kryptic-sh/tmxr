@@ -116,6 +116,7 @@ struct File {
     exit_unattached: bool,
     client_away_time: u64,
     destroy_unattached: DestroyUnattached,
+    detach_on_destroy: DetachOnDestroy,
     escape_time: u64,
     focus_events: bool,
     display_time: u64,
@@ -263,6 +264,7 @@ impl From<File> for Config {
                 default_size: f.default_size,
                 default_shell: f.default_shell,
                 destroy_unattached: f.destroy_unattached,
+                detach_on_destroy: f.detach_on_destroy,
                 display_panes_active_colour: Word(s.display_panes_active_colour),
                 display_panes_colour: Word(s.display_panes_colour),
                 display_panes_time: f.display_panes_time,
@@ -621,6 +623,45 @@ impl DestroyUnattached {
     /// Whether an unattached session goes.
     pub const fn destroys(self) -> bool {
         matches!(self, Self::On | Self::KeepGroup)
+    }
+}
+
+/// Where a destroyed session's clients go (`detach-on-destroy`), as tmux's
+/// `server_destroy_session`: `on` detaches them, `off` moves them to the
+/// session used last, `no-detached` to the one used last that has no client,
+/// and `previous` / `next` to the session before or after it by name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DetachOnDestroy {
+    Off,
+    On,
+    NoDetached,
+    Previous,
+    Next,
+}
+
+impl DetachOnDestroy {
+    pub const NAMES: &str = "off, on, no-detached, previous or next";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "off" => Some(Self::Off),
+            "on" => Some(Self::On),
+            "no-detached" => Some(Self::NoDetached),
+            "previous" => Some(Self::Previous),
+            "next" => Some(Self::Next),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::On => "on",
+            Self::NoDetached => "no-detached",
+            Self::Previous => "previous",
+            Self::Next => "next",
+        }
     }
 }
 

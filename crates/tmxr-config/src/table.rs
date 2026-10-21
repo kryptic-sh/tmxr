@@ -5,9 +5,9 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    AlertAction, BoxLines, ClockModeStyle, CursorStyle, DestroyUnattached, MessageLine, ModeKeys,
-    PaneIndicators, PaneLines, PaneStatus, ScrollbarPosition, Scrollbars, StatusJustify,
-    StatusLines, StatusPosition, Visual, WindowSize,
+    AlertAction, BoxLines, ClockModeStyle, CursorStyle, DestroyUnattached, DetachOnDestroy,
+    MessageLine, ModeKeys, PaneIndicators, PaneLines, PaneStatus, ScrollbarPosition, Scrollbars,
+    StatusJustify, StatusLines, StatusPosition, Visual, WindowSize,
 };
 
 /// An option's value: how `set-option` reads it and `show-options` prints
@@ -254,6 +254,7 @@ choice!(
     ClockModeStyle,
     CursorStyle,
     DestroyUnattached,
+    DetachOnDestroy,
     Scrollbars,
     ScrollbarPosition,
     ModeKeys,

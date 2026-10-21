@@ -580,6 +580,8 @@ pub(super) struct ClientFlags {
     read_only: bool,
     /// `ignore-size` on or (`!ignore-size`) off; `None` leaves it.
     ignore_size: Option<bool>,
+    /// `no-detach-on-destroy` on or off; `None` leaves it.
+    no_detach_on_destroy: Option<bool>,
 }
 
 /// `-f`'s client flags, comma separated, each turned off by a leading `!`,
@@ -593,6 +595,7 @@ pub(super) fn client_flags(list: Option<&str>) -> Result<ClientFlags, String> {
             "" => {}
             "read-only" => flags.read_only |= on,
             "ignore-size" => flags.ignore_size = Some(on),
+            "no-detach-on-destroy" => flags.no_detach_on_destroy = Some(on),
             f => return Err(format!("unsupported client flag: {f}")),
         }
     }
@@ -606,6 +609,9 @@ pub(super) fn set_client_flags(srv: &mut Server, client: ClientId, flags: &Clien
         return;
     };
     c.attach_read_only |= flags.read_only;
+    if let Some(keep) = flags.no_detach_on_destroy {
+        c.no_detach_on_destroy = keep;
+    }
     let Some(ignore) = flags.ignore_size.filter(|i| *i != c.ignore_size) else {
         return;
     };
