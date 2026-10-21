@@ -561,6 +561,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`#{pane_current_command}` names a program as soon as it starts** (Linux,
+  macOS): it read the command tmxr keeps for automatic renames, refreshed once
+  per `status-interval`, so a script asking just after starting a program (a key
+  binding checking for vim) got the shell's name for up to 5 seconds. It is now
+  read when asked, as tmux does. Windows still reads the kept copy, as a lookup
+  there snapshots every process.
 - **A pane printing fast costs about a quarter of the CPU it did**: each line
   that scrolled into history cost the screen emulator (the `vt100` crate) an
   allocation, a reallocation and a comparison per cell. tmxr now builds against

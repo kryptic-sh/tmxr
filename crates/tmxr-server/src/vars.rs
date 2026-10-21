@@ -783,11 +783,18 @@ impl<'a> Context for Vars<'a> {
             "pane_current_path" => pane_current_path(srv, pane?.id)?.display().to_string(),
             "pane_current_command" => {
                 let p = pane?;
-                srv.commands
-                    .get(&p.id)
-                    .cloned()
-                    .or_else(|| tmxr_term::process::foreground_command(&p.pty))
-                    .unwrap_or_default()
+                let cached = srv.commands.get(&p.id).cloned();
+                let live = || tmxr_term::process::foreground_command(&p.pty);
+                // Read when asked, as tmux does, so a program just started is
+                // named at once: on Unix that is a system call and a read. On
+                // Windows a lookup snapshots every process, so the copy
+                // `refresh_commands` keeps is read, up to a refresh old.
+                if cfg!(windows) {
+                    cached.or_else(live)
+                } else {
+                    live().or(cached)
+                }
+                .unwrap_or_default()
             }
             // 0 for an empty pane, as tmux's.
             "pane_pid" => {

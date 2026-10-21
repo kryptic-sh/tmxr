@@ -411,6 +411,18 @@ table. What has been verified, and how:
   `tick` runs; one added to `tick` without a deadline there runs only when
   something else wakes the server. Windows' client still polls (crossterm's
   console reader cannot be woken), measured nowhere.
+- **The status line is expanded again with every frame**
+  (`render::draw_status`), where tmux redraws it on its timer and on particular
+  events only: pane output that redraws a client also refreshes its status
+  line's formats. Seen 2026-10-21 once `#{pane_current_command}` was read live:
+  the frame for a command's echo could already name the program in a
+  `status-interval 0` session (the old test of the timer relied on the value
+  being stale; it now watches `%S` instead). Not changed; caching a status line
+  between timer ticks would match tmux.
+- **`#{pane_current_command}` on Windows** still reads the copy
+  `util::refresh_commands` keeps, up to a refresh old, as a lookup there
+  (`foreground_command_windows`) snapshots every process; Unix reads it when
+  asked (`vars.rs`). Not measured: what a live read would cost on Windows.
 - **vt100 is patched** until a release carries the fixes (doy/vt100-rust#47,
   #48, #49 and #50, from branches `scroll-alloc`, `visible-row`,
   `trim-on-scroll` and `line-cells` of kryptic-sh/vt100-rust; #49 builds on #47;

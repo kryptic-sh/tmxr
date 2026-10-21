@@ -372,6 +372,38 @@ fn monitor_activity_and_silence_flag_windows_out_of_sight() {
     assert!(!flags(&t, "0").contains('~'), "only the window that asked");
 }
 
+/// `#{pane_current_command}` names a program as soon as it is in front, as
+/// tmux reads it on each expansion, not at the next refresh of the commands
+/// tmxr keeps for automatic renames. Unix only: Windows reads the kept copy, a
+/// lookup there snapshotting every process.
+#[cfg(unix)]
+#[test]
+fn the_current_command_is_read_when_asked() {
+    let t = Tmxr::new("curcmd");
+    t.run(&["new-session", "-d", "-s", "cc"]);
+    t.wait_prompt("cc");
+    // A refresh keeps the shell's name, then the next is put far off.
+    t.run(&["set-option", "-g", "status-interval", "1"]);
+    std::thread::sleep(Duration::from_millis(1500));
+    t.run(&["set-option", "-g", "status-interval", "60"]);
+    t.run(&["send-keys", "-t", "cc", "sleep 30", "Enter"]);
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        let name = t.run(&[
+            "display-message",
+            "-p",
+            "-t",
+            "cc",
+            "#{pane_current_command}",
+        ]);
+        if name.trim() == "sleep" {
+            break;
+        }
+        assert!(Instant::now() < deadline, "still named {name:?}");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
 #[test]
 fn allow_rename_lets_programs_name_their_window() {
     // The name string is found by the splitter passthrough uses, which needs
