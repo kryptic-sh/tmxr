@@ -216,6 +216,7 @@ impl Tmxr {
 
     /// [`Tmxr::attach`] in a terminal that takes synchronized updates: it
     /// answers DECRQM for mode 2026 as set.
+    #[cfg(unix)]
     fn attach_sync(&self, rest: &[&str]) -> Screen {
         self.terminal(
             self.dir.path(),
