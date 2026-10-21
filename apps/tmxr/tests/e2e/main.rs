@@ -41,10 +41,13 @@ impl Tmxr {
         let config = dir.path().join("config.toml");
         // No clipboard: copying in a test must not overwrite the desktop's.
         // No assume-paste-time: a test types a whole key sequence in one
-        // write, which tmux's would take as pasted text.
+        // write, which tmux's would take as pasted text. The shell as the
+        // default command, so a pane's shell is not a login shell: a login
+        // shell reads the machine's profile, which on macOS reorders PATH
+        // (`path_helper`) and sets a longer prompt.
         std::fs::write(
             &config,
-            format!("default-shell = {shell:?}\nset-clipboard = \"off\"\nassume-paste-time = 0\n[resurrect]\nrestore-on-start = false\nauto-save-minutes = 0\n"),
+            format!("default-shell = {shell:?}\ndefault-command = {shell:?}\nset-clipboard = \"off\"\nassume-paste-time = 0\n[resurrect]\nrestore-on-start = false\nauto-save-minutes = 0\n"),
         )
         .unwrap();
         Self { dir, label, config }

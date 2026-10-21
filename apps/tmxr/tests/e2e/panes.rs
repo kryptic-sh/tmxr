@@ -788,8 +788,11 @@ fn pane_tty_is_the_terminal_the_program_sees() {
 fn a_pane_without_a_command_runs_a_login_shell() {
     let t = Tmxr::new("login");
     t.run(&["new-session", "-d", "-s", "lg"]);
-    t.run(&["new-window", "-d", "-t", "lg:1", "sh"]);
-    for (target, name) in [("lg:0", "[-sh]"), ("lg:1", "[sh]")] {
+    // The harness's panes run the shell as their command; this one does not.
+    t.run(&["set-option", "-g", "default-command", ""]);
+    t.run(&["new-window", "-d", "-t", "lg:1"]);
+    t.run(&["new-window", "-d", "-t", "lg:2", "sh"]);
+    for (target, name) in [("lg:1", "[-sh]"), ("lg:2", "[sh]")] {
         t.wait_prompt(target);
         t.run(&["send-keys", "-t", target, r#"echo "[$0]""#, "Enter"]);
         t.wait_run(

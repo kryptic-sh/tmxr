@@ -244,6 +244,14 @@ table. What has been verified, and how:
   connecting and being checked is refused. A label's socket on Unix sits in
   tmxr's private directory, unreachable by other users whatever `socket-access`
   says; `server-access -a` then says to use `-S`, as tmux documents.
+- **A pane given no command runs a login shell** (`SpawnSpec::login_shell`), as
+  tmux's spawn does, so the machine's login profile runs in it: on macOS
+  `path_helper` reorders `PATH` and the prompt gets longer, which broke e2e
+  tests in CI (run 39479217254, 2026-10-20); the e2e harness therefore sets
+  `default-command` to the shell, and only
+  `a_pane_without_a_command_runs_a_login_shell` clears it. Compared with tmux
+  3.6 on Arch (`-sh` against `-sh`, the oracle's window 0); macOS's
+  `path_helper` effect seen in CI, not compared with tmux there.
 - **A removed socket is bound again on SIGUSR1** (`Server::rebind`), as tmux's
   `server_signal` does (`sigusr1_binds_a_removed_socket_again`). Each time
   leaves the previous accept thread waiting on the old socket, which no client
