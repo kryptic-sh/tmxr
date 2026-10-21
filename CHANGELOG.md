@@ -551,6 +551,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An idle client no longer wakes 20 times a second** (Linux and macOS): its
+  input thread polled the terminal every 50 ms to see whether to pause for a
+  lock command; it now waits for input, and a pause wakes it. An attached tmxr
+  idles like tmux's client, which matters on a laptop's battery. The server
+  still wakes on a timer (see the backlog).
 - **Copies reach the desktop the copying client is on** (Linux and the BSDs):
   the local clipboard was set with the server's own display, so a server started
   from a TTY, or left running across a logout or a compositor restart, copied

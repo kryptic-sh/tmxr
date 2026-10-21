@@ -367,6 +367,17 @@ table. What has been verified, and how:
   `terminal-overrides ",*:RGB"` does. The 16 are sent as `90`–`97` for the
   bright ones; there is no 8-colour mode (bold for bright, as tmux uses on a
   terminal with 8).
+- **The server wakes four times a second when idle** (`Server::run` waits on its
+  channel with a 250 ms timeout, then `tick`s), where tmux's server sleeps until
+  something is due: measured 2026-10-21 on the Arch laptop, an attached session
+  doing nothing cost the tmxr server about 5 context switches a second and the
+  tmux 3.8 server 0.1 (the client, which polled 20 times a second, now sleeps:
+  `an_idle_client_does_not_wake`). Making it sleep needs a deadline for each
+  timed duty `tick` runs: message and key-repeat expiry, `lock-after-time`,
+  `monitor-silence` alerts, clock mode, the status line's `status-interval` and
+  with it `util::refresh_commands` (every pane's foreground process, for
+  automatic renames, where tmux checks a name when the pane prints), resurrect's
+  auto-save, `#()` job tidying and the hourly socket refresh.
 - **No frame-rate cap**: the server renders after each pass of its loop, and a
   pass stops handling events after `DRAIN_BUDGET` so a flood still repaints.
   Each pane's output waits in a bounded queue (`output::QUEUE_LIMIT`) that

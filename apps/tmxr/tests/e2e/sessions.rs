@@ -1482,3 +1482,41 @@ fn sigusr1_binds_a_removed_socket_again() {
         |o| o.trim() == "rb",
     );
 }
+
+/// An attached client that nothing happens to sleeps, as tmux's does: its
+/// input thread waits for an event instead of polling, which matters on a
+/// laptop's battery. Linux only: it counts context switches in `/proc`.
+#[cfg(target_os = "linux")]
+#[test]
+fn an_idle_client_does_not_wake() {
+    const IDLE: Duration = Duration::from_secs(3);
+    // Room for a status line redraw or two; the poll this replaced woke the
+    // client several times as often.
+    const MOST_SWITCHES: u64 = 10;
+    let t = Tmxr::new("idleclient");
+    let s = t.attach(&["new", "-s", "idle"]);
+    s.wait_for("the status line", |text| text.contains("idle"));
+    t.wait_prompt("idle");
+    let pid = s.child.process_id().unwrap();
+    let switches = || -> u64 {
+        let tasks = std::fs::read_dir(format!("/proc/{pid}/task")).unwrap();
+        tasks
+            .flatten()
+            .filter_map(|task| std::fs::read_to_string(task.path().join("status")).ok())
+            .flat_map(|status| {
+                status
+                    .lines()
+                    .filter(|l| l.contains("ctxt_switches"))
+                    .filter_map(|l| l.split_whitespace().nth(1)?.parse::<u64>().ok())
+                    .collect::<Vec<_>>()
+            })
+            .sum()
+    };
+    let before = switches();
+    std::thread::sleep(IDLE);
+    let woke = switches() - before;
+    assert!(
+        woke <= MOST_SWITCHES,
+        "the idle client woke {woke} times in {IDLE:?}"
+    );
+}

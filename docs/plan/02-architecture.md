@@ -94,7 +94,10 @@ The client is deliberately dumb and uses plain threads:
 
 - **Input thread**: `crossterm::event::read()` → `ClientMsg::Input(event)`. On
   Windows this reads console input records, on Unix it parses stdin — either way
-  the server receives the same structured events.
+  the server receives the same structured events. On Unix it waits for an event
+  without a timeout, so an idle client does not wake; pausing it for a lock
+  command raises SIGWINCH, which crossterm's reader watches, to end the wait.
+  The Windows console reader cannot be woken, so there it waits in short polls.
 - **Main thread**: reads `ServerMsg` frames; `Output(bytes)` → stdout,
   `Detached` / `Exited` → restore terminal, print the reason, exit.
 - Resize events arrive through crossterm on every platform (`Event::Resize`).

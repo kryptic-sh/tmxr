@@ -90,8 +90,10 @@ pub fn set_focus_events(on: bool) -> io::Result<()> {
     }
 }
 
-/// How long the input thread waits for an event before checking whether it
-/// should pause: the most a [`Input::pause`] waits.
+/// How often a paused input thread looks whether it may read again, and on
+/// Windows how long it waits for an event before checking whether it should
+/// pause (the most an [`Input::pause`] waits there). On Unix it waits for
+/// an event without a timeout, and a pause wakes it.
 const INPUT_POLL: Duration = Duration::from_millis(50);
 
 /// The input thread, which can be paused while another program (the lock
@@ -121,6 +123,8 @@ impl Input {
         // The flag keeps the thread from taking the gate again before this
         // does; the gate waits out a read already under way.
         self.paused.store(true, Ordering::Release);
+        #[cfg(unix)]
+        wake_reader()?;
         let gate = self
             .gate
             .lock()
@@ -159,6 +163,21 @@ fn console_key(ev: Event) -> Event {
     }
 }
 
+/// Wake the input thread out of a read waiting for an event: crossterm's
+/// reader watches for SIGWINCH, so one raised here ends it with a `Resize`
+/// to the size the terminal already has, which the server takes as a
+/// redraw.
+#[cfg(unix)]
+fn wake_reader() -> io::Result<()> {
+    // SAFETY: `raise` only sends a signal to this thread; crossterm's handler
+    // for it (signal-hook's) writes to its reader's pipe, and before that
+    // handler exists the signal is ignored, SIGWINCH's default.
+    if unsafe { libc::raise(libc::SIGWINCH) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
 /// Forward terminal events to the server until either side goes away.
 pub fn spawn_input(send: Arc<Mutex<SendHalf>>) -> Input {
     let input = Input {
@@ -176,6 +195,10 @@ pub fn spawn_input(send: Arc<Mutex<SendHalf>>) -> Input {
                     continue;
                 }
                 let Ok(_reading) = gate.lock() else { break };
+                // On Unix the read below waits for an event, a pause waking
+                // it; the Windows console's reader cannot be woken, so it
+                // looks for a pause between short waits.
+                #[cfg(windows)]
                 match crossterm::event::poll(INPUT_POLL) {
                     Ok(true) => {}
                     Ok(false) => continue,
