@@ -1236,6 +1236,8 @@ fn each_session_redraws_its_status_line_at_its_own_interval() {
         t.run(&["new-session", "-d", "-s", name]);
         t.run(&["set-option", "-t", name, "status-interval", interval]);
         t.run(&["set-option", "-t", name, "status-right", "t=%H:%M:%S"]);
+        // A rename redraws the client, as tmux's does: keep the name still.
+        t.run(&["set-option", "-w", "-t", name, "automatic-rename", "off"]);
         t.wait_settled(name);
         let s = t.attach(&["attach", "-t", name]);
         s.wait_for("the status line", |text| !stamp(text).is_empty());
