@@ -287,8 +287,12 @@ table. What has been verified, and how:
   removes a file whose newest timestamp is 10 days old, so the server renews the
   socket's ctime each hour (`Endpoint::refresh`, from `Server::tick`, as tmux's
   `server_update_socket` chmods it); the refresh is unit-tested, the hourly call
-  is not observed by any test. Not tried: a real logout with a server running,
-  or macOS's own cleaning of `$TMPDIR`.
+  is not observed by any test. A real logout (2026-10-22, Arch, an SSH login to
+  localhost as the session): a server started in it kept running once the
+  session ended (logind left it `closing`, as `KillUserProcesses` is off by
+  default and lingering was off), and answered `list-sessions` on its socket.
+  With `KillUserProcesses=yes` logind would end it, as it would tmux's. Not
+  tried: macOS's own cleaning of `$TMPDIR`.
 - **`display-popup` / `display-menu` gaps.** Placement (`-x` / `-y`, letters,
   numbers and the `popup_*` variables) is transcribed from tmux 3.6's
   `cmd_display_menu_get_pos` and checked against a running tmux
