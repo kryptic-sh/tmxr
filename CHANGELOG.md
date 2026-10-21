@@ -561,6 +561,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Command lines split as tmux's do** (found by new property tests): only
+  spaces and tabs part words, where tmxr also split on Unicode's other spaces (a
+  no-break space in a name); a line break ends a command as `;` does, where tmxr
+  read it as a space, so a multi-line command string runs each line; `$0` and
+  `$1x` stay as written, as a variable name starts with a letter or `_`.
+- **Quoted words read back as they were**: a word starting with `{` (a session
+  named `{x` from the session picker) is quoted instead of opening a block, and
+  `show-options` writes a NUL in a value as `\000`, which reads back, where `\0`
+  did not.
 - **An idle tmxr no longer wakes the CPU several times a second** (the client on
   Linux and macOS, the server everywhere): the client's input thread polled the
   terminal every 50 ms to see whether to pause for a lock command, and the

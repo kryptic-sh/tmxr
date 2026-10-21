@@ -87,7 +87,15 @@ pub fn tokenize_lines(
 
     while let Some(c) = chars.next() {
         match c {
-            c if c.is_whitespace() => end_word(&mut command, &mut word, &mut in_word),
+            // Spaces and tabs part words; any other character, Unicode's
+            // other spaces among them, is part of one, as in tmux's lexer.
+            ' ' | '\t' => end_word(&mut command, &mut word, &mut in_word),
+            // A line ends the command, as `;` does; `\r\n` is a line end.
+            '\r' if chars.peek() == Some(&'\n') => {}
+            '\n' => {
+                end_word(&mut command, &mut word, &mut in_word);
+                end_command(&mut command, &mut commands);
+            }
             '#' if !in_word && chars.peek() != Some(&'{') => break,
             '{' if !in_word => {
                 command.words.push(block(&mut chars)?);
@@ -131,7 +139,7 @@ pub fn tokenize_lines(
                 in_word = true;
                 let next_ends_word = chars
                     .peek()
-                    .is_none_or(|n| *n == '/' || n.is_whitespace() || *n == ';');
+                    .is_none_or(|n| matches!(n, '/' | ' ' | '\t' | '\n' | ';'));
                 if next_ends_word {
                     word.push_str(&env("HOME").unwrap_or_else(|| "~".into()));
                 } else {
@@ -161,7 +169,7 @@ pub fn join_args(words: &[String]) -> String {
             if !w.is_empty()
                 && w.chars()
                     .all(|c| c.is_alphanumeric() || "-_./:%@#{}=+,^".contains(c))
-                && !w.starts_with('#')
+                && !w.starts_with(['#', '{'])
             {
                 w.clone()
             } else {
@@ -178,7 +186,8 @@ pub fn join_args(words: &[String]) -> String {
 /// it holds a `"`; a single such character, or a lone `~`, as `\c`; control
 /// characters as C escapes or octal, and a leading `~` escaped. What it
 /// gives reads back through [`tokenize`] as `word`, except where tmux's own
-/// does not either: a backslash inside single quotes stays doubled.
+/// does not either: an escape inside single quotes (a doubled backslash,
+/// a control character's) reads back as written, as tmux 3.6's does.
 pub fn escape_arg(word: &str) -> String {
     const DOUBLE: &str = " #';${}%";
     const SINGLE: &str = " \"";
@@ -216,8 +225,9 @@ pub fn escape_arg(word: &str) -> String {
             '\x0b' => escaped.push_str("\\v"),
             '\t' => escaped.push_str("\\t"),
             '\x0c' => escaped.push_str("\\f"),
-            '\0' if chars.peek().is_some_and(|n| n.is_digit(8)) => escaped.push_str("\\000"),
-            '\0' => escaped.push_str("\\0"),
+            // Where tmux's vis writes `\0` with no octal digit after, which
+            // its own parser refuses; a tmux value never holds a NUL to show.
+            '\0' => escaped.push_str("\\000"),
             c if c == ' ' || c.is_ascii_graphic() || !c.is_ascii() => escaped.push(c),
             c => {
                 escaped.push('\\');
@@ -378,8 +388,10 @@ fn expand_var(
             }
         }
     } else {
+        // A name starts with a letter or `_`, as tmux's yylex_is_var: `$0`
+        // and `$1x` stay as written.
         while let Some(&c) = chars.peek() {
-            if c.is_ascii_alphanumeric() || c == '_' {
+            if c.is_ascii_alphabetic() || c == '_' || (!name.is_empty() && c.is_ascii_digit()) {
                 name.push(c);
                 chars.next();
             } else {
@@ -409,6 +421,23 @@ mod tests {
 
     fn t(line: &str) -> Vec<Vec<String>> {
         tokenize(line, &env).unwrap()
+    }
+
+    #[test]
+    fn spaces_and_tabs_part_words_and_a_line_ends_a_command() {
+        assert_eq!(
+            t("a\tb\u{a0}c\u{85}d\nx y\r\nz"),
+            vec![w(&["a", "b\u{a0}c\u{85}d"]), w(&["x", "y"]), w(&["z"])]
+        );
+        assert_eq!(t("echo ~\nls"), vec![w(&["echo", "/home/u"]), w(&["ls"])]);
+    }
+
+    #[test]
+    fn a_variable_name_starts_with_a_letter_or_underscore() {
+        assert_eq!(
+            t("echo $X $X1 \"$0\" $1x"),
+            vec![w(&["echo", "ex", "", "$0", "$1x"])]
+        );
     }
 
     #[test]

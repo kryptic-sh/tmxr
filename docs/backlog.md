@@ -47,12 +47,6 @@ table. What has been verified, and how:
   patched, `[patch.crates-io]` on a kryptic-sh branch) to keep a cell's link; or
   move to tmxr's own grid, a much larger change. Both are a dependency decision;
   nothing was started.
-- **Fuzzing the command parser and the frame codec** (`docs/plan/14`, a weekly
-  cron job): needs `cargo-fuzz` and `libfuzzer-sys`, new dependencies on a
-  nightly toolchain, or `proptest`-style property tests on stable, also new.
-
-## Known gaps and follow-ups
-
 - **Synchronized updates are asked for, not configured**
   (`terminal::probe_sync`): at its first attach a client sends DECRQM for mode
   2026 and DA1 and reads the answers straight from the terminal (up to

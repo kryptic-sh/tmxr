@@ -75,4 +75,8 @@ Before the first tag:
 
 ## Phase 3 — later
 
-- Weekly cron extras (fuzzing the command parser and the frame codec).
+- Fuzzing the command parser and the frame codec is done by property tests
+  (`proptest`, `crates/tmxr-command/tests/props.rs` and
+  `crates/tmxr-proto/tests/props.rs`), which run with every `cargo test`; a
+  failure proptest finds is kept in `props.proptest-regressions` beside the test
+  and tried first from then on. No weekly fuzzing job.
