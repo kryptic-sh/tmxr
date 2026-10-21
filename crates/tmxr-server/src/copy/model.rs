@@ -128,74 +128,56 @@ pub fn cell_style(cell: &vt100::Cell) -> Style {
 }
 
 /// Capture every line of history plus the visible screen.
-pub fn snapshot(screen: &mut vt100::Screen) -> Vec<Line> {
+pub fn snapshot(screen: &vt100::Screen) -> Vec<Line> {
     let total = screen.scrollback_len() + usize::from(tmxr_term::screen_size(screen).0);
     snapshot_lines(screen, 0..total)
 }
 
 /// Capture the lines `range` of history and screen, numbered as
-/// [`snapshot`]'s, the oldest line of history 0: only the screenfuls of
-/// history that hold them are read, as a pane's history can be long.
-pub fn snapshot_lines(screen: &mut vt100::Screen, range: std::ops::Range<usize>) -> Vec<Line> {
-    let (rows, cols) = tmxr_term::screen_size(screen);
-    let original = screen.scrollback();
-    let history = screen.scrollback_len();
-    let mut lines: Vec<Option<Line>> = vec![None; range.len()];
-    // The screenful whose top row is the range's first line, then each one
-    // below it, to the screen itself (offset 0).
-    let mut offset = history.saturating_sub(range.start);
-    loop {
-        screen.set_scrollback(offset);
-        for r in 0..rows {
-            let idx = history - offset + usize::from(r);
-            if !range.contains(&idx) || lines[idx - range.start].is_some() {
-                continue;
-            }
-            let written = |cell: &vt100::Cell| {
-                cell.has_contents()
-                    || cell.is_wide_continuation()
-                    || cell.bgcolor() != vt100::Color::Default
-            };
-            // One scan from the right finds both ends: the last cell that is
-            // not blank, and the last written one, before which every cell is
-            // kept (a written space reads as blank, so it can come first).
-            let (mut used, mut kept) = (0, 0);
-            for c in (0..cols).rev() {
-                let cell = screen.cell(r, c);
-                if kept == 0 && cell_of(cell) != BLANK {
-                    kept = c + 1;
-                }
-                if cell.is_some_and(written) {
-                    used = usize::from(c) + 1;
-                    kept = kept.max(c + 1);
-                    break;
-                }
-            }
-            let cells = (0..kept).map(|c| cell_of(screen.cell(r, c))).collect();
-            lines[idx - range.start] = Some(Line {
-                cells,
-                width: usize::from(cols),
-                wrapped: screen.row_wrapped(r),
-                used,
-            });
-        }
-        if offset == 0 || history - offset + usize::from(rows) >= range.end {
-            break;
-        }
-        offset = offset.saturating_sub(usize::from(rows));
-    }
-    screen.set_scrollback(original);
-    lines
-        .into_iter()
-        .map(|l| {
-            l.unwrap_or(Line {
+/// [`snapshot`]'s, the oldest line of history 0, read straight from vt100's
+/// rows (`Screen::line_cells`) without moving the pane's view.
+pub fn snapshot_lines(screen: &vt100::Screen, range: std::ops::Range<usize>) -> Vec<Line> {
+    let width = usize::from(tmxr_term::screen_size(screen).1);
+    range
+        .map(|idx| match screen.line_cells(idx) {
+            // A row of history from before a narrowing resize can be wider
+            // than the pane; it shows as wide as the pane.
+            Some(cells) => line_of(
+                &cells[..cells.len().min(width)],
+                width,
+                screen.line_wrapped(idx),
+            ),
+            None => Line {
                 cells: Vec::new(),
                 width: 0,
                 wrapped: false,
                 used: 0,
-            })
+            },
         })
         .collect()
+}
+
+/// A copy of one row of vt100 cells, `width` wide.
+fn line_of(cells: &[vt100::Cell], width: usize, wrapped: bool) -> Line {
+    let written = |cell: &vt100::Cell| {
+        cell.has_contents()
+            || cell.is_wide_continuation()
+            || cell.bgcolor() != vt100::Color::Default
+    };
+    let used = cells.iter().rposition(written).map_or(0, |c| c + 1);
+    // Every cell before the last written one is kept (a written space reads
+    // as blank), and any after it up to the last that is not blank.
+    let kept = cells
+        .iter()
+        .rposition(|c| cell_of(Some(c)) != BLANK)
+        .map_or(0, |c| c + 1)
+        .max(used);
+    Line {
+        cells: cells[..kept].iter().map(|c| cell_of(Some(c))).collect(),
+        width,
+        wrapped,
+        used,
+    }
 }
 
 /// A copy of `cell`, one of what a screen shows.

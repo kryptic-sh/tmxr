@@ -573,12 +573,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   where tmux 3.8 holds about 23 MiB. The `vt100` tmxr builds against keeps a
   line of history only as long as its text (doy/vt100-rust#47) and narrows a
   line again once scrolled past (#49).
-- **Copy mode starts about seven times faster on a long history**: entering it
+- **Copy mode starts about sixty times faster on a long history**: entering it
   copies the pane's history, which on a pane with 50000 lines took about 330 ms
-  of the server's CPU, every client waiting meanwhile; now about 45 ms. A copied
-  line keeps only its cells up to the last that is not blank, sharing a blank
-  for the rest, and reading a cell of a scrolled-back screen no longer walks
-  every row above it (in `vt100`, offered upstream as doy/vt100-rust#48).
+  of the server's CPU, every client waiting meanwhile; now about 5 ms, where
+  tmux 3.8 takes 4. The copy reads each line of history straight from the
+  `vt100` tmxr builds against (doy/vt100-rust#50) instead of scrolling the pane
+  through it a cell at a time, and keeps a line's cells only up to the last that
+  is not blank.
 - **`capture-pane` reads only the lines it prints**: it copied the pane's whole
   history first, so a capture of the screen took about 370 ms of the server's
   CPU on a pane with 50000 lines of history, and a script capturing in a loop
