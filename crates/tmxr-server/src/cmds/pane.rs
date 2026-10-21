@@ -683,7 +683,7 @@ fn capture(
             allocated(l.used, width)
         };
         let mut text = String::new();
-        for c in l.cells.iter().take(take).filter(|c| !c.symbol.is_empty()) {
+        for c in l.cells().take(take).filter(|c| !c.symbol.is_empty()) {
             if flags.escapes {
                 text.push_str(&sgr_change(last, c.style));
                 last = c.style;

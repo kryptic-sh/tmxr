@@ -623,7 +623,7 @@ fn draw_pane(
             let matches = cm.match_spans(y);
             for col in 0..w {
                 let x = usize::from(col);
-                let cell = line.and_then(|l| l.cells.get(x));
+                let cell = line.and_then(|l| l.cell(x));
                 let mut style =
                     with_default_colours(cell.map(|c| c.style).unwrap_or_default(), base);
                 if let Some((start, _)) = matches.iter().find(|(s, e)| (*s..*e).contains(&x)) {
@@ -636,13 +636,7 @@ fn draw_pane(
                 if y == cm.cy && usize::from(col) == cm.cx {
                     style = style.add_modifier(Modifier::REVERSED);
                 }
-                let sym = cell.map_or(" ", |c| {
-                    if c.symbol.is_empty() {
-                        " "
-                    } else {
-                        c.symbol.as_str()
-                    }
-                });
+                let sym = cell.map_or(" ", |c| if c.symbol.is_empty() { " " } else { &c.symbol });
                 if let Some(out) = buf.cell_mut((r.x + col, r.y + row)) {
                     out.set_symbol(sym).set_style(style);
                 }

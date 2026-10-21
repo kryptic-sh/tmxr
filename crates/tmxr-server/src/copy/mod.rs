@@ -410,8 +410,7 @@ impl CopyMode {
 
     fn line_len(&self, y: usize) -> usize {
         self.lines.get(y).map_or(0, |l| {
-            l.cells
-                .iter()
+            l.cells()
                 .rposition(|c| !c.symbol.trim().is_empty())
                 .map_or(0, |i| i + 1)
         })
@@ -451,7 +450,7 @@ impl CopyMode {
     fn padding(&self, y: usize, x: usize) -> bool {
         self.lines
             .get(y)
-            .and_then(|l| l.cells.get(x))
+            .and_then(|l| l.cell(x))
             .is_some_and(|c| c.symbol.is_empty())
     }
 
@@ -533,7 +532,7 @@ impl CopyMode {
     fn char_at(&self, y: usize, x: usize) -> char {
         self.lines
             .get(y)
-            .and_then(|l| l.cells.get(x))
+            .and_then(|l| l.cell(x))
             .and_then(|c| c.symbol.chars().next())
             .unwrap_or(' ')
     }

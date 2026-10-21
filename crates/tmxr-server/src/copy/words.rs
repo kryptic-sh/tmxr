@@ -137,13 +137,13 @@ impl CopyMode {
         }
         let above = y.checked_sub(1)?;
         let line = self.lines.get(above).filter(|l| l.wrapped)?;
-        Some((above, line.cells.len().checked_sub(1)?))
+        Some((above, line.width().checked_sub(1)?))
     }
 
     /// The cell after `(y, x)`, on to the next line when this one wraps.
     pub(super) fn cell_after(&self, (y, x): (usize, usize)) -> Option<(usize, usize)> {
         let line = self.lines.get(y)?;
-        if x + 1 < line.cells.len() {
+        if x + 1 < line.width() {
             return Some((y, x + 1));
         }
         (line.wrapped && y + 1 < self.lines.len()).then_some((y + 1, 0))
