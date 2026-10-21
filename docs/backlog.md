@@ -418,19 +418,18 @@ table. What has been verified, and how:
   of the output mostly measured the captures (each copied the whole history
   before `snapshot_lines`, see the changelog), which put tmxr at five times
   tmux's CPU.
-- **Entering copy mode still costs about 13 times tmux's CPU on a long history**
+- **Entering copy mode still costs about 11 times tmux's CPU on a long history**
   (2026-10-21, the Arch laptop, `copy-mode` then `cancel` on a pane with 50000
-  lines of history, 120x40, pinned to the performance cores): tmxr 54 ms of
+  lines of history, 120x40, pinned to the performance cores): tmxr 43–44 ms of
   server CPU, tmux 3.8 4 ms; it was 327–362 ms before `Line` kept only its cells
-  up to the last non-blank one and vt100 read a cell in constant time (#48).
-  `copy::snapshot` still reads every cell of every line through `Screen::cell`,
-  scanning each line from the right twice (once for `used`, once for what to
-  keep), and vt100's `set_scrollback` widens each history row it shows back to
-  the screen's width (`grow_visible_scrollback`), a reallocation per row that
-  also undoes #47's trimming in memory. tmux copies its grid's lines as they
-  are. Next steps, not started: one scan per line, and a copy mode that reads
-  history rows on demand instead of copying them all, which is the larger
-  change.
+  up to the last non-blank one, `snapshot_lines` scanned each line once, and
+  vt100 read a cell in constant time (#48). What is left: `copy::snapshot` still
+  reads every line through `Screen::cell`, and vt100's `set_scrollback` widens
+  each history row it shows back to the screen's width
+  (`grow_visible_scrollback`), a reallocation per row that also undoes #47's
+  trimming in memory. tmux copies its grid's lines as they are. The next step,
+  not started, is a copy mode that reads history rows on demand instead of
+  copying them all, a larger change.
 - **No frame-rate cap**: the server renders after each pass of its loop, and a
   pass stops handling events after `DRAIN_BUDGET` so a flood still repaints.
   Each pane's output waits in a bounded queue (`output::QUEUE_LIMIT`) that

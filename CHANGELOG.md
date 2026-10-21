@@ -567,9 +567,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a `vt100` with that fixed (offered upstream as doy/vt100-rust#47). On a
   laptop, the server's CPU for a pane printing `seq 1 2000000` went from about 2
   s to about 0.55 s, where tmux 3.8 spends about 0.6 s.
-- **Copy mode starts about six times faster on a long history**: entering it
+- **Copy mode starts about seven times faster on a long history**: entering it
   copies the pane's history, which on a pane with 50000 lines took about 330 ms
-  of the server's CPU, every client waiting meanwhile; now about 55 ms. A copied
+  of the server's CPU, every client waiting meanwhile; now about 45 ms. A copied
   line keeps only its cells up to the last that is not blank, sharing a blank
   for the rest, and reading a cell of a scrolled-back screen no longer walks
   every row above it (in `vt100`, offered upstream as doy/vt100-rust#48).

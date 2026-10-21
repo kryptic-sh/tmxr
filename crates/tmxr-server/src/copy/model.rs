@@ -39,7 +39,7 @@ fn symbol(contents: &str) -> Cow<'static, str> {
     }
 }
 
-/// A cell nothing was written to, as [`cell_at`] makes one.
+/// A cell nothing was written to, as [`cell_of`] copies one.
 const BLANK: Cell = Cell {
     symbol: Cow::Borrowed(" "),
     style: Style::new().fg(Color::Reset).bg(Color::Reset),
@@ -160,22 +160,27 @@ pub fn snapshot_lines(screen: &mut vt100::Screen, range: std::ops::Range<usize>)
             if !range.contains(&idx) || lines[idx - range.start].is_some() {
                 continue;
             }
-            let written = |c: u16| {
-                screen.cell(r, c).is_some_and(|cell| {
-                    cell.has_contents()
-                        || cell.is_wide_continuation()
-                        || cell.bgcolor() != vt100::Color::Default
-                })
+            let written = |cell: &vt100::Cell| {
+                cell.has_contents()
+                    || cell.is_wide_continuation()
+                    || cell.bgcolor() != vt100::Color::Default
             };
-            let used = (0..cols)
-                .rev()
-                .find(|&c| written(c))
-                .map_or(0, |c| usize::from(c) + 1);
-            let kept = (0..cols)
-                .rev()
-                .find(|&c| cell_at(screen, r, c) != BLANK)
-                .map_or(0, |c| c + 1);
-            let cells = (0..kept).map(|c| cell_at(screen, r, c)).collect();
+            // One scan from the right finds both ends: the last cell that is
+            // not blank, and the last written one, before which every cell is
+            // kept (a written space reads as blank, so it can come first).
+            let (mut used, mut kept) = (0, 0);
+            for c in (0..cols).rev() {
+                let cell = screen.cell(r, c);
+                if kept == 0 && cell_of(cell) != BLANK {
+                    kept = c + 1;
+                }
+                if cell.is_some_and(written) {
+                    used = usize::from(c) + 1;
+                    kept = kept.max(c + 1);
+                    break;
+                }
+            }
+            let cells = (0..kept).map(|c| cell_of(screen.cell(r, c))).collect();
             lines[idx - range.start] = Some(Line {
                 cells,
                 width: usize::from(cols),
@@ -202,9 +207,9 @@ pub fn snapshot_lines(screen: &mut vt100::Screen, range: std::ops::Range<usize>)
         .collect()
 }
 
-/// The cell at row `r`, column `c` of what `screen` shows.
-fn cell_at(screen: &vt100::Screen, r: u16, c: u16) -> Cell {
-    match screen.cell(r, c) {
+/// A copy of `cell`, one of what a screen shows.
+fn cell_of(cell: Option<&vt100::Cell>) -> Cell {
+    match cell {
         Some(cell) => Cell {
             symbol: if cell.is_wide_continuation() {
                 Cow::Borrowed("")
@@ -234,7 +239,7 @@ mod tests {
     #[test]
     fn a_cell_never_written_is_blank() {
         let parser = vt100::Parser::new(2.try_into().unwrap(), 4.try_into().unwrap(), 0);
-        assert_eq!(cell_at(parser.screen(), 1, 3), BLANK);
+        assert_eq!(cell_of(parser.screen().cell(1, 3)), BLANK);
     }
 
     #[test]
@@ -251,6 +256,35 @@ mod tests {
         assert_eq!(line.chars(), vec!['a', 'b', ' ', ' ', ' ', ' ']);
         assert!(lines[1].cells.is_empty());
         assert_eq!(lines[1].cells().count(), 6);
+    }
+
+    /// Cells erased while bold is on are not blank, so they are kept, but
+    /// nothing was written to them, so `used` stops before them.
+    #[test]
+    fn a_line_keeps_cells_past_the_last_written_one() {
+        let mut parser = vt100::Parser::new(2.try_into().unwrap(), 6.try_into().unwrap(), 0);
+        parser.process(b"ab\x1b[1m\x1b[K\x1b[m");
+        let line = &snapshot(parser.screen_mut())[0];
+        assert_eq!(line.used, 2);
+        assert_eq!(line.cells.len(), 6);
+        assert!(
+            line.cell(5)
+                .unwrap()
+                .style
+                .add_modifier
+                .contains(Modifier::BOLD)
+        );
+    }
+
+    /// A space written with no attributes reads as a blank, but it is still
+    /// written: the line keeps everything before it, as a prompt ends in one.
+    #[test]
+    fn a_line_ending_in_a_written_space_keeps_its_text() {
+        let mut parser = vt100::Parser::new(2.try_into().unwrap(), 6.try_into().unwrap(), 0);
+        parser.process(b"$ ");
+        let line = &snapshot(parser.screen_mut())[0];
+        assert_eq!(line.used, 2);
+        assert_eq!(line.text(0, 6), "$");
     }
 
     #[test]
