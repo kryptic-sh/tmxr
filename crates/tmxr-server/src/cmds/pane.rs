@@ -656,10 +656,9 @@ fn capture(
     (start, end): (Option<&str>, Option<&str>),
     flags: CaptureFlags,
 ) -> String {
-    let lines = crate::copy::snapshot(screen);
     let rows = usize::from(tmxr_term::screen_size(screen).0);
-    let history = lines.len().saturating_sub(rows);
-    let last = lines.len().saturating_sub(1);
+    let history = crate::copy::history_len(screen);
+    let last = (history + rows).saturating_sub(1);
     let line = |value: Option<&str>, dash: usize, default: usize| match value {
         Some("-") => dash,
         Some(v) => v.parse::<i64>().map_or(default, |n| {
@@ -671,11 +670,13 @@ fn capture(
     let top = line(start, 0, history);
     let bottom = line(end, last, last);
     let (top, bottom) = (top.min(bottom), top.max(bottom));
+    // Only the lines asked for: the whole history can be long.
+    let lines = crate::copy::snapshot_lines(screen, top..bottom + 1);
     let width = usize::from(tmxr_term::screen_size(screen).1);
     let mut out = String::new();
     // As tmux's, the last cell's style carries over from line to line.
     let mut last = Style::default();
-    for l in lines.get(top..=bottom).unwrap_or_default() {
+    for l in &lines {
         let take = if flags.join || flags.written_only {
             l.used
         } else {

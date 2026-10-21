@@ -561,13 +561,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- **A pane printing fast costs about a third of the CPU it did**: each line that
-  scrolled into history cost the screen emulator (the `vt100` crate) an
+- **A pane printing fast costs about a quarter of the CPU it did**: each line
+  that scrolled into history cost the screen emulator (the `vt100` crate) an
   allocation, a reallocation and a comparison per cell. tmxr now builds against
   a `vt100` with that fixed (offered upstream as doy/vt100-rust#47). On a
-  laptop, the server's CPU for a pane printing `seq 1 2000000` went from about
-  3.3 s to about 1.1 s, where tmux 3.8 spends about 0.7 s, and the output
-  finishes as fast as under tmux.
+  laptop, the server's CPU for a pane printing `seq 1 2000000` went from about 2
+  s to about 0.55 s, where tmux 3.8 spends about 0.6 s.
+- **`capture-pane` reads only the lines it prints**: it copied the pane's whole
+  history first, so a capture of the screen took about 370 ms of the server's
+  CPU on a pane with 50000 lines of history, and a script capturing in a loop
+  kept the server busy. Now about 1 ms.
 - **Command lines split as tmux's do** (found by new property tests): only
   spaces and tabs part words, where tmxr also split on Unicode's other spaces (a
   no-break space in a name); a line break ends a command as `;` does, where tmxr

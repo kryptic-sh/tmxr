@@ -84,18 +84,35 @@ pub fn cell_style(cell: &vt100::Cell) -> Style {
 
 /// Capture every line of history plus the visible screen.
 pub fn snapshot(screen: &mut vt100::Screen) -> Vec<Line> {
-    let (rows, cols) = tmxr_term::screen_size(screen);
+    let total = history_len(screen) + usize::from(tmxr_term::screen_size(screen).0);
+    snapshot_lines(screen, 0..total)
+}
+
+/// How many lines of history the pane holds.
+pub fn history_len(screen: &mut vt100::Screen) -> usize {
     let original = screen.scrollback();
     screen.set_scrollback(usize::MAX);
     let history = screen.scrollback();
-    let total = history + usize::from(rows);
-    let mut lines: Vec<Option<Line>> = vec![None; total];
-    let mut offset = history;
+    screen.set_scrollback(original);
+    history
+}
+
+/// Capture the lines `range` of history and screen, numbered as
+/// [`snapshot`]'s, the oldest line of history 0: only the screenfuls of
+/// history that hold them are read, as a pane's history can be long.
+pub fn snapshot_lines(screen: &mut vt100::Screen, range: std::ops::Range<usize>) -> Vec<Line> {
+    let (rows, cols) = tmxr_term::screen_size(screen);
+    let original = screen.scrollback();
+    let history = history_len(screen);
+    let mut lines: Vec<Option<Line>> = vec![None; range.len()];
+    // The screenful whose top row is the range's first line, then each one
+    // below it, to the screen itself (offset 0).
+    let mut offset = history.saturating_sub(range.start);
     loop {
         screen.set_scrollback(offset);
         for r in 0..rows {
             let idx = history - offset + usize::from(r);
-            if idx >= total || lines[idx].is_some() {
+            if !range.contains(&idx) || lines[idx - range.start].is_some() {
                 continue;
             }
             let written = |c: u16| {
@@ -127,13 +144,13 @@ pub fn snapshot(screen: &mut vt100::Screen) -> Vec<Line> {
                     },
                 })
                 .collect();
-            lines[idx] = Some(Line {
+            lines[idx - range.start] = Some(Line {
                 cells,
                 wrapped: screen.row_wrapped(r),
                 used,
             });
         }
-        if offset == 0 {
+        if offset == 0 || history - offset + usize::from(rows) >= range.end {
             break;
         }
         offset = offset.saturating_sub(usize::from(rows));
@@ -149,4 +166,42 @@ pub fn snapshot(screen: &mut vt100::Screen) -> Vec<Line> {
             })
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A ranged capture is the same slice of the full one, wherever the
+    /// range falls: in history, across its end, on the screen, or past it.
+    #[test]
+    fn a_range_of_lines_is_that_slice_of_the_whole_snapshot() {
+        let mut parser = vt100::Parser::new(5.try_into().unwrap(), 12.try_into().unwrap(), 100);
+        for n in 0..37 {
+            parser
+                .process(format!("\x1b[3{}mline {n} {}\r\n", n % 8, "x".repeat(n % 15)).as_bytes());
+        }
+        parser.screen_mut().set_scrollback(3);
+        let screen = parser.screen_mut();
+        let all = snapshot(screen);
+        assert!(all.len() > 40, "history wrapped lines: {}", all.len());
+        let total = all.len();
+        for range in [
+            0..1,
+            0..total,
+            2..9,
+            4..23,
+            total - 7..total,
+            total - 5..total,
+            total - 6..total - 2,
+            17..18,
+        ] {
+            assert_eq!(
+                snapshot_lines(screen, range.clone()),
+                all[range.clone()],
+                "{range:?}"
+            );
+        }
+        assert_eq!(screen.scrollback(), 3, "the pane's own scroll is kept");
+    }
 }

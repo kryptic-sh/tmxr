@@ -402,15 +402,18 @@ table. What has been verified, and how:
   Found with a pprof (`setitimer`) profile, as `perf` is not installed: 92.5% of
   bare vt100's time on `seq 1 2000000` was in `scroll_up`. Measured 2026-10-21
   on the Arch laptop (i7-1355U, pinned to its performance cores), a pane
-  printing `seq 1 2000000` with a 120x40 client attached: the server's CPU went
-  from 3.29–3.33 s to 1.03–1.11 s, tmux 3.8's 0.61–0.68 s, with wall time 3.7 s
-  to 1.0–1.1 s, tmux's 1.0 s. vt100 alone at the default `history-limit` of
-  50000 went from 1.56 s to 0.41 s, with history identical by hash (a check
-  shown to catch three deliberately broken variants). Drop the patch once a
-  vt100 release has it; `cargo install tmxr` from crates.io builds without it.
-  What is left of the gap to tmux was not profiled. The chip is hybrid, and the
-  same emulator run took 1.5 times as long pinned to an efficiency core
-  (`taskset`), which the scheduler may pick for the server.
+  printing `seq 1 2000000` with a 120x40 client attached, its end signalled by
+  `wait-for`: the server's CPU went from 1.68–2.14 s to 0.50–0.58 s, tmux 3.8's
+  0.61–0.62 s, wall time from about 2 s to 0.7 s, tmux's 0.8 s. vt100 alone at
+  the default `history-limit` of 50000 went from 1.56 s to 0.41 s, with history
+  identical by hash (a check shown to catch three deliberately broken variants).
+  Drop the patch once a vt100 release has it; `cargo install tmxr` from
+  crates.io builds without it. The chip is hybrid, and the same emulator run
+  took 1.5 times as long pinned to an efficiency core (`taskset`), which the
+  scheduler may pick for the server. Measuring note: an earlier harness that
+  polled `capture-pane -p` for the end of the output mostly measured the
+  captures (each copied the whole history before `snapshot_lines`, see the
+  changelog), which put tmxr at five times tmux's CPU.
 - **No frame-rate cap**: the server renders after each pass of its loop, and a
   pass stops handling events after `DRAIN_BUDGET` so a flood still repaints.
   Each pane's output waits in a bounded queue (`output::QUEUE_LIMIT`) that
