@@ -191,10 +191,11 @@ ConPTY drops the end of a program's tmux passthrough, so without them inline
 images stay off. The Scoop package includes them; tmxr built from source
 (`cargo install tmxr-cli`) uses Windows' own.
 
-`cargo install tmxr-cli` builds against crates.io's crossterm, without the fixes
-the release binaries and packages carry (a resize lost when it arrives with a
-key or a focus change, a burst of input over 1024 bytes cut short); prefer a
-release or a build from this repository.
+`cargo install tmxr-cli` builds against crates.io's crossterm and vt100, without
+the fixes the release binaries and packages carry (a resize lost when it arrives
+with a key or a focus change, a burst of input over 1024 bytes cut short, a pane
+printing fast costing three times the CPU); prefer a release or a build from
+this repository.
 
 Shell completions and the man page come from the binary itself:
 `tmxr --completions <bash|zsh|fish|powershell|elvish|nushell>` and `tmxr --man`.

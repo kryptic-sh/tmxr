@@ -43,10 +43,11 @@ table. What has been verified, and how:
 
 - **OSC 8 hyperlinks** (tmux keeps a pane's links: the pane menu's link items,
   `#{mouse_hyperlink}`). tmxr's screen is the `vt100` crate's, which drops OSC
-  8, so a link never reaches tmxr. Options: fork `vt100` (as crossterm is
-  patched, `[patch.crates-io]` on a kryptic-sh branch) to keep a cell's link; or
-  move to tmxr's own grid, a much larger change. Both are a dependency decision;
-  nothing was started.
+  8, so a link never reaches tmxr. Options: carry a cell's link on the vt100
+  fork tmxr is already patched to (kryptic-sh/vt100-rust, see "vt100 is
+  patched"), though a link is a feature upstream may not take, so the fork would
+  carry it on its own; or move to tmxr's own grid, a much larger change. Both
+  need the owner's decision; nothing was started.
 - **Synchronized updates are asked for, not configured**
   (`terminal::probe_sync`): at its first attach a client sends DECRQM for mode
   2026 and DA1 and reads the answers straight from the terminal (up to
@@ -391,22 +392,25 @@ table. What has been verified, and how:
   added to `tick` without a deadline there runs only when something else wakes
   the server. Windows' client still polls (crossterm's console reader cannot be
   woken), measured nowhere.
-- **A pane's output costs about five times tmux's CPU** (measured 2026-10-21 on
-  the Arch laptop, an i7-1355U; a pane printing `seq 1 2000000` with a 120x40
-  client attached): the tmux 3.8 server spent 0.58 s of CPU, tmxr's 2.9 to 3.4
-  s, all of it on its main thread, in handling the output (rendering took 10 ms,
-  settling under 1 ms; timed by hand around `Server::run`'s phases, not
-  committed). The emulator alone, outside the server, took 1.25 s on that output
-  with 2000 lines of history and 1.62 s with the default `history-limit` of
-  50000, bare vt100 0.18 1.28 s: tmxr's own layer (`Emulator`, `ModeSplitter`,
-  `DcsSplitter`) adds next to nothing, and chunk size does not matter. The chip
-  is hybrid (two performance cores, eight efficiency cores) and the same run
-  took 1.5 times as long pinned to an efficiency core (`taskset`), which the
-  scheduler may pick for the server. Bringing it near tmux's means a faster
-  vt100 (its per-line scroll and history), a fork or upstream work, the same
-  choice as the OSC 8 decision above; not started. No profiler was available
-  (`perf` needs installing, `perf_event_paranoid` is 2), so where vt100 spends
-  it is not known.
+- **vt100 is patched** until a release carries the fix (doy/vt100-rust#47,
+  branch `scroll-alloc` of kryptic-sh/vt100-rust, pinned by `rev` in the root
+  `Cargo.toml`'s `[patch.crates-io]` and allowed in `deny.toml`, as crossterm
+  is): for every line scrolled into history, vt100 0.18.1's `Grid::scroll_up`
+  compared each cell against a blank one through an out-of-line `PartialEq`,
+  shrank the row (a reallocation) and allocated a full-width row to replace it.
+  The patch copies the used cells into the history row and clears them in place.
+  Found with a pprof (`setitimer`) profile, as `perf` is not installed: 92.5% of
+  bare vt100's time on `seq 1 2000000` was in `scroll_up`. Measured 2026-10-21
+  on the Arch laptop (i7-1355U, pinned to its performance cores), a pane
+  printing `seq 1 2000000` with a 120x40 client attached: the server's CPU went
+  from 3.29–3.33 s to 1.03–1.11 s, tmux 3.8's 0.61–0.68 s, with wall time 3.7 s
+  to 1.0–1.1 s, tmux's 1.0 s. vt100 alone at the default `history-limit` of
+  50000 went from 1.56 s to 0.41 s, with history identical by hash (a check
+  shown to catch three deliberately broken variants). Drop the patch once a
+  vt100 release has it; `cargo install tmxr` from crates.io builds without it.
+  What is left of the gap to tmux was not profiled. The chip is hybrid, and the
+  same emulator run took 1.5 times as long pinned to an efficiency core
+  (`taskset`), which the scheduler may pick for the server.
 - **No frame-rate cap**: the server renders after each pass of its loop, and a
   pass stops handling events after `DRAIN_BUDGET` so a flood still repaints.
   Each pane's output waits in a bounded queue (`output::QUEUE_LIMIT`) that
