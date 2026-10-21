@@ -76,11 +76,10 @@ table. What has been verified, and how:
   thread polls its socket every 50 ms, 20 wakeups a second for as long as the
   helper holds a copy. Fixed in hjkl (`cab0bebd`,
   `perf(hjkl-clipboard): sleep while holding a Wayland selection`; 20.2 to 0.2),
-  not released yet: bump tmxr's hjkl-clipboard once a release carries it. Its
-  X11 thread still polls (`recv_timeout` of 50 ms in `x11_thread.rs`, 20.2
-  wakeups a second on Xwayland): a fix is parked on hjkl's `clipboard-x11-idle`
-  branch, because one 8 MiB paste through Hyprland's XWayland bridge came out
-  truncated with it (hjkl's backlog, section 1.17).
+  and its X11 thread likewise (`7b35bca0`, 20.2 to 0.2 on Xwayland, with INCR
+  chunks 2 ms apart in `05a6d230`, as Hyprland 0.56's XWayland bridge loses
+  chunks sent back to back: hyprwm/Hyprland discussion 16612). Neither is
+  released yet: bump tmxr's hjkl-clipboard once a release carries them.
 - **CSIs the emulator makes beside vt100** (`modes::ModeSplitter`, from tmux's
   `input_csi_table`): SCP / RCP, REP (only right after a printed character, as
   tmux's), CBT and DECSCUSR (the shape and blinking tmxr keeps); HVP and HPA are
