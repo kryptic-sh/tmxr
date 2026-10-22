@@ -696,8 +696,10 @@ table. What has been verified, and how:
     a session's windows, the `target` and `window-target` types; `prompt_tab_*`
     in `corpus/keys.toml`), though which ten names a long menu keeps was matched
     by result (the last ten), not read from tmux's code; smaller flags:
-    `source-file -v`, several paths and globs (each load replaces the whole TOML
-    config, so several files have no clear meaning yet); `source-file` of a tmux
+    `source-file -v`; several paths and globs (each file could now be applied
+    over the last, `Server::overlay_config`; open: which then counts as the
+    config `prefix R` reloads and `#{config_files}` shows, and globs need a
+    matcher, a new dependency or one written for it); `source-file` of a tmux
     command file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `client-light-theme` /
     `-dark-theme`. Copy mode lacks `next-prompt` / `previous-prompt` (they need
@@ -752,9 +754,7 @@ table. What has been verified, and how:
   `set-option -s` (tmxr picks the table from the name), `clear-history -H` (tmxr
   keeps no hyperlinks), and `-Z` on `choose-buffer`, `choose-client`,
   `choose-tree`, `find-window` and `customize-mode` (tmux zooms the pane under
-  its pane modes; tmxr's pickers are full-screen overlays). Separately,
-  `source-file` replaces the config path and reloads everything, where tmux runs
-  the file's commands.
+  its pane modes; tmxr's pickers are full-screen overlays).
 - **What `list-keys` prints of a bind**: its commands re-parsed and its `{ … }`
   blocks in braces, as tmux's (`blocks_print_in_braces_as_tmux`; a
   `tmxr_command::Line` carries which words were blocks to `bind-key`). A bind
