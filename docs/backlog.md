@@ -675,12 +675,14 @@ table. What has been verified, and how:
     the terminal's own colour, the client terminal's, which the client asks with
     OSC 10 / 11 beside its DECRQM probe at attach (`ClientMsg::TerminalColours`;
     `colour_queries_get_the_client_terminals_colours`; in Alacritty 0.17 on
-    2026-10-22 a pane read back Alacritty's own colours; Alacritty answers OSC
-    10 and 11, in the query's terminator, but not OSC 12). Unlike tmux, the
-    client asks once, at its first attach, where tmux asks again on a theme
-    change (mode 2031, which Alacritty lacks), and the Windows client does not
-    ask; A program's OSC 4 palette entries (`tmxr_term::palette`) are drawn as
-    it set them and its queries for them answered
+    2026-10-22 a pane read back Alacritty's own colours, and Neovim (`-u NONE`)
+    in tmxr in an Alacritty with a light background set `background=light`,
+    where under tmxr 0.9.0 it guessed `dark`; Alacritty answers OSC 10 and 11,
+    in the query's terminator, but not OSC 12). Unlike tmux, the client asks
+    once, at its first attach, where tmux asks again on a theme change (mode
+    2031, which Alacritty lacks), and the Windows client does not ask; A
+    program's OSC 4 palette entries (`tmxr_term::palette`) are drawn as it set
+    them and its queries for them answered
     (`palette_entries_a_program_sets_are_answered`,
     `a_programs_palette_colour_is_drawn`), but a query for an entry not set gets
     no answer, where tmux asks the client's terminal and passes its answer on.
