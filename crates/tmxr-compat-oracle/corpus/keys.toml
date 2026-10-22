@@ -92,6 +92,29 @@ checks = [
 ]
 
 [[cases]]
+name = "previous_prompt_moves_to_the_shells_prompt_marks"
+program = 'for i in $(seq 1 20); do printf "\\033]133;A\\007p%s\\n\\033]133;C\\007o%s\\n" $i $i; done; exec sleep 1000'
+steps = [
+  { sleep = 0.5 },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X previous-prompt" },
+  { run = "send-keys -t o -X previous-prompt" },
+]
+checks = [{ format = "#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{copy_cursor_word}" }]
+
+[[cases]]
+name = "next_prompt_o_moves_to_the_output_marks"
+program = 'for i in $(seq 1 20); do printf "\\033]133;A\\007p%s\\n\\033]133;C\\007o%s\\n" $i $i; done; exec sleep 1000'
+steps = [
+  { sleep = 0.5 },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X next-prompt -o" },
+  { run = "send-keys -t o -X next-prompt -o" },
+]
+checks = [{ format = "#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{copy_cursor_word}" }]
+
+[[cases]]
 name = "copy_mode_s_shows_another_panes_screen"
 steps = [
   { run = "split-window -d -t o 'printf \"srcmarker\n\"; exec sleep 1000'" },

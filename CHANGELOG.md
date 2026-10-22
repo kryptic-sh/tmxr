@@ -37,6 +37,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Copy mode's `next-prompt` / `previous-prompt`**, as tmux's: with shell
+  integration (OSC 133), move to the start of the next or previous prompt, or
+  with `-o` of a command's output, throughout the history.
 - **`source-file` runs tmux command files**: a file not named `.toml` (a
   `.tmux.conf`) is read as tmux's: each line's commands, `{ … }` blocks over
   several lines, `\` line continuations, `NAME=VALUE`, `%hidden` and `%if` /

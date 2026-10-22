@@ -37,6 +37,15 @@ fn dimension(n: u16) -> NonZeroU16 {
 /// Side-channel state collected while parsing a pane's output.
 #[derive(Debug, Default)]
 pub struct Hooks {
+    /// Rows the main screen's history has lost off its top: with the
+    /// history's length and a screen row, a line's number for good, which
+    /// the shell's prompt marks are kept by.
+    dropped: usize,
+    /// Lines the shell marked as a prompt's start (OSC 133 A) and an
+    /// output's (C), by number, as tmux's `GRID_LINE_START_PROMPT` /
+    /// `_OUTPUT` line flags.
+    prompts: std::collections::BTreeSet<usize>,
+    outputs: std::collections::BTreeSet<usize>,
     title: Option<String>,
     bell: bool,
     /// OSC 52 payloads (`(selection, base64 data)`) waiting to be forwarded.
@@ -84,6 +93,12 @@ impl Hooks {
 impl vt100::Callbacks for Hooks {
     fn audible_bell(&mut self, _: &mut vt100::Screen) {
         self.bell = true;
+    }
+
+    fn on_scroll(&mut self, _: vt100::capture::RowContents<'_>, alternate_screen: bool) {
+        if !alternate_screen {
+            self.dropped += 1;
+        }
     }
 
     fn set_window_title(&mut self, _: &mut vt100::Screen, title: &[u8]) {
@@ -183,7 +198,20 @@ impl vt100::Callbacks for Hooks {
                 let (row, col) = screen.cursor_position();
                 self.input_mark = Some((screen.scrollback_len(), row, col));
             }
-            [b"133", b"A" | b"C" | b"D", ..] => self.input_mark = None,
+            [b"133", mark @ (b"A" | b"C" | b"D"), ..] => {
+                self.input_mark = None;
+                // The cursor's line starts a prompt (A) or an output (C).
+                if !screen.alternate_screen() && *mark != b"D" {
+                    let row = usize::from(screen.cursor_position().0);
+                    let line = self.dropped + screen.scrollback_len() + row;
+                    let marks = if *mark == b"A" {
+                        &mut self.prompts
+                    } else {
+                        &mut self.outputs
+                    };
+                    marks.insert(line);
+                }
+            }
             // A title holding `;` arrives split, which vt100 leaves alone:
             // all of it after the first `;` is the title, as xterm reads it.
             [b"0" | b"2", rest @ ..] if rest.len() > 1 => {
@@ -338,8 +366,33 @@ impl Emulator {
     /// Drop the history above the screen (tmux's `clear-history`), keeping
     /// the screen, cursor and modes.
     pub fn clear_history(&mut self) {
+        let lost = self.parser.screen().scrollback_len();
+        self.parser.callbacks_mut().dropped += lost;
         self.parser.screen_mut().clear_scrollback();
         self.count_history();
+    }
+
+    /// The lines of the history and screen, the oldest 0, that the shell
+    /// marked as starting a prompt (OSC 133 A), or with `output` an
+    /// output (C): what copy mode's `next-prompt` / `previous-prompt` move
+    /// between. Marks on lines the history has lost are dropped here.
+    pub fn prompt_lines(&mut self, output: bool) -> Vec<usize> {
+        let screen = self.parser.screen();
+        let lines = screen.scrollback_len() + usize::from(screen_size(screen).0);
+        let hooks = self.parser.callbacks_mut();
+        let dropped = hooks.dropped;
+        for marks in [&mut hooks.prompts, &mut hooks.outputs] {
+            *marks = marks.split_off(&dropped);
+        }
+        let marks = if output {
+            &hooks.outputs
+        } else {
+            &hooks.prompts
+        };
+        marks
+            .range(dropped..dropped + lines)
+            .map(|l| l - dropped)
+            .collect()
     }
 
     /// Reset the terminal as tmux's input_reset and screen_write_reset
@@ -831,6 +884,46 @@ fn hex(b: u8) -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Each line's text, the oldest of the history first.
+    fn lines(emu: &Emulator) -> Vec<String> {
+        let screen = emu.screen();
+        (0..screen.scrollback_len() + 3)
+            .map(|i| {
+                screen
+                    .line_cells(i)
+                    .unwrap()
+                    .iter()
+                    .map(vt100::Cell::contents)
+                    .collect()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn prompt_marks_follow_their_lines_as_the_history_drops_some() {
+        let mut emu = Emulator::new(3, 20, 5);
+        for i in 0..10 {
+            emu.process(format!("\x1b]133;A\x07p{i}\r\n\x1b]133;C\x07o{i}\r\n").as_bytes());
+        }
+        let text = lines(&emu);
+        for (output, first) in [(false, 'p'), (true, 'o')] {
+            let marked = emu.prompt_lines(output);
+            let expected: Vec<usize> = (0..text.len())
+                .filter(|&i| text[i].starts_with(first))
+                .collect();
+            assert_eq!(marked, expected, "{first}: {text:?}");
+        }
+        assert!(text.iter().any(|l| l == "p9"), "{text:?}");
+        // Clearing the history keeps the marks on the screen where they are.
+        emu.clear_history();
+        let text = lines(&emu);
+        let marked = emu.prompt_lines(false);
+        assert!(
+            marked.iter().all(|&i| text[i].starts_with('p')),
+            "{marked:?} {text:?}"
+        );
+    }
 
     #[test]
     fn origin_mode_is_kept_and_still_moves_the_cursor() {

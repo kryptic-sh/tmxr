@@ -700,14 +700,15 @@ table. What has been verified, and how:
     `-dark-theme` (tmux turns on mode 2031 and reads `CSI ? 997 ; 1 / 2 n`;
     Alacritty 0.17 answers DECRQM for 2031 with `0`, not known, and the
     `CSI ? 996 n` query with nothing, 2026-10-22, so a real check needs another
-    terminal, foot or kitty). Copy mode lacks `next-prompt` / `previous-prompt`
-    (they need a prompt mark on every history line, as tmux keeps per grid line;
-    `Emulator` keeps only the last OSC 133 input mark, and vt100's lines carry
-    no flags, so the marks would have to be counted alongside the history as it
-    scrolls). Word and line selection moving away and back to where
-    `select-word` / `select-line` left the cursor (by characters, words and
-    lines) is compared with tmux (`*_selection_back_*` in `corpus/keys.toml`);
-    other paths back were not.
+    terminal, foot or kitty). Copy mode's `next-prompt` / `previous-prompt`
+    (compared with tmux 3.6 in `corpus/keys.toml`) read OSC 133 marks the
+    emulator keeps by line number (`Emulator::prompt_lines`, rows lost off the
+    history counted by vt100's `on_scroll`); a mark stays on its number where a
+    scroll region or a line insert or delete moves lines within the screen,
+    where tmux's line flags move with the line (shells do neither). Word and
+    line selection moving away and back to where `select-word` / `select-line`
+    left the cursor (by characters, words and lines) is compared with tmux
+    (`*_selection_back_*` in `corpus/keys.toml`); other paths back were not.
 
 - **`server did not start` under a full `cargo test`** (Windows, three times on
   2026-10-20: `lock_hands_the_keys_to_the_lock_command`, then

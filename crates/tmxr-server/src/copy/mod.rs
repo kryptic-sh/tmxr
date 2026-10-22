@@ -39,6 +39,10 @@ pub struct CopyMode {
     /// (`copy-mode -s`): what `refresh-from-pane` reads again.
     pub source: Option<crate::model::PaneId>,
     pub lines: Vec<Line>,
+    /// Lines the shell marked as starting a prompt (OSC 133 A) and an
+    /// output (C), for `next-prompt` / `previous-prompt` (`-o`).
+    pub prompts: Vec<usize>,
+    pub outputs: Vec<usize>,
     /// First line shown.
     pub top: usize,
     /// Cursor (line, column).
@@ -159,6 +163,8 @@ impl CopyMode {
             cy: top + usize::from(crow),
             cx: usize::from(ccol),
             lines,
+            prompts: Vec::new(),
+            outputs: Vec::new(),
             anchor: None,
             sel_end: None,
             kind: SelKind::Char,
@@ -414,6 +420,25 @@ impl CopyMode {
                 .rposition(|c| !c.symbol.trim().is_empty())
                 .map_or(0, |i| i + 1)
         })
+    }
+
+    /// To the start of the next (or previous) line the shell marked as a
+    /// prompt's, or with `output` an output's, as tmux's
+    /// window_copy_cursor_prompt: in history it comes to the top of the
+    /// view; on the screen the view shows the screen.
+    fn jump_to_prompt(&mut self, down: bool, output: bool) {
+        let marks = if output { &self.outputs } else { &self.prompts };
+        let found = if down {
+            marks.iter().find(|&&l| l > self.cy)
+        } else {
+            marks.iter().rev().find(|&&l| l < self.cy)
+        };
+        let Some(&line) = found else {
+            return;
+        };
+        let history = self.lines.len().saturating_sub(usize::from(self.rows));
+        (self.cy, self.cx) = (line, 0);
+        self.top = if line > history { history } else { line };
     }
 
     fn scroll_to_cursor(&mut self) {
@@ -677,6 +702,9 @@ impl CopyMode {
             "previous-space" => self.prev_word(true),
             "next-word-end" => self.word_end(false),
             "next-space-end" => self.word_end(true),
+            "next-prompt" | "previous-prompt" => {
+                self.jump_to_prompt(name == "next-prompt", arg == Some("-o"));
+            }
             "history-top" => (self.cy, self.cx) = (0, 0),
             "history-bottom" => self.cy = last,
             "top-line" => self.cy = self.top,
