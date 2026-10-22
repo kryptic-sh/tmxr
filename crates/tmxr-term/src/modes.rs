@@ -57,6 +57,13 @@ pub enum Piece {
     TabSet,
     /// TBC: the tab stop at the cursor (0) or every one (3) cleared.
     TabClear(u32),
+    /// `OSC 10`, `11` or `12` `; ?`: the program asks for the default
+    /// foreground, background or cursor colour; `bel` if the query ended in
+    /// a BEL (an answer ends as it did).
+    ColourQuery {
+        which: u8,
+        bel: bool,
+    },
 }
 
 /// Splits the split modes out of DEC private mode sets and resets
@@ -86,6 +93,8 @@ enum Scan {
     TabSet,
     /// The two bytes that start a string.
     String,
+    /// A colour query `len` bytes long.
+    ColourQuery { len: usize, which: u8, bel: bool },
     /// A CSI `len` bytes long: its private marker (`<` to `?`), its
     /// parameters, its intermediate bytes, and its final byte.
     Csi {
@@ -97,6 +106,36 @@ enum Scan {
     },
 }
 
+/// After `ESC ]`: an OSC asking for a colour (`10;?`, `11;?` or `12;?`, then
+/// a BEL or `ESC \`), the start of one cut off, or `None` for any other.
+fn scan_colour_query(rest: &[u8]) -> Option<Scan> {
+    for (which, ask) in [(10, b"10;?"), (11, b"11;?"), (12, b"12;?")] {
+        let k = rest.len().min(ask.len());
+        if rest[..k] != ask[..k] {
+            continue;
+        }
+        if k < ask.len() {
+            return Some(Scan::Incomplete);
+        }
+        let len = 2 + ask.len();
+        return match &rest[ask.len()..] {
+            [] | [0x1b] => Some(Scan::Incomplete),
+            [0x07, ..] => Some(Scan::ColourQuery {
+                len: len + 1,
+                which,
+                bel: true,
+            }),
+            [0x1b, b'\\', ..] => Some(Scan::ColourQuery {
+                len: len + 2,
+                which,
+                bel: false,
+            }),
+            _ => None,
+        };
+    }
+    None
+}
+
 /// What `bytes`, starting at an ESC, holds.
 fn scan(bytes: &[u8]) -> Scan {
     match bytes {
@@ -104,8 +143,9 @@ fn scan(bytes: &[u8]) -> Scan {
         [_, b'c', ..] => Scan::Reset,
         [_, b'H', ..] => Scan::TabSet,
         [_, b'[', ..] => scan_csi(bytes),
+        [_, b']', rest @ ..] => scan_colour_query(rest).unwrap_or(Scan::String),
         // A string's body follows, and ends at a BEL or an `ESC \`.
-        [_, b']' | b'P' | b'_' | b'^' | b'X', ..] => Scan::String,
+        [_, b'P' | b'_' | b'^' | b'X', ..] => Scan::String,
         // An escape: intermediates, then its final byte.
         _ => {
             for (i, &b) in bytes.iter().enumerate().skip(1) {
@@ -277,6 +317,10 @@ impl ModeSplitter {
                     self.in_string = true;
                     2
                 }
+                Scan::ColourQuery { len, which, bel } => {
+                    pieces.push(Piece::ColourQuery { which, bel });
+                    len
+                }
                 Scan::Csi {
                     len,
                     marker,
@@ -397,10 +441,44 @@ mod tests {
                 | Piece::DeleteLines(_)
                 | Piece::Tab
                 | Piece::TabSet
-                | Piece::TabClear(_) => None,
+                | Piece::TabClear(_)
+                | Piece::ColourQuery { .. } => None,
             })
             .flatten()
             .collect()
+    }
+
+    #[test]
+    fn colour_queries_split_out_with_their_ending() {
+        let mut f = ModeSplitter::default();
+        assert_eq!(
+            f.split(b"a\x1b]11;?\x07b\x1b]10;?\x1b\\"),
+            vec![
+                Piece::Text(b"a".to_vec()),
+                Piece::ColourQuery {
+                    which: 11,
+                    bel: true
+                },
+                Piece::Text(b"b".to_vec()),
+                Piece::ColourQuery {
+                    which: 10,
+                    bel: false
+                },
+            ]
+        );
+        // Cut off, it waits for its end.
+        assert_eq!(f.split(b"\x1b]1"), vec![]);
+        assert_eq!(f.split(b"2;?\x1b"), vec![]);
+        assert_eq!(
+            f.split(b"\\"),
+            vec![Piece::ColourQuery {
+                which: 12,
+                bel: false
+            }]
+        );
+        // Other OSCs, a colour set among them, stay as they are.
+        let other = b"\x1b]11;#000000\x07\x1b]10;?x\x07\x1b]0;t\x07";
+        assert_eq!(text(f.split(other)), other);
     }
 
     #[test]

@@ -316,6 +316,10 @@ pub struct Emulator {
     /// to the alternate screen, as tmux's `saved_cx` / `saved_cy`: kept
     /// after the switch back, and not set by 47 or 1047.
     alternate_saved: Option<(u16, u16)>,
+    /// The colours the program asked for (`OSC 10` / `11` / `12` `; ?`),
+    /// in order, each with whether it ended in a BEL, for the server to
+    /// answer: the answers depend on options and clients.
+    colour_queries: Vec<(u8, bool)>,
     /// The scroll region's top and bottom rows, `None` for the whole
     /// screen. tmux keeps one for the terminal; vt100 keeps one per screen,
     /// so it is written into vt100's again after each switch.
@@ -351,6 +355,7 @@ impl Emulator {
             alt_allowed: true,
             origin_mode: false,
             alternate_saved: None,
+            colour_queries: Vec::new(),
             region: None,
             tabs: default_tabs(cols),
             mouse_utf8: false,
@@ -531,6 +536,7 @@ impl Emulator {
                 }
                 Piece::TabClear(3) => self.tabs.fill(false),
                 Piece::TabClear(_) => {}
+                Piece::ColourQuery { which, bel } => self.colour_queries.push((which, bel)),
             }
         }
     }
@@ -804,6 +810,12 @@ impl Emulator {
     pub fn insert_and_wrap(&self) -> (bool, bool) {
         let hooks = self.parser.callbacks();
         (hooks.insert_mode, !hooks.no_wrap)
+    }
+
+    /// The colour queries since the last call (`which` of 10, 11 or 12, and
+    /// whether each ended in a BEL), in order.
+    pub fn take_colour_queries(&mut self) -> Vec<(u8, bool)> {
+        std::mem::take(&mut self.colour_queries)
     }
 
     /// Where the cursor was (row, column) when the program last switched to

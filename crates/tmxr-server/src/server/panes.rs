@@ -542,6 +542,44 @@ impl Server {
         self.panes.values().filter_map(|p| p.dead_line_at).min()
     }
 
+    /// The answers to pane `pid`'s colour queries, as tmux's input_osc_10,
+    /// `_11` and `_12`: the foreground and background its `window-style` (or
+    /// `window-active-style`) gives, and its cursor's colour (the program's,
+    /// else `cursor-colour`), each as `rgb:rrrr/gggg/bbbb` ended as its
+    /// query was. A colour that is the terminal's own gets no answer.
+    fn colour_answers(&self, pid: PaneId, queries: &[(u8, bool)]) -> Vec<u8> {
+        let mut out = Vec::new();
+        if queries.is_empty() {
+            return out;
+        }
+        let rgb = |c: tmxr_command::format::Colour| match c {
+            tmxr_command::format::Colour::Default => None,
+            tmxr_command::format::Colour::Indexed(n) => Some(tmxr_command::colour::indexed(n)),
+            tmxr_command::format::Colour::Rgb(r, g, b) => Some(u32::from_be_bytes([0, r, g, b])),
+        };
+        let colours = crate::render::pane_default_colours(self, pid);
+        for &(which, bel) in queries {
+            let colour = match which {
+                10 => colours.fg.and_then(rgb),
+                11 => colours.bg.and_then(rgb),
+                _ => self
+                    .panes
+                    .get(&pid)
+                    .and_then(|p| p.emu.cursor_colour())
+                    .or_else(|| tmxr_command::colour::rgb(&self.pane_options(pid).cursor_colour)),
+            };
+            if let Some(c) = colour {
+                let [_, r, g, b] = c.to_be_bytes();
+                let end = if bel { "\x07" } else { "\x1b\\" };
+                out.extend(
+                    format!("\x1b]{which};rgb:{r:02x}{r:02x}/{g:02x}{g:02x}/{b:02x}{b:02x}{end}")
+                        .into_bytes(),
+                );
+            }
+        }
+        out
+    }
+
     pub(super) fn pty_event(&mut self, pid: PaneId, ev: PtyEvent) {
         match ev {
             PtyEvent::Output(bytes) => {
@@ -565,6 +603,7 @@ impl Server {
                 let alternate = p.emu.screen().alternate_screen();
                 let title = p.emu.title().map(str::to_owned);
                 let replies = p.emu.process(&bytes);
+                let queries = p.emu.take_colour_queries();
                 // Output copy mode does not show, as tmux's
                 // PANE_UNSEENCHANGES.
                 if let Some(cm) = p.copy.as_mut() {
@@ -587,9 +626,13 @@ impl Server {
                     self.refit_scrollbar(pid);
                 }
                 self.copy_line_output(pid);
+                let answers = self.colour_answers(pid, &queries);
                 let Some(p) = self.panes.get_mut(&pid) else {
                     return;
                 };
+                if !answers.is_empty() {
+                    let _ = p.pty.write(&answers);
+                }
                 if let Some(pipe) = &p.pipe {
                     pipe.send(&bytes);
                 }

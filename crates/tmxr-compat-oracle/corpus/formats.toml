@@ -968,6 +968,27 @@ checks = [
 ]
 
 [[cases]]
+name = "colour_queries_are_answered_from_the_window_style"
+# What a program reads back for OSC 10, 11 and 12 queries, ended as each
+# query was; none for a colour that is the terminal's own (the oracle's
+# terminal tells tmux none).
+unix_only = true
+steps = [
+  { run = "set -g window-style 'fg=#102030,bg=colour100'" },
+  { run = "set -g cursor-colour red" },
+  { run = "new-window -d -t o:1 'stty raw -echo; printf \"\\033]11;?\\007\\033]10;?\\033\\\\\\\\\\033]12;?\\007\"; exec cat -v'" },
+  { run = "new-window -d -t o:2 'stty raw -echo; printf \"\\033]12;#abcdef\\007\\033]12;?\\033\\\\\\\\\"; exec cat -v'" },
+  { run = "set -u -g window-style" },
+  { run = "new-window -d -t o:3 'stty raw -echo; printf \"\\033]11;?\\007x\"; exec cat -v'" },
+  { sleep = 0.8 },
+]
+checks = [
+  { command = "capture-pane -p -t o:1", expect = "^[]11;rgb:8787/8787/0000^G^[]10;rgb:1010/2020/3030^[\\^[]12;rgb:8080/0000/0000^G" },
+  { command = "capture-pane -p -t o:2", expect = "^[]12;rgb:abab/cdcd/efef^[\\" },
+  { command = "capture-pane -p -t o:3", expect = "x" },
+]
+
+[[cases]]
 name = "cursor_colour_falls_back_to_the_option"
 unix_only = true
 steps = [

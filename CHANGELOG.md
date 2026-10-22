@@ -38,6 +38,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Colour queries are answered**: a program asking for the default foreground,
+  background or cursor colour (`OSC 10`, `11`, `12` with `?`, as editors do to
+  pick a light or dark theme) gets the colour `window-style` /
+  `window-active-style` or the cursor's colour gives, as tmux answers, ended as
+  its query was.
 - **A program's cursor colour reaches the terminal**: the cursor colour the
   active pane's program sets with OSC 12 (read as tmux reads X11 colour
   specifications, and reset by OSC 112) is given to the client's terminal, as

@@ -21,7 +21,7 @@ const NAMES: [&str; 8] = [
 
 /// What colour `n` of the 256 is in RGB: tmux's table, which is xterm's
 /// 16 colours, cube and grey ramp.
-fn indexed(n: u8) -> u32 {
+pub fn indexed(n: u8) -> u32 {
     match n {
         0..=15 => BASIC[usize::from(n)],
         16..=231 => {
