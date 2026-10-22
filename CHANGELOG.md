@@ -37,6 +37,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **X11's colour names**, as tmux's: `#{c:orchid}`, and styles such as
+  `fg=NavyBlue` or `bg=grey50`, take the 578 names tmux 3.6 knows, ignoring
+  case. Styles also take `grey` / `gray` with a percentage, which only `c:` took
+  before.
 - **The `w:` format modifier**, as tmux's: the width the expanded text takes on
   screen (`#{w:#{pane_title}}`), where `n:` gives its length in bytes. Styles
   take no width, `##` counts as one `#`, and a wide character as two.

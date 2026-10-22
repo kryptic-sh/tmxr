@@ -46,8 +46,8 @@ fn strip_prefix_ignore_case<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
 /// The RGB value of the colour `s` names, as tmux's colour_fromstring then
 /// colour_force_rgb: `#rrggbb`, `colourN` / `colorN`, the eight names (or
 /// `0` to `7`) and their `bright` forms (or `90` to `97`), and `greyN` /
-/// `grayN` from 0 to 100. `default`, `terminal` and anything else give
-/// none; so do X11's colour names, which tmux takes and tmxr does not.
+/// `grayN` from 0 to 100, and X11's colour names ([`named`]). `default`,
+/// `terminal` and anything else give none.
 pub fn rgb(s: &str) -> Option<u32> {
     if let Some(hex) = s.strip_prefix('#') {
         return (hex.len() == 6 && hex.bytes().all(|b| b.is_ascii_hexdigit()))
@@ -69,15 +69,29 @@ pub fn rgb(s: &str) -> Option<u32> {
             return Some(indexed(8 + i));
         }
     }
-    let grey =
-        strip_prefix_ignore_case(s, "grey").or_else(|| strip_prefix_ignore_case(s, "gray"))?;
-    if grey.is_empty() {
-        return Some(0xbebebe);
+    named(s)
+}
+
+/// The RGB value of a colour name, as tmux's colour_byname: `grey` / `gray`
+/// alone or with a percentage from 0 to 100 (`grey50`), else one of X11's
+/// names (`orchid`, `NavyBlue`), either ignoring case. A name starting with
+/// grey or gray is only ever read as one of those, as in tmux.
+pub fn named(s: &str) -> Option<u32> {
+    if let Some(grey) =
+        strip_prefix_ignore_case(s, "grey").or_else(|| strip_prefix_ignore_case(s, "gray"))
+    {
+        if grey.is_empty() {
+            return Some(0xbebebe);
+        }
+        let percent = grey.parse::<u8>().ok().filter(|p| *p <= 100)?;
+        // tmux's round(2.55 * c), in the same double precision.
+        let v = (2.55 * f64::from(percent)).round() as u32;
+        return Some(v << 16 | v << 8 | v);
     }
-    let percent = grey.parse::<u8>().ok().filter(|p| *p <= 100)?;
-    // tmux's round(2.55 * c), in the same double precision.
-    let v = (2.55 * f64::from(percent)).round() as u32;
-    Some(v << 16 | v << 8 | v)
+    crate::x11_colours::X11_COLOURS
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case(s))
+        .map(|&(_, v)| v)
 }
 
 #[cfg(test)]
@@ -96,6 +110,12 @@ mod tests {
         assert_eq!(rgb("colour232"), Some(0x080808));
         assert_eq!(rgb("COLOR255"), Some(0xeeeeee));
         assert_eq!(rgb("colour256"), None);
+        // X11's names, as tmux 3.6's colour_byname, ignoring case.
+        assert_eq!(rgb("orchid"), Some(0xda70d6));
+        assert_eq!(rgb("NAVYBLUE"), Some(0x000080));
+        assert_eq!(rgb("navy blue"), Some(0x000080), "tmux's table has both");
+        assert_eq!(rgb("not a colour"), None);
+        assert_eq!(rgb("greyish"), None, "a grey name is only a grey");
         assert_eq!(rgb("red"), Some(0x800000));
         assert_eq!(rgb("1"), Some(0x800000));
         assert_eq!(rgb("BrightRed"), Some(0xff0000));

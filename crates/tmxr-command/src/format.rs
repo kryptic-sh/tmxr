@@ -1406,7 +1406,8 @@ impl Style {
 }
 
 /// Parse a tmux colour: `default`, `#rrggbb`, `colourN` / `colorN`, a basic
-/// name (`red`) or a bright one (`brightred`).
+/// name (`red`) or a bright one (`brightred`), or another name tmux knows
+/// (`grey50`, `orchid`: [`crate::colour::named`]).
 pub fn parse_colour(s: &str) -> Option<Colour> {
     const NAMES: [&str; 8] = [
         "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white",
@@ -1436,7 +1437,7 @@ pub fn parse_colour(s: &str) -> Option<Colour> {
     {
         return Some(Colour::Indexed(i as u8 + 8));
     }
-    None
+    crate::colour::named(s).map(|v| Colour::Rgb((v >> 16) as u8, (v >> 8) as u8, v as u8))
 }
 
 /// A piece of expanded text as tmux's `format_draw` reads it.
@@ -1600,6 +1601,15 @@ mod tests {
             strftime("%z", &local(2024, 3, 1, 1, 0, 5, 60, 1_709_251_200)),
             "+0100"
         );
+    }
+
+    #[test]
+    fn styles_take_the_colour_names_tmux_knows() {
+        assert_eq!(parse_colour("orchid"), Some(Colour::Rgb(0xda, 0x70, 0xd6)));
+        // round(2.55 * 50) is 127 in double precision, as tmux computes it.
+        assert_eq!(parse_colour("grey50"), Some(Colour::Rgb(0x7f, 0x7f, 0x7f)));
+        assert_eq!(parse_colour("red"), Some(Colour::Indexed(1)));
+        assert_eq!(parse_colour("nonsense"), None);
     }
 
     #[test]

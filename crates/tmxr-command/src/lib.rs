@@ -21,6 +21,7 @@ pub mod localtime;
 pub mod table;
 pub mod template;
 pub mod tokenize;
+mod x11_colours;
 
 pub use args::Args;
 pub use bind_key::{BindKey, MouseAction, MouseKey, MouseLocation};
