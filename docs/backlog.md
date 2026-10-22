@@ -495,8 +495,12 @@ table. What has been verified, and how:
   within 5 s under a flood. Frame rate itself is not capped or measured;
   considered and not done (2026-10-14): tmux has no cap either (it redraws once
   per pass of its event loop, as tmxr does), and nothing has shown a need. A cap
-  is worth adding only with a measurement showing frames wasted, for example the
-  bytes sent to a client under a flood against what it can show.
+  is worth adding only with a measurement showing frames wasted. Measured
+  2026-10-22 on the Arch laptop: a 120x40 client in a pty, its pane printing
+  `seq 1 2000000` (its end signalled by `wait-for`), was sent 20160 to 132753
+  bytes by tmxr (release build, three runs) and 1961163 to 1997129 by tmux 3.8,
+  in 0.63–0.73 s against tmux's 0.67–0.85 s: tmxr already sends a fraction of
+  what tmux does under a flood, so a cap would save nothing measurable there.
 - **Resurrect**: a pane's title is saved and restored, but a restored program
   that titles itself wins, and on Windows ConPTY reports cmd's own title as it
   starts, so there a saved title barely shows. Arguments are restored only for
