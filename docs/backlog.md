@@ -683,11 +683,15 @@ table. What has been verified, and how:
     it set them and its queries for them answered
     (`palette_entries_a_program_sets_are_answered`,
     `a_programs_palette_colour_is_drawn`), but a query for an entry not set gets
-    no answer, where tmux asks the client's terminal and passes its answer on;
-    an empty OSC 104 leaves the OSC 10 / 11 colours, as tmux 3.6 shows it (its
-    colour_palette_clear resets them, but nothing marks the pane's style
-    changed, so they stay until something else does). A program's OSC 10 / 11
-    colours are its pane's, as tmux's palette `fg` / `bg`, with tmux's
+    no answer, where tmux asks the client's terminal and passes its answer on.
+    tmux's `pane-colours` (a default palette under the program's) is missing:
+    adding it needs `tmxr_config::Array` read by index, a config-file form for a
+    sparse array, `with_palette` falling back to it, and the emulator told it,
+    as it answers OSC 4 queries itself (considered 2026-10-22, not started:
+    little used); an empty OSC 104 leaves the OSC 10 / 11 colours, as tmux 3.6
+    shows it (its colour_palette_clear resets them, but nothing marks the pane's
+    style changed, so they stay until something else does). A program's OSC 10 /
+    11 colours are its pane's, as tmux's palette `fg` / `bg`, with tmux's
     precedence: in the active pane over `window-style` and under
     `window-active-style`, in another under `window-style`
     (`a_programs_default_colours_are_the_panes`); `cursor_shape` and
