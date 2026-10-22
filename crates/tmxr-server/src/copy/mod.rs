@@ -13,7 +13,9 @@ mod words;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 pub use commands::{command, enter, enter_from, refuses_args};
-pub use model::{Cell, Line, cell_style, colour, snapshot, snapshot_lines, snapshot_normal_rows};
+pub use model::{
+    Cell, Line, cell_style, colour, link_of, snapshot, snapshot_lines, snapshot_normal_rows,
+};
 pub use search::Search;
 pub use words::word_at;
 
@@ -403,6 +405,12 @@ impl CopyMode {
     pub fn cursor_word(&self) -> String {
         let line = self.lines.get(self.cy).map(Line::chars).unwrap_or_default();
         word_at(&line, self.cx, &self.word_separators)
+    }
+
+    /// The OSC 8 link of the cell shown at `col`, `row` rows down the view,
+    /// as the pane's `Screen::hyperlink` numbers it.
+    pub fn view_link(&self, row: usize, col: usize) -> Option<std::num::NonZeroU16> {
+        link_of(&self.lines.get(self.top + row)?.cell(col)?.style)
     }
 
     /// The text of the line shown `row` rows down the view.

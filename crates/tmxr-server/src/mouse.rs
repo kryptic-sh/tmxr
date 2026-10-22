@@ -261,7 +261,15 @@ fn dispatch(srv: &mut Server, id: ClientId, action: MouseAction, target: MouseTa
         mouse: Some(target),
         ..Ctx::default()
     };
-    match srv.keys.get(table, &key.into()).cloned() {
+    // Not bound in copy mode's table, the root table's bind runs, as tmux's
+    // server_client_key_callback tries the root table after a mode's.
+    let key = key.into();
+    let bind = srv
+        .keys
+        .get(table, &key)
+        .or_else(|| srv.keys.get("root", &key).filter(|_| table != "root"))
+        .cloned();
+    match bind {
         Some(b) => srv.run_bind_ctx(id, &ctx, &b.cmd),
         None if on_pane && !in_copy && !srv.client_read_only(id) => {
             let _ = forward(srv, &ctx);

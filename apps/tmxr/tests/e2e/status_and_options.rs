@@ -1590,6 +1590,43 @@ fn a_programs_hyperlink_reaches_the_client() {
     });
 }
 
+/// Copy mode shows a link scrolled into the history with its link, and
+/// `#{mouse_hyperlink}` reads it there, as tmux's.
+#[cfg(unix)]
+#[test]
+fn copy_mode_keeps_a_lines_hyperlink() {
+    let t = Tmxr::new("copylink");
+    t.run(&[
+        "new-session",
+        "-d",
+        "-s",
+        "cl",
+        r"printf '\033]8;;https://example.com/old\033\\oldlink\033]8;;\033\\\n'; seq 1 60; exec sleep 100",
+    ]);
+    let s = t.attach(&["attach", "-t", "cl"]);
+    s.wait_for("the output", |text| text.contains("60"));
+    let before = s.raw_text().len();
+    t.run(&["copy-mode", "-t", "cl"]);
+    t.run(&["send-keys", "-t", "cl", "-X", "history-top"]);
+    // Its first cell under the copy cursor, so the link starts ahead of a
+    // change of style.
+    s.wait_for("the link in copy mode", |text| {
+        text.starts_with("oldlink")
+            && s.raw_text()[before..].contains("\x1b]8;;https://example.com/old\x1b\\")
+    });
+    t.run(&["set-option", "-g", "mouse", "on"]);
+    t.run(&[
+        "bind-key",
+        "-n",
+        "MouseDown3Pane",
+        "set-option -gF @link '[#{mouse_hyperlink}]'",
+    ]);
+    s.click(2, 2, 0);
+    t.wait_run(&["show-options", "-gv", "@link"], "the link clicked", |o| {
+        o.trim() == "[https://example.com/old]"
+    });
+}
+
 /// The client's cursor takes the active pane's shape (`cursor-style`, or a
 /// program's DECSCUSR) and colour (a program's OSC 12), as tmux's.
 #[test]

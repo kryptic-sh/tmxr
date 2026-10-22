@@ -178,6 +178,30 @@ fn lines_from<'s>(
         .collect()
 }
 
+/// `style` carrying the cell's OSC 8 link, as vt100 numbers it, in its
+/// `underline_color`, which nothing else in a snapshot sets (vt100 keeps no
+/// underline colour): so a cell stays as small. [`link_of`] reads it back,
+/// and a style drawn from a snapshot must drop it first.
+fn with_link(style: Style, link: Option<std::num::NonZeroU16>) -> Style {
+    let Some(link) = link else {
+        return style;
+    };
+    let [hi, lo] = link.get().to_be_bytes();
+    Style {
+        underline_color: Some(Color::Rgb(0, hi, lo)),
+        ..style
+    }
+}
+
+/// The OSC 8 link a snapshot cell's style carries (see [`with_link`]), for
+/// the pane's `Screen::hyperlink`.
+pub fn link_of(style: &Style) -> Option<std::num::NonZeroU16> {
+    match style.underline_color {
+        Some(Color::Rgb(0, hi, lo)) => std::num::NonZeroU16::new(u16::from_be_bytes([hi, lo])),
+        _ => None,
+    }
+}
+
 /// A copy of one row of vt100 cells, `width` wide.
 fn line_of(cells: &[vt100::Cell], width: usize, wrapped: bool) -> Line {
     let written = |cell: &vt100::Cell| {
@@ -212,7 +236,7 @@ fn cell_of(cell: Option<&vt100::Cell>) -> Cell {
             } else {
                 Cow::Borrowed(" ")
             },
-            style: cell_style(cell),
+            style: with_link(cell_style(cell), cell.hyperlink_id()),
         },
         None => Cell {
             symbol: Cow::Borrowed(" "),
@@ -224,6 +248,25 @@ fn cell_of(cell: Option<&vt100::Cell>) -> Cell {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A snapshot keeps each cell's link in its style, and a cell stays as
+    /// small as one without.
+    #[test]
+    fn a_snapshot_keeps_a_cells_link() {
+        let mut parser = vt100::Parser::new(2.try_into().unwrap(), 10.try_into().unwrap(), 0);
+        parser.process(b"a\x1b]8;;u\x07b\x1b]8;;\x07c");
+        let line = &snapshot(parser.screen())[0];
+        let links: Vec<_> = (0..3)
+            .map(|x| line.cell(x).and_then(|c| link_of(&c.style)))
+            .collect();
+        let id = parser
+            .screen()
+            .cell(0, 1)
+            .and_then(vt100::Cell::hyperlink_id);
+        assert!(id.is_some());
+        assert_eq!(links, [None, id, None]);
+        assert_eq!(std::mem::size_of::<Cell>(), 40);
+    }
 
     /// A ranged capture is the same slice of the full one, wherever the
     /// range falls: in history, across its end, on the screen, or past it.

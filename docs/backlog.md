@@ -437,11 +437,13 @@ table. What has been verified, and how:
   (`a_programs_hyperlink_reaches_the_client`). The owner chose this over an
   overdraw pass or tmxr's own diff; underline colours, if they ever come, need
   another carrier. Still unlike tmux: links go to every client, where tmux sends
-  them only to terminals whose `terminal-features` have `hyperlinks`; copy mode
-  shows none and `#{mouse_hyperlink}` is empty in it (its snapshot keeps no
-  links); a client's and a pane's link tables only grow (`u16` of them in a
-  pane, then text is unlinked). Seen drawing cleanly in Alacritty 0.17
-  (2026-10-22, nested Hyprland); clicking a link there was not tried.
+  them only to terminals whose `terminal-features` have `hyperlinks`. Copy
+  mode's snapshot keeps a cell's link the same way, in its style's
+  `underline_color` (`copy::link_of`, a cell stays 40 bytes), resolved through
+  the pane's vt100 table when drawn (`copy_mode_keeps_a_lines_hyperlink`). A
+  client's and a pane's link tables only grow (`u16` of them in a pane, then
+  text is unlinked). Seen drawing cleanly in Alacritty 0.17 (2026-10-22, nested
+  Hyprland); clicking a link there was not tried.
 - **vt100 is patched** until a release carries the fixes (doy/vt100-rust#47,
   #48, #49, #50, #51 and #52, from branches `scroll-alloc`, `visible-row`,
   `trim-on-scroll`, `line-cells`, `hyperlinks` and `saved-screen` of

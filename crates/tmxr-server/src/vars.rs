@@ -300,20 +300,18 @@ pub fn mouse_var(srv: &Server, mouse: &crate::mouse::MouseTarget, name: &str) ->
             crate::copy::word_at(&line(), usize::from(x), separators)
         }
         "mouse_line" => String::from_iter(line()).trim_end().to_owned(),
-        // The link under the mouse, as tmux's; none in copy mode, whose
-        // copy of the pane keeps no links.
-        "mouse_hyperlink" => match &p.copy {
-            Some(_) => String::new(),
-            None => {
-                let screen = p.emu.screen();
-                screen
-                    .cell(y, x)
-                    .and_then(vt100::Cell::hyperlink_id)
-                    .and_then(|id| screen.hyperlink(id))
-                    .map(|h| h.uri.clone())
-                    .unwrap_or_default()
+        // The link under the mouse, as tmux's (in copy mode, as the view
+        // shows it).
+        "mouse_hyperlink" => {
+            let screen = p.emu.screen();
+            match &p.copy {
+                Some(cm) => cm.view_link(usize::from(y), usize::from(x)),
+                None => screen.cell(y, x).and_then(vt100::Cell::hyperlink_id),
             }
-        },
+            .and_then(|id| screen.hyperlink(id))
+            .map(|h| h.uri.clone())
+            .unwrap_or_default()
+        }
         _ => return None,
     })
 }

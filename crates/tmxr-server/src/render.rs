@@ -722,8 +722,15 @@ fn draw_pane(
             for col in 0..w {
                 let x = usize::from(col);
                 let cell = line.and_then(|l| l.cell(x));
-                let mut style =
-                    with_default_colours(cell.map(|c| c.style).unwrap_or_default(), base);
+                let link = cell.and_then(|c| crate::copy::link_of(&c.style));
+                let mut style = with_default_colours(
+                    cell.map(|c| Style {
+                        underline_color: None,
+                        ..c.style
+                    })
+                    .unwrap_or_default(),
+                    base,
+                );
                 if let Some((start, _)) = matches.iter().find(|(s, e)| (*s..*e).contains(&x)) {
                     let current = y == cm.cy && *start == cm.cx;
                     style = style.patch(if current { copy.current } else { copy.matched });
@@ -737,6 +744,10 @@ fn draw_pane(
                 let sym = cell.map_or(" ", |c| if c.symbol.is_empty() { " " } else { &c.symbol });
                 if let Some(out) = buf.cell_mut((r.x + col, r.y + row)) {
                     out.set_symbol(sym).set_style(style);
+                    let screen = pane.emu.screen();
+                    if let Some(link) = link.and_then(|id| screen.hyperlink(id)) {
+                        out.underline_color = links.borrow_mut().carrier(link);
+                    }
                 }
             }
         }

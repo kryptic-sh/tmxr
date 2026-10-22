@@ -52,8 +52,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Hyperlinks (OSC 8)**: a link a program prints (`ls --hyperlink`, a
   compiler's diagnostics) reaches the terminal through tmxr, as through tmux,
   and `#{mouse_hyperlink}` gives the one under the mouse, so the pane menu's
-  "Type" / "Copy" link items show. The `vt100` tmxr builds against keeps them
-  (doy/vt100-rust#51).
+  "Type" / "Copy" link items show; copy mode keeps them too. The `vt100` tmxr
+  builds against keeps them (doy/vt100-rust#51).
 - **Copy mode's `next-prompt` / `previous-prompt`**, as tmux's: with shell
   integration (OSC 133), move to the start of the next or previous prompt, or
   with `-o` of a command's output, throughout the history.
@@ -617,6 +617,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Mouse binds of the root table run in copy mode** when copy mode's table has
+  none, as tmux's do: the right-click menu (with its "Go To Top" and "Go To
+  Bottom" items) and anything else bound only there did nothing in copy mode.
 - **A tapped or quick right click keeps the pane menu open**, as tmux's: its
   release, read with the press, closed the menu the press had just opened, so a
   touchpad tap showed no menu. Input the terminal sends together is now taken
