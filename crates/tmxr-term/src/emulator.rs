@@ -67,6 +67,12 @@ pub struct Hooks {
     insert_mode: bool,
     /// The cursor blinks: an odd DECSCUSR, or `CSI ? 12 h`.
     cursor_blinking: bool,
+    /// The cursor made very visible, as tmux's `MODE_CURSOR_VERY_VISIBLE`
+    /// (`CSI 34 l`; `CSI 34 h` ends it).
+    cursor_very_visible: bool,
+    /// The cursor's colour as RGB (OSC 12; OSC 112 resets it), which a
+    /// full reset keeps, as tmux's.
+    cursor_colour: Option<u32>,
     /// Autowrap turned off (`CSI ? 7 l`, DECAWM), which vt100 does not
     /// keep (it always wraps).
     no_wrap: bool,
@@ -134,9 +140,15 @@ impl vt100::Callbacks for Hooks {
                     }
                 }
             }
-            // Insert mode, as tmux keeps it.
-            (None, 'h' | 'l') if params.iter().any(|v| v.first() == Some(&4)) => {
-                self.insert_mode = c == 'h';
+            // Insert mode and a very visible cursor, as tmux keeps them.
+            (None, 'h' | 'l') => {
+                for mode in params.iter().filter_map(|v| v.first()) {
+                    match mode {
+                        4 => self.insert_mode = c == 'h',
+                        34 => self.cursor_very_visible = c == 'l',
+                        _ => {}
+                    }
+                }
             }
             // DA1: identify as a VT220 with ANSI colour, as tmux does.
             (None, 'c') if p(0).unwrap_or(0) == 0 => self.replies.extend(b"\x1b[?62;22c"),
@@ -217,6 +229,15 @@ impl vt100::Callbacks for Hooks {
             [b"0" | b"2", rest @ ..] if rest.len() > 1 => {
                 self.title = Some(String::from_utf8_lossy(&rest.join(&b';')).into_owned());
             }
+            // The cursor's colour, as tmux's input_osc_12: one it cannot
+            // read changes nothing. Queries (`?`) are not answered.
+            [b"12", spec @ ..] if !spec.is_empty() => {
+                let spec = String::from_utf8_lossy(&spec.join(&b';')).into_owned();
+                if let Some(rgb) = tmxr_command::colour::parse_x11(&spec) {
+                    self.cursor_colour = Some(rgb);
+                }
+            }
+            [b"112"] | [b"112", b""] => self.cursor_colour = None,
             [b"7", uri, ..] => {
                 if let Some(path) = file_uri_path(&String::from_utf8_lossy(uri)) {
                     self.cwd = Some(path);
@@ -432,6 +453,7 @@ impl Emulator {
         hooks.focus_reports = false;
         // tmux's reset clears the blinking but keeps the cursor's shape.
         hooks.cursor_blinking = false;
+        hooks.cursor_very_visible = false;
         hooks.kitty_flags.clear();
         self.reset_keys();
         self.count_history();
@@ -483,8 +505,11 @@ impl Emulator {
                     self.origin_mode = false;
                     self.region = None;
                     self.tabs = default_tabs(self.parser.screen().size().1.get());
-                    // tmux's full reset stops the blinking, its shape kept.
-                    self.parser.callbacks_mut().cursor_blinking = false;
+                    // tmux's full reset stops the blinking, its shape and
+                    // colour kept.
+                    let hooks = self.parser.callbacks_mut();
+                    hooks.cursor_blinking = false;
+                    hooks.cursor_very_visible = false;
                     self.parser.process(b"\x1bc");
                 }
                 Piece::Repeat { ch, count } => self.repeat(ch, count),
@@ -788,6 +813,17 @@ impl Emulator {
         self.alternate_saved
     }
 
+    /// The cursor's colour the program set, as RGB (`#{cursor_colour}`).
+    pub fn cursor_colour(&self) -> Option<u32> {
+        self.parser.callbacks().cursor_colour
+    }
+
+    /// Whether the program made the cursor very visible
+    /// (`#{cursor_very_visible}`).
+    pub fn cursor_very_visible(&self) -> bool {
+        self.parser.callbacks().cursor_very_visible
+    }
+
     /// Whether origin mode is on (`#{origin_flag}`).
     pub fn origin_mode(&self) -> bool {
         self.origin_mode
@@ -938,6 +974,23 @@ mod tests {
             marked.iter().all(|&i| text[i].starts_with('p')),
             "{marked:?} {text:?}"
         );
+    }
+
+    #[test]
+    fn cursor_colour_and_very_visible_are_kept_as_tmuxs() {
+        let mut e = Emulator::new(6, 20, 0);
+        assert_eq!((e.cursor_colour(), e.cursor_very_visible()), (None, false));
+        e.process(b"\x1b]12;rgb:12/34/56\x07\x1b[4;34l");
+        assert_eq!(e.cursor_colour(), Some(0x123456));
+        assert!(e.cursor_very_visible());
+        e.process(b"\x1b]12;bogus\x07\x1b[34h");
+        assert_eq!(e.cursor_colour(), Some(0x123456), "an unread colour");
+        assert!(!e.cursor_very_visible());
+        e.process(b"\x1b[34l\x1bc");
+        assert_eq!(e.cursor_colour(), Some(0x123456), "a reset keeps it");
+        assert!(!e.cursor_very_visible(), "a reset ends it");
+        e.process(b"\x1b]112\x07");
+        assert_eq!(e.cursor_colour(), None);
     }
 
     #[test]

@@ -940,6 +940,34 @@ checks = [
 ]
 
 [[cases]]
+name = "cursor_colour_and_very_visible_as_tmux"
+unix_only = true
+steps = [
+  { run = "new-window -d -t o:1 'printf \"\\033]12;red\\007\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:2 'printf \"\\033]12;rgb:1234/5678/9abc\\033\\\\\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:3 'printf \"\\033]12;bogus\\007\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:4 'printf \"\\033]12;red\\007\\033]112\\007\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:5 'printf \"\\033]12;red\\007\\033c\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:6 'printf \"\\033[4;34l\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:7 'printf \"\\033[34l\\033[34h\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:8 'printf \"\\033[34l\\033c\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:9 'printf \"\\033]12;cmy:0.5/0.25/1e0\\007\"; exec sleep 1000'" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "display -p -t o:0 '#{cursor_colour}|#{cursor_very_visible}'", expect = "none|0" },
+  { command = "display -p -t o:1 '#{cursor_colour}|#{cursor_very_visible}'", expect = "#ff0000|0" },
+  { command = "display -p -t o:2 '#{cursor_colour}|#{cursor_very_visible}'", expect = "#12569a|0" },
+  { command = "display -p -t o:3 '#{cursor_colour}|#{cursor_very_visible}'", expect = "none|0" },
+  { command = "display -p -t o:4 '#{cursor_colour}|#{cursor_very_visible}'", expect = "none|0" },
+  { command = "display -p -t o:5 '#{cursor_colour}|#{cursor_very_visible}'", expect = "#ff0000|0" },
+  { command = "display -p -t o:6 '#{cursor_colour}|#{cursor_very_visible}'", expect = "none|1" },
+  { command = "display -p -t o:7 '#{cursor_colour}|#{cursor_very_visible}'", expect = "none|0" },
+  { command = "display -p -t o:8 '#{cursor_colour}|#{cursor_very_visible}'", expect = "none|0" },
+  { command = "display -p -t o:9 '#{cursor_colour}|#{cursor_very_visible}'", expect = "#7fbf00|0" },
+]
+
+[[cases]]
 name = "alternate_saved_keeps_the_cursor_1049_saved"
 unix_only = true
 steps = [

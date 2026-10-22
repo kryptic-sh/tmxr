@@ -2538,6 +2538,7 @@ dependencies = [
  "crossterm",
  "libc",
  "portable-pty",
+ "tmxr-command",
  "vt100",
  "windows-sys",
 ]

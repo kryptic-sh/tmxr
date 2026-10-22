@@ -38,8 +38,10 @@ pub const NAMES: &[&str] = &[
     "copy_cursor_y",
     "cursor_blinking",
     "cursor_character",
+    "cursor_colour",
     "cursor_flag",
     "cursor_shape",
+    "cursor_very_visible",
     "cursor_x",
     "cursor_y",
     "history_limit",
@@ -942,6 +944,11 @@ impl<'a> Context for Vars<'a> {
                 }
             }
             "alternate_on" => flag(pane?.emu.screen().alternate_screen()),
+            "cursor_colour" => pane?
+                .emu
+                .cursor_colour()
+                .map_or_else(|| "none".to_owned(), |rgb| format!("#{rgb:06x}")),
+            "cursor_very_visible" => flag(pane?.emu.cursor_very_visible()),
             // tmux's saved_cx / saved_cy, UINT_MAX until a switch sets them.
             "alternate_saved_x" | "alternate_saved_y" => {
                 let saved = pane?.emu.alternate_saved();

@@ -94,9 +94,145 @@ pub fn named(s: &str) -> Option<u32> {
         .map(|&(_, v)| v)
 }
 
+/// The RGB value of an X11 colour specification, as tmux's
+/// colour_parseX11 reads one (OSC 12 and the other OSC colours):
+/// `rgb:rr/gg/bb`, `#rrggbb`, `r,g,b`, `rgb:rrrr/gggg/bbbb`, `#rrrrggggbbbb`,
+/// `cmyk:c/m/y/k` or `cmy:c/m/y` (each from 0 to 1), else a name as
+/// [`named`] reads it, spaces around it ignored. The first five take their
+/// numbers as tmux's `sscanf` does: each hex field up to its width, and
+/// anything after the last ignored.
+pub fn parse_x11(p: &str) -> Option<u32> {
+    let join = |r: u32, g: u32, b: u32| (r & 0xff) << 16 | (g & 0xff) << 8 | (b & 0xff);
+    let short = match p.len() {
+        12 => p
+            .strip_prefix("rgb:")
+            .and_then(|f| hex_fields(f, Some('/'), 2)),
+        7 => p.strip_prefix('#').and_then(|f| hex_fields(f, None, 2)),
+        _ => None,
+    };
+    if let Some([r, g, b]) = short.or_else(|| decimal_fields(p)) {
+        return Some(join(r, g, b));
+    }
+    let long = match p.len() {
+        18 => p
+            .strip_prefix("rgb:")
+            .and_then(|f| hex_fields(f, Some('/'), 4)),
+        13 => p.strip_prefix('#').and_then(|f| hex_fields(f, None, 4)),
+        _ => None,
+    };
+    if let Some([r, g, b]) = long {
+        return Some(join(r >> 8, g >> 8, b >> 8));
+    }
+    let cmyk = p
+        .strip_prefix("cmyk:")
+        .and_then(float_fields::<4>)
+        .or_else(|| {
+            let [c, m, y] = float_fields::<3>(p.strip_prefix("cmy:")?)?;
+            Some([c, m, y, 0.0])
+        });
+    if let Some([c, m, y, k]) = cmyk {
+        if [c, m, y, k].iter().all(|v| (0.0..=1.0).contains(v)) {
+            // C's double to unsigned char conversion: truncated.
+            let channel = |v: f64| ((1.0 - v) * (1.0 - k) * 255.0) as u32;
+            return Some(join(channel(c), channel(m), channel(y)));
+        }
+        return None;
+    }
+    named(p.trim_matches(' '))
+}
+
+/// Three hex fields of up to `width` digits each (at least one), as
+/// `sscanf`'s `%0Nx`, with `sep` between them; what follows is ignored.
+fn hex_fields(mut s: &str, sep: Option<char>, width: usize) -> Option<[u32; 3]> {
+    let mut out = [0; 3];
+    for (i, field) in out.iter_mut().enumerate() {
+        if i > 0
+            && let Some(sep) = sep
+        {
+            s = s.strip_prefix(sep)?;
+        }
+        let digits = s
+            .bytes()
+            .take(width)
+            .take_while(u8::is_ascii_hexdigit)
+            .count();
+        *field = u32::from_str_radix(s.get(..digits).filter(|d| !d.is_empty())?, 16).ok()?;
+        s = &s[digits..];
+    }
+    Some(out)
+}
+
+/// `sscanf`'s `%d,%d,%d`: three decimal numbers, each after optional spaces
+/// and a sign, with commas between; what follows is ignored. Each is kept
+/// as its low byte, as tmux passes them on as `u_char`.
+fn decimal_fields(mut s: &str) -> Option<[u32; 3]> {
+    let mut out = [0; 3];
+    for (i, field) in out.iter_mut().enumerate() {
+        if i > 0 {
+            s = s.strip_prefix(',')?;
+        }
+        s = s.trim_start_matches(|c: char| c.is_ascii_whitespace());
+        let sign = usize::from(s.starts_with(['+', '-']));
+        let digits = s[sign..].bytes().take_while(u8::is_ascii_digit).count();
+        if digits == 0 {
+            return None;
+        }
+        let n: i64 = s[..sign + digits].parse().unwrap_or(i64::MAX);
+        *field = (n & 0xff) as u32;
+        s = &s[sign + digits..];
+    }
+    Some(out)
+}
+
+/// `N` numbers split by `/`, as `sscanf`'s `%lf` reads each (the longest
+/// start of it that is a number); what follows the last is ignored.
+fn float_fields<const N: usize>(s: &str) -> Option<[f64; N]> {
+    let mut out = [0.0; N];
+    let mut rest = s;
+    for (i, field) in out.iter_mut().enumerate() {
+        if i > 0 {
+            rest = rest.strip_prefix('/')?;
+        }
+        let end = (1..=rest.len())
+            .rev()
+            .find(|&n| rest.is_char_boundary(n) && rest[..n].trim_start().parse::<f64>().is_ok())?;
+        *field = rest[..end].trim_start().parse().ok()?;
+        rest = &rest[end..];
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn x11_specifications_read_as_tmuxs() {
+        // Each from tmux 3.6, given as OSC 12 and read back as
+        // #{cursor_colour} (2026-10-22).
+        assert_eq!(parse_x11("red"), Some(0xff0000));
+        assert_eq!(parse_x11("rgb:12/34/56"), Some(0x123456));
+        assert_eq!(parse_x11("#abcdef"), Some(0xabcdef));
+        assert_eq!(parse_x11("rgb:1234/5678/9abc"), Some(0x12569a));
+        assert_eq!(parse_x11("Navy Blue"), Some(0x000080));
+        assert_eq!(parse_x11("1,2,3"), Some(0x010203));
+        assert_eq!(parse_x11("cmy:0/1/0"), Some(0xff00ff));
+        assert_eq!(parse_x11("bogus"), None);
+        assert_eq!(parse_x11("256,0,-1"), Some(0x0000ff));
+        assert_eq!(parse_x11(" red "), Some(0xff0000));
+        assert_eq!(parse_x11("grey50"), Some(0x7f7f7f));
+        assert_eq!(parse_x11("cmyk:0/0/0/0.5"), Some(0x7f7f7f));
+        assert_eq!(parse_x11("rgb:1/2/3"), None);
+        assert_eq!(parse_x11("rgb:a/bb/ccc"), Some(0x0abbcc));
+        assert_eq!(parse_x11("#12345"), None);
+        assert_eq!(parse_x11("2,3"), None);
+        assert_eq!(parse_x11("cmyk:2/0/0/0"), None);
+        assert_eq!(parse_x11("#abcdefabcdef"), Some(0xabefcd));
+        assert_eq!(parse_x11(" 1, 2,3x"), Some(0x010203));
+        assert_eq!(parse_x11("cmy:0.5/0.25/1e0"), Some(0x7fbf00));
+        assert_eq!(parse_x11("RED"), Some(0xff0000));
+        assert_eq!(parse_x11("DarkSlateGrey"), Some(0x2f4f4f));
+    }
 
     #[test]
     fn colours_read_as_tmuxs_table() {

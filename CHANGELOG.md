@@ -37,6 +37,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`#{cursor_colour}` and `#{cursor_very_visible}`**: the cursor colour a
+  program sets with OSC 12 (read as tmux reads X11 colour specifications, and
+  reset by OSC 112) and the very visible cursor of `CSI 34 l`, as tmux's.
 - **`#{alternate_saved_x}` and `#{alternate_saved_y}`**: where the cursor was
   when the pane's program last switched to the alternate screen with
   `CSI ? 1049 h`, as tmux's (4294967295 until it has).
