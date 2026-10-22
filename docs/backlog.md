@@ -783,10 +783,13 @@ table. What has been verified, and how:
   `move_window_renumbers_and_replaces` found its session's windows gone, and
   `alerts_follow_the_action_and_visual_options` attached to a server with
   `no sessions`; a guess is a pane's `cmd.exe` failing to start under the load,
-  its session and server going with it. Not new: run twice each the same day,
-  the e2e suite alone failed one test (a different one each time) in one of two
-  runs at `4e59d9a`, from before that day's work, and the same at the day's end,
-  so the rate is unchanged; a full `cargo test` fails one about every run. Load
+  its session and server going with it. Again on 2026-10-22:
+  `remain_on_exit_failed_monitor_bell_and_rename_format` found
+  `no server running` at its first check, just after its `new-session -d`, and
+  passed alone three times running. Not new: run twice each the same day, the
+  e2e suite alone failed one test (a different one each time) in one of two runs
+  at `4e59d9a`, from before that day's work, and the same at the day's end, so
+  the rate is unchanged; a full `cargo test` fails one about every run. Load
   decides it: with other programs busy, the e2e suite alone failed five or six
   tests in a run, and with the machine idle none (178 of 178, the same day).
   Timing checks fail the same way under load:
