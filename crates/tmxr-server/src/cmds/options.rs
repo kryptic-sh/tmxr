@@ -49,45 +49,66 @@ pub(super) fn run(
             }
         }
         "source-file" => {
-            // -F: the path is a format, expanded first.
-            let path = pos.first().map(|p| {
-                PathBuf::from(if a.has('F') {
+            // With no path, the config file the server reads.
+            if pos.is_empty() {
+                let file = srv
+                    .cfg_path
+                    .clone()
+                    .or_else(|| match tmxr_config::load(None) {
+                        Ok((_, tmxr_config::ConfigSource::File(p))) => Some(p),
+                        _ => None,
+                    })
+                    .ok_or("no config file to source")?;
+                // -n: only check that it loads, changing nothing, as tmux's
+                // parse-only source-file.
+                if a.has('n') {
+                    tmxr_config::load(Some(&file)).map_err(|e| e.to_string())?;
+                } else {
+                    srv.overlay_config(&file)?;
+                    if let Some(c) = attached_client(srv, ctx) {
+                        srv.show_message(c, "config reloaded".into());
+                    }
+                }
+                return Ok(true);
+            }
+            // Each path (a format with -F) is a glob, as tmux's; each file
+            // it names goes over what is running in turn, and an error in
+            // one leaves the others to run. Which file is the config does
+            // not change, as in tmux.
+            let mut files = Vec::new();
+            let mut errors = Vec::new();
+            for p in pos {
+                let p = if a.has('F') {
                     expand_for(srv, ctx, ctx.pane, p)
                 } else {
                     p.clone()
-                })
-            });
-            // -q: a file that is not there is no error, as tmux's.
-            if a.has('q') && path.as_ref().is_some_and(|p| !p.exists()) {
-                return Ok(true);
+                };
+                match glob::glob(&p) {
+                    Ok(found) => {
+                        let found: Vec<PathBuf> = found.filter_map(Result::ok).collect();
+                        // -q: a path matching nothing is no error, as tmux's.
+                        if found.is_empty() && !a.has('q') {
+                            errors.push(format!("{p}: No such file or directory"));
+                        }
+                        files.extend(found);
+                    }
+                    Err(e) => errors.push(format!("{p}: {e}")),
+                }
             }
-            // -n: only check that the file loads (else the config's own),
-            // changing nothing, as tmux's parse-only source-file.
-            if a.has('n') {
-                let check = path.as_deref().or(srv.cfg_path.as_deref());
-                tmxr_config::load(check).map_err(|e| e.to_string())?;
-                return Ok(true);
+            for file in &files {
+                let done = if a.has('n') {
+                    tmxr_config::load(Some(file))
+                        .map(drop)
+                        .map_err(|e| e.to_string())
+                } else {
+                    srv.overlay_config(file)
+                };
+                if let Err(e) = done {
+                    errors.push(e);
+                }
             }
-            if let Some(path) = path {
-                // One that does not load changes nothing, the config path
-                // included, so the next reload still finds the old file.
-                tmxr_config::load(Some(&path)).map_err(|e| e.to_string())?;
-                srv.cfg_path = Some(path);
-            }
-            // What the file sets goes over what is running, as tmux's
-            // source-file runs a file's commands; with no path, the config
-            // file the server reads.
-            let file = srv
-                .cfg_path
-                .clone()
-                .or_else(|| match tmxr_config::load(None) {
-                    Ok((_, tmxr_config::ConfigSource::File(p))) => Some(p),
-                    _ => None,
-                });
-            let file = file.ok_or("no config file to source")?;
-            srv.overlay_config(&file)?;
-            if let Some(c) = attached_client(srv, ctx) {
-                srv.show_message(c, "config reloaded".into());
+            if !errors.is_empty() {
+                return Err(errors.join("; "));
             }
         }
 

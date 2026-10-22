@@ -629,7 +629,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         1,
         "[-gv] [-t target-window] [option]"
     ),
-    cmd!("source-file", Some("source"), "Fnq", 0, 1, "[-Fnq] [path]"),
+    cmd!(
+        "source-file",
+        Some("source"),
+        "Fnq",
+        0,
+        ANY,
+        "[-Fnq] [path ...]"
+    ),
     cmd!(
         "split-window",
         Some("splitw"),

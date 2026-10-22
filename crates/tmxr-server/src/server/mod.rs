@@ -1399,7 +1399,6 @@ impl Server {
         if sets.resurrect {
             self.cfg.resurrect = file.resurrect;
         }
-        self.cfg_file = Some(path.to_path_buf());
         self.apply_rgb_colour();
         self.mark_all_dirty();
         if errors.is_empty() {

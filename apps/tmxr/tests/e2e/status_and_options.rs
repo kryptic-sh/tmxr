@@ -560,11 +560,13 @@ fn source_file_q_and_a_missing_file_leave_the_config_alone() {
     );
     let config_files = || t.run(&["display-message", "-p", "#{config_files}"]);
     assert_eq!(config_files().trim(), t.config.display().to_string());
-    // A file that does load becomes the config's file.
+    // Another file is applied, but the config stays the file the server
+    // started with, as tmux's #{config_files}.
     let other = t.dir.path().join("other.toml");
-    std::fs::write(&other, "").unwrap();
+    std::fs::write(&other, "[options]\n'@other' = 'yes'\n").unwrap();
     t.run(&["source-file", other.to_str().unwrap()]);
-    assert_eq!(config_files().trim(), other.display().to_string());
+    assert_eq!(t.run(&["show-options", "-gv", "@other"]).trim(), "yes");
+    assert_eq!(config_files().trim(), t.config.display().to_string());
 
     // -n only checks a file loads: a broken one fails, a good one is not
     // taken up.
@@ -576,13 +578,56 @@ fn source_file_q_and_a_missing_file_leave_the_config_alone() {
             .success()
     );
     t.run(&["source-file", "-n", t.config.to_str().unwrap()]);
-    assert_eq!(config_files().trim(), other.display().to_string());
+    assert_eq!(config_files().trim(), t.config.display().to_string());
 
     // -F expands the path as a format.
     t.run(&["set", "-g", "@dir", t.dir.path().to_str().unwrap()]);
+    t.run(&["set", "-g", "@other", "no"]);
     let sep = std::path::MAIN_SEPARATOR;
-    t.run(&["source-file", "-F", &format!("#{{@dir}}{sep}config.toml")]);
-    assert_eq!(config_files().trim(), t.config.display().to_string());
+    t.run(&["source-file", "-F", &format!("#{{@dir}}{sep}other.toml")]);
+    assert_eq!(t.run(&["show-options", "-gv", "@other"]).trim(), "yes");
+}
+
+/// `source-file` takes several paths and globs, as tmux's: each file named
+/// goes over what is running in turn, so a later one wins; a path matching
+/// nothing is an error unless -q.
+#[test]
+fn source_file_takes_several_paths_and_globs() {
+    let t = Tmxr::new("sourceglob");
+    t.run(&["new-session", "-d", "-s", "sg"]);
+    let dir = t.dir.path().join("conf.d");
+    std::fs::create_dir(&dir).unwrap();
+    std::fs::write(dir.join("a.toml"), "[options]\n'@a' = 'a'\n'@last' = 'a'\n").unwrap();
+    std::fs::write(dir.join("b.toml"), "[options]\n'@b' = 'b'\n'@last' = 'b'\n").unwrap();
+    let one = t.dir.path().join("one.toml");
+    std::fs::write(&one, "[options]\n'@one' = '1'\n").unwrap();
+    let pattern = dir.join("*.toml");
+    let sourced = t.output(&[
+        "source-file",
+        pattern.to_str().unwrap(),
+        one.to_str().unwrap(),
+    ]);
+    assert!(
+        sourced.status.success(),
+        "{}",
+        String::from_utf8_lossy(&sourced.stderr)
+    );
+    let show = |name: &str| t.run(&["show-options", "-gv", name]).trim().to_owned();
+    assert_eq!(show("@a"), "a");
+    assert_eq!(show("@b"), "b");
+    assert_eq!(show("@one"), "1");
+    assert_eq!(show("@last"), "b", "b.toml comes after a.toml");
+    let none = dir.join("*.nothing");
+    assert!(
+        !t.output(&["source-file", none.to_str().unwrap()])
+            .status
+            .success()
+    );
+    assert!(
+        t.output(&["source-file", "-q", none.to_str().unwrap()])
+            .status
+            .success()
+    );
 }
 
 /// `source-file` applies what the file sets over what is running, as tmux's

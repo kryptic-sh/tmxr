@@ -12,6 +12,7 @@ readme.workspace = true
 
 [dependencies]
 crossterm = "0.29.0"
+glob = "0.3.4"
 hjkl-clipboard = "0.43.4"
 hjkl-layout = "0.42.1"
 hjkl-picker = "0.42.1"
