@@ -1590,6 +1590,23 @@ fn a_programs_hyperlink_reaches_the_client() {
     });
 }
 
+/// A colour of the 256 a program sets (OSC 4) is drawn as it set it.
+#[cfg(unix)]
+#[test]
+fn a_programs_palette_colour_is_drawn() {
+    let t = Tmxr::new("palette");
+    t.run(&[
+        "new-session",
+        "-d",
+        "-s",
+        "pa",
+        r"printf '\033]4;1;#102030\007\033[31mpalette-red\033[0m'; exec sleep 100",
+    ]);
+    let s = t.attach(&["attach", "-t", "pa"]);
+    s.wait_for("the text", |text| text.contains("palette-red"));
+    s.wait_for("its colour", |_| s.raw_text().contains("38;2;16;32;48"));
+}
+
 /// Copy mode shows a link scrolled into the history with its link, and
 /// `#{mouse_hyperlink}` reads it there, as tmux's.
 #[cfg(unix)]

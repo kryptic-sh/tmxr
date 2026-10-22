@@ -675,18 +675,25 @@ table. What has been verified, and how:
     10 and 11, in the query's terminator, but not OSC 12). Unlike tmux, the
     client asks once, at its first attach, where tmux asks again on a theme
     change (mode 2031, which Alacritty lacks), and the Windows client does not
-    ask; OSC 4 (palette) queries get no answer. A program's OSC 10 / 11 colours
-    are its pane's, as tmux's palette `fg` / `bg`, with tmux's precedence: in
-    the active pane over `window-style` and under `window-active-style`, in
-    another under `window-style` (`a_programs_default_colours_are_the_panes`);
-    `cursor_shape` and `cursor_blinking` are kept from DECSCUSR and `CSI ? 12`;
-    `insert_flag` and `wrap_flag` are kept from the sequences vt100 passes on
-    unhandled, but vt100 itself still draws as with insert off and wrap on;
-    `origin_flag` from `CSI ? 6`, split out by `modes::ModeSplitter` and passed
-    on to vt100); overline, and underline styles and colours (`double-`,
-    `curly-`, `dotted-` and `dashed-underscore` draw as the plain underline;
-    vt100 0.18, re-checked 2026-10-21, still keeps one on/off underline in
-    `Attrs` and no overline).
+    ask; A program's OSC 4 palette entries (`tmxr_term::palette`) are drawn as
+    it set them and its queries for them answered
+    (`palette_entries_a_program_sets_are_answered`,
+    `a_programs_palette_colour_is_drawn`), but a query for an entry not set gets
+    no answer, where tmux asks the client's terminal and passes its answer on;
+    an empty OSC 104 leaves the OSC 10 / 11 colours, as tmux 3.6 shows it (its
+    colour_palette_clear resets them, but nothing marks the pane's style
+    changed, so they stay until something else does). A program's OSC 10 / 11
+    colours are its pane's, as tmux's palette `fg` / `bg`, with tmux's
+    precedence: in the active pane over `window-style` and under
+    `window-active-style`, in another under `window-style`
+    (`a_programs_default_colours_are_the_panes`); `cursor_shape` and
+    `cursor_blinking` are kept from DECSCUSR and `CSI ? 12`; `insert_flag` and
+    `wrap_flag` are kept from the sequences vt100 passes on unhandled, but vt100
+    itself still draws as with insert off and wrap on; `origin_flag` from
+    `CSI ? 6`, split out by `modes::ModeSplitter` and passed on to vt100);
+    overline, and underline styles and colours (`double-`, `curly-`, `dotted-`
+    and `dashed-underscore` draw as the plain underline; vt100 0.18, re-checked
+    2026-10-21, still keeps one on/off underline in `Attrs` and no overline).
   - Options: every status row is drawn from its `status-format` item by
     `format_draw` (the first from tmux's default unless set), which takes tmux's
     `align`, `fill`, `default` / `push-default` / `pop-default`, lists (cut

@@ -968,6 +968,23 @@ checks = [
 ]
 
 [[cases]]
+name = "palette_entries_a_program_sets_are_answered"
+# OSC 4 sets entries and answers queries for those set (one not set goes
+# unanswered: no client to ask); OSC 104 unsets one, and with nothing after
+# it every one, though tmux goes on showing the OSC 11 colour.
+unix_only = true
+steps = [
+  { run = "new-window -d -t o:1 'stty raw -echo; printf \"\\033]4;1;#102030;2;red\\007\\033]4;1;?;3;?\\033\\\\\\\\\\033]104;2\\007\\033]4;2;?\\007\"; exec cat -v'" },
+  { run = "new-window -d -t o:2 'stty raw -echo; printf \"\\033]11;#102030\\007\\033]4;5;red\\007\\033]104\\007\\033]4;5;?\\007x\"; exec cat -v'" },
+  { sleep = 0.8 },
+]
+checks = [
+  { command = "capture-pane -p -t o:1", expect = "^[]4;1;rgb:1010/2020/3030^[\\" },
+  { command = "capture-pane -p -t o:2", expect = "x" },
+  { command = "display -p -t o:2 '#{pane_bg}'" },
+]
+
+[[cases]]
 name = "a_programs_default_colours_are_the_panes"
 # OSC 10 / 11 set the pane's colours under its window style, as tmux's
 # palette fg / bg: the formats show them, and a query reads them back. In the

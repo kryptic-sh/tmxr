@@ -338,6 +338,8 @@ pub struct Emulator {
     /// in order, each with whether it ended in a BEL, for the server to
     /// answer: the answers depend on options and clients.
     colour_queries: Vec<(u8, bool)>,
+    /// The 256 colours' entries the program set (OSC 4).
+    palette: crate::palette::Palette,
     /// The scroll region's top and bottom rows, `None` for the whole
     /// screen. tmux keeps one for the terminal; vt100 keeps one per screen,
     /// so it is written into vt100's again after each switch.
@@ -374,6 +376,7 @@ impl Emulator {
             origin_mode: false,
             alternate_saved: None,
             colour_queries: Vec::new(),
+            palette: crate::palette::Palette::default(),
             region: None,
             tabs: default_tabs(cols),
             mouse_utf8: false,
@@ -534,6 +537,7 @@ impl Emulator {
                     hooks.cursor_blinking = false;
                     hooks.cursor_very_visible = false;
                     (hooks.palette_fg, hooks.palette_bg) = (None, None);
+                    self.palette.clear();
                     self.parser.process(b"\x1bc");
                 }
                 Piece::Repeat { ch, count } => self.repeat(ch, count),
@@ -556,6 +560,7 @@ impl Emulator {
                 Piece::TabClear(3) => self.tabs.fill(false),
                 Piece::TabClear(_) => {}
                 Piece::ColourQuery { which, bel } => self.colour_queries.push((which, bel)),
+                Piece::Palette { osc, body, bel } => self.palette_osc(osc, &body, bel),
             }
         }
     }
@@ -829,6 +834,29 @@ impl Emulator {
     pub fn insert_and_wrap(&self) -> (bool, bool) {
         let hooks = self.parser.callbacks();
         (hooks.insert_mode, !hooks.no_wrap)
+    }
+
+    /// OSC 4 or 104 with `body`, as tmux's input_osc_4 / _104. An OSC 104
+    /// with nothing after it unsets every entry and leaves the OSC 10 / 11
+    /// colours, as tmux 3.6 shows it: its colour_palette_clear resets those
+    /// too, but nothing marks the pane's style changed, so it goes on
+    /// drawing and showing them.
+    fn palette_osc(&mut self, osc: u16, body: &[u8], bel: bool) {
+        let body = String::from_utf8_lossy(body);
+        match osc {
+            4 => {
+                let end = if bel { "\x07" } else { "\x1b\\" };
+                let replies = &mut self.parser.callbacks_mut().replies;
+                self.palette.osc_4(&body, end, replies);
+            }
+            _ if body.is_empty() => self.palette.clear(),
+            _ => self.palette.osc_104(&body),
+        }
+    }
+
+    /// The palette entries the program set (OSC 4).
+    pub fn palette(&self) -> &crate::palette::Palette {
+        &self.palette
     }
 
     /// The colour queries since the last call (`which` of 10, 11 or 12, and

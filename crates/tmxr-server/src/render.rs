@@ -727,13 +727,16 @@ fn draw_pane(
                 let x = usize::from(col);
                 let cell = line.and_then(|l| l.cell(x));
                 let link = cell.and_then(|c| crate::copy::link_of(&c.style));
-                let mut style = with_default_colours(
-                    cell.map(|c| Style {
-                        underline_color: None,
-                        ..c.style
-                    })
-                    .unwrap_or_default(),
-                    base,
+                let mut style = with_palette(
+                    with_default_colours(
+                        cell.map(|c| Style {
+                            underline_color: None,
+                            ..c.style
+                        })
+                        .unwrap_or_default(),
+                        base,
+                    ),
+                    pane.emu.palette(),
                 );
                 if let Some((start, _)) = matches.iter().find(|(s, e)| (*s..*e).contains(&x)) {
                     let current = y == cm.cy && *start == cm.cx;
@@ -774,13 +777,7 @@ fn draw_pane(
         }
         return None;
     }
-    draw_screen(
-        pane.emu.screen(),
-        buf,
-        Rect::new(r.x, r.y, w, h),
-        base,
-        links,
-    )
+    draw_screen(&pane.emu, buf, Rect::new(r.x, r.y, w, h), base, links)
 }
 
 /// The colours pane `pid`'s cells take where its program set none, as
@@ -839,6 +836,23 @@ pub(crate) fn pane_default_colours(srv: &Server, pid: PaneId) -> format::Style {
     }
 }
 
+/// `style` with each of the 256 colours the pane's program set (OSC 4) as
+/// it set it, as tmux draws a pane's cells through its palette.
+fn with_palette(style: Style, palette: &tmxr_term::palette::Palette) -> Style {
+    let map = |c: Option<Color>| match c {
+        Some(Color::Indexed(n)) => palette.get(n).map_or(c, |rgb| {
+            let [_, r, g, b] = rgb.to_be_bytes();
+            Some(Color::Rgb(r, g, b))
+        }),
+        _ => c,
+    };
+    Style {
+        fg: map(style.fg),
+        bg: map(style.bg),
+        ..style
+    }
+}
+
 /// `style` with `base`'s colours where it has the terminal's default.
 fn with_default_colours(style: Style, base: Style) -> Style {
     let unset = |c: Option<Color>| c.is_none_or(|c| c == Color::Reset);
@@ -860,12 +874,14 @@ fn with_default_colours(style: Style, base: Style) -> Style {
 /// Draw a program's screen into `area`. Returns where its cursor is, if
 /// shown and inside the area.
 fn draw_screen(
-    screen: &vt100::Screen,
+    emu: &tmxr_term::Emulator,
     buf: &mut Buffer,
     area: Rect,
     base: Style,
     links: &RefCell<Links>,
 ) -> Option<Position> {
+    let screen = emu.screen();
+    let palette = emu.palette();
     for row in 0..area.height {
         for col in 0..area.width {
             let Some(out) = buf.cell_mut((area.x + col, area.y + row)) else {
@@ -877,14 +893,16 @@ fn draw_screen(
                 }
                 Some(c) => {
                     let sym = if c.has_contents() { c.contents() } else { " " };
-                    out.set_symbol(sym)
-                        .set_style(with_default_colours(cell_style(c), base));
+                    out.set_symbol(sym).set_style(with_palette(
+                        with_default_colours(cell_style(c), base),
+                        palette,
+                    ));
                     if let Some(link) = c.hyperlink_id().and_then(|id| screen.hyperlink(id)) {
                         out.underline_color = links.borrow_mut().carrier(link);
                     }
                 }
                 None => {
-                    out.set_symbol(" ").set_style(base);
+                    out.set_symbol(" ").set_style(with_palette(base, palette));
                 }
             }
         }
@@ -1149,7 +1167,7 @@ fn draw_overlay(
                 draw_box(buf, area, lines, style, &p.title);
             }
             let inner = p.inner().intersection(area);
-            let cursor = draw_screen(p.emu.screen(), buf, inner, Style::default(), links);
+            let cursor = draw_screen(&p.emu, buf, inner, Style::default(), links);
             cursor.filter(|_| !p.exited)
         }
     }
@@ -1322,7 +1340,7 @@ fn draw_preview(srv: &Server, pane: PaneId, buf: &mut Buffer, area: Rect) {
     for row in 0..area.height {
         for col in 0..area.width {
             let cell = screen.cell(first + row, col);
-            let style = cell.map(cell_style).unwrap_or_default();
+            let style = with_palette(cell.map(cell_style).unwrap_or_default(), p.emu.palette());
             let sym = cell
                 .map(vt100::Cell::contents)
                 .filter(|s| !s.is_empty())

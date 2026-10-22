@@ -22,6 +22,7 @@ pub mod emulator;
 pub mod encode;
 pub mod env;
 pub mod modes;
+pub mod palette;
 pub mod process;
 pub mod pty;
 

@@ -64,6 +64,13 @@ pub enum Piece {
         which: u8,
         bel: bool,
     },
+    /// `OSC 4` (`osc` 4) or `OSC 104` and what follows its number, which
+    /// set, ask for or reset palette entries; `bel` as for a colour query.
+    Palette {
+        osc: u16,
+        body: Vec<u8>,
+        bel: bool,
+    },
 }
 
 /// Splits the split modes out of DEC private mode sets and resets
@@ -95,6 +102,13 @@ enum Scan {
     String,
     /// A colour query `len` bytes long.
     ColourQuery { len: usize, which: u8, bel: bool },
+    /// An OSC 4 or 104 `len` bytes long.
+    Palette {
+        len: usize,
+        osc: u16,
+        body: Vec<u8>,
+        bel: bool,
+    },
     /// A CSI `len` bytes long: its private marker (`<` to `?`), its
     /// parameters, its intermediate bytes, and its final byte.
     Csi {
@@ -136,6 +150,38 @@ fn scan_colour_query(rest: &[u8]) -> Option<Scan> {
     None
 }
 
+/// The longest OSC 4 or 104 split out; a longer one is passed on as it is
+/// (and changes nothing).
+const MAX_PALETTE_OSC: usize = 4096;
+
+/// After `ESC ]`: an OSC 4 or 104 up to its BEL or `ESC \`, the start of
+/// one cut off, or `None` for any other OSC (or one another control ends).
+fn scan_palette(rest: &[u8]) -> Option<Scan> {
+    let (osc, start) = match rest {
+        [b'4'] | [b'1'] | [b'1', b'0'] | [b'1', b'0', b'4'] => return Some(Scan::Incomplete),
+        [b'4', b';', ..] => (4, 2),
+        [b'1', b'0', b'4', b';', ..] => (104, 4),
+        [b'1', b'0', b'4', 0x07 | 0x1b, ..] => (104, 3),
+        _ => return None,
+    };
+    for (i, &b) in rest.iter().enumerate().skip(start) {
+        let (bel, len) = match (b, rest.get(i + 1)) {
+            (0x07, _) => (true, i + 1),
+            (0x1b, Some(b'\\')) => (false, i + 2),
+            (0x1b, None) => return Some(Scan::Incomplete),
+            (0x1b | 0x18 | 0x1a, _) => return None,
+            _ => continue,
+        };
+        return Some(Scan::Palette {
+            len: 2 + len,
+            osc,
+            body: rest[start..i].to_vec(),
+            bel,
+        });
+    }
+    (rest.len() < MAX_PALETTE_OSC).then_some(Scan::Incomplete)
+}
+
 /// What `bytes`, starting at an ESC, holds.
 fn scan(bytes: &[u8]) -> Scan {
     match bytes {
@@ -143,7 +189,9 @@ fn scan(bytes: &[u8]) -> Scan {
         [_, b'c', ..] => Scan::Reset,
         [_, b'H', ..] => Scan::TabSet,
         [_, b'[', ..] => scan_csi(bytes),
-        [_, b']', rest @ ..] => scan_colour_query(rest).unwrap_or(Scan::String),
+        [_, b']', rest @ ..] => scan_colour_query(rest)
+            .or_else(|| scan_palette(rest))
+            .unwrap_or(Scan::String),
         // A string's body follows, and ends at a BEL or an `ESC \`.
         [_, b'P' | b'_' | b'^' | b'X', ..] => Scan::String,
         // An escape: intermediates, then its final byte.
@@ -321,6 +369,15 @@ impl ModeSplitter {
                     pieces.push(Piece::ColourQuery { which, bel });
                     len
                 }
+                Scan::Palette {
+                    len,
+                    osc,
+                    body,
+                    bel,
+                } => {
+                    pieces.push(Piece::Palette { osc, body, bel });
+                    len
+                }
                 Scan::Csi {
                     len,
                     marker,
@@ -442,10 +499,45 @@ mod tests {
                 | Piece::Tab
                 | Piece::TabSet
                 | Piece::TabClear(_)
-                | Piece::ColourQuery { .. } => None,
+                | Piece::ColourQuery { .. }
+                | Piece::Palette { .. } => None,
             })
             .flatten()
             .collect()
+    }
+
+    #[test]
+    fn palette_oscs_split_out_whole() {
+        let mut f = ModeSplitter::default();
+        assert_eq!(
+            f.split(b"\x1b]4;1;red\x07\x1b]104\x1b\\"),
+            vec![
+                Piece::Palette {
+                    osc: 4,
+                    body: b"1;red".to_vec(),
+                    bel: true
+                },
+                Piece::Palette {
+                    osc: 104,
+                    body: Vec::new(),
+                    bel: false
+                },
+            ]
+        );
+        // Cut off, it waits for its end.
+        assert_eq!(f.split(b"\x1b]10"), vec![]);
+        assert_eq!(f.split(b"4;2;3"), vec![]);
+        assert_eq!(
+            f.split(b"\x07"),
+            vec![Piece::Palette {
+                osc: 104,
+                body: b"2;3".to_vec(),
+                bel: true
+            }]
+        );
+        // OSC 1 (a title) and OSC 40 are not palette ones.
+        let other = b"\x1b]1;x\x07\x1b]40;y\x07";
+        assert_eq!(text(f.split(other)), other);
     }
 
     #[test]

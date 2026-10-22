@@ -38,6 +38,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A program's palette is its pane's**: the colours of the 256 a program sets
+  with OSC 4 (base16-shell and the like) are drawn as it set them in its pane,
+  and its OSC 4 queries for them answered, as tmux does; OSC 104 unsets them.
 - **A program's default colours are its pane's**: the foreground and background
   a program sets with OSC 10 / 11 (reset by OSC 110 / 111) are the pane's, drawn
   and shown by `#{pane_fg}` / `#{pane_bg}`, as tmux's, under `window-style` in
