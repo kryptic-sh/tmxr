@@ -131,6 +131,21 @@ checks = [
 ]
 
 [[cases]]
+name = "a_right_tap_keeps_the_menu_it_opens"
+# Read with the press, the release reaches the pane, not the menu the press
+# opened: `h` then picks "Horizontal Split".
+attach = true
+unix_only = true
+steps = [
+  { mouse = { action = "tap", button = 3, at = [5, 5] } },
+  { wait_text = "Horizontal Split" },
+  { sleep = 0.5 },
+  { keys = "h" },
+  { sleep = 0.5 },
+]
+checks = [{ format = "#{window_panes}", expect = "2" }]
+
+[[cases]]
 name = "a_release_outside_a_menu_closes_it"
 attach = true
 unix_only = true

@@ -118,8 +118,22 @@ table. What has been verified, and how:
   paste all match. Its first runs found the wheel scrolling as it entered copy
   mode and the binds missing tmux's alternate-screen and copy-mode conditions,
   fixed. Menus take the mouse as tmux's (`Menu::mouse`, from `menu_key_cb`),
-  checked by the oracle's menu cases. Still missing: nothing has been tried by
-  hand in a real terminal.
+  checked by the oracle's menu cases. Tried by hand in Alacritty 0.17
+  (2026-10-22, an X11 Alacritty on the Xwayland of a Hyprland nested in
+  `kwin_wayland --virtual`, driven by `xdotool` there; `wlrctl`'s virtual
+  pointer moves Hyprland 0.56's cursor but its buttons and wheel reach no
+  client): clicks focus panes, the wheel enters copy mode, `q` leaves it, double
+  and triple clicks copy a word and a line, a drag copies its text, a border
+  drag resizes, and a middle click pastes. It found a right click's menu closing
+  at once: the press and release came in one read, and tmxr gave the release to
+  the menu the press had opened, where tmux's `server_client_handle_key` gives
+  an overlay only input that arrives once it is open
+  (`a_right_tap_keeps_the_menu_it_opens`; the oracle's `click` writes the two 80
+  ms apart, as a deliberate click, and tmux closes the menu then). The client
+  now sends what it reads together as one message (`ClientMsg::Input`,
+  `Server::inputs`) for that; tmxr's prompts and pickers still take keys read
+  with the key that opened them, where tmux's prompt does not (its modes do), so
+  a command typed in one go reaches the prompt.
 - **crossterm is patched** until a release carries the fixes: crossterm 0.29's
   Unix parser read `ESC ESC` as a plain Escape, so Alt+Escape lost its Alt
   (upstream as crossterm-rs/crossterm#1143, branch `fix-alt-escape` of

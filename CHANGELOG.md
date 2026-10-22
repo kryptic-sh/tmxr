@@ -24,11 +24,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`customize-mode` refuses `-a` and `-F`**, which it accepted and ignored:
   tmux's has no `-a`, and its `-F` formats tree lines tmxr's picker does not
   have.
-- **The client-server protocol is now 9** (the client sends its process id, for
-  `#{client_pid}`, and its terminal's device, for `#{client_tty}`; the server
-  tells it whether to ask for focus reports, `focus-events`, and what to run in
-  its place, `detach-client -E`): after upgrading, a running server must be
-  restarted (`tmxr kill-server`); the client says so if it meets one.
+- **The client-server protocol is now 10** (the client sends its process id, for
+  `#{client_pid}`, its terminal's device, for `#{client_tty}`, and the input
+  events it reads together as one message; the server tells it whether to ask
+  for focus reports, `focus-events`, and what to run in its place,
+  `detach-client -E`): after upgrading, a running server must be restarted
+  (`tmxr kill-server`); the client says so if it meets one.
 - **`break-pane -t` is the window the pane becomes**, as tmux's, not the pane to
   break: that is `-s` now (the current pane without it). `-t` takes an index
   (`-t :5`), `-a` / `-b` place it next to the target window, and `-n` names it
@@ -616,6 +617,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A tapped or quick right click keeps the pane menu open**, as tmux's: its
+  release, read with the press, closed the menu the press had just opened, so a
+  touchpad tap showed no menu. Input the terminal sends together is now taken
+  together, as tmux takes one read: a menu, popup or `display-panes` open when
+  it arrives takes it, and one opened by an event in it does not see the rest.
 - **A comment in a command string spanning lines ended the whole string**: the
   commands on the lines after a `#` comment were dropped; a comment now runs to
   the end of its line, as in tmux.

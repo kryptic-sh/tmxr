@@ -213,6 +213,12 @@ impl Server {
                 c.sgr(b, at, true)?;
                 c.sgr(b, at, false)
             }
+            // The press and release in one write, as a touchpad's tap or a
+            // quick click reaches the terminal: tmux reads them together.
+            "tap" => {
+                let (col, row) = (at.0 + 1, at.1 + 1);
+                c.send(format!("\x1b[<{b};{col};{row}M\x1b[<{b};{col};{row}m").as_bytes())
+            }
             // Every press and release in one write: how quickly the presses
             // arrive decides a double click, and a busy runner must not.
             "double-click" | "triple-click" => {

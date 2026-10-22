@@ -81,11 +81,10 @@ mod tests {
                 }),
             }),
             ClientMsg::Command(vec!["split-window".into(), "-h".into()]),
-            ClientMsg::Input(Event::Key(KeyEvent::new(
-                KeyCode::Char('h'),
-                KeyModifiers::CONTROL,
-            ))),
-            ClientMsg::Input(Event::Resize(120, 40)),
+            ClientMsg::Input(vec![
+                Event::Key(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::CONTROL)),
+                Event::Resize(120, 40),
+            ]),
             ClientMsg::Detach,
             ClientMsg::Resumed,
             ClientMsg::LockFailed("lock: not found".into()),
@@ -160,7 +159,7 @@ mod tests {
         for m in sample_server() {
             write_msg(&mut buf, &m).unwrap();
         }
-        assert_eq!(PROTOCOL_VERSION, 9, "update the golden digest below too");
+        assert_eq!(PROTOCOL_VERSION, 10, "update the golden digest below too");
         assert_eq!(
             fnv1a(&buf),
             GOLDEN,
@@ -168,7 +167,7 @@ mod tests {
         );
     }
 
-    const GOLDEN: u64 = 16_031_002_265_491_766_994;
+    const GOLDEN: u64 = 4_896_775_764_239_183_878;
 
     /// FNV-1a 64-bit (http://www.isthe.com/chongo/tech/comp/fnv/), used only to
     /// pin the golden bytes in a readable constant.

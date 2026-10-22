@@ -15,7 +15,7 @@ pub use codec::{ProtoError, read_msg, write_msg};
 
 /// Bumped on any change to a type in this module. Client and server refuse to
 /// talk across a mismatch rather than mis-decode each other.
-pub const PROTOCOL_VERSION: u32 = 9;
+pub const PROTOCOL_VERSION: u32 = 10;
 
 /// The most bytes of standard input one [`ClientMsg::Stdin`] carries, and
 /// of a reply's output one [`ServerMsg::Output`] carries, so input or a
@@ -59,9 +59,10 @@ pub enum ClientMsg {
     /// A command line in tmux's language, already split into arguments
     /// (`["split-window", "-h"]`). Empty means the default command.
     Command(Vec<String>),
-    /// An input event from the attached client's terminal (keys, mouse,
-    /// paste, focus, resize), decoded by crossterm on the client.
-    Input(crossterm::event::Event),
+    /// Input events from the attached client's terminal (keys, mouse,
+    /// paste, focus, resize), decoded by crossterm on the client: those it
+    /// read together, in order, as tmux takes one read of its terminal.
+    Input(Vec<crossterm::event::Event>),
     /// The client wants to detach (sent on terminal hangup).
     Detach,
     /// The client is back from `suspend-client` or a lock; its terminal was

@@ -17,7 +17,52 @@ use crate::overlay::{Overlay, OverlayAction};
 const MENU_ITEMS: usize = 10;
 
 impl Server {
-    pub(super) fn input(&mut self, id: ClientId, ev: TermEvent) {
+    /// Events client `id`'s terminal sent together, as tmux's
+    /// server_client_handle_key takes one read: a menu, popup or
+    /// `display-panes` open as they arrive takes its events at once, and
+    /// the others run in order, one's commands before the next, but an
+    /// overlay of those kinds one of them opens does not see the rest. So
+    /// a right click's release, read with its press, does not close the
+    /// menu the press opened.
+    pub(super) fn inputs(&mut self, id: ClientId, events: Vec<TermEvent>) {
+        let mut waiting = Vec::new();
+        for ev in events {
+            if self.tmux_overlay(id).is_some() {
+                self.input(id, ev);
+            } else {
+                waiting.push(ev);
+            }
+        }
+        for ev in waiting {
+            let opened = self.tmux_overlay(id).and_then(|a| a.overlay.take());
+            self.input(id, ev);
+            // An overlay the event opened in turn takes its place.
+            if let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut())
+                && att.overlay.is_none()
+            {
+                att.overlay = opened;
+            }
+        }
+    }
+
+    /// Client `id`'s attachment, if what it shows over its window is one of
+    /// the overlays tmux has (a menu, popup or `display-panes`). tmxr's
+    /// pickers and prompts still take keys read with the key that opened
+    /// them: tmux's modes do too, but its prompt does not, which tmxr keeps
+    /// so a command typed in one go reaches its prompt.
+    fn tmux_overlay(&mut self, id: ClientId) -> Option<&mut super::Attached> {
+        self.clients
+            .get_mut(&id)
+            .and_then(|c| c.att.as_mut())
+            .filter(|a| {
+                matches!(
+                    a.overlay,
+                    Some(Overlay::Menu(_) | Overlay::Popup(_) | Overlay::Panes { .. })
+                )
+            })
+    }
+
+    fn input(&mut self, id: ClientId, ev: TermEvent) {
         let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
             return;
         };

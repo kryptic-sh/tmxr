@@ -765,7 +765,7 @@ impl Server {
                     c.stdin.get_or_insert_with(Vec::new).extend(data);
                 }
             }
-            ClientMsg::Input(ev) => self.input(id, ev),
+            ClientMsg::Input(events) => self.inputs(id, events),
             ClientMsg::Detach => self.detach(id, "detached"),
             ClientMsg::Resumed | ClientMsg::LockFailed(_) => {
                 // The shell had the terminal: repaint everything, and tell

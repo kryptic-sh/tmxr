@@ -304,14 +304,23 @@ pub fn spawn_input(send: Arc<Mutex<SendHalf>>) -> Input {
                     Ok(false) => continue,
                     Err(_) => break,
                 }
-                let Ok(mut ev) = crossterm::event::read() else {
+                let Ok(ev) = crossterm::event::read() else {
                     break;
                 };
+                // With the events read with it, as the server takes them
+                // together (a click's press and release).
+                let mut events = vec![ev];
+                while let Ok(true) = crossterm::event::poll(Duration::ZERO) {
+                    match crossterm::event::read() {
+                        Ok(ev) => events.push(ev),
+                        Err(_) => break,
+                    }
+                }
                 if console_bytes {
-                    ev = console_key(ev);
+                    events = events.into_iter().map(console_key).collect();
                 }
                 let Ok(mut send) = send.lock() else { break };
-                if write_msg(&mut *send, &ClientMsg::Input(ev)).is_err() {
+                if write_msg(&mut *send, &ClientMsg::Input(events)).is_err() {
                     break;
                 }
             }

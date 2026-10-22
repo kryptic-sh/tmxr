@@ -71,9 +71,10 @@ pub enum Step {
     WaitText(String),
 }
 
-/// A mouse event: `click`, `double-click`, `triple-click`, `down`, `up`,
-/// `drag` (from `at` to `to`), `wheel-up` or `wheel-down`, with button 1
-/// (left), 2 (middle) or 3 (right).
+/// A mouse event: `click` (the press and release written apart), `tap`
+/// (written together), `double-click`, `triple-click`, `down`, `up`, `drag`
+/// (from `at` to `to`), `wheel-up` or `wheel-down`, with button 1 (left), 2
+/// (middle) or 3 (right).
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Mouse {
