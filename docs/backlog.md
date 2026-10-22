@@ -602,9 +602,10 @@ table. What has been verified, and how:
     (`tmxr_server::run`); the first client to attach is now told so, but the
     file's good parts are not kept. tmux runs a config line by line and keeps
     what worked; tmxr's TOML is read whole.
-  - Performance: entering copy mode copies every history row into
-    `copy::snapshot` (a String per cell) on the server thread; Windows takes two
-    process snapshots per pane per second in `util::refresh_commands`;
+  - Performance: entering copy mode still copies the whole history
+    (`copy::snapshot`), but cheaply since 2026-10-21 (5–6 ms for 50000 lines,
+    see "vt100 is patched"); Windows takes two process snapshots per pane each
+    `status-interval` (5 s by default) in `util::refresh_commands`;
     `#{pane_current_path}` inspects the process on each expansion: on Windows, a
     release build showed no measurable cost against `#{pane_index}` (40 calls of
     20 expansions each, 2026-10-20; a debug build took about 28 ms an
