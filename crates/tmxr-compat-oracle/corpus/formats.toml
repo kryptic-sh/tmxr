@@ -968,6 +968,22 @@ checks = [
 ]
 
 [[cases]]
+name = "cursor_colour_falls_back_to_the_option"
+unix_only = true
+steps = [
+  { run = "set -g cursor-colour colour100" },
+  { run = "new-window -d -t o:1 'printf \"\\033]12;#abcdef\\007\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:2" },
+  { run = "set -p -t o:2 cursor-colour '#102030'" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "display -p -t o:0 '#{cursor_colour}'", expect = "colour100" },
+  { command = "display -p -t o:1 '#{cursor_colour}'", expect = "#abcdef" },
+  { command = "display -p -t o:2 '#{cursor_colour}'", expect = "#102030" },
+]
+
+[[cases]]
 name = "alternate_saved_keeps_the_cursor_1049_saved"
 unix_only = true
 steps = [

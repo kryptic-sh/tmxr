@@ -656,8 +656,9 @@ table. What has been verified, and how:
     tmux, it is sent to every terminal, where tmux sends it only where terminfo
     or `terminal-features` has `ccolour`, and a leaving client always sends OSC
     112, where tmux does only if it set a colour (as tmxr already did with the
-    cursor shape); tmux's `cursor-colour` option is missing; tmux answers an OSC
-    12 query (`?`), which tmxr does not, nor OSC 4, 10 or 11 queries (vt100's
+    cursor shape); `cursor-colour` gives the colour where the program sets none
+    (`cursor_colour_falls_back_to_the_option`); tmux answers an OSC 12 query
+    (`?`), which tmxr does not, nor OSC 4, 10 or 11 queries (vt100's
     `unhandled_osc` does not say which terminator a reply should use);
     `cursor_shape` and `cursor_blinking` are kept from DECSCUSR and `CSI ? 12`;
     `insert_flag` and `wrap_flag` are kept from the sequences vt100 passes on
@@ -687,11 +688,13 @@ table. What has been verified, and how:
     its client cell); `window-status-activity-style` and `-bell-style` default
     to `default` where tmux's are `reverse`, on purpose (tmux's would change
     tmxr's theme, which shows the alert flags in its window format); colour
-    options (`status-fg` / `-bg`, `display-panes-colour`, `clock-mode-colour`
-    and the rest, all `Word`) keep any text as typed, where tmux 3.6 (seen
-    2026-10-20) refuses `nocolour` or `colour300` with `bad colour` and shows
-    `#ABCDEF` as `#abcdef`; checking them as tmux does was considered and
-    declined for now: tmxr's own defaults put formats in colour options
+    options (`status-fg` / `-bg`, `display-panes-colour`, `clock-mode-colour`,
+    `cursor-colour` and the rest, all `Word`) keep any text as typed, where tmux
+    3.6 (seen 2026-10-20) refuses `nocolour` or `colour300` with `bad colour`
+    and shows `#ABCDEF` as `#abcdef` (and, seen 2026-10-22, refuses `none` for
+    `cursor-colour` though it shows its default as `none`, and shows `orchid`
+    there as `#da70d6`); checking them as tmux does was considered and declined
+    for now: tmxr's own defaults put formats in colour options
     (`display-panes-colour = "#{@thm_blue}"`), which tmux's check would refuse,
     so it needs those expanded first or the theme moved. `editor` edits a buffer
     from `choose-buffer` (`e`) in a popup, as tmux's `popup_editor`, the popup

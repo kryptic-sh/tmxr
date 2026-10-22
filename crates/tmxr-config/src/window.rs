@@ -201,6 +201,7 @@ pub const PANE_OPTIONS: &[&str] = &[
     "allow-rename",
     "allow-set-title",
     "alternate-screen",
+    "cursor-colour",
     "cursor-style",
     "pane-border-format",
     "pane-scrollbars-style",
@@ -460,6 +461,9 @@ options_table! {
     /// Copy mode search matches under the cursor, and the others.
     "copy-mode-current-match-style" => copy_mode_current_match_style: String,
     "copy-mode-match-style" => copy_mode_match_style: String,
+    /// A pane's cursor colour until its program sets one (OSC 12); `none`
+    /// for the terminal's own.
+    "cursor-colour" => cursor_colour: Word,
     /// A pane's cursor shape until its program asks for one.
     "cursor-style" => cursor_style: CursorStyle,
     /// What fills the client beyond a smaller window; empty, a dot.

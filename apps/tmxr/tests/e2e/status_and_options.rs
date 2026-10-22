@@ -1674,6 +1674,11 @@ fn cursor_style_and_programs_shape_the_clients_cursor() {
         let raw = s.raw_text();
         raw.rfind("\x1b]112\x07") > raw.rfind("\x1b]12;rgb:12/34/56\x07")
     });
+    // Its `cursor-colour`, where the program sets none.
+    t.run(&["set", "-g", "cursor-colour", "#102030"]);
+    s.wait_for("the option's colour", |_| {
+        s.raw_text().contains("\x1b]12;rgb:10/20/30\x07")
+    });
 }
 
 #[test]

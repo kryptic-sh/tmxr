@@ -942,10 +942,11 @@ impl<'a> Context for Vars<'a> {
                 }
             }
             "alternate_on" => flag(pane?.emu.screen().alternate_screen()),
-            "cursor_colour" => pane?
-                .emu
-                .cursor_colour()
-                .map_or_else(|| "none".to_owned(), |rgb| format!("#{rgb:06x}")),
+            // The program's, else `cursor-colour` as set.
+            "cursor_colour" => match pane?.emu.cursor_colour() {
+                Some(rgb) => format!("#{rgb:06x}"),
+                None => srv.pane_options(pane?.id).cursor_colour.to_string(),
+            },
             "cursor_very_visible" => flag(pane?.emu.cursor_very_visible()),
             // tmux's saved_cx / saved_cy, UINT_MAX until a switch sets them.
             "alternate_saved_x" | "alternate_saved_y" => {

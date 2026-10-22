@@ -41,7 +41,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **A program's cursor colour reaches the terminal**: the cursor colour the
   active pane's program sets with OSC 12 (read as tmux reads X11 colour
   specifications, and reset by OSC 112) is given to the client's terminal, as
-  tmux does, and reset when the client leaves; `#{cursor_colour}` shows it, and
+  tmux does, and reset when the client leaves; the new `cursor-colour` pane
+  option gives one where the program sets none. `#{cursor_colour}` shows it, and
   `#{cursor_very_visible}` the very visible cursor of `CSI 34 l`.
 - **`#{alternate_saved_x}` and `#{alternate_saved_y}`**: where the cursor was
   when the pane's program last switched to the alternate screen with
