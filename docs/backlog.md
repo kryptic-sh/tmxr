@@ -443,7 +443,9 @@ table. What has been verified, and how:
   the pane's vt100 table when drawn (`copy_mode_keeps_a_lines_hyperlink`). A
   client's and a pane's link tables only grow (`u16` of them in a pane, then
   text is unlinked). Seen drawing cleanly in Alacritty 0.17 (2026-10-22, nested
-  Hyprland); clicking a link there was not tried.
+  Hyprland), and a click on a link there, with tmxr's mouse off, gave
+  Alacritty's hint command the link's URL (an X11 Alacritty driven by `xdotool`;
+  the hint set to a command that only records it).
 - **vt100 is patched** until a release carries the fixes (doy/vt100-rust#47,
   #48, #49, #50, #51 and #52, from branches `scroll-alloc`, `visible-row`,
   `trim-on-scroll`, `line-cells`, `hyperlinks` and `saved-screen` of
