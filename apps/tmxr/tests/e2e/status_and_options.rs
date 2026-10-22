@@ -1629,7 +1629,10 @@ fn cursor_style_and_programs_shape_the_clients_cursor() {
     s.wait_for("the option's shape again", |_| {
         s.raw_text().matches("\x1b[4 q").count() > before
     });
-    // And the terminal's own colour.
+    // And the terminal's own colour. Not looked for on Windows, where the
+    // harness reads the client through a ConPTY that passes OSC 12 on but
+    // not OSC 112 (CI, 2026-10-22).
+    #[cfg(unix)]
     s.wait_for("the terminal's colour", |_| {
         let raw = s.raw_text();
         raw.rfind("\x1b]112\x07") > raw.rfind("\x1b]12;rgb:12/34/56\x07")
