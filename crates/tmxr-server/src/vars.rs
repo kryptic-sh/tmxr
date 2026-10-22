@@ -103,10 +103,12 @@ pub const NAMES: &[&str] = &[
     "selection_present",
     "server_sessions",
     "session_activity",
+    "session_activity_flag",
     "session_alert",
     "session_alerts",
     "session_attached",
     "session_attached_list",
+    "session_bell_flag",
     "session_created",
     "session_format",
     "session_group",
@@ -122,6 +124,7 @@ pub const NAMES: &[&str] = &[
     "session_marked",
     "session_name",
     "session_path",
+    "session_silence_flag",
     "session_stack",
     "session_windows",
     "sixel_support",
@@ -630,6 +633,18 @@ impl<'a> Context for Vars<'a> {
                     }
                 }
                 seen
+            }
+            // Whether any of the session's windows has that alert for it. tmux
+            // 3.6 means the same but looks at one window only (the first
+            // for a bell, the format's own for the others), so it can say 0
+            // where a later window is alerted.
+            "session_activity_flag" | "session_bell_flag" | "session_silence_flag" => {
+                let mark = match name {
+                    "session_activity_flag" => '#',
+                    "session_bell_flag" => '!',
+                    _ => '~',
+                };
+                flag(alerts(srv, session?).iter().any(|(_, m)| m.contains(mark)))
             }
             // The alerted windows' indexes, each with its alerts.
             "session_alerts" => alerts(srv, session?)

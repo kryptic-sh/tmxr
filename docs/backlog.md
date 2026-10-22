@@ -854,14 +854,12 @@ table. What has been verified, and how:
   window they place (2026-10-18, tmux 3.6): `server_link_window` moves
   `marked_pane.wl` to the new link but keeps `marked_pane.s`, so the mark no
   longer validates. tmxr keeps the mark; not copied, as it reads as a tmux bug.
-- **tmux's `session_bell_flag`, `session_activity_flag` and
-  `session_silence_flag` do not ask the session** (tmux 3.6 `format.c`, read,
-  not run): the loop over the session's windows returns on its first pass, so
-  the bell flag is the session's first window's, and the other two test the
-  format's target window (`ft->wl`), not the loop's. tmxr has none of the three;
-  `session_alert` / `session_alerts` give the session's alerts correctly.
-  Options: add them with tmux's answers (scripts get what tmux gives) or with
-  the evident intent (any window alerted); not decided, so not added.
+- **`session_bell_flag`, `session_activity_flag`, `session_silence_flag` differ
+  from tmux 3.6 on purpose** (decided by the owner, 2026-10-22): tmux's loop
+  over the session's windows returns on its first pass, so its bell flag is the
+  first window's and the other two test the format's target window (read in
+  `format.c`, not run); tmxr's are set when any window has the alert
+  (`session_alert_flags_look_at_every_window`).
 - **tmux crashes on a session loop's current format from a detached client**
   (2026-10-18, tmux 3.6): `display -p '#{S:a,b}'` run from the command line
   takes down the server, as `format_loop_sessions` reads the client's session,

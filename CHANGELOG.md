@@ -37,6 +37,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`#{session_bell_flag}`, `#{session_activity_flag}` and
+  `#{session_silence_flag}`**: 1 when any of the session's windows has that
+  alert for it. tmux 3.6 has them but looks at one window only (the first for a
+  bell, the format's own window for the others), so it can say 0 where a later
+  window is alerted; tmxr looks at every window.
 - **Synchronized updates** (Linux and macOS): a client asks its terminal at
   attach whether it takes DEC mode 2026 (DECRQM) and, where it does, writes each
   frame as one synchronized update, so the terminal never shows a frame half

@@ -404,6 +404,40 @@ fn the_current_command_is_read_when_asked() {
     }
 }
 
+/// `session_bell_flag`, `session_activity_flag` and `session_silence_flag`
+/// are set when any of the session's windows has the alert, whichever window
+/// it is (tmux 3.6 looks at one window only), and not in the session showing
+/// the window, which is not alerted.
+#[cfg(unix)]
+#[test]
+fn session_alert_flags_look_at_every_window() {
+    let t = Tmxr::new("sessionflags");
+    t.run(&[
+        "new-session",
+        "-d",
+        "-s",
+        "o",
+        r#"read x; printf "\a"; exec sleep 1000"#,
+    ]);
+    let s = t.attach(&["attach", "-t", "o"]);
+    s.wait_for("the status line", |text| text.contains("o"));
+    t.run(&["set-option", "-g", "monitor-activity", "on"]);
+    t.run(&["new-session", "-d", "-s", "p"]);
+    t.run(&["new-window", "-d", "-t", "p:3"]);
+    t.run(&["link-window", "-d", "-s", "o:0", "-t", "p:5"]);
+    t.run(&["send-keys", "-t", "o:0", "Enter"]);
+    let flags = "#{session_bell_flag}#{session_activity_flag}#{session_silence_flag}";
+    t.wait_run(
+        &["display-message", "-p", "-t", "p", flags],
+        "p's flags",
+        |o| o.trim() == "110",
+    );
+    assert_eq!(
+        t.run(&["display-message", "-p", "-t", "o", flags]).trim(),
+        "000"
+    );
+}
+
 #[test]
 fn allow_rename_lets_programs_name_their_window() {
     // The name string is found by the splitter passthrough uses, which needs
