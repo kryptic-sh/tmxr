@@ -291,6 +291,10 @@ pub struct Emulator {
     alt_allowed: bool,
     /// Origin mode (`CSI ? 6 h`, DECOM), which vt100 keeps to itself.
     origin_mode: bool,
+    /// Where the cursor was (row, column) when `CSI ? 1049 h` last switched
+    /// to the alternate screen, as tmux's `saved_cx` / `saved_cy`: kept
+    /// after the switch back, and not set by 47 or 1047.
+    alternate_saved: Option<(u16, u16)>,
     /// The scroll region's top and bottom rows, `None` for the whole
     /// screen. tmux keeps one for the terminal; vt100 keeps one per screen,
     /// so it is written into vt100's again after each switch.
@@ -325,6 +329,7 @@ impl Emulator {
             modes: ModeSplitter::default(),
             alt_allowed: true,
             origin_mode: false,
+            alternate_saved: None,
             region: None,
             tabs: default_tabs(cols),
             mouse_utf8: false,
@@ -687,7 +692,10 @@ impl Emulator {
         let cursor = format!("\x1b[{};{}H", row + 1, col + 1);
         match (on, mode) {
             (true, _) if alternate => {}
-            (true, _) => {
+            (true, mode) => {
+                if mode == 1049 {
+                    self.alternate_saved = Some((row, col));
+                }
                 self.parser.process(b"\x1b[?1049h");
                 self.parser.process(cursor.as_bytes());
             }
@@ -771,6 +779,13 @@ impl Emulator {
     pub fn insert_and_wrap(&self) -> (bool, bool) {
         let hooks = self.parser.callbacks();
         (hooks.insert_mode, !hooks.no_wrap)
+    }
+
+    /// Where the cursor was (row, column) when the program last switched to
+    /// the alternate screen with `CSI ? 1049 h` (`#{alternate_saved_x}`,
+    /// `#{alternate_saved_y}`), if it has.
+    pub fn alternate_saved(&self) -> Option<(u16, u16)> {
+        self.alternate_saved
     }
 
     /// Whether origin mode is on (`#{origin_flag}`).
@@ -923,6 +938,20 @@ mod tests {
             marked.iter().all(|&i| text[i].starts_with('p')),
             "{marked:?} {text:?}"
         );
+    }
+
+    #[test]
+    fn the_cursor_1049_saved_is_kept_as_tmuxs() {
+        let mut e = Emulator::new(6, 20, 0);
+        assert_eq!(e.alternate_saved(), None);
+        e.process(b"ab\r\ncde\x1b[?1049h\x1b[4;7Hx");
+        assert_eq!(e.alternate_saved(), Some((1, 3)));
+        // Not moved by a switch while on the alternate screen, nor by 47 or
+        // 1047, and kept after the switch back.
+        e.process(b"\x1b[?1049h\x1b[?1049l\x1b[H\x1b[?47h\x1b[?47l\x1b[?1047h");
+        assert_eq!(e.alternate_saved(), Some((1, 3)));
+        e.process(b"\x1b[?1047l\x1bc");
+        assert_eq!(e.alternate_saved(), Some((1, 3)), "a full reset keeps it");
     }
 
     #[test]

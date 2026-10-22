@@ -37,6 +37,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`#{alternate_saved_x}` and `#{alternate_saved_y}`**: where the cursor was
+  when the pane's program last switched to the alternate screen with
+  `CSI ? 1049 h`, as tmux's (4294967295 until it has).
 - **`capture-pane -a`** captures the normal screen a program on the alternate
   screen hides (an editor, a pager), as tmux's; without an alternate screen it
   fails with `no alternate screen`, or with `-q` captures nothing.

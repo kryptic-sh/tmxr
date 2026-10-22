@@ -11,6 +11,8 @@ use crate::server::{Attached, Server};
 pub const NAMES: &[&str] = &[
     "active_window_index",
     "alternate_on",
+    "alternate_saved_x",
+    "alternate_saved_y",
     "buffer_mode_format",
     "client_activity",
     "client_created",
@@ -940,6 +942,13 @@ impl<'a> Context for Vars<'a> {
                 }
             }
             "alternate_on" => flag(pane?.emu.screen().alternate_screen()),
+            // tmux's saved_cx / saved_cy, UINT_MAX until a switch sets them.
+            "alternate_saved_x" | "alternate_saved_y" => {
+                let saved = pane?.emu.alternate_saved();
+                let (row, col) =
+                    saved.map_or((u32::MAX, u32::MAX), |(r, c)| (u32::from(r), u32::from(c)));
+                if name.ends_with('x') { col } else { row }.to_string()
+            }
             // tmux's: how far the copy-mode view is above the bottom, and
             // whether something is selected; only in copy mode.
             "scroll_position" => pane?.copy.as_ref()?.position().0.to_string(),
