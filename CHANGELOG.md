@@ -37,6 +37,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`source-file` takes several paths and globs**, as tmux's:
+  `source-file ~/.config/tmxr/conf.d/*.toml extra.toml` applies each file in
+  turn, a later one winning; a path matching nothing is an error unless `-q`.
 - **X11's colour names**, as tmux's: `#{c:orchid}`, and styles such as
   `fg=NavyBlue` or `bg=grey50`, take the 578 names tmux 3.6 knows, ignoring
   case. Styles also take `grey` / `gray` with a percentage, which only `c:` took
@@ -495,7 +498,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   file sets (options, user options, binds, hooks) takes its value, and
   everything else keeps its own, so a `set -g`, `bind` or `set-hook` made at run
   time survives `prefix R`. It used to replace the whole config, dropping them.
-  A file setting an option to its default value still sets it.
+  A file setting an option to its default value still sets it. Sourcing a file
+  no longer makes it the config `prefix R` reloads: that stays the file the
+  server started with, as in tmux.
 - **Pane output no longer redraws the status line**, as in tmux: the status line
   is expanded on its `status-interval` timer and on the events that change it (a
   window renamed, flagged, added or selected, a key table, a message, a title),

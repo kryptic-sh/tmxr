@@ -67,7 +67,11 @@ server, as tmux's runs a file's commands (`Server::overlay_config`,
 keys under the options they set), user option, bind (`false` unbinds) and hook
 takes the file's value, and the rest keep theirs, run-time `set -g`, `bind` and
 `set-hook` included. A `[navigator]` or `[resurrect]` section replaces that
-section whole. `[hooks]` names are checked against the hooks tmxr fires
+section whole. `source-file PATH ...` takes several paths, each a glob (the
+`glob` crate), applied in turn so a later file wins; a path matching nothing is
+an error unless `-q`. Sourcing never changes which file is the config
+(`prefix R`, `#{config_files}`): that is the one the server started with, as
+tmux's. `[hooks]` names are checked against the hooks tmxr fires
 (`hooks::known`); an unknown one is reported and left out.
 
 ### Option scopes
