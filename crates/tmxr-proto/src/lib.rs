@@ -17,6 +17,9 @@ pub use codec::{ProtoError, read_msg, write_msg};
 /// talk across a mismatch rather than mis-decode each other.
 pub const PROTOCOL_VERSION: u32 = 11;
 
+/// How long a client waits for a server it started to accept connections.
+pub const SPAWN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
 /// The most bytes of standard input one [`ClientMsg::Stdin`] carries, and
 /// of a reply's output one [`ServerMsg::Output`] carries, so input or a
 /// reply of any size stays under [`codec::MAX_FRAME`].

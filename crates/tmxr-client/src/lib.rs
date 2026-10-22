@@ -23,9 +23,6 @@ use tmxr_proto::{
 
 pub use spawn::SERVER_ARG;
 
-/// How long to wait for a freshly spawned server to accept connections.
-const SPAWN_TIMEOUT: Duration = Duration::from_secs(10);
-
 /// What to run.
 pub struct Options {
     pub endpoint: Endpoint,
@@ -92,7 +89,7 @@ fn is_no_server(e: &io::Error) -> bool {
 }
 
 fn wait_for_server(endpoint: &Endpoint) -> io::Result<Stream> {
-    let deadline = Instant::now() + SPAWN_TIMEOUT;
+    let deadline = Instant::now() + tmxr_proto::SPAWN_TIMEOUT;
     let mut delay = Duration::from_millis(10);
     loop {
         match endpoint.connect() {

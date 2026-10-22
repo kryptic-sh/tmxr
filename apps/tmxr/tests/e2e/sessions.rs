@@ -424,6 +424,31 @@ fn destroy_unattached_and_the_exit_options_follow_tmux() {
 }
 
 #[test]
+fn a_server_nothing_reaches_goes_after_its_grace() {
+    let t = Tmxr::new("grace");
+    let started = Instant::now();
+    t.run(&["start-server"]);
+    let ls = t.output(&["ls"]);
+    assert!(ls.status.success(), "no server after start-server: {ls:?}");
+    // Gone once nothing has come for its grace (`STARTUP_GRACE`, 15 s), but
+    // not before a client would stop waiting for it (`SPAWN_TIMEOUT`, 10 s).
+    let deadline = started + Duration::from_secs(40);
+    while t
+        .output(&["show-options", "-s", "exit-empty"])
+        .status
+        .success()
+    {
+        assert!(Instant::now() < deadline, "the server stayed");
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    assert!(
+        started.elapsed() >= Duration::from_secs(10),
+        "it went after {:?}, before a client would stop waiting",
+        started.elapsed()
+    );
+}
+
+#[test]
 fn input_and_replies_larger_than_a_frame_go_whole() {
     let t = Tmxr::new("bigreply");
     t.run(&["new-session", "-d", "-s", "br"]);

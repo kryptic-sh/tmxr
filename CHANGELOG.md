@@ -631,6 +631,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A server nothing reaches no longer runs for ever**: one started for a client
+  that gave up waiting for it (a slow start under load), or by a `start-server`
+  that nothing followed, has no session and no client, and now goes after 15 s
+  (with `exit-empty`, as tmux's server goes when it has no sessions).
+
 - **Binds of the root table run in copy mode** when copy mode's table has none
   for the key or mouse event, as tmux's do: a `bind -n` key, the right-click
   menu (with its "Go To Top" and "Go To Bottom" items) and anything else bound

@@ -429,7 +429,15 @@ impl Server {
     /// `exit-unattached`) no session is left. Not before a first session,
     /// so a server started for a client's command waits for it.
     pub fn check_exit(&mut self) {
-        if !self.had_session || !self.cfg.exit_empty {
+        if !self.cfg.exit_empty {
+            return;
+        }
+        // Before a first session, only a server nothing has reached within
+        // the grace goes: a client gave up waiting for it, or ended.
+        if !self.had_session {
+            if self.clients.is_empty() && self.up_since.elapsed() >= super::STARTUP_GRACE {
+                self.begin_exit();
+            }
             return;
         }
         if !self.cfg.exit_unattached && !self.sessions.is_empty() {

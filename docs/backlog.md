@@ -789,14 +789,15 @@ table. What has been verified, and how:
   passing alone three times running. The servers did start, only late: after the
   third, two `__server` processes for the failed run's pipes (`oracle-58296-44`,
   `-45`) were still running 20 minutes on with no session, so the client's wait
-  elapsed before the server opened its pipe. Such a server never exits:
-  `Server::check_exit` waits for a first session (`had_session`, there because
-  tmxr's server starts apart from its client, unlike tmux's forked one) and none
-  comes. Options, neither taken: the server exits with no session and no client
-  once a startup grace longer than `SPAWN_TIMEOUT` has passed (a test of it
-  waits out the grace), or the client keeps the spawned `Child` and kills it
-  when it gives up (the child is dropped at once today). Why the start took so
-  long under load is not known.
+  elapsed before the server opened its pipe. Such a server used to run for ever
+  with no session; since 2026-10-22 one that has had no session and has no
+  client goes after `STARTUP_GRACE` (`Server::check_exit`, with `exit-empty`;
+  `a_server_nothing_reaches_goes_after_its_grace`), longer than the client's
+  `SPAWN_TIMEOUT`, which a const assertion holds it to. Considered and declined:
+  the client killing the server it spawned when it gives up, as a server that
+  did open its pipe may by then serve another client, and how a busy pipe
+  reaches `wait_for_server` on Windows was not established. Why the start took
+  so long under load is still not known, so the failures themselves remain.
 - **`word_separators_and_wrap_search_reach_copy_mode` failed once** (Windows,
   full e2e suite, 2026-10-18) at its first `#{copy_cursor_word}` check; four
   runs alone and the next full run passed. The failure output was not kept, so

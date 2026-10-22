@@ -259,6 +259,8 @@ pub struct Server {
     /// The id the next `pipe-pane` pipe takes.
     pub next_pipe: u64,
     had_session: bool,
+    /// When the server started, for [`STARTUP_GRACE`].
+    up_since: Instant,
     pub exiting: bool,
     /// When the socket was last shown as in use ([`SOCKET_REFRESH`]).
     socket_refreshed: Instant,
@@ -349,6 +351,13 @@ const DRAIN_BUDGET: Duration = Duration::from_millis(20);
 /// file from `/tmp`.
 const SOCKET_REFRESH: Duration = Duration::from_secs(60 * 60);
 
+/// How long a server that has had no session waits for a client before it
+/// goes (with `exit-empty`): longer than a client waits for the server it
+/// starts, so one whose start outlasted its client's wait does not run on
+/// with nothing in it.
+const STARTUP_GRACE: Duration = Duration::from_secs(15);
+const _: () = assert!(STARTUP_GRACE.as_secs() > tmxr_proto::SPAWN_TIMEOUT.as_secs());
+
 /// When foreground commands need a wakeup of their own to refresh, `every`
 /// after `last` did: none when a status line is redrawn (at one of
 /// `status_due`) within half an interval of it, as `tick` refreshes them
@@ -403,6 +412,7 @@ impl Server {
             next_buffer: 0,
             next_pipe: 0,
             had_session: false,
+            up_since: Instant::now(),
             exiting: false,
             socket_refreshed: Instant::now(),
             last_status: Instant::now(),
@@ -458,6 +468,9 @@ impl Server {
             .collect();
         if !self.exiting {
             due.push(self.socket_refreshed + SOCKET_REFRESH);
+            if !self.had_session && self.cfg.exit_empty {
+                due.push(self.up_since + STARTUP_GRACE);
+            }
         }
         let away = self.cfg.client_away_time;
         let mut status_due = Vec::new();
