@@ -336,6 +336,18 @@ checks = [
 ]
 
 [[cases]]
+name = "w_measures_the_width_on_screen"
+steps = [
+  { run = "set -g @a 'a中b'" },
+  { run = "set -g @s '#[fg=red]ab##'" },
+  { run = "set -g @u 'héllo wörld'" },
+  { run = "set -g @e ''" },
+]
+checks = [
+  { format = "#{w:@a}|#{w:@s}|#{w:@u}|#{n:@u}|#{w:@e}|#{w;n:@a}|#{n;w:@a}" },
+]
+
+[[cases]]
 name = "e_t_q_and_m_chain_with_other_modifiers"
 steps = [
   { run = "set -g @f '#{session_name}-long-text'" },

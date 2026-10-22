@@ -856,6 +856,8 @@ enum Mod<'a> {
     Literal,
     /// `n`: the length in bytes.
     Length,
+    /// `w`: the width on screen, as tmux's `format_width`.
+    Width,
     /// `s/pattern/replacement/flags`: each match of a regular expression
     /// replaced (`i` ignores case).
     Sub {
@@ -914,12 +916,13 @@ fn value_modifiers(body: &str) -> Option<(Vec<Mod<'_>>, &str)> {
         let after = chars.as_str();
         // What follows the modifier, up to the `;` or `:` that ends it.
         let (m, tail) = match letter {
-            'b' | 'd' | 'l' | 'n' | 'E' | 'T' => {
+            'b' | 'd' | 'l' | 'n' | 'w' | 'E' | 'T' => {
                 let m = match letter {
                     'b' => Mod::Basename,
                     'd' => Mod::Dirname,
                     'l' => Mod::Literal,
                     'n' => Mod::Length,
+                    'w' => Mod::Width,
                     'E' => Mod::Expand,
                     _ => Mod::ExpandTime,
                 };
@@ -1082,7 +1085,24 @@ fn apply_modifiers(mods: &[Mod<'_>], inner: &str, ctx: &dyn Context, pass: Pass)
     if mods.contains(&Mod::Length) {
         value = value.len().to_string();
     }
+    if mods.contains(&Mod::Width) {
+        value = display_width(&value).to_string();
+    }
     value
+}
+
+/// Columns `text` takes when drawn, as tmux's `format_width`: styles take
+/// none, `##` is one `#`, and a control character none. Where a `#[` has no
+/// `]` this counts the text before it; tmux's gives 0 for the whole.
+fn display_width(text: &str) -> usize {
+    use unicode_width::UnicodeWidthChar as _;
+    draw_pieces(text)
+        .iter()
+        .filter_map(|p| match p {
+            Piece::Text(t) => Some(t.chars().map(|c| c.width().unwrap_or(0)).sum::<usize>()),
+            Piece::Style(_) => None,
+        })
+        .sum()
 }
 
 /// tmux's `s/pattern/replacement/`: every match of the extended regular
@@ -1580,6 +1600,15 @@ mod tests {
             strftime("%z", &local(2024, 3, 1, 1, 0, 5, 60, 1_709_251_200)),
             "+0100"
         );
+    }
+
+    #[test]
+    fn w_gives_the_width_on_screen() {
+        assert_eq!(x("#{w:@u}"), "11");
+        assert_eq!(x("#{n:@u}"), "13", "bytes, against columns");
+        assert_eq!(x("#{w:#{l:a中b}}"), "4");
+        assert_eq!(x("#{w:#{l:#[fg=red]ab##}}"), "3", "a style takes none");
+        assert_eq!(x("#{w:@e}"), "0");
     }
 
     #[test]

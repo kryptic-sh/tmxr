@@ -621,14 +621,12 @@ table. What has been verified, and how:
     server's tick calling it is not observed by any test); a job's run is
     stopped by killing its own process (SIGKILL), where tmux sends SIGTERM, and
     in both a command's own children outlive it unless the shell `exec`s them;
-    modifiers `w:` (it needs a display-width measure `tmxr-command` does not
-    have, unicode-width being a new dependency); `c:` gives no colour for X11's
-    names (`orchid`, `navy blue`), which tmux 3.6's `colour_byname` takes from a
-    table of 578 (`tmxr_command::colour::rgb` reads everything else tmux reads,
-    compared in the oracle; copying the table is the open choice); a syntax
-    error ends the expansion as tmux's for a comparison, `m:` or `R:` without
-    its comma (`format::expand_item`), and a loop or `N:` whose lookup fails
-    gives what tmux's does (compared by
+    `c:` gives no colour for X11's names (`orchid`, `navy blue`), which tmux
+    3.6's `colour_byname` takes from a table of 578 (`tmxr_command::colour::rgb`
+    reads everything else tmux reads, compared in the oracle; copying the table
+    is the open choice); a syntax error ends the expansion as tmux's for a
+    comparison, `m:` or `R:` without its comma (`format::expand_item`), and a
+    loop or `N:` whose lookup fails gives what tmux's does (compared by
     `loops_and_n_whose_lookups_fail_as_tmux`); many of tmux's format variables
     (compare tmux's `format_table` with `vars.rs` for the list;
     `alternate_saved_*`, `cursor_colour` and `cursor_very_visible` need terminal

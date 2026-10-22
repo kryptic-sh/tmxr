@@ -37,6 +37,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The `w:` format modifier**, as tmux's: the width the expanded text takes on
+  screen (`#{w:#{pane_title}}`), where `n:` gives its length in bytes. Styles
+  take no width, `##` counts as one `#`, and a wide character as two.
 - **`#{session_bell_flag}`, `#{session_activity_flag}` and
   `#{session_silence_flag}`**: 1 when any of the session's windows has that
   alert for it. tmux 3.6 has them but looks at one window only (the first for a

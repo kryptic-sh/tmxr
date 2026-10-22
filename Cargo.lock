@@ -2456,6 +2456,7 @@ dependencies = [
  "proptest",
  "regex",
  "thiserror 2.0.21",
+ "unicode-width",
  "windows-sys",
 ]
 
