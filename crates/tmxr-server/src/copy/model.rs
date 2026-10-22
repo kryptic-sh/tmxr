@@ -137,16 +137,37 @@ pub fn snapshot(screen: &vt100::Screen) -> Vec<Line> {
 /// [`snapshot`]'s, the oldest line of history 0, read straight from vt100's
 /// rows (`Screen::line_cells`) without moving the pane's view.
 pub fn snapshot_lines(screen: &vt100::Screen, range: std::ops::Range<usize>) -> Vec<Line> {
+    lines_from(screen, range, |idx| {
+        Some((screen.line_cells(idx)?, screen.line_wrapped(idx)))
+    })
+}
+
+/// Capture the rows `range` of the normal screen the alternate screen hides,
+/// as it was when the alternate screen came on (`capture-pane -a`): no rows
+/// when the alternate screen is not shown.
+pub fn snapshot_normal_rows(screen: &vt100::Screen, range: std::ops::Range<usize>) -> Vec<Line> {
+    lines_from(screen, range, |idx| {
+        let row = u16::try_from(idx).ok()?;
+        Some((
+            screen.normal_screen_row_cells(row)?,
+            screen.normal_screen_row_wrapped(row),
+        ))
+    })
+}
+
+/// The lines `range`, each read by `row` as its cells and whether it wraps;
+/// a line `row` has none for is empty.
+fn lines_from<'s>(
+    screen: &vt100::Screen,
+    range: std::ops::Range<usize>,
+    row: impl Fn(usize) -> Option<(&'s [vt100::Cell], bool)>,
+) -> Vec<Line> {
     let width = usize::from(tmxr_term::screen_size(screen).1);
     range
-        .map(|idx| match screen.line_cells(idx) {
+        .map(|idx| match row(idx) {
             // A row of history from before a narrowing resize can be wider
             // than the pane; it shows as wide as the pane.
-            Some(cells) => line_of(
-                &cells[..cells.len().min(width)],
-                width,
-                screen.line_wrapped(idx),
-            ),
+            Some((cells, wrapped)) => line_of(&cells[..cells.len().min(width)], width, wrapped),
             None => Line {
                 cells: Vec::new(),
                 width: 0,

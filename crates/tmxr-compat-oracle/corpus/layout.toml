@@ -167,6 +167,21 @@ checks = [
 ]
 
 [[cases]]
+name = "capture_pane_a_reads_the_normal_screen_under_the_alternate_one"
+unix_only = true
+size = [20, 6]
+program = "printf 'normal\\n0123456789012345678901\\nlast'; sleep 1; printf '\\033[?1049h\\033[Halt'; exec sleep 1000"
+steps = [{ run = "new-window -d -t o:1" }, { sleep = 1.5 }]
+checks = [
+  { command = "capture-pane -p -t o:0", expect = "alt" },
+  { command = "capture-pane -p -a -t o:0", expect = "normal\n01234567890123456789\n01\nlast" },
+  { command = "capture-pane -p -aJ -t o:0", expect = "normal\n0123456789012345678901\nlast" },
+  { command = "capture-pane -p -a -S -5 -E 0 -t o:0", expect = "normal" },
+  { command = "capture-pane -p -a -S 2 -t o:0", expect = "01\nlast" },
+  { command = "capture-pane -p -a -q -t o:1", expect = "" },
+]
+
+[[cases]]
 name = "pane_targets_name_edges_corners_neighbours_and_offsets"
 steps = [
   { run = "split-window -h -t o" },

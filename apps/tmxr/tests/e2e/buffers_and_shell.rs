@@ -505,3 +505,21 @@ fn a_brace_block_runs_as_commands() {
         o.trim() == "xy"
     });
 }
+
+/// `capture-pane -a` with no alternate screen fails as tmux's, and with -q
+/// captures nothing: no buffer, an empty line printed.
+#[test]
+fn capture_pane_a_without_an_alternate_screen() {
+    let t = Tmxr::new("capturea");
+    t.run(&["new-session", "-d", "-s", "ca"]);
+    let out = t.output(&["capture-pane", "-a", "-t", "ca"]);
+    assert!(!out.status.success());
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("no alternate screen"),
+        "{out:?}"
+    );
+    assert_eq!(t.run(&["capture-pane", "-a", "-q", "-p", "-t", "ca"]), "\n");
+    let out = t.output(&["capture-pane", "-a", "-q", "-t", "ca"]);
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(t.run(&["list-buffers"]), "");
+}

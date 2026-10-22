@@ -482,17 +482,30 @@ pub(super) fn run(
                 .value('E')
                 .map(|v| super::expand_for(srv, ctx, Some(pid), v));
             let pane = srv.panes.get_mut(&pid).ok_or("no such pane")?;
+            // -a: the normal screen the alternate screen hides, as tmux's
+            // saved grid; an error without one, or with -q nothing.
+            let normal = a.has('a');
+            if normal && !pane.emu.screen().alternate_screen() {
+                if !a.has('q') {
+                    return Err("no alternate screen".into());
+                }
+                if a.has('p') {
+                    out.stdout.push('\n');
+                }
+                return Ok(true);
+            }
             let range = (start.as_deref(), end.as_deref());
             let flags = CaptureFlags {
                 join: a.has('J'),
                 keep_spaces: a.has('N'),
                 written_only: a.has('T'),
                 escapes: a.has('e'),
+                normal,
             };
             let mut text = capture(pane.emu.screen_mut(), range, flags);
             // -C: escaped as tmux's GRID_STRING_ESCAPE_SEQUENCES does
             // plain text, its backslashes doubled, and -e's escapes written
-            // as `\033`. (-q only quiets -a, which tmxr does not have.)
+            // as `\033`.
             if a.has('C') {
                 text = text.replace('\\', "\\\\").replace('\x1b', "\\033");
             }
@@ -634,6 +647,8 @@ struct CaptureFlags {
     written_only: bool,
     /// -e: each change of colour or attribute as tmux's escape for it.
     escapes: bool,
+    /// -a: the normal screen under the alternate one, which has no history.
+    normal: bool,
 }
 
 /// How many cells tmux's grid_expand_line has given a line once `used` of
@@ -657,7 +672,11 @@ fn capture(
     flags: CaptureFlags,
 ) -> String {
     let rows = usize::from(tmxr_term::screen_size(screen).0);
-    let history = screen.scrollback_len();
+    let history = if flags.normal {
+        0
+    } else {
+        screen.scrollback_len()
+    };
     let last = (history + rows).saturating_sub(1);
     let line = |value: Option<&str>, dash: usize, default: usize| match value {
         Some("-") => dash,
@@ -671,7 +690,11 @@ fn capture(
     let bottom = line(end, last, last);
     let (top, bottom) = (top.min(bottom), top.max(bottom));
     // Only the lines asked for: the whole history can be long.
-    let lines = crate::copy::snapshot_lines(screen, top..bottom + 1);
+    let lines = if flags.normal {
+        crate::copy::snapshot_normal_rows(screen, top..bottom + 1)
+    } else {
+        crate::copy::snapshot_lines(screen, top..bottom + 1)
+    };
     let width = usize::from(tmxr_term::screen_size(screen).1);
     let mut out = String::new();
     // As tmux's, the last cell's style carries over from line to line.

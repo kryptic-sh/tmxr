@@ -37,6 +37,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`capture-pane -a`** captures the normal screen a program on the alternate
+  screen hides (an editor, a pager), as tmux's; without an alternate screen it
+  fails with `no alternate screen`, or with `-q` captures nothing.
 - **Hyperlinks (OSC 8)**: a link a program prints (`ls --hyperlink`, a
   compiler's diagnostics) reaches the terminal through tmxr, as through tmux,
   and `#{mouse_hyperlink}` gives the one under the mouse, so the pane menu's

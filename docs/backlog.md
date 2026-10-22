@@ -429,29 +429,29 @@ table. What has been verified, and how:
   pane, then text is unlinked). Seen drawing cleanly in Alacritty 0.17
   (2026-10-22, nested Hyprland); clicking a link there was not tried.
 - **vt100 is patched** until a release carries the fixes (doy/vt100-rust#47,
-  #48, #49, #50 and #51, from branches `scroll-alloc`, `visible-row`,
-  `trim-on-scroll`, `line-cells` and `hyperlinks` of kryptic-sh/vt100-rust; #49
-  builds on #47; tmxr builds against `tmxr-0.18`, which carries all five, pinned
-  by `rev` in the root `Cargo.toml`'s `[patch.crates-io]` and allowed in
-  `deny.toml`, as crossterm is). #49: `set_scrollback` widened each history row
-  it showed to the screen's width and never narrowed it again, so one copy-mode
-  entry on 50000 lines of history left the server at 206 MiB for good (now 30
-  MiB, tmux 23 MiB); a whole-history page now costs a reallocation per row
-  instead, 46 ms against 32–35 ms for reading every cell (bare vt100, best of
-  5). #50 adds `Screen::line_cells` / `line_wrapped`, a line of history and
-  screen by index without moving the view: `copy::snapshot` reads through it, so
-  entering copy mode on 50000 lines costs 5–6 ms of server CPU (tmux 4 ms;
-  327–362 ms before these changes), and tmxr no longer moves vt100's view at
-  all, so #49 serves other users of vt100. #48: `Grid::visible_row` was
-  `visible_rows().nth(row)`, which steps through every row above, so each
-  `Screen::cell` cost time in proportion to its row. #47: for every line
-  scrolled into history, vt100 0.18.1's `Grid::scroll_up` compared each cell
-  against a blank one through an out-of-line `PartialEq`, shrank the row (a
-  reallocation) and allocated a full-width row to replace it. The patch copies
-  the used cells into the history row and clears them in place. Found with a
-  pprof (`setitimer`) profile, as `perf` is not installed: 92.5% of bare vt100's
-  time on `seq 1 2000000` was in `scroll_up`. Measured 2026-10-21 on the Arch
-  laptop (i7-1355U, pinned to its performance cores), a pane printing
+  #48, #49, #50, #51 and #52, from branches `scroll-alloc`, `visible-row`,
+  `trim-on-scroll`, `line-cells`, `hyperlinks` and `saved-screen` of
+  kryptic-sh/vt100-rust; #49 builds on #47 and #52 on #50; tmxr builds against
+  `tmxr-0.18`, which carries all six, pinned by `rev` in the root `Cargo.toml`'s
+  `[patch.crates-io]` and allowed in `deny.toml`, as crossterm is). #49:
+  `set_scrollback` widened each history row it showed to the screen's width and
+  never narrowed it again, so one copy-mode entry on 50000 lines of history left
+  the server at 206 MiB for good (now 30 MiB, tmux 23 MiB); a whole-history page
+  now costs a reallocation per row instead, 46 ms against 32–35 ms for reading
+  every cell (bare vt100, best of 5). #50 adds `Screen::line_cells` /
+  `line_wrapped`, a line of history and screen by index without moving the view:
+  `copy::snapshot` reads through it, so entering copy mode on 50000 lines costs
+  5–6 ms of server CPU (tmux 4 ms; 327–362 ms before these changes), and tmxr no
+  longer moves vt100's view at all, so #49 serves other users of vt100. #48:
+  `Grid::visible_row` was `visible_rows().nth(row)`, which steps through every
+  row above, so each `Screen::cell` cost time in proportion to its row. #47: for
+  every line scrolled into history, vt100 0.18.1's `Grid::scroll_up` compared
+  each cell against a blank one through an out-of-line `PartialEq`, shrank the
+  row (a reallocation) and allocated a full-width row to replace it. The patch
+  copies the used cells into the history row and clears them in place. Found
+  with a pprof (`setitimer`) profile, as `perf` is not installed: 92.5% of bare
+  vt100's time on `seq 1 2000000` was in `scroll_up`. Measured 2026-10-21 on the
+  Arch laptop (i7-1355U, pinned to its performance cores), a pane printing
   `seq 1 2000000` with a 120x40 client attached, its end signalled by
   `wait-for`: the server's CPU went from 1.68–2.14 s to 0.50–0.58 s, tmux 3.8's
   0.61–0.62 s, wall time from about 2 s to 0.7 s, tmux's 0.8 s. vt100 alone at
@@ -676,17 +676,18 @@ table. What has been verified, and how:
     wait; tmxr's client reads through crossterm, which already reads an Escape
     and a key that arrive together as Meta and the key, so only keys arriving
     apart are joined there (tmxr's default is 0, tmux's 10).
-  - Commands: `capture-pane -a` (it needs the saved normal screen, which `vt100`
-    does not expose; 0.18, re-checked 2026-10-21, still keeps the inactive grid
-    private, with only `Screen::alternate_screen()` to say which is shown). `-e`
-    writes only the attributes `vt100` keeps (bold, dim, italics, underline,
-    reverse; not blink, hidden, strikethrough, overline or the underline styles
-    and colour), and `38;5;n` for n below 16 as the plain or bright code, as
-    `vt100` stores both alike. A line's allocation (what `-N`, `-e` and a plain
-    capture run to) is worked out from what was written (`allocated` in
-    `cmds/pane.rs`, as `grid_expand_line` rounds), where tmux's comes from the
-    line's whole history, so a line written long and then cut short differs; an
-    erased cell counts as unwritten (known divergence
+  - Commands: `capture-pane -a` reads the normal screen as vt100 keeps it under
+    the alternate one (doy/vt100-rust#52), where tmux's is a copy taken when the
+    alternate screen came on; the two could differ if the pane is resized while
+    the alternate screen shows (vt100 resizes the hidden grid too; not
+    compared). `capture-pane -e` writes only the attributes `vt100` keeps (bold,
+    dim, italics, underline, reverse; not blink, hidden, strikethrough, overline
+    or the underline styles and colour), and `38;5;n` for n below 16 as the
+    plain or bright code, as `vt100` stores both alike. A line's allocation
+    (what `-N`, `-e` and a plain capture run to) is worked out from what was
+    written (`allocated` in `cmds/pane.rs`, as `grid_expand_line` rounds), where
+    tmux's comes from the line's whole history, so a line written long and then
+    cut short differs; an erased cell counts as unwritten (known divergence
     `capture_pane_t_counts_an_erased_cell_as_written`). The oracle cannot catch
     a difference on a capture's last line, as it trims the output's end. tmux
     also keeps a tab as the tab character, where `vt100` keeps the spaces it
