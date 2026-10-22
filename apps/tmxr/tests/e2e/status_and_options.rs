@@ -588,6 +588,48 @@ fn source_file_q_and_a_missing_file_leave_the_config_alone() {
     assert_eq!(t.run(&["show-options", "-gv", "@other"]).trim(), "yes");
 }
 
+/// `source-file -v` shows what a file set, as the commands that set it, each
+/// after the file's path, as tmux's shows a file's commands.
+#[test]
+fn source_file_v_shows_what_the_file_set() {
+    let t = Tmxr::new("sourcev");
+    t.run(&["new-session", "-d", "-s", "sv"]);
+    let file = t.dir.path().join("v.toml");
+    std::fs::write(
+        &file,
+        "escape-time = 3\n\
+         [status]\n\
+         right = 'r v'\n\
+         [options]\n\
+         '@x' = 'y'\n\
+         [keys.prefix]\n\
+         z = { cmd = 'display-message zz' }\n\
+         c = false\n\
+         [hooks]\n\
+         after-new-window = 'set -g @hooked yes'\n",
+    )
+    .unwrap();
+    let path = file.to_str().unwrap();
+    let shown = t.run(&["source-file", "-v", path]);
+    for line in [
+        "set-option -g escape-time 3",
+        "set-option -g status-right \"r v\"",
+        "set-option -g @x y",
+        "bind-key -T prefix z display-message zz",
+        "unbind-key -T prefix c",
+        "set-hook -g after-new-window \"set -g @hooked yes\"",
+    ] {
+        assert!(
+            shown.lines().any(|l| l == format!("{path}: {line}")),
+            "no {line:?} in:\n{shown}"
+        );
+    }
+    assert!(
+        t.run(&["source-file", path]).is_empty(),
+        "silent without -v"
+    );
+}
+
 /// `source-file` takes several paths and globs, as tmux's: each file named
 /// goes over what is running in turn, so a later one wins; a path matching
 /// nothing is an error unless -q.

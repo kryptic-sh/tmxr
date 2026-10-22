@@ -696,7 +696,7 @@ table. What has been verified, and how:
     a session's windows, the `target` and `window-target` types; `prompt_tab_*`
     in `corpus/keys.toml`), though which ten names a long menu keeps was matched
     by result (the last ten), not read from tmux's code; smaller flags:
-    `source-file -v`; `source-file` of a tmux command file (`%if`, `%hidden`).
+    `source-file` of a tmux command file (`%if`, `%hidden`).
   - Hooks and modes: tmux hooks tmxr does not fire: `client-light-theme` /
     `-dark-theme`. Copy mode lacks `next-prompt` / `previous-prompt` (they need
     a prompt mark on every history line, as tmux keeps per grid line; `Emulator`

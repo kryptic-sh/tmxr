@@ -71,8 +71,10 @@ section whole. `source-file PATH ...` takes several paths, each a glob (the
 `glob` crate), applied in turn so a later file wins; a path matching nothing is
 an error unless `-q`. Sourcing never changes which file is the config
 (`prefix R`, `#{config_files}`): that is the one the server started with, as
-tmux's. `[hooks]` names are checked against the hooks tmxr fires
-(`hooks::known`); an unknown one is reported and left out.
+tmux's. `-v` prints what each file set as the commands that set it
+(`set-option -g`, `bind-key` / `unbind-key`, `set-hook -g`), after the file's
+path. `[hooks]` names are checked against the hooks tmxr fires (`hooks::known`);
+an unknown one is reported and left out.
 
 ### Option scopes
 

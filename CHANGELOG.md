@@ -37,6 +37,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`source-file -v`** shows what a file set, as the commands that set it
+  (`set-option -g`, `bind-key` / `unbind-key`, `set-hook -g`), each after the
+  file's path, as tmux's `-v` shows a file's commands.
 - **`source-file` takes several paths and globs**, as tmux's:
   `source-file ~/.config/tmxr/conf.d/*.toml extra.toml` applies each file in
   turn, a later one winning; a path matching nothing is an error unless `-q`.

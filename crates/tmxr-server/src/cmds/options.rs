@@ -1,5 +1,6 @@
 //! Option and config commands.
 
+use std::fmt::Write as _;
 use std::path::PathBuf;
 
 use tmxr_command::Parsed;
@@ -105,6 +106,12 @@ pub(super) fn run(
                 };
                 if let Err(e) = done {
                     errors.push(e);
+                } else if a.has('v') {
+                    // -v: what the file set, as the commands that would set
+                    // it, as tmux's shows a file's commands.
+                    for line in applied(srv, file) {
+                        let _ = writeln!(out.stdout, "{}: {line}", file.display());
+                    }
                 }
             }
             if !errors.is_empty() {
@@ -218,6 +225,56 @@ pub const SERVER_OPTIONS: &[&str] = &[
 /// A flag as `show-options` prints it.
 const fn on_off(b: bool) -> &'static str {
     if b { "on" } else { "off" }
+}
+
+/// What the config file at `path` sets, as the commands that set it to what
+/// the server now has: `set-option -g`, `bind-key` / `unbind-key` and
+/// `set-hook -g` / `-gu`.
+fn applied(srv: &Server, path: &std::path::Path) -> Vec<String> {
+    let Ok(sets) = tmxr_config::file_sets(path) else {
+        return Vec::new();
+    };
+    let mut lines = Vec::new();
+    for name in sets.options.iter().chain(&sets.user_options) {
+        let value = server_option_lines(srv)
+            .into_iter()
+            .find_map(|l| l.strip_prefix(&format!("{name} ")).map(str::to_owned))
+            .or_else(|| {
+                let value = srv
+                    .cfg
+                    .session
+                    .show(name)
+                    .or_else(|| srv.cfg.window.show(name))
+                    .or_else(|| srv.cfg.options.get(name).cloned())?;
+                Some(scoped::shown(name, value))
+            });
+        if let Some(value) = value {
+            lines.push(format!("set-option -g {name} {value}"));
+        }
+    }
+    for (table, key) in &sets.binds {
+        let Ok(k) = key.parse::<tmxr_command::BindKey>() else {
+            continue;
+        };
+        lines.push(match srv.keys.get(table, &k) {
+            Some(spec) => super::binds::bind_line(table, &k, spec),
+            None => format!(
+                "unbind-key -T {table} {}",
+                tmxr_command::join_args(std::slice::from_ref(key))
+            ),
+        });
+    }
+    for name in &sets.hooks {
+        match srv.hooks.get(name) {
+            Some(commands) => lines.extend(
+                commands
+                    .iter()
+                    .map(|c| format!("set-hook -g {name} {}", tmxr_command::escape_arg(c))),
+            ),
+            None => lines.push(format!("set-hook -gu {name}")),
+        }
+    }
+    lines
 }
 
 /// A server option's value, as a format reads it: unquoted.

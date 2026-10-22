@@ -632,10 +632,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     cmd!(
         "source-file",
         Some("source"),
-        "Fnq",
+        "Fnqv",
         0,
         ANY,
-        "[-Fnq] [path ...]"
+        "[-Fnqv] [path ...]"
     ),
     cmd!(
         "split-window",
