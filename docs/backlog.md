@@ -44,13 +44,6 @@ table. What has been verified, and how:
 
 ## Decisions waiting on the owner
 
-- **OSC 8 hyperlinks** (tmux keeps a pane's links: the pane menu's link items,
-  `#{mouse_hyperlink}`). tmxr's screen is the `vt100` crate's, which drops OSC
-  8, so a link never reaches tmxr. Options: carry a cell's link on the vt100
-  fork tmxr is already patched to (kryptic-sh/vt100-rust, see "vt100 is
-  patched"), though a link is a feature upstream may not take, so the fork would
-  carry it on its own; or move to tmxr's own grid, a much larger change. Both
-  need the owner's decision; nothing was started.
 - **Synchronized updates are asked for, not configured**
   (`terminal::probe_sync`): at its first attach a client sends DECRQM for mode
   2026 and DA1 and reads the answers straight from the terminal (up to
@@ -160,8 +153,7 @@ table. What has been verified, and how:
 - **tmux default binds**: all of tmux 3.6's 267 are bound (compared with its
   `list-keys`, 2026-10-11) except the 18 digit binds (`1`-`9` in vi, `M-1`-`M-9`
   in emacs) that open a "(repeat)" prompt, declined: tmxr's copy mode takes
-  counts directly (`5j`). The pane menu's hyperlink items never show, as tmxr
-  keeps no OSC 8 links.
+  counts directly (`5j`).
 - **Scrollbars** follow tmux 3.6 (`layout_fix_panes`, the slider formula,
   `window_copy_scroll1`), checked against tmux's pane sizes.
 - **Option scopes** follow tmux 3.6: global, per session, per window and per
@@ -422,42 +414,56 @@ table. What has been verified, and how:
   `util::refresh_commands` keeps, up to a refresh old, as a lookup there
   (`foreground_command_windows`) snapshots every process; Unix reads it when
   asked (`vars.rs`). Not measured: what a live read would cost on Windows.
+- **OSC 8 hyperlinks** (decided by the owner 2026-10-22: kept by the vt100 fork,
+  doy/vt100-rust#51, which costs a cell 2 bytes of text so it stays 32 bytes):
+  render puts a link's number in the frame cell's `underline_color`
+  (`backend::Links`; tmxr has no other use for it, as vt100 keeps no underline
+  colour), so ratatui's diff redraws a cell whose link alone changed, and
+  `AnsiBackend::draw` writes it as OSC 8
+  (`a_programs_hyperlink_reaches_the_client`). The owner chose this over an
+  overdraw pass or tmxr's own diff; underline colours, if they ever come, need
+  another carrier. Still unlike tmux: links go to every client, where tmux sends
+  them only to terminals whose `terminal-features` have `hyperlinks`; copy mode
+  shows none and `#{mouse_hyperlink}` is empty in it (its snapshot keeps no
+  links); a client's and a pane's link tables only grow (`u16` of them in a
+  pane, then text is unlinked). Seen drawing cleanly in Alacritty 0.17
+  (2026-10-22, nested Hyprland); clicking a link there was not tried.
 - **vt100 is patched** until a release carries the fixes (doy/vt100-rust#47,
-  #48, #49 and #50, from branches `scroll-alloc`, `visible-row`,
-  `trim-on-scroll` and `line-cells` of kryptic-sh/vt100-rust; #49 builds on #47;
-  tmxr builds against `tmxr-0.18`, which carries all four, pinned by `rev` in
-  the root `Cargo.toml`'s `[patch.crates-io]` and allowed in `deny.toml`, as
-  crossterm is). #49: `set_scrollback` widened each history row it showed to the
-  screen's width and never narrowed it again, so one copy-mode entry on 50000
-  lines of history left the server at 206 MiB for good (now 30 MiB, tmux 23
-  MiB); a whole-history page now costs a reallocation per row instead, 46 ms
-  against 32–35 ms for reading every cell (bare vt100, best of 5). #50 adds
-  `Screen::line_cells` / `line_wrapped`, a line of history and screen by index
-  without moving the view: `copy::snapshot` reads through it, so entering copy
-  mode on 50000 lines costs 5–6 ms of server CPU (tmux 4 ms; 327–362 ms before
-  these changes), and tmxr no longer moves vt100's view at all, so #49 serves
-  other users of vt100. #48: `Grid::visible_row` was `visible_rows().nth(row)`,
-  which steps through every row above, so each `Screen::cell` cost time in
-  proportion to its row. #47: for every line scrolled into history, vt100
-  0.18.1's `Grid::scroll_up` compared each cell against a blank one through an
-  out-of-line `PartialEq`, shrank the row (a reallocation) and allocated a
-  full-width row to replace it. The patch copies the used cells into the history
-  row and clears them in place. Found with a pprof (`setitimer`) profile, as
-  `perf` is not installed: 92.5% of bare vt100's time on `seq 1 2000000` was in
-  `scroll_up`. Measured 2026-10-21 on the Arch laptop (i7-1355U, pinned to its
-  performance cores), a pane printing `seq 1 2000000` with a 120x40 client
-  attached, its end signalled by `wait-for`: the server's CPU went from
-  1.68–2.14 s to 0.50–0.58 s, tmux 3.8's 0.61–0.62 s, wall time from about 2 s
-  to 0.7 s, tmux's 0.8 s. vt100 alone at the default `history-limit` of 50000
-  went from 1.56 s to 0.41 s, with history identical by hash (a check shown to
-  catch three deliberately broken variants). Drop the patch once a vt100 release
-  has it; `cargo install tmxr` from crates.io builds without it. The chip is
-  hybrid, and the same emulator run took 1.5 times as long pinned to an
-  efficiency core (`taskset`), which the scheduler may pick for the server.
-  Measuring note: an earlier harness that polled `capture-pane -p` for the end
-  of the output mostly measured the captures (each copied the whole history
-  before `snapshot_lines`, see the changelog), which put tmxr at five times
-  tmux's CPU.
+  #48, #49, #50 and #51, from branches `scroll-alloc`, `visible-row`,
+  `trim-on-scroll`, `line-cells` and `hyperlinks` of kryptic-sh/vt100-rust; #49
+  builds on #47; tmxr builds against `tmxr-0.18`, which carries all five, pinned
+  by `rev` in the root `Cargo.toml`'s `[patch.crates-io]` and allowed in
+  `deny.toml`, as crossterm is). #49: `set_scrollback` widened each history row
+  it showed to the screen's width and never narrowed it again, so one copy-mode
+  entry on 50000 lines of history left the server at 206 MiB for good (now 30
+  MiB, tmux 23 MiB); a whole-history page now costs a reallocation per row
+  instead, 46 ms against 32–35 ms for reading every cell (bare vt100, best of
+  5). #50 adds `Screen::line_cells` / `line_wrapped`, a line of history and
+  screen by index without moving the view: `copy::snapshot` reads through it, so
+  entering copy mode on 50000 lines costs 5–6 ms of server CPU (tmux 4 ms;
+  327–362 ms before these changes), and tmxr no longer moves vt100's view at
+  all, so #49 serves other users of vt100. #48: `Grid::visible_row` was
+  `visible_rows().nth(row)`, which steps through every row above, so each
+  `Screen::cell` cost time in proportion to its row. #47: for every line
+  scrolled into history, vt100 0.18.1's `Grid::scroll_up` compared each cell
+  against a blank one through an out-of-line `PartialEq`, shrank the row (a
+  reallocation) and allocated a full-width row to replace it. The patch copies
+  the used cells into the history row and clears them in place. Found with a
+  pprof (`setitimer`) profile, as `perf` is not installed: 92.5% of bare vt100's
+  time on `seq 1 2000000` was in `scroll_up`. Measured 2026-10-21 on the Arch
+  laptop (i7-1355U, pinned to its performance cores), a pane printing
+  `seq 1 2000000` with a 120x40 client attached, its end signalled by
+  `wait-for`: the server's CPU went from 1.68–2.14 s to 0.50–0.58 s, tmux 3.8's
+  0.61–0.62 s, wall time from about 2 s to 0.7 s, tmux's 0.8 s. vt100 alone at
+  the default `history-limit` of 50000 went from 1.56 s to 0.41 s, with history
+  identical by hash (a check shown to catch three deliberately broken variants).
+  Drop the patch once a vt100 release has it; `cargo install tmxr` from
+  crates.io builds without it. The chip is hybrid, and the same emulator run
+  took 1.5 times as long pinned to an efficiency core (`taskset`), which the
+  scheduler may pick for the server. Measuring note: an earlier harness that
+  polled `capture-pane -p` for the end of the output mostly measured the
+  captures (each copied the whole history before `snapshot_lines`, see the
+  changelog), which put tmxr at five times tmux's CPU.
 - **No frame-rate cap**: the server renders after each pass of its loop, and a
   pass stops handling events after `DRAIN_BUDGET` so a flood still repaints.
   Each pane's output waits in a bounded queue (`output::QUEUE_LIMIT`) that

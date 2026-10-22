@@ -55,9 +55,10 @@ missing or behaves differently from tmux is listed in
   its own saves.
 - Mouse (click to focus, drag borders, wheel into copy mode, drag to copy), all
   rebindable as tmux's mouse keys (`MouseDown1Pane`, `WheelUpPane`, …), OSC 52
-  and the local clipboard, and tmux passthrough (`allow-passthrough`) for inline
-  images. On Windows this needs the `conpty.dll` and `OpenConsole.exe` the
-  release zip ships beside `tmxr.exe` (see Installing).
+  and the local clipboard, tmux passthrough (`allow-passthrough`) for inline
+  images, and the links programs print (OSC 8) passed on to the terminal, with
+  the pane menu's link items. On Windows this needs the `conpty.dll` and
+  `OpenConsole.exe` the release zip ships beside `tmxr.exe` (see Installing).
 
 ## Using it
 

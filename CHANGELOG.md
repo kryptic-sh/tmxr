@@ -37,6 +37,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Hyperlinks (OSC 8)**: a link a program prints (`ls --hyperlink`, a
+  compiler's diagnostics) reaches the terminal through tmxr, as through tmux,
+  and `#{mouse_hyperlink}` gives the one under the mouse, so the pane menu's
+  "Type" / "Copy" link items show. The `vt100` tmxr builds against keeps them
+  (doy/vt100-rust#51).
 - **Copy mode's `next-prompt` / `previous-prompt`**, as tmux's: with shell
   integration (OSC 133), move to the start of the next or previous prompt, or
   with `-o` of a command's output, throughout the history.

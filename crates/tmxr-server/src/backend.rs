@@ -8,8 +8,10 @@
 //! console API calls when it cannot confirm ANSI support for the process's
 //! own console — and the server, detached, has none.
 
+use std::cell::RefCell;
 use std::fmt::Write as _;
 use std::io;
+use std::rc::Rc;
 
 use ratatui::backend::{Backend, ClearType, WindowSize};
 use ratatui::buffer::Cell;
@@ -23,6 +25,50 @@ pub struct AnsiBackend {
     /// The colours the terminal takes; colours beyond them are sent as their
     /// nearest it has.
     depth: ColourDepth,
+    /// The hyperlinks the renderer put in cells, shared with it.
+    links: Rc<RefCell<Links>>,
+}
+
+/// The OSC 8 hyperlinks a client is sent, each distinct one numbered once
+/// for good. A cell carries its link's number in ratatui's
+/// `underline_color`, which tmxr has no other use for (vt100 keeps no
+/// underline colour): so the frame diff redraws a cell whose link changed,
+/// and [`AnsiBackend`] writes it as OSC 8, never as a colour.
+#[derive(Debug, Default)]
+pub struct Links {
+    /// Each link as OSC 8 writes it: its parameters (`id=…`) and URI.
+    table: Vec<(String, String)>,
+}
+
+impl Links {
+    /// The `underline_color` that carries `link`.
+    pub fn carrier(&mut self, link: &vt100::Hyperlink) -> Color {
+        let params = link
+            .id
+            .as_ref()
+            .map_or_else(String::new, |id| format!("id={id}"));
+        let entry = (params, link.uri.clone());
+        let index = self
+            .table
+            .iter()
+            .position(|e| *e == entry)
+            .unwrap_or_else(|| {
+                self.table.push(entry);
+                self.table.len() - 1
+            });
+        // Numbered from 1, so the default colour carries none.
+        let [_, r, g, b] = u32::try_from(index + 1).unwrap_or(0).to_be_bytes();
+        Color::Rgb(r, g, b)
+    }
+
+    /// The link a cell's `underline_color` carries, if any.
+    fn of(&self, c: Color) -> Option<&(String, String)> {
+        let Color::Rgb(r, g, b) = c else {
+            return None;
+        };
+        let n = u32::from_be_bytes([0, r, g, b]);
+        self.table.get(usize::try_from(n).ok()?.checked_sub(1)?)
+    }
 }
 
 /// How many colours a client's terminal takes (`rgb-colour`).
@@ -43,7 +89,13 @@ impl AnsiBackend {
             size: Size::new(cols, rows),
             cursor: Position::new(0, 0),
             depth: ColourDepth::TrueColour,
+            links: Rc::default(),
         }
+    }
+
+    /// The hyperlink table, for the renderer to fill as it draws.
+    pub fn links(&self) -> Rc<RefCell<Links>> {
+        Rc::clone(&self.links)
     }
 
     /// The colours to send (`rgb-colour`).
@@ -231,8 +283,11 @@ impl Backend for AnsiBackend {
     where
         I: Iterator<Item = (u16, u16, &'a Cell)>,
     {
+        let links = Rc::clone(&self.links);
+        let links = links.borrow();
         let mut last: Option<Position> = None;
         let mut style: Option<String> = None;
+        let mut link: Option<&(String, String)> = None;
         for (x, y, cell) in content {
             if !matches!(last, Some(p) if p.y == y && p.x + 1 == x) {
                 let _ = write!(self.out, "\x1b[{};{}H", y + 1, x + 1);
@@ -243,7 +298,16 @@ impl Backend for AnsiBackend {
                 self.out.push_str(&want);
                 style = Some(want);
             }
+            let cell_link = links.of(cell.underline_color);
+            if cell_link != link {
+                let (params, uri) = cell_link.map_or(("", ""), |(p, u)| (p.as_str(), u.as_str()));
+                let _ = write!(self.out, "\x1b]8;{params};{uri}\x1b\\");
+                link = cell_link;
+            }
             self.out.push_str(cell.symbol());
+        }
+        if link.is_some() {
+            self.out.push_str("\x1b]8;;\x1b\\");
         }
         if style.is_some() {
             self.out.push_str("\x1b[0m");
@@ -307,6 +371,25 @@ impl Backend for AnsiBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_link_is_carried_and_read_back() {
+        let mut links = Links::default();
+        let a = vt100::Hyperlink {
+            uri: "u".into(),
+            id: None,
+        };
+        let b = vt100::Hyperlink {
+            uri: "u".into(),
+            id: Some("k".into()),
+        };
+        let (ca, cb) = (links.carrier(&a), links.carrier(&b));
+        assert_ne!(ca, cb, "an id makes another link");
+        assert_eq!(links.carrier(&a), ca, "the same link, the same number");
+        assert_eq!(links.of(ca), Some(&(String::new(), "u".to_owned())));
+        assert_eq!(links.of(cb), Some(&("id=k".to_owned(), "u".to_owned())));
+        assert_eq!(links.of(Color::Reset), None);
+    }
     use ratatui::Terminal;
     use ratatui::TerminalOptions;
     use ratatui::Viewport;

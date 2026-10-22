@@ -266,7 +266,6 @@ pub fn pane_current_path(srv: &Server, pane: PaneId) -> Option<PathBuf> {
 /// tmux's `mouse_*` variables for a command a mouse event ran: where in its
 /// pane the mouse was, and the word and line under it (in copy mode, as the
 /// view shows them). `None` for other names, or away from a pane.
-/// `mouse_hyperlink` is empty: tmxr keeps no OSC 8 links.
 pub fn mouse_var(srv: &Server, mouse: &crate::mouse::MouseTarget, name: &str) -> Option<String> {
     if !name.starts_with("mouse_") || name == "mouse_any_flag" {
         return None;
@@ -297,7 +296,20 @@ pub fn mouse_var(srv: &Server, mouse: &crate::mouse::MouseTarget, name: &str) ->
             crate::copy::word_at(&line(), usize::from(x), separators)
         }
         "mouse_line" => String::from_iter(line()).trim_end().to_owned(),
-        "mouse_hyperlink" => String::new(),
+        // The link under the mouse, as tmux's; none in copy mode, whose
+        // copy of the pane keeps no links.
+        "mouse_hyperlink" => match &p.copy {
+            Some(_) => String::new(),
+            None => {
+                let screen = p.emu.screen();
+                screen
+                    .cell(y, x)
+                    .and_then(vt100::Cell::hyperlink_id)
+                    .and_then(|id| screen.hyperlink(id))
+                    .map(|h| h.uri.clone())
+                    .unwrap_or_default()
+            }
+        },
         _ => return None,
     })
 }

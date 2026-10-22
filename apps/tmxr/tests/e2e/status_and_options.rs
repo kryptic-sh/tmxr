@@ -1540,6 +1540,56 @@ fn a_renamed_window_redraws_every_status_line_listing_it() {
     });
 }
 
+/// A link a program prints (OSC 8) reaches the client's terminal around the
+/// cells written under it, with its id, as tmux's does.
+#[cfg(unix)]
+#[test]
+fn a_programs_hyperlink_reaches_the_client() {
+    let t = Tmxr::new("hyperlink");
+    t.run(&[
+        "new-session",
+        "-d",
+        "-s",
+        "hl",
+        r"printf '\033]8;id=k;https://example.com/x\033\\linked\033]8;;\033\\ plain'; sleep 1; printf '\r\033]8;;https://example.com/y\033\\linked\033]8;;\033\\\n'; exec sleep 100",
+    ]);
+    let s = t.attach(&["attach", "-t", "hl"]);
+    s.wait_for("the text", |text| text.contains("linked plain"));
+    let raw = s.raw_text();
+    // The link around `linked`, ended before `plain` (the blank between
+    // them is not redrawn, so a cursor move may come first).
+    let start = raw
+        .find("\x1b]8;id=k;https://example.com/x\x1b\\linked")
+        .unwrap_or_else(|| panic!("no link: {raw:?}"));
+    let end = raw[start..]
+        .find("\x1b]8;;\x1b\\")
+        .unwrap_or_else(|| panic!("no end: {raw:?}"));
+    let plain = raw[start..].find("plain").unwrap();
+    assert!(end < plain, "{raw:?}");
+    // The same text again under another link changes nothing that shows,
+    // and still reaches the terminal with its new link.
+    s.wait_for("the second link", |_| {
+        s.raw_text()
+            .contains("\x1b]8;;https://example.com/y\x1b\\linked")
+    });
+    // `#{mouse_hyperlink}` is the link under the mouse, and empty off it.
+    t.run(&["set-option", "-g", "mouse", "on"]);
+    t.run(&[
+        "bind-key",
+        "-n",
+        "MouseDown3Pane",
+        "set-option -gF @link '[#{mouse_hyperlink}]'",
+    ]);
+    s.click(2, 2, 0);
+    t.wait_run(&["show-options", "-gv", "@link"], "the link clicked", |o| {
+        o.trim() == "[https://example.com/y]"
+    });
+    s.click(2, 9, 0);
+    t.wait_run(&["show-options", "-gv", "@link"], "off the link", |o| {
+        o.trim() == "[]"
+    });
+}
+
 /// `attach -f ignore-size`: the client's size sizes no window while a client
 /// without the flag is attached, as tmux's; alone, it does.
 #[test]

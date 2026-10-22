@@ -41,8 +41,9 @@ strip = true
 # carries both.
 # vt100 0.18.1 without the allocations per line scrolled into history
 # (doy/vt100-rust#47), with a cell read in constant time (#48), history rows
-# narrowed again once scrolled past (#49) and a line of history read without
-# scrolling (#50); drop once a vt100 release carries all four.
+# narrowed again once scrolled past (#49), a line of history read without
+# scrolling (#50) and OSC 8 hyperlinks kept (#51); drop once a vt100 release
+# carries all five.
 [patch.crates-io]
 crossterm = { git = "https://github.com/kryptic-sh/crossterm", rev = "08697c050383371f02bf957109a3583e48930c0f" }
-vt100 = { git = "https://github.com/kryptic-sh/vt100-rust", rev = "d25c1442ffcf8307269e6a364f5ecd8f01a18556" }
+vt100 = { git = "https://github.com/kryptic-sh/vt100-rust", rev = "ed7ef6ac43409f40498f22ce46d857ae95fff58e" }

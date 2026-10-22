@@ -1,17 +1,18 @@
 //! Compose one client's frame: panes, borders, status line, overlays.
 
+use std::cell::RefCell;
 use std::fmt::Write as _;
 
 use ratatui::Terminal;
 use ratatui::buffer::Buffer;
-use ratatui::layout::{Position, Rect};
+use ratatui::layout::{Position, Rect, Size};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph, Widget};
 use tmxr_command::format::{self, Colour};
 use tmxr_config::{PaneIndicators, PaneLines};
 
-use crate::backend::AnsiBackend;
+use crate::backend::{AnsiBackend, Links};
 use crate::copy::cell_style;
 use crate::model::{ClientId, PaneId, WindowId};
 use crate::overlay::{Overlay, PickerOverlay, Previewed};
@@ -253,6 +254,8 @@ pub fn draw(
     let (cols, rows) = (att.cols, att.rows);
     let session = srv.sessions.get(&att.session);
     let window = session.and_then(|s| s.current_window());
+    let links = term.backend().links();
+    let links = &*links;
     let _ = term.draw(|f| {
         let buf = f.buffer_mut();
         let pane_rows = rows.saturating_sub(srv.status_rows(att.session));
@@ -266,7 +269,7 @@ pub fn draw(
                     let (ox, oy) = window_offset(srv, att);
                     let (w, h) = (win.cols.max(cols), win.rows.max(pane_rows));
                     let mut whole = Buffer::empty(Rect::new(0, 0, w, h));
-                    let at = draw_window(srv, id, wid, &mut whole, w, h);
+                    let at = draw_window(srv, id, wid, &mut whole, w, h, links);
                     for y in 0..pane_rows.min(h.saturating_sub(oy)) {
                         for x in 0..cols.min(w.saturating_sub(ox)) {
                             if let (Some(cell), Some(out)) =
@@ -281,7 +284,7 @@ pub fn draw(
                         (x < cols && y < pane_rows).then_some(Position::new(x, y + top))
                     })
                 }
-                _ => draw_window(srv, id, wid, buf, cols, pane_rows),
+                _ => draw_window(srv, id, wid, buf, cols, pane_rows, links),
             };
         }
         (ranges, drawn) = match status.filter(|s| still_fits(srv, att, s, cols, rows)) {
@@ -295,7 +298,7 @@ pub fn draw(
                 (ranges, cache)
             }
         };
-        if let Some(c) = draw_overlay(srv, id, buf, cols, rows) {
+        if let Some(c) = draw_overlay(srv, id, buf, cols, rows, links) {
             cursor = Some(c);
         }
         if let Some(c) = cursor {
@@ -369,6 +372,7 @@ fn draw_window(
     buf: &mut Buffer,
     cols: u16,
     rows: u16,
+    links: &RefCell<Links>,
 ) -> Option<Position> {
     let win = srv.windows.get(&wid)?;
     let rects = srv.pane_cells(wid);
@@ -390,7 +394,7 @@ fn draw_window(
     for (pid, cell) in &rects {
         // The pane's own cells: its layout cell less any scrollbar.
         let r = srv.panes.get(pid).map_or(*cell, |p| p.rect);
-        if let Some(c) = draw_pane(srv, *pid, r, buf, w, h, &copy)
+        if let Some(c) = draw_pane(srv, *pid, r, buf, Size::new(w, h), &copy, links)
             && *pid == win.active
         {
             cursor = Some(c);
@@ -686,13 +690,13 @@ fn draw_pane(
     pid: PaneId,
     r: hjkl_layout::LayoutRect,
     buf: &mut Buffer,
-    max_w: u16,
-    max_h: u16,
+    max: Size,
     copy: &PaneStyles,
+    links: &RefCell<Links>,
 ) -> Option<Position> {
     let pane = srv.panes.get(&pid)?;
-    let w = r.w.min(max_w.saturating_sub(r.x));
-    let h = r.h.min(max_h.saturating_sub(r.y));
+    let w = r.w.min(max.width.saturating_sub(r.x));
+    let h = r.h.min(max.height.saturating_sub(r.y));
     let base = pane_default_style(srv, pid);
     if pane.clock {
         draw_clock(buf, Rect::new(r.x, r.y, w, h), copy.clock, copy.clock_style);
@@ -743,7 +747,13 @@ fn draw_pane(
         }
         return None;
     }
-    draw_screen(pane.emu.screen(), buf, Rect::new(r.x, r.y, w, h), base)
+    draw_screen(
+        pane.emu.screen(),
+        buf,
+        Rect::new(r.x, r.y, w, h),
+        base,
+        links,
+    )
 }
 
 /// The colours pane `pid`'s cells take where its program set none, as
@@ -813,6 +823,7 @@ fn draw_screen(
     buf: &mut Buffer,
     area: Rect,
     base: Style,
+    links: &RefCell<Links>,
 ) -> Option<Position> {
     for row in 0..area.height {
         for col in 0..area.width {
@@ -827,6 +838,9 @@ fn draw_screen(
                     let sym = if c.has_contents() { c.contents() } else { " " };
                     out.set_symbol(sym)
                         .set_style(with_default_colours(cell_style(c), base));
+                    if let Some(link) = c.hyperlink_id().and_then(|id| screen.hyperlink(id)) {
+                        out.underline_color = links.borrow_mut().carrier(link);
+                    }
                 }
                 None => {
                     out.set_symbol(" ").set_style(base);
@@ -992,6 +1006,7 @@ fn draw_overlay(
     buf: &mut Buffer,
     cols: u16,
     rows: u16,
+    links: &RefCell<Links>,
 ) -> Option<Position> {
     let att = srv.clients.get(&id)?.att.as_ref()?;
     let vars = Vars::for_pane(srv, None, Some(id));
@@ -1093,7 +1108,7 @@ fn draw_overlay(
                 draw_box(buf, area, lines, style, &p.title);
             }
             let inner = p.inner().intersection(area);
-            let cursor = draw_screen(p.emu.screen(), buf, inner, Style::default());
+            let cursor = draw_screen(p.emu.screen(), buf, inner, Style::default(), links);
             cursor.filter(|_| !p.exited)
         }
     }
