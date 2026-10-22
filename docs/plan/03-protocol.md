@@ -71,7 +71,7 @@ A protocol mismatch is reported to the user with both versions and a hint
 enum ClientMsg {
     Hello(Hello),
     Command(Vec<String>),           // argv after `tmxr`; empty = default command
-    Input(crossterm::event::Event), // key, mouse, paste, focus, resize
+    Input(Vec<crossterm::event::Event>), // key, mouse, paste, focus, resize: one read's
     Detach,                         // terminal hangup
     Resumed,                        // back from suspend-client: redraw everything
     LockFailed(String),             // the lock command failed: why
@@ -96,9 +96,14 @@ Notes:
   `CommandResult` and the connection closes.
 - `crossterm` events go over the wire as-is (crossterm's `serde` feature), so
   key decoding happens once, in the client, with crossterm's per-platform
-  backends. The server never parses terminal input bytes.
+  backends. The server never parses terminal input bytes. The events the client
+  reads together go in one `Input`, as tmux takes one read of its terminal: a
+  menu, popup or `display-panes` open when they arrive takes them, and one that
+  an event among them opens does not see the rest (`Server::inputs`).
 - `Output` is opaque to the client. Terminal features are not negotiated: the
-  server always emits 24-bit colour and OSC 52.
+  colours sent follow the `rgb-colour` option (24-bit by default), and OSC 52,
+  OSC 8 hyperlinks and the cursor's shape (DECSCUSR) and colour (OSC 12 / 112)
+  go to every terminal, where tmux asks terminfo and `terminal-features`.
 - `suspend-client` sends `Suspend`: the client restores its terminal, stops
   itself with `SIGTSTP`, and once the shell continues it re-enters raw mode and
   sends `Resumed`, on which the server repaints. Only a client whose hello says
