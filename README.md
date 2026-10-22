@@ -101,7 +101,8 @@ x = false                                                  # remove a default
 tmux's `source-file`: what the file sets takes its value, and settings it does
 not mention keep what was set since (`set -g`, `bind`, `set-hook`).
 `tmxr source-file PATH ...` applies other files the same way, in turn, each path
-a glob (`~/.config/tmxr/conf.d/*.toml`).
+a glob (`~/.config/tmxr/conf.d/*.toml`). A file not named `.toml` is read as
+tmux commands, as tmux reads `~/.tmux.conf`.
 
 Coming from tmux, `tmxr --import-tmux-conf ~/.tmux.conf > config.toml` writes
 your tmux.conf's global options, binds and hooks as a tmxr config, and lists at

@@ -97,6 +97,12 @@ impl Environment {
         self.0.insert(name.to_owned(), entry);
     }
 
+    /// `name`'s entry, hidden or not: `Some(None)` where it is removed,
+    /// `None` where it is not here at all.
+    pub fn lookup(&self, name: &str) -> Option<Option<&str>> {
+        self.0.get(name).map(|e| e.value.as_deref())
+    }
+
     /// Forget `name` here, so an outer environment's value shows through.
     pub fn unset(&mut self, name: &str) {
         self.0.remove(name);

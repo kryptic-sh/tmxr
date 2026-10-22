@@ -630,6 +630,90 @@ fn source_file_v_shows_what_the_file_set() {
     );
 }
 
+/// The tmux command file both tests below read; what tmux 3.6 made of it
+/// is in their expectations (checked by hand, 2026-10-22).
+#[cfg(unix)]
+const TMUX_FILE: &str = r##"# comment
+set -g @a one ; set -g @b two
+FOO=bar
+%hidden SECRET=hush
+set -g @c "$FOO-$SECRET"
+%if "#{==:#{@a},one}"
+set -g @d yes
+%elif "1"
+set -g @d elif
+%else
+set -g @d no
+%endif
+%if "0"
+set -g @e taken
+%else
+set -g @e else
+%endif
+bind -T prefix z {
+  display-message one
+  display-message two
+}
+set -g @f \
+continued
+"##;
+
+/// A file other than `.toml` is run as tmux commands, as tmux's
+/// source-file: read whole first (so `%if` sees `@a` unset, the commands
+/// running after), with `%hidden`, `NAME=VALUE`, blocks and `\` lines.
+#[cfg(unix)]
+#[test]
+fn source_file_runs_a_tmux_command_file() {
+    let t = Tmxr::new("sourcetmux");
+    t.run(&["new-session", "-d", "-s", "st"]);
+    let file = t.dir.path().join("tmux.conf");
+    std::fs::write(&file, TMUX_FILE).unwrap();
+    let sourced = t.output(&["source-file", file.to_str().unwrap()]);
+    assert!(
+        sourced.status.success(),
+        "{}",
+        String::from_utf8_lossy(&sourced.stderr)
+    );
+    let values = t.run(&[
+        "display-message",
+        "-p",
+        "#{@a}|#{@b}|#{@c}|#{@d}|#{@e}|#{@f}",
+    ]);
+    assert_eq!(values.trim(), "one|two|bar-hush|elif|else|continued");
+    assert_eq!(t.run(&["show-environment", "-g", "FOO"]).trim(), "FOO=bar");
+    assert_eq!(
+        t.run(&["show-environment", "-gh", "SECRET"]).trim(),
+        "SECRET=hush"
+    );
+    assert_eq!(
+        t.run(&["list-keys", "-T", "prefix", "z"]).trim(),
+        r"bind-key -T prefix z display-message one \;\; display-message two"
+    );
+}
+
+/// A command that does not parse stops the whole file, as tmux's, with the
+/// error at its line; what the reading set (variables) stays set.
+#[cfg(unix)]
+#[test]
+fn a_tmux_command_file_that_does_not_parse_runs_nothing() {
+    let t = Tmxr::new("sourcebad");
+    t.run(&["new-session", "-d", "-s", "sb"]);
+    let file = t.dir.path().join("bad.conf");
+    std::fs::write(&file, format!("{TMUX_FILE}bogus-command\n")).unwrap();
+    let sourced = t.output(&["source-file", file.to_str().unwrap()]);
+    assert!(!sourced.status.success());
+    let err = String::from_utf8_lossy(&sourced.stderr);
+    assert!(
+        err.contains(&format!(
+            "{}:24: unknown command: bogus-command",
+            file.display()
+        )),
+        "{err}"
+    );
+    assert_eq!(t.run(&["display-message", "-p", "#{@a}#{@f}"]).trim(), "");
+    assert_eq!(t.run(&["show-environment", "-g", "FOO"]).trim(), "FOO=bar");
+}
+
 /// `source-file` takes several paths and globs, as tmux's: each file named
 /// goes over what is running in turn, so a later one wins; a path matching
 /// nothing is an error unless -q.

@@ -96,7 +96,11 @@ pub fn tokenize_lines(
                 end_word(&mut command, &mut word, &mut in_word);
                 end_command(&mut command, &mut commands);
             }
-            '#' if !in_word && chars.peek() != Some(&'{') => break,
+            // A comment runs to the end of its line, which then ends the
+            // command as any line end does.
+            '#' if !in_word && chars.peek() != Some(&'{') => {
+                while chars.next_if(|c| *c != '\n').is_some() {}
+            }
             '{' if !in_word => {
                 command.words.push(block(&mut chars)?);
                 command.blocks.push(true);
@@ -430,6 +434,12 @@ mod tests {
             vec![w(&["a", "b\u{a0}c\u{85}d"]), w(&["x", "y"]), w(&["z"])]
         );
         assert_eq!(t("echo ~\nls"), vec![w(&["echo", "/home/u"]), w(&["ls"])]);
+    }
+
+    #[test]
+    fn a_comment_runs_to_the_end_of_its_line() {
+        assert_eq!(t("a # c\nb"), vec![w(&["a"]), w(&["b"])]);
+        assert_eq!(t("# all of it\nb c"), vec![w(&["b", "c"])]);
     }
 
     #[test]

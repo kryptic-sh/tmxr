@@ -11,6 +11,7 @@ mod pane;
 mod prompt;
 mod scoped;
 mod session;
+mod source;
 mod wait;
 mod window;
 

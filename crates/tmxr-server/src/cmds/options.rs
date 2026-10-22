@@ -97,6 +97,14 @@ pub(super) fn run(
                 }
             }
             for file in &files {
+                // A `.toml` file is a tmxr config; any other, tmux commands.
+                let toml = file.extension().is_some_and(|e| e == "toml");
+                if !toml {
+                    if !a.has('n') {
+                        errors.extend(super::source::run_command_file(srv, ctx, file));
+                    }
+                    continue;
+                }
                 let done = if a.has('n') {
                     tmxr_config::load(Some(file))
                         .map(drop)

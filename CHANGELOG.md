@@ -37,6 +37,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`source-file` runs tmux command files**: a file not named `.toml` (a
+  `.tmux.conf`) is read as tmux's: each line's commands, `{ … }` blocks over
+  several lines, `\` line continuations, `NAME=VALUE`, `%hidden` and `%if` /
+  `%elif` / `%else` / `%endif`, the whole file read before any of it runs. A
+  command that does not parse stops the file with `path:line: error`, as tmux's.
 - **`source-file -v`** shows what a file set, as the commands that set it
   (`set-option -g`, `bind-key` / `unbind-key`, `set-hook -g`), each after the
   file's path, as tmux's `-v` shows a file's commands.
@@ -592,6 +597,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A comment in a command string spanning lines ended the whole string**: the
+  commands on the lines after a `#` comment were dropped; a comment now runs to
+  the end of its line, as in tmux.
 - **The clipboard helper sleeps while it holds a copy** (Linux): hjkl-clipboard
   0.43.4, which tmxr now builds with, no longer polls the Wayland socket or the
   X11 connection every 50 ms; measured on Hyprland, 19.9 wakeups a second while
