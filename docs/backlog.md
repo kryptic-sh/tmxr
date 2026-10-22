@@ -777,15 +777,23 @@ table. What has been verified, and how:
     `-dark-theme` (tmux turns on mode 2031 and reads `CSI ? 997 ; 1 / 2 n`;
     Alacritty 0.17 answers DECRQM for 2031 with `0`, not known, and the
     `CSI ? 996 n` query with nothing, 2026-10-22, so a real check needs another
-    terminal, foot or kitty). Copy mode's `next-prompt` / `previous-prompt`
-    (compared with tmux 3.6 in `corpus/keys.toml`) read OSC 133 marks the
-    emulator keeps by line number (`Emulator::prompt_lines`, rows lost off the
-    history counted by vt100's `on_scroll`); a mark stays on its number where a
-    scroll region or a line insert or delete moves lines within the screen,
-    where tmux's line flags move with the line (shells do neither). Word and
-    line selection moving away and back to where `select-word` / `select-line`
-    left the cursor (by characters, words and lines) is compared with tmux
-    (`*_selection_back_*` in `corpus/keys.toml`); other paths back were not.
+    terminal, foot or kitty, none installed here on 2026-10-22). What it would
+    take, from tmux 3.6's tty.c and server-client.c: the client sends
+    `CSI ? 2031 h` and `CSI ? 996 n` as its terminal starts and `CSI ? 2031 l`
+    as it stops, and the terminal's `CSI ? 997 ; 1 n` (dark) / `2 n` (light)
+    sets the client's theme (`#{client_theme}`), fires the hook and asks for its
+    colours again; panes that set mode 2031 get the report passed on. The client
+    reads its input through crossterm, which drops a CSI it does not know, so
+    the patched crossterm would need to hand the report on first. Copy mode's
+    `next-prompt` / `previous-prompt` (compared with tmux 3.6 in
+    `corpus/keys.toml`) read OSC 133 marks the emulator keeps by line number
+    (`Emulator::prompt_lines`, rows lost off the history counted by vt100's
+    `on_scroll`); a mark stays on its number where a scroll region or a line
+    insert or delete moves lines within the screen, where tmux's line flags move
+    with the line (shells do neither). Word and line selection moving away and
+    back to where `select-word` / `select-line` left the cursor (by characters,
+    words and lines) is compared with tmux (`*_selection_back_*` in
+    `corpus/keys.toml`); other paths back were not.
 
 - **`server did not start` under a full `cargo test`** (Windows, three times on
   2026-10-20: `lock_hands_the_keys_to_the_lock_command`, then
