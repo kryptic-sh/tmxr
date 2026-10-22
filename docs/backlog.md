@@ -895,5 +895,8 @@ table. What has been verified, and how:
   which this does not explain; untraced, as it predates `set -x`.
 - The `.deb` and `.rpm` are installed and run in clean Debian and Fedora
   containers by CI's `install-packages` job on every push to `main`, x86_64 and
-  aarch64 (on an Arm runner). The macOS release binaries and the `.apk` were not
-  run outside CI's smoke step.
+  aarch64 (on an Arm runner). The `.apk` of 0.9.0 was installed and run by hand
+  in a clean Alpine 3.23.3 container (podman, 2026-10-22): its checksum matched
+  the release's, it installed, and a detached session's output, `display -p` and
+  `kill-server` worked. The macOS release binaries were not run outside CI's
+  smoke step.
