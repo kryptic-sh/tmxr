@@ -99,6 +99,8 @@ pub struct Attached {
     pub table: String,
     /// The cursor shape (DECSCUSR's `Ps`) last sent to the terminal.
     pub cursor_style: u8,
+    /// The cursor colour last sent to the terminal; `None` for its own.
+    pub cursor_colour: Option<u32>,
     /// When `table` was entered, for `prefix-timeout`.
     pub table_at: Instant,
     pub repeat_until: Option<Instant>,
@@ -1306,6 +1308,7 @@ impl Server {
             let mut bytes = term.backend_mut().take();
             let title = crate::render::title(self, id);
             let cursor_style = crate::render::cursor_style(self, id);
+            let cursor_colour = crate::render::cursor_colour(self, id);
             if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
                 a.term = Some(term);
                 a.status_ranges = ranges;
@@ -1314,6 +1317,18 @@ impl Server {
                 if a.cursor_style != cursor_style {
                     a.cursor_style = cursor_style;
                     bytes.extend_from_slice(format!("\x1b[{cursor_style} q").as_bytes());
+                }
+                // And its colour, as tmux's Cs and Cr.
+                if a.cursor_colour != cursor_colour {
+                    a.cursor_colour = cursor_colour;
+                    let set = match cursor_colour {
+                        Some(rgb) => {
+                            let [_, r, g, b] = rgb.to_be_bytes();
+                            format!("\x1b]12;rgb:{r:02x}/{g:02x}/{b:02x}\x07")
+                        }
+                        None => "\x1b]112\x07".to_owned(),
+                    };
+                    bytes.extend_from_slice(set.as_bytes());
                 }
                 // The title goes out only when it changes, as tmux's.
                 if title.is_some() && a.title != title {

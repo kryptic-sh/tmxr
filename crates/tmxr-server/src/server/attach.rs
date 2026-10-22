@@ -39,6 +39,7 @@ impl Server {
             table,
             table_at: Instant::now(),
             cursor_style: 0,
+            cursor_colour: None,
             repeat_until: None,
             overlay: None,
             message: None,

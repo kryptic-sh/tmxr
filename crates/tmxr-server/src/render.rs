@@ -221,6 +221,18 @@ pub fn window_offset(srv: &Server, att: &crate::server::Attached) -> (u16, u16) 
     )
 }
 
+/// The cursor colour client `id` shows, as RGB: what the active pane's
+/// program set (OSC 12), else the terminal's own, as tmux's
+/// `tty_update_mode`.
+pub fn cursor_colour(srv: &Server, id: ClientId) -> Option<u32> {
+    let pane = srv
+        .clients
+        .get(&id)
+        .and_then(|c| c.att.as_ref())
+        .and_then(|a| srv.active_pane_of_session(a.session))?;
+    srv.panes.get(&pane)?.emu.cursor_colour()
+}
+
 /// The cursor shape client `id` shows, as DECSCUSR's `Ps`: what the
 /// active pane's program asked for, else its `cursor-style`, as tmux's
 /// `tty_update_mode`.

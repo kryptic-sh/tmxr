@@ -116,8 +116,9 @@ fn restore(kitty: bool) {
         LeaveAlternateScreen,
         crossterm::cursor::Show
     );
-    // Reset attributes and the cursor shape the panes may have changed.
-    let _ = out.write_all(b"\x1b[0m\x1b[0 q");
+    // Reset attributes and the cursor shape and colour the panes may have
+    // changed.
+    let _ = out.write_all(b"\x1b[0m\x1b[0 q\x1b]112\x07");
     let _ = out.flush();
     let _ = disable_raw_mode();
 }

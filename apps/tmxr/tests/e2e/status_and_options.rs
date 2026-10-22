@@ -1590,8 +1590,8 @@ fn a_programs_hyperlink_reaches_the_client() {
     });
 }
 
-/// `attach -f ignore-size`: the client's size sizes no window while a client
-/// without the flag is attached, as tmux's; alone, it does.
+/// The client's cursor takes the active pane's shape (`cursor-style`, or a
+/// program's DECSCUSR) and colour (a program's OSC 12), as tmux's.
 #[test]
 fn cursor_style_and_programs_shape_the_clients_cursor() {
     let t = Tmxr::new("cursorstyle");
@@ -1602,18 +1602,25 @@ fn cursor_style_and_programs_shape_the_clients_cursor() {
     s.wait_for("the option's shape", |_| s.raw_text().contains("\x1b[4 q"));
     // A program's own shape (bar, 6) wins over the option.
     #[cfg(unix)]
-    let program = ["/bin/sh", "-c", r"printf '\033[6 qbar-asked'; sleep 30"];
+    let program = [
+        "/bin/sh",
+        "-c",
+        r"printf '\033[6 q\033]12;rgb:12/34/56\007bar-asked'; sleep 30",
+    ];
     #[cfg(windows)]
     let program = [
         "powershell.exe",
         "-NoProfile",
         "-Command",
-        "[Console]::Out.Write([string][char]27 + '[6 qbar-asked'); Start-Sleep 30",
+        "$e = [string][char]27; [Console]::Out.Write($e + '[6 q' + $e + ']12;rgb:12/34/56' + [char]7 + 'bar-asked'); Start-Sleep 30",
     ];
     let mut args = vec!["new-window", "-t", "cs"];
     args.extend(program);
     t.run(&args);
     s.wait_for("the program's shape", |_| s.raw_text().contains("\x1b[6 q"));
+    s.wait_for("the program's colour", |_| {
+        s.raw_text().contains("\x1b]12;rgb:12/34/56\x07")
+    });
     // The shape can reach the terminal a frame before the program's text.
     s.wait_for("the program's text", |text| text.contains("bar-asked"));
     // Back on the first window, the option's shape again.
@@ -1621,6 +1628,11 @@ fn cursor_style_and_programs_shape_the_clients_cursor() {
     t.run(&["select-window", "-t", "cs:0"]);
     s.wait_for("the option's shape again", |_| {
         s.raw_text().matches("\x1b[4 q").count() > before
+    });
+    // And the terminal's own colour.
+    s.wait_for("the terminal's colour", |_| {
+        let raw = s.raw_text();
+        raw.rfind("\x1b]112\x07") > raw.rfind("\x1b]12;rgb:12/34/56\x07")
     });
 }
 
