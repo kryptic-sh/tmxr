@@ -838,6 +838,177 @@ impl Config {
     }
 }
 
+impl Config {
+    /// Give option `name` the value it has in `from`: a server option, or a
+    /// global session or window one. False for a name that is none of them.
+    pub fn copy_option(&mut self, from: &Self, name: &str) -> bool {
+        match name {
+            "prompt-history-limit" => self.prompt_history_limit = from.prompt_history_limit,
+            "buffer-limit" => self.buffer_limit = from.buffer_limit,
+            "message-limit" => self.message_limit = from.message_limit,
+            "exit-empty" => self.exit_empty = from.exit_empty,
+            "exit-unattached" => self.exit_unattached = from.exit_unattached,
+            "client-away-time" => self.client_away_time = from.client_away_time,
+            "prefix-timeout" => self.prefix_timeout = from.prefix_timeout,
+            "escape-time" => self.escape_time = from.escape_time,
+            "focus-events" => self.focus_events = from.focus_events,
+            "default-terminal" => self.default_terminal.clone_from(&from.default_terminal),
+            "extended-keys" => self.extended_keys.clone_from(&from.extended_keys),
+            "set-clipboard" => self.set_clipboard.clone_from(&from.set_clipboard),
+            "rgb-colour" => self.rgb_colour.clone_from(&from.rgb_colour),
+            "copy-command" => self.copy_command.clone_from(&from.copy_command),
+            "editor" => self.editor.clone_from(&from.editor),
+            "history-file" => self.history_file.clone_from(&from.history_file),
+            "socket-access" => self.socket_access.clone_from(&from.socket_access),
+            _ => {
+                return self.session.copy_from(&from.session, name)
+                    || self.window.copy_from(&from.window, name);
+            }
+        }
+        true
+    }
+}
+
+/// A config file's `[status]` keys and the options each sets, as `File`
+/// turns them into a [`Config`].
+const STATUS_OPTIONS: &[(&str, &str)] = &[
+    ("clock-mode-colour", "clock-mode-colour"),
+    (
+        "copy-mode-current-match-style",
+        "copy-mode-current-match-style",
+    ),
+    ("copy-mode-match-style", "copy-mode-match-style"),
+    ("menu-border-lines", "menu-border-lines"),
+    ("menu-border-style", "menu-border-style"),
+    ("menu-selected-style", "menu-selected-style"),
+    ("menu-style", "menu-style"),
+    ("mode-style", "mode-style"),
+    ("pane-active-border-style", "pane-active-border-style"),
+    ("pane-border-style", "pane-border-style"),
+    ("pane-status-current-style", "pane-status-current-style"),
+    ("pane-status-style", "pane-status-style"),
+    (
+        "session-status-current-style",
+        "session-status-current-style",
+    ),
+    ("session-status-style", "session-status-style"),
+    ("popup-border-lines", "popup-border-lines"),
+    ("popup-border-style", "popup-border-style"),
+    ("popup-style", "popup-style"),
+    ("window-current-format", "window-status-current-format"),
+    ("window-activity-style", "window-status-activity-style"),
+    ("window-bell-style", "window-status-bell-style"),
+    ("window-current-style", "window-status-current-style"),
+    ("window-format", "window-status-format"),
+    ("window-last-style", "window-status-last-style"),
+    ("window-separator", "window-status-separator"),
+    ("window-style", "window-status-style"),
+    ("display-panes-active-colour", "display-panes-active-colour"),
+    ("display-panes-colour", "display-panes-colour"),
+    ("status", "status"),
+    ("format", "status-format"),
+    ("bg", "status-bg"),
+    ("fg", "status-fg"),
+    ("message-line", "message-line"),
+    ("message-style", "message-style"),
+    ("message-command-style", "message-command-style"),
+    ("left", "status-left"),
+    ("left-length", "status-left-length"),
+    ("left-style", "status-left-style"),
+    ("right", "status-right"),
+    ("right-length", "status-right-length"),
+    ("right-style", "status-right-style"),
+    ("justify", "status-justify"),
+    ("position", "status-position"),
+    ("style", "status-style"),
+];
+
+/// The parts of a config file that hold no option of their own name.
+const SECTIONS: &[&str] = &[
+    "keys",
+    "hooks",
+    "navigator",
+    "options",
+    "resurrect",
+    "status",
+];
+
+/// What a config file sets, as written: for `source-file` to apply only
+/// that over what is running, as tmux runs a file's commands.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct FileSets {
+    /// Options by tmux name ([`Config::copy_option`]).
+    pub options: Vec<String>,
+    /// `[options]`: user options (`@name`).
+    pub user_options: Vec<String>,
+    /// `[keys.TABLE]`: each (table, key) it binds or unbinds.
+    pub binds: Vec<(String, String)>,
+    /// `[hooks]`: each hook it names.
+    pub hooks: Vec<String>,
+    /// Whether it has a `[navigator]` / `[resurrect]` section.
+    pub navigator: bool,
+    pub resurrect: bool,
+}
+
+/// What the config file at `path` sets ([`FileSets`]).
+pub fn file_sets(path: &Path) -> Result<FileSets, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let table = text
+        .parse::<toml::Table>()
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(sets(&table))
+}
+
+fn sets(table: &toml::Table) -> FileSets {
+    let keys_of = |section: &str| -> Vec<String> {
+        table
+            .get(section)
+            .and_then(toml::Value::as_table)
+            .map(|t| t.keys().cloned().collect())
+            .unwrap_or_default()
+    };
+    let binds = table
+        .get("keys")
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flatten()
+        .flat_map(|(t, entries)| {
+            entries
+                .as_table()
+                .into_iter()
+                .flat_map(|e| e.keys())
+                .map(move |k| (t.clone(), k.clone()))
+        })
+        .collect();
+    FileSets {
+        options: options_set(table),
+        user_options: keys_of("options"),
+        binds,
+        hooks: keys_of("hooks"),
+        navigator: table.contains_key("navigator"),
+        resurrect: table.contains_key("resurrect"),
+    }
+}
+
+/// The options a config file sets, by tmux name: its top-level keys, each
+/// an option's name, and its `[status]` keys, under the options they set.
+fn options_set(table: &toml::Table) -> Vec<String> {
+    let mut names: Vec<String> = table
+        .keys()
+        .filter(|k| !SECTIONS.contains(&k.as_str()))
+        .cloned()
+        .collect();
+    if let Some(status) = table.get("status").and_then(toml::Value::as_table) {
+        names.extend(status.keys().filter_map(|k| {
+            STATUS_OPTIONS
+                .iter()
+                .find(|(key, _)| key == k)
+                .map(|(_, name)| (*name).to_owned())
+        }));
+    }
+    names
+}
+
 impl Default for Config {
     fn default() -> Self {
         defaults()
@@ -881,6 +1052,83 @@ fn default_editor() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every option the defaults set is found by [`options_set`] and known to
+    /// [`Config::copy_option`], and every `[status]` key has its option, so
+    /// a file's settings cannot go unnoticed.
+    #[test]
+    fn options_set_names_every_option_a_file_can_set() {
+        let table: toml::Table = DEFAULTS.parse().unwrap();
+        let status = table["status"].as_table().unwrap();
+        for key in status.keys() {
+            assert!(
+                STATUS_OPTIONS.iter().any(|(k, _)| k == key),
+                "[status] {key} sets no option"
+            );
+        }
+        let names = options_set(&table);
+        let options = table
+            .keys()
+            .filter(|k| !SECTIONS.contains(&k.as_str()))
+            .count();
+        assert_eq!(names.len(), options + status.len());
+        let (mut to, from) = (defaults(), defaults());
+        for name in &names {
+            assert!(to.copy_option(&from, name), "{name} cannot be copied");
+        }
+    }
+
+    #[test]
+    fn copy_option_takes_one_option_only() {
+        let mut to = defaults();
+        let mut from = defaults();
+        from.session
+            .set("status-left", Some("from"), false)
+            .unwrap();
+        from.session
+            .set("status-right", Some("from"), false)
+            .unwrap();
+        from.escape_time = 999;
+        assert!(to.copy_option(&from, "status-left"));
+        assert!(to.copy_option(&from, "escape-time"));
+        assert_eq!(to.session.show("status-left").as_deref(), Some("from"));
+        assert_ne!(to.session.show("status-right").as_deref(), Some("from"));
+        assert_eq!(to.escape_time, 999);
+        assert!(!to.copy_option(&from, "no-such-option"));
+    }
+
+    #[test]
+    fn a_file_says_what_it_sets() {
+        let table: toml::Table = "escape-time = 1\n[options]\n'@a' = 'x'\n[keys.prefix]\nr = false\nx = 'kill-pane'\n[hooks]\nafter-new-window = 'x'\n[navigator]\npattern = 'vim'\n"
+            .parse()
+            .unwrap();
+        let s = sets(&table);
+        assert_eq!(s.options, ["escape-time"]);
+        assert_eq!(s.user_options, ["@a"]);
+        assert_eq!(
+            s.binds,
+            [
+                ("prefix".to_owned(), "r".to_owned()),
+                ("prefix".to_owned(), "x".to_owned())
+            ]
+        );
+        assert_eq!(s.hooks, ["after-new-window"]);
+        assert!(s.navigator && !s.resurrect);
+    }
+
+    #[test]
+    fn options_set_reads_status_keys_under_their_names() {
+        let table: toml::Table =
+            "history-limit = 5\n[status]\nleft = 'x'\nwindow-format = 'y'\n[keys.root]\n"
+                .parse()
+                .unwrap();
+        let mut names = options_set(&table);
+        names.sort();
+        assert_eq!(
+            names,
+            ["history-limit", "status-left", "window-status-format"]
+        );
+    }
 
     fn bind<'a>(cfg: &'a Config, table: &str, key: &str) -> Option<&'a Bind> {
         cfg.binds()

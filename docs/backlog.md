@@ -596,8 +596,6 @@ table. What has been verified, and how:
 - **From a code review by a sub-agent (2026-10-18).** Found by reading code and
   tmux 3.6's source; nothing was run. Items marked _checked_ were confirmed by
   reading the code again; the rest are as reported.
-  - `source-file PATH` sets `cfg_path` and replaces the whole config, losing
-    every run-time `set -g`; a later plain `source-file` reloads `PATH`.
   - One config error at start throws the whole file away for the defaults
     (`tmxr_server::run`); the first client to attach is now told so, but the
     file's good parts are not kept. tmux runs a config line by line and keeps

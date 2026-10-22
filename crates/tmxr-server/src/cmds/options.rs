@@ -74,7 +74,18 @@ pub(super) fn run(
                 tmxr_config::load(Some(&path)).map_err(|e| e.to_string())?;
                 srv.cfg_path = Some(path);
             }
-            srv.reload_config()?;
+            // What the file sets goes over what is running, as tmux's
+            // source-file runs a file's commands; with no path, the config
+            // file the server reads.
+            let file = srv
+                .cfg_path
+                .clone()
+                .or_else(|| match tmxr_config::load(None) {
+                    Ok((_, tmxr_config::ConfigSource::File(p))) => Some(p),
+                    _ => None,
+                });
+            let file = file.ok_or("no config file to source")?;
+            srv.overlay_config(&file)?;
             if let Some(c) = attached_client(srv, ctx) {
                 srv.show_message(c, "config reloaded".into());
             }

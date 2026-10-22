@@ -585,6 +585,65 @@ fn source_file_q_and_a_missing_file_leave_the_config_alone() {
     assert_eq!(config_files().trim(), t.config.display().to_string());
 }
 
+/// `source-file` applies what the file sets over what is running, as tmux's
+/// runs a file's commands: options, user options, binds and hooks it names
+/// take its values (one set to its default value included), and everything
+/// else keeps what was set since the server started.
+#[test]
+fn source_file_applies_only_what_the_file_sets() {
+    let t = Tmxr::new("sourceover");
+    t.run(&["new-session", "-d", "-s", "so"]);
+    t.run(&["set-option", "-g", "status-left", "run-time"]);
+    t.run(&["set-option", "-g", "history-limit", "1234"]);
+    t.run(&["set-option", "-g", "@keep", "kept"]);
+    t.run(&[
+        "bind-key",
+        "-T",
+        "prefix",
+        "y",
+        "display-message",
+        "run-time",
+    ]);
+    t.run(&["set-hook", "-g", "after-new-window", "set -g @hooked yes"]);
+    let file = t.dir.path().join("overlay.toml");
+    std::fs::write(
+        &file,
+        "status-interval = 7\n\
+         history-limit = 50000\n\
+         [status]\n\
+         right = 'from-file'\n\
+         [options]\n\
+         '@file' = 'f'\n\
+         [keys.prefix]\n\
+         z = { cmd = 'display-message zz' }\n\
+         c = false\n",
+    )
+    .unwrap();
+    let sourced = t.output(&["source-file", file.to_str().unwrap()]);
+    assert!(
+        sourced.status.success(),
+        "{}",
+        String::from_utf8_lossy(&sourced.stderr)
+    );
+    let show = |name: &str| t.run(&["show-options", "-gv", name]).trim().to_owned();
+    assert_eq!(show("status-left"), "run-time");
+    assert_eq!(show("@keep"), "kept");
+    assert_eq!(show("status-interval"), "7");
+    assert_eq!(show("history-limit"), "50000", "a default value set again");
+    assert_eq!(show("status-right"), "from-file");
+    assert_eq!(show("@file"), "f");
+    let keys = t.run(&["list-keys", "-T", "prefix"]);
+    let bound = |key: &str| {
+        keys.lines()
+            .any(|l| l.split_whitespace().nth(3) == Some(key))
+    };
+    assert!(bound("y"), "the run-time bind stays:\n{keys}");
+    assert!(bound("z"), "the file's bind is added");
+    assert!(!bound("c"), "the file unbinds c");
+    let hooks = t.run(&["show-hooks", "-g"]);
+    assert!(hooks.contains("after-new-window"), "{hooks}");
+}
+
 #[test]
 fn environment_commands_set_show_and_reach_new_panes() {
     let t = Tmxr::new("env");

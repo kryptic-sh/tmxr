@@ -61,11 +61,14 @@ session-created = ["new-window -d", "new-window -d"]
 Option names are tmux's, so docs and muscle memory carry over. `@user-options`
 are allowed (formats reference them via `#{@name}` / `#{E:@name}`).
 
-`source-file` (and `prefix R`) re-reads the file and applies it to the running
-server. `[hooks]` names are checked against the hooks tmxr fires
-(`hooks::known`); an unknown one is reported and left out. Its hooks are the
-global table, replaced on reload as the binds are, so a `set-hook -g` made at
-run time lasts until then.
+`source-file` (and `prefix R`) applies what the file sets over the running
+server, as tmux's runs a file's commands (`Server::overlay_config`,
+`tmxr_config::file_sets`): each option it names (top-level keys, and `[status]`
+keys under the options they set), user option, bind (`false` unbinds) and hook
+takes the file's value, and the rest keep theirs, run-time `set -g`, `bind` and
+`set-hook` included. A `[navigator]` or `[resurrect]` section replaces that
+section whole. `[hooks]` names are checked against the hooks tmxr fires
+(`hooks::known`); an unknown one is reported and left out.
 
 ### Option scopes
 

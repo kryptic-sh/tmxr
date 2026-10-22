@@ -97,7 +97,9 @@ x = false                                                  # remove a default
 "|" = { cmd = "split-window -h", note = "Split side by side" }
 ```
 
-`prefix R` (or `tmxr source-file`) reloads it.
+`prefix R` (or `tmxr source-file`) applies it again over the running server, as
+tmux's `source-file`: what the file sets takes its value, and settings it does
+not mention keep what was set since (`set -g`, `bind`, `set-hook`).
 
 Coming from tmux, `tmxr --import-tmux-conf ~/.tmux.conf > config.toml` writes
 your tmux.conf's global options, binds and hooks as a tmxr config, and lists at

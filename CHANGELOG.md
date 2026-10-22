@@ -491,6 +491,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`source-file` applies a file over what is running, as tmux's**: what the
+  file sets (options, user options, binds, hooks) takes its value, and
+  everything else keeps its own, so a `set -g`, `bind` or `set-hook` made at run
+  time survives `prefix R`. It used to replace the whole config, dropping them.
+  A file setting an option to its default value still sets it.
 - **Pane output no longer redraws the status line**, as in tmux: the status line
   is expanded on its `status-interval` timer and on the events that change it (a
   window renamed, flagged, added or selected, a key table, a message, a title),

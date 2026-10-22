@@ -1334,24 +1334,72 @@ impl Server {
         }
     }
 
-    pub fn reload_config(&mut self) -> Result<(), String> {
-        let (cfg, source) =
-            tmxr_config::load(self.cfg_path.as_deref()).map_err(|e| e.to_string())?;
-        self.cfg_file = config_file(source);
-        let (keys, mut errors) = KeyTables::from_config(&cfg);
-        self.navigator = match navigator_regex(&cfg.navigator.pattern) {
-            Ok(re) => Some(re),
-            Err(e) => {
-                errors.push(e);
-                None
+    /// Apply what the config file at `path` sets over what is running, as
+    /// tmux's `source-file` runs a file's commands: each option, user
+    /// option, bind and hook it names takes its value there, and everything
+    /// else keeps its own, changes made since the server started included.
+    pub fn overlay_config(&mut self, path: &std::path::Path) -> Result<(), String> {
+        let (file, _) = tmxr_config::load(Some(path)).map_err(|e| e.to_string())?;
+        let sets = tmxr_config::file_sets(path)?;
+        let mut errors = Vec::new();
+        for name in &sets.options {
+            self.cfg.copy_option(&file, name);
+        }
+        for name in &sets.user_options {
+            match file.options.get(name) {
+                Some(value) => self.cfg.options.insert(name.clone(), value.clone()),
+                None => self.cfg.options.remove(name),
+            };
+        }
+        for (table, key) in &sets.binds {
+            let bind_key = match key.parse::<tmxr_command::BindKey>() {
+                Ok(k) => k,
+                Err(e) => {
+                    errors.push(format!("config [keys.{table}]: {e}"));
+                    continue;
+                }
+            };
+            // What the file leaves bound, as a whole reload would: a bind,
+            // or none for `false`.
+            match file.keys.get(table).and_then(|t| t.get(key)) {
+                Some(tmxr_config::BindEntry::Bind(b)) => self.keys.bind(
+                    table,
+                    bind_key,
+                    crate::keys::BindSpec {
+                        cmd: b.cmd.clone(),
+                        note: b.note.clone(),
+                        repeat: b.repeat,
+                    },
+                ),
+                _ => {
+                    self.keys.unbind(table, &bind_key);
+                }
             }
-        };
-        // The config's hooks replace the global ones, as its binds do.
-        let (hooks, hook_errors) = crate::hooks::from_config(&cfg);
-        errors.extend(hook_errors);
-        self.hooks = hooks;
-        self.keys = keys;
-        self.cfg = cfg;
+        }
+        for name in &sets.hooks {
+            if !crate::hooks::known(name) {
+                errors.push(format!("hooks.{name}: unknown hook"));
+                continue;
+            }
+            match file.hooks.get(name) {
+                Some(commands) => self.hooks.insert(name.clone(), commands.clone()),
+                None => self.hooks.remove(name),
+            };
+        }
+        if sets.navigator {
+            self.cfg.navigator = file.navigator.clone();
+            self.navigator = match navigator_regex(&self.cfg.navigator.pattern) {
+                Ok(re) => Some(re),
+                Err(e) => {
+                    errors.push(e);
+                    None
+                }
+            };
+        }
+        if sets.resurrect {
+            self.cfg.resurrect = file.resurrect;
+        }
+        self.cfg_file = Some(path.to_path_buf());
         self.apply_rgb_colour();
         self.mark_all_dirty();
         if errors.is_empty() {

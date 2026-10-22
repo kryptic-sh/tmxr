@@ -364,6 +364,16 @@ macro_rules! options_table {
                 }
             }
 
+            /// Give `name` the value it has in `other`; false for a name
+            /// that is not in the table.
+            pub fn copy_from(&mut self, other: &Self, name: &str) -> bool {
+                match name {
+                    $($name => self.$field = other.$field.clone(),)*
+                    _ => return false,
+                }
+                true
+            }
+
             /// Set `name` from `set-option`'s `value`; `append` is `-a`.
             pub fn set(&mut self, name: &str, value: Option<&str>, append: bool) -> Result<(), String> {
                 match name {
