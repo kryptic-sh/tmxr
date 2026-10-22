@@ -387,7 +387,8 @@ fn session_with_window(
     spec: Option<&str>,
     keep_zoom: bool,
 ) -> Result<SessionId, String> {
-    let Some(spec) = spec.filter(|t| t.contains([':', '.', '%', '@'])) else {
+    let Some(spec) = spec.filter(|t| t.contains([':', '.', '%', '@']) || target::is_mouse(t))
+    else {
         return target::session(srv, ctx, spec);
     };
     let (sid, wid, pid) = target::pane(srv, ctx, Some(spec))?;

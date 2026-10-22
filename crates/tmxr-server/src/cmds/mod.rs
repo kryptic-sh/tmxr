@@ -269,7 +269,7 @@ fn expand_by(
     match &ctx.mouse {
         // A mouse bind's commands also see what was under the mouse.
         Some(mouse) => expander(s, &|name: &str| {
-            crate::vars::mouse_var(srv, mouse, name)
+            crate::vars::mouse_var(srv, ctx.client, mouse, name)
                 .or_else(|| tmxr_command::format::Context::get(vars, name))
         }),
         None => expander(s, vars),

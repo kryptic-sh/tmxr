@@ -38,6 +38,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Pane, session and user ranges in the status line**: `status-format`'s
+  `#[range=pane|%N]`, `#[range=session|$N]` and `#[range=user|text]` take clicks
+  as tmux's do, and `#{mouse_status_range}` names the range clicked (a user
+  range's text), for status-line buttons of a config's own.
 - **A program's palette is its pane's**: the colours of the 256 a program sets
   with OSC 4 (base16-shell and the like) are drawn as it set them in its pane,
   and its OSC 4 queries for them answered, as tmux does; OSC 104 unsets them.
@@ -536,6 +540,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **A click on the status line runs `switch-client -t =`**, tmux's default
+  `MouseDown1Status`, instead of `select-window -t =`: a window still selects
+  it, and a session range now switches to its session.
 - **Windows: one process snapshot a refresh for every pane**, where naming each
   pane's foreground command took two snapshots of every process a pane (about 5
   ms each), on the server's thread.

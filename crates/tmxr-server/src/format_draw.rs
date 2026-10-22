@@ -38,12 +38,65 @@ enum Part {
 }
 
 /// What a click on a run reaches, as tmux's `#[range=…]`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Range {
     None,
     Left,
     Right,
+    /// A pane by id (`range=pane|%1`).
+    Pane(u32),
+    /// A window by index (`range=window|1`).
     Window(u32),
+    /// A session by id (`range=session|$1`).
+    Session(u32),
+    /// Text of the config's own (`range=user|text`), for
+    /// `#{mouse_status_range}`: cut to [`USER_RANGE_MAX`] bytes, as tmux's.
+    User(String),
+}
+
+/// The most bytes of a user range's text kept, as tmux's `range_string`.
+pub const USER_RANGE_MAX: usize = 15;
+
+impl Range {
+    /// What `range=` names (its text after `range=`), as tmux's style_parse
+    /// reads it; `None` where it reads none.
+    fn parse(spec: &str) -> Option<Self> {
+        let (kind, arg) = match spec.split_once('|') {
+            Some((kind, arg)) => (kind, Some(arg)),
+            None => (spec, None),
+        };
+        let id = |prefix: char| {
+            let digits = arg?.strip_prefix(prefix)?;
+            digits
+                .bytes()
+                .all(|b| b.is_ascii_digit())
+                .then(|| digits.parse().ok())?
+        };
+        Some(match kind.to_ascii_lowercase().as_str() {
+            "left" if arg.is_none() => Self::Left,
+            "right" if arg.is_none() => Self::Right,
+            "pane" => Self::Pane(id('%')?),
+            "window" => {
+                let digits = arg?;
+                Self::Window(
+                    digits
+                        .bytes()
+                        .all(|b| b.is_ascii_digit())
+                        .then(|| digits.parse().ok())??,
+                )
+            }
+            "session" => Self::Session(id('$')?),
+            "user" => {
+                let text = arg?;
+                let cut = (0..=USER_RANGE_MAX.min(text.len()))
+                    .rev()
+                    .find(|&i| text.is_char_boundary(i))
+                    .unwrap_or(0);
+                Self::User(text[..cut].to_owned())
+            }
+            _ => return None,
+        })
+    }
 }
 
 /// One run of the line: its text, its style, the part it goes in and its
@@ -115,7 +168,7 @@ fn runs(text: &str, base: Style) -> (Vec<Run>, Option<Style>, ListLayout) {
                     text,
                     style: current,
                     part,
-                    range,
+                    range: range.clone(),
                 });
                 continue;
             }
@@ -132,13 +185,8 @@ fn runs(text: &str, base: Style) -> (Vec<Run>, Option<Style>, ListLayout) {
                 "list=focus" => list = ListMode::Focus,
                 "list=left-marker" => list = ListMode::LeftMarker,
                 "list=right-marker" => list = ListMode::RightMarker,
-                "range=left" => range = Range::Left,
-                "range=right" => range = Range::Right,
-                _ if item.starts_with("range=") => {
-                    range = item
-                        .strip_prefix("range=window|")
-                        .and_then(|i| i.parse().ok())
-                        .map_or(Range::None, Range::Window);
+                _ if item.len() > 6 && item[..6].eq_ignore_ascii_case("range=") => {
+                    range = Range::parse(&item[6..]).unwrap_or(Range::None);
                 }
                 _ => {
                     if let Some(a) = item.strip_prefix("align=") {
@@ -259,7 +307,7 @@ impl Screen {
         for r in mine {
             let (nx, _) = buf.set_stringn(x, 0, &r.text, usize::from(total - x), r.style);
             if r.range != Range::None && nx > x {
-                ranges.push((x, nx, r.range));
+                ranges.push((x, nx, r.range.clone()));
             }
             x = nx;
         }
@@ -295,14 +343,15 @@ impl Target<'_> {
             }
         }
         let end = start.saturating_add(width);
-        for &(a, b, range) in &s.ranges {
+        for (a, b, range) in &s.ranges {
+            let (a, b) = (*a, *b);
             if b <= start || a >= end {
                 continue;
             }
             let (a, b) = (a.max(start) - start + offset, b.min(end) - start + offset);
             let (a, b) = (a.min(self.cols), b.min(self.cols));
             if b > a {
-                self.spans.push((self.x0 + a, self.x0 + b, range));
+                self.spans.push((self.x0 + a, self.x0 + b, range.clone()));
             }
         }
     }
@@ -664,13 +713,16 @@ mod tests {
             0,
             12,
             Style::default(),
-            "#[range=left]L#[norange]-#[range=window|3]w3#[range=pane|%1]p#[align=right range=right]R",
+            "#[range=left]L#[norange]-#[range=window|3]w3#[range=pane|%1]p#[range=session|$2]s#[range=user|a-long-user-range-text]u#[range=pane|1]x#[align=right range=right]R",
         );
         assert_eq!(
             spans,
             [
                 (0, 1, Range::Left),
                 (2, 4, Range::Window(3)),
+                (4, 5, Range::Pane(1)),
+                (5, 6, Range::Session(2)),
+                (6, 7, Range::User("a-long-user-ran".into())),
                 (11, 12, Range::Right)
             ]
         );

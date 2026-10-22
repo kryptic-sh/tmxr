@@ -270,9 +270,42 @@ pub fn pane_current_path(srv: &Server, pane: PaneId) -> Option<PathBuf> {
 /// tmux's `mouse_*` variables for a command a mouse event ran: where in its
 /// pane the mouse was, and the word and line under it (in copy mode, as the
 /// view shows them). `None` for other names, or away from a pane.
-pub fn mouse_var(srv: &Server, mouse: &crate::mouse::MouseTarget, name: &str) -> Option<String> {
+pub fn mouse_var(
+    srv: &Server,
+    client: Option<ClientId>,
+    mouse: &crate::mouse::MouseTarget,
+    name: &str,
+) -> Option<String> {
     if !name.starts_with("mouse_") || name == "mouse_any_flag" {
         return None;
+    }
+    // The range under a click on the status line's first row, read from
+    // client `client`'s line as tmux's format_cb_mouse_status_range does.
+    if name == "mouse_status_range" {
+        use crate::format_draw::Range;
+        use tmxr_command::MouseLocation as L;
+        let att = srv.clients.get(&client?)?.att.as_ref()?;
+        let first = if srv.status_at_top(att.session) {
+            0
+        } else {
+            att.rows.saturating_sub(srv.status_rows(att.session))
+        };
+        let on_status = matches!(
+            mouse.location,
+            L::Status | L::StatusLeft | L::StatusRight | L::StatusDefault
+        );
+        if !on_status || mouse.row != first {
+            return Some(String::new());
+        }
+        return Some(match att.status_ranges.at(mouse.col) {
+            (L::StatusLeft, _) => "left".to_owned(),
+            (L::StatusRight, _) => "right".to_owned(),
+            (_, Some(Range::Pane(_))) => "pane".to_owned(),
+            (_, Some(Range::Window(_))) => "window".to_owned(),
+            (_, Some(Range::Session(_))) => "session".to_owned(),
+            (_, Some(Range::User(text))) => text.clone(),
+            _ => String::new(),
+        });
     }
     let p = srv.panes.get(&mouse.pane?)?;
     let (x, y) = (

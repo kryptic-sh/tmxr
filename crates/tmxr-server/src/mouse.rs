@@ -87,6 +87,8 @@ const MODS: KeyModifiers = KeyModifiers::CONTROL
     .union(KeyModifiers::ALT)
     .union(KeyModifiers::SHIFT);
 
+use crate::format_draw::Range;
+
 pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
     if !srv.client_session_options(id).mouse {
         return;
@@ -315,13 +317,26 @@ fn locate(
         } else {
             att.rows.saturating_sub(lines)
         };
-        let (location, idx) = if row == first {
+        let (location, range) = if row == first {
             att.status_ranges.at(col)
         } else {
             (MouseLocation::StatusDefault, None)
         };
         t.location = location;
-        t.window = idx.and_then(|i| Some((i, *sess.windows.get(&i)?)));
+        // A range's target, as tmux's server_client_check_mouse sets it: a
+        // pane or session that is gone makes the click nothing.
+        match range {
+            Some(Range::Window(i)) => t.window = sess.windows.get(i).map(|w| (*i, *w)),
+            Some(Range::Pane(p)) => {
+                srv.panes.get(p)?;
+                t.pane = Some(*p);
+            }
+            Some(Range::Session(s)) => {
+                srv.sessions.get(s)?;
+                t.session = *s;
+            }
+            _ => {}
+        }
         return Some(t);
     }
     let wid = sess.current_window()?;

@@ -29,12 +29,12 @@ pub struct StatusCache {
     ranges: StatusRanges,
 }
 
-/// `(first column, end column, window index)` of each window in the status
-/// line, for mouse clicks.
+/// Where the status line's ranges are, for mouse clicks.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatusRanges {
-    /// Each window's cells in the window list: start, end, window index.
-    pub windows: Vec<(u16, u16, u32)>,
+    /// Each window, pane, session and user range: its first column, its end
+    /// column and what it is.
+    pub targets: Vec<(u16, u16, crate::format_draw::Range)>,
     /// Where `status-left` ends.
     pub left_end: u16,
     /// Where `status-right` starts.
@@ -46,7 +46,7 @@ impl Default for StatusRanges {
     /// outside the left, right and window parts.
     fn default() -> Self {
         Self {
-            windows: Vec::new(),
+            targets: Vec::new(),
             left_end: 0,
             right_start: u16::MAX,
         }
@@ -54,12 +54,18 @@ impl Default for StatusRanges {
 }
 
 impl StatusRanges {
-    /// What a click at `col` of the status line is on, and the window index
-    /// when it is a window.
-    pub fn at(&self, col: u16) -> (tmxr_command::MouseLocation, Option<u32>) {
+    /// What a click at `col` of the status line is on, and the window,
+    /// pane, session or user range there.
+    pub fn at(
+        &self,
+        col: u16,
+    ) -> (
+        tmxr_command::MouseLocation,
+        Option<&crate::format_draw::Range>,
+    ) {
         use tmxr_command::MouseLocation as L;
-        if let Some((_, _, idx)) = self.windows.iter().find(|(a, b, _)| col >= *a && col < *b) {
-            (L::Status, Some(*idx))
+        if let Some((_, _, range)) = self.targets.iter().find(|(a, b, _)| col >= *a && col < *b) {
+            (L::Status, Some(range))
         } else if col < self.left_end {
             (L::StatusLeft, None)
         } else if col >= self.right_start {
@@ -1013,19 +1019,21 @@ fn draw_ask(
 
 /// What clicks reach on a line `format_draw` drew, from its ranges: the
 /// left part up to the last left range's end, the right part from the
-/// first right range's start, and each window's cells.
+/// first right range's start, and each window's, pane's, session's and user
+/// range's cells.
 fn status_ranges(spans: &[(u16, u16, crate::format_draw::Range)]) -> StatusRanges {
     use crate::format_draw::Range;
     let mut ranges = StatusRanges::default();
-    for &(start, end, range) in spans {
+    for (start, end, range) in spans {
+        let (start, end) = (*start, *end);
         match range {
             Range::Left => ranges.left_end = ranges.left_end.max(end),
             Range::Right => ranges.right_start = ranges.right_start.min(start),
-            Range::Window(idx) => match ranges.windows.last_mut() {
-                Some(last) if last.2 == idx && last.1 == start => last.1 = end,
-                _ => ranges.windows.push((start, end, idx)),
-            },
             Range::None => {}
+            _ => match ranges.targets.last_mut() {
+                Some(last) if last.2 == *range && last.1 == start => last.1 = end,
+                _ => ranges.targets.push((start, end, range.clone())),
+            },
         }
     }
     ranges
@@ -1442,16 +1450,22 @@ mod tests {
 
     #[test]
     fn status_clicks_land_on_left_windows_gap_and_right() {
+        use crate::format_draw::Range;
         let r = StatusRanges {
-            windows: vec![(5, 10, 0), (10, 14, 1)],
+            targets: vec![
+                (5, 10, Range::Window(0)),
+                (10, 14, Range::Window(1)),
+                (14, 16, Range::Session(2)),
+            ],
             left_end: 5,
             right_start: 30,
         };
         assert_eq!(r.at(0), (L::StatusLeft, None));
         assert_eq!(r.at(4), (L::StatusLeft, None));
-        assert_eq!(r.at(5), (L::Status, Some(0)));
-        assert_eq!(r.at(13), (L::Status, Some(1)));
-        assert_eq!(r.at(14), (L::StatusDefault, None));
+        assert_eq!(r.at(5), (L::Status, Some(&Range::Window(0))));
+        assert_eq!(r.at(13), (L::Status, Some(&Range::Window(1))));
+        assert_eq!(r.at(15), (L::Status, Some(&Range::Session(2))));
+        assert_eq!(r.at(16), (L::StatusDefault, None));
         assert_eq!(r.at(30), (L::StatusRight, None));
         // A message over the status line: nothing to click on.
         assert_eq!(StatusRanges::default().at(3), (L::StatusDefault, None));

@@ -27,11 +27,11 @@ punctuation (`'`, `"`, `;`, `%`, `\`). hjkl's notation is accepted too: `<C-b>`,
 Mouse events are keys, as in tmux: `MouseDown1Pane`, `MouseUp3Pane`,
 `MouseDrag1Border`, `MouseDragEnd1Pane`, `WheelUpPane`, `MouseDown1Status` and
 so on (buttons 1–3; `Pane`, `Border` or `Status`; `C-` / `M-` / `S-` prefixes).
-A pane in copy mode looks them up in the copy-mode table, everything else in
-`root`; a pane event nothing binds goes to the pane's program. Mouse binds run
-with the mouse as their target: `-t =` (or `{mouse}`) is the pane or window
-under it, `send-keys -M` passes the event to the program, `copy-mode -M` starts
-a drag selection and `resize-pane -M` drags a border;
+A pane in copy mode looks them up in the copy-mode table and then in `root`,
+everything else in `root`; a pane event nothing binds goes to the pane's
+program. Mouse binds run with the mouse as their target: `-t =` (or `{mouse}`)
+is the pane or window under it, `send-keys -M` passes the event to the program,
+`copy-mode -M` starts a drag selection and `resize-pane -M` drags a border;
 `send-keys -X begin-selection` / `clear-selection` from a mouse bind act at the
 mouse. `defaults.toml` binds tmux's defaults plus tmux-yank's
 `MouseDragEnd1Pane`. `DoubleClick1Pane` / `TripleClick1Pane` (presses in the

@@ -684,8 +684,11 @@ fn places(srv: &Server, ctx: &Ctx, c: ClientId, pane: Option<PaneId>) -> Places 
             .and_then(|c| c.att.as_ref())
             .and_then(|att| {
                 let current = srv.sessions.get(&att.session)?.current;
-                let ranges = &att.status_ranges.windows;
-                ranges.iter().find(|r| r.2 == current).map(|r| r.0)
+                let ranges = &att.status_ranges.targets;
+                ranges
+                    .iter()
+                    .find(|r| r.2 == crate::format_draw::Range::Window(current))
+                    .map(|r| r.0)
             }),
         status_lines: srv.client_status_rows(c),
         status_top: srv.client_session(c).is_some_and(|s| srv.status_at_top(s)),

@@ -41,7 +41,7 @@ pub fn current_session(srv: &Server, ctx: &Ctx) -> Option<SessionId> {
 }
 
 /// `=` / `{mouse}`: the mouse target of a mouse bind.
-fn is_mouse(spec: &str) -> bool {
+pub fn is_mouse(spec: &str) -> bool {
     matches!(spec, "=" | "{mouse}")
 }
 
@@ -82,6 +82,12 @@ pub fn session(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<SessionId> {
     let spec = spec.map(|s| s.split(':').next().unwrap_or(s));
     match spec.filter(|s| !s.is_empty()) {
         None => current_session(srv, ctx).ok_or_else(|| "no current session".into()),
+        // The session under the mouse (a session range's), as tmux's
+        // cmd_mouse_session.
+        Some(s) if is_mouse(s) => ctx
+            .mouse
+            .map(|t| t.session)
+            .ok_or_else(|| "no mouse target".into()),
         // A window or pane id names the session it is in, as tmux's.
         Some(s) if s.starts_with('@') || s.starts_with('%') => Ok(window(srv, ctx, Some(s))?.0),
         Some(s) => find_session(srv, s),
@@ -421,6 +427,14 @@ pub fn pane(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, Wind
             }
         };
         let p = srv.panes.get(&pane).ok_or("no pane under the mouse")?;
+        // A status line's pane range names a pane, which must be in the
+        // window the mouse is on, as tmux's cmd_mouse_pane checks.
+        if t.pane.is_some() && Some(p.window) != t.window.map(|(_, w)| w) {
+            let (_, _, wid) = window(srv, ctx, Some("="))?;
+            if p.window != wid {
+                return Err("no pane under the mouse".into());
+            }
+        }
         return Ok((t.session, p.window, pane));
     }
     if let Some(id) = spec

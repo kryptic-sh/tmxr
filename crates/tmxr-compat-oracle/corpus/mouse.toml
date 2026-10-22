@@ -85,6 +85,75 @@ steps = [
 checks = [{ format = "#{window_index}", expect = "0" }]
 
 [[cases]]
+name = "a_click_on_a_session_range_switches_to_it"
+# status-format's session, pane and user ranges, as tmux's: the default
+# MouseDown1Status (switch-client -t =) switches to a session range's
+# session, and to a pane range's pane.
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "set -g mouse on" },
+  { run = "split-window -d -t o" },
+  { run = "new-session -d -s other" },
+  { run = "set -g status-format[0] '#[range=session|$1]SESSONE#[norange] #[range=pane|%1]PANEONE#[norange] #[range=user|btn]BUTTON'" },
+  { sleep = 0.5 },
+  { mouse = { action = "click", at = { text = "PANEONE", row = -1 } } },
+  { sleep = 0.3 },
+  { mouse = { action = "click", at = { text = "SESSONE", row = -1 } } },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "display -p -t other '#{session_id}'", expect = "$1" },
+  { command = "display -p -t o '#{pane_id}'", expect = "%1" },
+  { command = "list-clients -F '#{client_session}'", expect = "other" },
+]
+
+[[cases]]
+name = "a_pane_range_off_the_clicked_window_does_nothing"
+# tmux's cmd_mouse_pane takes a pane range's pane only in the window the
+# mouse is on: one in another session's window is no target.
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "set -g mouse on" },
+  { run = "new-session -d -s other" },
+  { run = "split-window -t other" },
+  { run = "set -g status-format[0] '#[range=pane|%1]OTHERPANE'" },
+  { sleep = 0.5 },
+  { mouse = { action = "click", at = { text = "OTHERPANE", row = -1 } } },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "display -p -t other '#{pane_id}'", expect = "%2" },
+  { command = "list-clients -F '#{client_session}'", expect = "o" },
+]
+
+[[cases]]
+name = "mouse_status_range_names_the_range_clicked"
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "set -g mouse on" },
+  { run = "set -g status-format[0] '#[range=user|a-very-long-button-name]BUTTON#[norange] #[range=window|0]WINDOWZERO#[norange] NONE'" },
+  { run = "bind -n MouseDown1Status set -gF @r '[#{mouse_status_range}]'" },
+  { run = "bind -n MouseDown1StatusDefault set -gF @d '[#{mouse_status_range}]'" },
+  { sleep = 0.5 },
+  { mouse = { action = "click", at = { text = "BUTTON", row = -1 } } },
+  { sleep = 0.3 },
+  { run = "set -gF @u '#{@r}'" },
+  { mouse = { action = "click", at = { text = "WINDOWZERO", row = -1 } } },
+  { sleep = 0.3 },
+  { mouse = { action = "click", at = { text = "NONE", row = -1 } } },
+  { sleep = 0.3 },
+]
+checks = [
+  { format = "#{@u} #{@r} #{@d}", expect = "[a-very-long-but] [window] []" },
+]
+
+[[cases]]
 name = "the_wheel_on_the_status_line_changes_window"
 attach = true
 unix_only = true
