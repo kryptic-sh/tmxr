@@ -85,6 +85,10 @@ mod tests {
                 Event::Key(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::CONTROL)),
                 Event::Resize(120, 40),
             ]),
+            ClientMsg::TerminalColours {
+                fg: Some(0xc0caf5),
+                bg: None,
+            },
             ClientMsg::Detach,
             ClientMsg::Resumed,
             ClientMsg::LockFailed("lock: not found".into()),
@@ -159,7 +163,7 @@ mod tests {
         for m in sample_server() {
             write_msg(&mut buf, &m).unwrap();
         }
-        assert_eq!(PROTOCOL_VERSION, 10, "update the golden digest below too");
+        assert_eq!(PROTOCOL_VERSION, 11, "update the golden digest below too");
         assert_eq!(
             fnv1a(&buf),
             GOLDEN,
@@ -167,7 +171,7 @@ mod tests {
         );
     }
 
-    const GOLDEN: u64 = 4_896_775_764_239_183_878;
+    const GOLDEN: u64 = 11_895_927_665_207_370_342;
 
     /// FNV-1a 64-bit (http://www.isthe.com/chongo/tech/comp/fnv/), used only to
     /// pin the golden bytes in a readable constant.

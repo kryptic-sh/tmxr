@@ -21,13 +21,22 @@ use tmxr_proto::{ClientMsg, write_msg};
 /// the panic hook installed in [`Guard::enter`]) on panic.
 pub struct Guard {
     kitty: bool,
-    sync: bool,
+    probe: Probe,
 }
 
-/// Whether the terminal takes synchronized updates (DEC mode 2026), asked
-/// once, at the first [`Guard::enter`]: a later one runs beside the input
-/// thread, which would take the answer.
-static SYNC: OnceLock<bool> = OnceLock::new();
+/// What the terminal said when asked: whether it takes synchronized
+/// updates (DEC mode 2026), and its default foreground and background
+/// colours (OSC 10 / 11) as RGB.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct Probe {
+    sync: bool,
+    fg: Option<u32>,
+    bg: Option<u32>,
+}
+
+/// The terminal's answers, asked once, at the first [`Guard::enter`]: a
+/// later one runs beside the input thread, which would take them.
+static PROBE: OnceLock<Probe> = OnceLock::new();
 
 /// How long the synchronized-update probe waits for the terminal's answers.
 #[cfg(unix)]
@@ -55,23 +64,42 @@ fn sync_answer(reply: &[u8]) -> Option<bool> {
     )
 }
 
-/// Ask the terminal whether it takes synchronized updates, reading its
-/// answers straight from the terminal before crossterm reads it (what is
-/// read here crossterm never sees).
+/// The colour the terminal's answer to `OSC which ; ?` in `reply` names
+/// (`OSC which ; spec`, ended by a BEL or `ESC \`), read as tmux's
+/// tty_keys_colours reads it.
 #[cfg(unix)]
-fn probe_sync(out: &mut impl Write) -> io::Result<bool> {
-    // DECRQM for mode 2026, then DA1 to know when the answers are in.
-    out.write_all(b"\x1b[?2026$p\x1b[c")?;
+fn colour_answer(reply: &[u8], which: u8) -> Option<u32> {
+    let text = String::from_utf8_lossy(reply);
+    let head = format!("\x1b]{which};");
+    let rest = &text[text.find(&head)? + head.len()..];
+    let end = rest.find(['\x07', '\x1b'])?;
+    tmxr_command::colour::parse_x11(&rest[..end])
+}
+
+/// Ask the terminal whether it takes synchronized updates and what its
+/// default colours are, as tmux asks at attach, reading its answers
+/// straight from the terminal before crossterm reads it (what is read here
+/// crossterm never sees).
+#[cfg(unix)]
+fn probe(out: &mut impl Write) -> io::Result<Probe> {
+    // DECRQM for mode 2026, OSC 10 and 11, then DA1 to know when the
+    // answers are in: terminals answer in order.
+    out.write_all(b"\x1b[?2026$p\x1b]10;?\x1b\\\x1b]11;?\x1b\\\x1b[c")?;
     out.flush()?;
     let deadline = std::time::Instant::now() + PROBE_WAIT;
     let mut reply = Vec::new();
+    let answers = |reply: &[u8], sync: bool| Probe {
+        sync,
+        fg: colour_answer(reply, 10),
+        bg: colour_answer(reply, 11),
+    };
     loop {
         if let Some(sync) = sync_answer(&reply) {
-            return Ok(sync);
+            return Ok(answers(&reply, sync));
         }
         let left = deadline.saturating_duration_since(std::time::Instant::now());
         if left.is_zero() {
-            return Ok(false);
+            return Ok(answers(&reply, false));
         }
         let mut pfd = libc::pollfd {
             fd: libc::STDIN_FILENO,
@@ -89,7 +117,7 @@ fn probe_sync(out: &mut impl Write) -> io::Result<bool> {
             return Err(e);
         }
         if ready == 0 {
-            return Ok(false);
+            return Ok(answers(&reply, false));
         }
         let mut buf = [0u8; 256];
         // SAFETY: reads into a live buffer of its own length; the terminal
@@ -97,7 +125,7 @@ fn probe_sync(out: &mut impl Write) -> io::Result<bool> {
         let n = unsafe { libc::read(libc::STDIN_FILENO, buf.as_mut_ptr().cast(), buf.len()) };
         let n = usize::try_from(n).map_err(|_| io::Error::last_os_error())?;
         if n == 0 {
-            return Ok(false);
+            return Ok(answers(&reply, false));
         }
         reply.extend_from_slice(&buf[..n]);
     }
@@ -133,9 +161,9 @@ impl Guard {
         // Before crossterm's keyboard probe below starts its reader. The
         // Windows console hands over input records, so it is not asked.
         #[cfg(unix)]
-        let sync = *SYNC.get_or_init(|| probe_sync(&mut out).unwrap_or(false));
+        let probe = *PROBE.get_or_init(|| probe(&mut out).unwrap_or_default());
         #[cfg(windows)]
-        let sync = *SYNC.get_or_init(|| false);
+        let probe = *PROBE.get_or_init(Probe::default);
         // Unambiguous key reports (C-h vs Backspace, C-i vs Tab, Escape vs
         // Alt) where the terminal supports the kitty protocol.
         let kitty = crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false);
@@ -150,17 +178,23 @@ impl Guard {
             restore(kitty);
             prev(info);
         }));
-        Ok(Self { kitty, sync })
+        Ok(Self { kitty, probe })
+    }
+
+    /// The terminal's default foreground and background colours, as RGB,
+    /// where it said them.
+    pub fn colours(&self) -> (Option<u32>, Option<u32>) {
+        (self.probe.fg, self.probe.bg)
     }
 
     /// Write one frame from the server, as one synchronized update where
     /// the terminal takes them, so it is never shown half drawn.
     pub fn write_frame(&self, out: &mut impl Write, frame: &[u8]) -> io::Result<()> {
-        if self.sync {
+        if self.probe.sync {
             out.write_all(b"\x1b[?2026h")?;
         }
         out.write_all(frame)?;
-        if self.sync {
+        if self.probe.sync {
             out.write_all(b"\x1b[?2026l")?;
         }
         out.flush()
@@ -487,6 +521,11 @@ mod tests {
     #[test]
     fn the_sync_probe_reads_decrpm_once_da1_is_in() {
         assert_eq!(sync_answer(b""), None);
+        // Colours, ended either way, before DA1.
+        let reply = b"\x1b]10;rgb:c0c0/caca/f5f5\x1b\\\x1b]11;rgb:1a1a/1b1b/2626\x07\x1b[?6c";
+        assert_eq!(colour_answer(reply, 10), Some(0xc0caf5));
+        assert_eq!(colour_answer(reply, 11), Some(0x1a1b26));
+        assert_eq!(colour_answer(b"\x1b[?6c", 11), None);
         // DECRPM alone: DA1 is still to come.
         assert_eq!(sync_answer(b"\x1b[?2026;2$y"), None);
         assert_eq!(sync_answer(b"\x1b[?2026;2$y\x1b[?62;22c"), Some(true));

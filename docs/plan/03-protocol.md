@@ -71,7 +71,8 @@ A protocol mismatch is reported to the user with both versions and a hint
 enum ClientMsg {
     Hello(Hello),
     Command(Vec<String>),           // argv after `tmxr`; empty = default command
-    Input(Vec<crossterm::event::Event>), // key, mouse, paste, focus, resize: one read's
+        Input(Vec<crossterm::event::Event>), // key, mouse, paste, focus, resize: one read's
+    TerminalColours { fg: Option<u32>, bg: Option<u32> }, // its terminal's, asked at attach
     Detach,                         // terminal hangup
     Resumed,                        // back from suspend-client: redraw everything
     LockFailed(String),             // the lock command failed: why

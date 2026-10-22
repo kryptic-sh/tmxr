@@ -15,7 +15,7 @@ pub use codec::{ProtoError, read_msg, write_msg};
 
 /// Bumped on any change to a type in this module. Client and server refuse to
 /// talk across a mismatch rather than mis-decode each other.
-pub const PROTOCOL_VERSION: u32 = 10;
+pub const PROTOCOL_VERSION: u32 = 11;
 
 /// The most bytes of standard input one [`ClientMsg::Stdin`] carries, and
 /// of a reply's output one [`ServerMsg::Output`] carries, so input or a
@@ -63,6 +63,13 @@ pub enum ClientMsg {
     /// paste, focus, resize), decoded by crossterm on the client: those it
     /// read together, in order, as tmux takes one read of its terminal.
     Input(Vec<crossterm::event::Event>),
+    /// The default foreground and background colours its terminal said it
+    /// has when asked (OSC 10 / 11) at attach, as RGB, each `None` if it did
+    /// not say; for programs' colour queries.
+    TerminalColours {
+        fg: Option<u32>,
+        bg: Option<u32>,
+    },
     /// The client wants to detach (sent on terminal hangup).
     Detach,
     /// The client is back from `suspend-client` or a lock; its terminal was

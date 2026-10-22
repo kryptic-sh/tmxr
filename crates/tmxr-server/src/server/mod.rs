@@ -81,6 +81,9 @@ pub struct Client {
     pub stdin: Option<Vec<u8>>,
     /// When it connected (`#{client_created}`).
     pub created: std::time::SystemTime,
+    /// The default foreground and background colours its terminal said
+    /// it has, as RGB, for programs' colour queries.
+    pub terminal_colours: (Option<u32>, Option<u32>),
 }
 
 impl Client {
@@ -631,6 +634,7 @@ impl Server {
                         no_detach_on_destroy: false,
                         stdin: None,
                         created: std::time::SystemTime::now(),
+                        terminal_colours: (None, None),
                     },
                 );
             }
@@ -766,6 +770,11 @@ impl Server {
                 }
             }
             ClientMsg::Input(events) => self.inputs(id, events),
+            ClientMsg::TerminalColours { fg, bg } => {
+                if let Some(c) = self.clients.get_mut(&id) {
+                    c.terminal_colours = (fg, bg);
+                }
+            }
             ClientMsg::Detach => self.detach(id, "detached"),
             ClientMsg::Resumed | ClientMsg::LockFailed(_) => {
                 // The shell had the terminal: repaint everything, and tell

@@ -214,8 +214,9 @@ impl Tmxr {
         self.spawn_at(self.dir.path(), program, args, vars)
     }
 
-    /// [`Tmxr::attach`] in a terminal that takes synchronized updates: it
-    /// answers DECRQM for mode 2026 as set.
+    /// [`Tmxr::attach`] in a terminal that takes synchronized updates and
+    /// tells its colours, as Alacritty does: it answers DECRQM for mode 2026
+    /// as set, and OSC 10 and 11 with [`TERMINAL_FG`] and [`TERMINAL_BG`].
     #[cfg(unix)]
     fn attach_sync(&self, rest: &[&str]) -> Screen {
         self.terminal(
@@ -239,7 +240,8 @@ impl Tmxr {
     }
 
     /// [`Tmxr::spawn_at`], the terminal answering DECRQM for mode 2026 as
-    /// set when `sync` (else, as one that does not know it, not at all).
+    /// set and OSC 10 / 11 with its colours when `sync` (else, as one that
+    /// knows neither, not at all).
     fn terminal(
         &self,
         cwd: &Path,
@@ -293,8 +295,16 @@ impl Tmxr {
                         break;
                     }
                     raw.lock().unwrap().extend_from_slice(&buf[..n]);
-                    if sync && buf[..n].windows(SYNC_QUERY.len()).any(|w| w == SYNC_QUERY) {
+                    let asked = |query: &[u8]| buf[..n].windows(query.len()).any(|w| w == query);
+                    if sync && asked(SYNC_QUERY) {
                         let _ = writer.lock().unwrap().write_all(b"\x1b[?2026;2$y");
+                    }
+                    for (query, colour) in
+                        [(b"\x1b]10;?", TERMINAL_FG), (b"\x1b]11;?", TERMINAL_BG)]
+                    {
+                        if sync && asked(query) {
+                            let _ = writer.lock().unwrap().write_all(colour);
+                        }
                     }
                     // Answer terminal queries (ConPTY's cursor-position
                     // probe, crossterm's capability probes) like a terminal.
@@ -521,6 +531,11 @@ fn console_window_probe() {
 
 /// DECRQM for synchronized updates (mode 2026), which the client asks.
 const SYNC_QUERY: &[u8] = b"\x1b[?2026$p";
+
+/// The default colours [`Tmxr::attach_sync`]'s terminal answers OSC 10 and
+/// 11 with, as Alacritty does (its colours, ended as asked).
+const TERMINAL_FG: &[u8] = b"\x1b]10;rgb:c0c0/caca/f5f5\x1b\\";
+const TERMINAL_BG: &[u8] = b"\x1b]11;rgb:1a1a/1b1b/2626\x1b\\";
 
 /// Where [`key_log_fixture`] logs the keys it reads, when a test starts it.
 const KEY_LOG: &str = "TMXR_E2E_KEY_LOG";

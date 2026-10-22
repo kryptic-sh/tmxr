@@ -1547,6 +1547,28 @@ fn an_idle_client_and_server_do_not_wake() {
 /// shows a frame half drawn; in one that does not, it writes none. Unix
 /// only: a Windows client does not ask, its console handing over input
 /// records rather than the terminal's answers.
+/// A program asking for the default colours, where the window's style leaves
+/// the terminal's own, gets those of the client's terminal, which the client
+/// asked at attach, as tmux's.
+#[cfg(unix)]
+#[test]
+fn colour_queries_get_the_client_terminals_colours() {
+    let t = Tmxr::new("termcolours");
+    t.run(&[
+        "new-session",
+        "-d",
+        "-s",
+        "tc",
+        r"stty raw -echo; head -c 1 >/dev/null; printf '\033]11;?\007\033]10;?\033\\'; exec cat -v",
+    ]);
+    let s = t.attach_sync(&["attach", "-t", "tc"]);
+    s.wait_for("the status line", |text| text.contains("tc"));
+    t.run(&["send-keys", "-t", "tc", "x"]);
+    s.wait_for("the answers", |text| {
+        text.contains("^[]11;rgb:1a1a/1b1b/2626^G^[]10;rgb:c0c0/caca/f5f5^[\\")
+    });
+}
+
 #[cfg(unix)]
 #[test]
 fn frames_are_synchronized_updates_where_the_terminal_takes_them() {

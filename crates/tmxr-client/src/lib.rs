@@ -181,8 +181,11 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                 }
             }
             ServerMsg::Attached => {
-                term = Some(terminal::Guard::enter()?);
-                if let Some(s) = send.take() {
+                let guard = terminal::Guard::enter()?;
+                let (fg, bg) = guard.colours();
+                term = Some(guard);
+                if let Some(mut s) = send.take() {
+                    write_msg(&mut s, &ClientMsg::TerminalColours { fg, bg }).map_err(to_io)?;
                     let shared = Arc::new(Mutex::new(s));
                     input = Some(terminal::spawn_input(Arc::clone(&shared)));
                     writer = Some(shared);

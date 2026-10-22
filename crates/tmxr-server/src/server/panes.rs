@@ -544,9 +544,11 @@ impl Server {
 
     /// The answers to pane `pid`'s colour queries, as tmux's input_osc_10,
     /// `_11` and `_12`: the foreground and background its `window-style` (or
-    /// `window-active-style`) gives, and its cursor's colour (the program's,
-    /// else `cursor-colour`), each as `rgb:rrrr/gggg/bbbb` ended as its
-    /// query was. A colour that is the terminal's own gets no answer.
+    /// `window-active-style`) gives, else those of the terminal of the first
+    /// client attached to a session holding its window that said them
+    /// (window_get_bg_client), and its cursor's colour (the program's, else
+    /// `cursor-colour`), each as `rgb:rrrr/gggg/bbbb` ended as its query
+    /// was. A colour nothing gives gets no answer.
     fn colour_answers(&self, pid: PaneId, queries: &[(u8, bool)]) -> Vec<u8> {
         let mut out = Vec::new();
         if queries.is_empty() {
@@ -558,10 +560,19 @@ impl Server {
             tmxr_command::format::Colour::Rgb(r, g, b) => Some(u32::from_be_bytes([0, r, g, b])),
         };
         let colours = crate::render::pane_default_colours(self, pid);
+        let window = self.panes.get(&pid).map(|p| p.window);
+        let client = |fg: bool| {
+            self.clients.values().find_map(|c| {
+                let session = self.sessions.get(&c.att.as_ref()?.session)?;
+                session.index_of(window?)?;
+                let (cfg, cbg) = c.terminal_colours;
+                if fg { cfg } else { cbg }
+            })
+        };
         for &(which, bel) in queries {
             let colour = match which {
-                10 => colours.fg.and_then(rgb),
-                11 => colours.bg.and_then(rgb),
+                10 => colours.fg.and_then(rgb).or_else(|| client(true)),
+                11 => colours.bg.and_then(rgb).or_else(|| client(false)),
                 _ => self
                     .panes
                     .get(&pid)
