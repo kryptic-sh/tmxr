@@ -115,6 +115,19 @@ steps = [
 checks = [{ format = "#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{copy_cursor_word}" }]
 
 [[cases]]
+name = "a_root_bind_runs_in_copy_mode"
+# Neither copy mode table binds F5: the root table's runs.
+attach = true
+unix_only = true
+steps = [
+  { run = "bind -n F5 set -g @k hit" },
+  { run = "copy-mode -t o" },
+  { keys = "\u001b[15~" },
+  { sleep = 0.3 },
+]
+checks = [{ format = "#{@k}", expect = "hit" }]
+
+[[cases]]
 name = "copy_mode_s_shows_another_panes_screen"
 steps = [
   { run = "split-window -d -t o 'printf \"srcmarker\n\"; exec sleep 1000'" },

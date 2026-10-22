@@ -527,7 +527,16 @@ impl Server {
                 self.mark_window_dirty(window);
                 return;
             }
-            if let Some(b) = self.keys.get(self.copy_table(pane), &key.into()).cloned() {
+            // Not bound in copy mode's table, the root table's bind runs,
+            // as tmux's server_client_key_callback tries it after a mode's;
+            // a key neither binds is not passed to the program.
+            let key = key.into();
+            let bind = self
+                .keys
+                .get(self.copy_table(pane), &key)
+                .or_else(|| self.keys.get(&root, &key))
+                .cloned();
+            if let Some(b) = bind {
                 self.run_bind(id, &b.cmd, Some(ev));
             }
             return;

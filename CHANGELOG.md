@@ -617,9 +617,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- **Mouse binds of the root table run in copy mode** when copy mode's table has
-  none, as tmux's do: the right-click menu (with its "Go To Top" and "Go To
-  Bottom" items) and anything else bound only there did nothing in copy mode.
+- **Binds of the root table run in copy mode** when copy mode's table has none
+  for the key or mouse event, as tmux's do: a `bind -n` key, the right-click
+  menu (with its "Go To Top" and "Go To Bottom" items) and anything else bound
+  only there did nothing in copy mode.
 - **A tapped or quick right click keeps the pane menu open**, as tmux's: its
   release, read with the press, closed the menu the press had just opened, so a
   touchpad tap showed no menu. Input the terminal sends together is now taken
