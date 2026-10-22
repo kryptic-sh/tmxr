@@ -20,13 +20,59 @@ use crate::Pty;
 /// Name of the process in the pane's foreground, as tmux shows it
 /// (`#{pane_current_command}`): the executable's base name.
 pub fn foreground_command(pty: &Pty) -> Option<String> {
+    Processes::now().foreground_command(pty)
+}
+
+/// The system's processes, read once for the lookups of several panes: one
+/// snapshot on Windows, where finding a pane's foreground process and
+/// naming it each need the whole list; nothing on Unix, where each lookup
+/// reads its own process.
+pub struct Processes {
+    /// `(pid, parent pid, exe name)`, oldest first.
     #[cfg(windows)]
-    {
-        foreground_command_windows(pty)
+    list: Vec<(u32, u32, String)>,
+}
+
+impl Processes {
+    pub fn now() -> Self {
+        Self {
+            #[cfg(windows)]
+            list: win::snapshot(),
+        }
     }
-    #[cfg(not(windows))]
-    {
-        process_name(foreground_pid(pty)?)
+
+    /// [`foreground_command`] from this reading.
+    pub fn foreground_command(&self, pty: &Pty) -> Option<String> {
+        #[cfg(windows)]
+        {
+            // The chosen child can exit before it is named: then the pane's
+            // own process rather than nothing.
+            let root = pty.pid()?;
+            let pairs: Vec<(u32, u32)> = self
+                .list
+                .iter()
+                .map(|&(pid, parent, _)| (pid, parent))
+                .collect();
+            pick_child(root, &pairs, win::created_100ns, win::age_100ns)
+                .and_then(|pid| self.name(pid))
+                .or_else(|| self.name(root))
+        }
+        #[cfg(not(windows))]
+        {
+            process_name(foreground_pid(pty)?)
+        }
+    }
+
+    /// `pid`'s executable name without `.exe`.
+    #[cfg(windows)]
+    fn name(&self, pid: u32) -> Option<String> {
+        let (_, _, exe) = self.list.iter().find(|(p, _, _)| *p == pid)?;
+        let stem = exe
+            .len()
+            .checked_sub(4)
+            .filter(|&i| exe.is_char_boundary(i) && exe[i..].eq_ignore_ascii_case(".exe"))
+            .map_or(exe.as_str(), |i| &exe[..i]);
+        Some(stem.to_owned())
     }
 }
 
@@ -54,16 +100,6 @@ fn foreground_pid(pty: &Pty) -> Option<u32> {
 fn foreground_pid(pty: &Pty) -> Option<u32> {
     let root = pty.pid()?;
     Some(newest_child(root).unwrap_or(root))
-}
-
-/// On Windows the chosen child can exit between the two snapshots; fall
-/// back to the pane's own process rather than reporting nothing.
-#[cfg(windows)]
-pub fn foreground_command_windows(pty: &Pty) -> Option<String> {
-    let root = pty.pid()?;
-    newest_child(root)
-        .and_then(process_name)
-        .or_else(|| process_name(root))
 }
 
 #[cfg(target_os = "linux")]
@@ -610,20 +646,6 @@ fn pick_child(
             created(*child).is_some_and(|c| c >= born)
                 && age(*child).is_some_and(|a| a >= SETTLE_100NS)
         })
-}
-
-#[cfg(windows)]
-fn process_name(pid: u32) -> Option<String> {
-    let exe = win::snapshot()
-        .into_iter()
-        .find(|(p, _, _)| *p == pid)
-        .map(|(_, _, exe)| exe)?;
-    let stem = exe
-        .len()
-        .checked_sub(4)
-        .filter(|&i| exe.is_char_boundary(i) && exe[i..].eq_ignore_ascii_case(".exe"))
-        .map_or(exe.as_str(), |i| &exe[..i]);
-    Some(stem.to_owned())
 }
 
 #[cfg(windows)]

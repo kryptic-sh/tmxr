@@ -154,12 +154,14 @@ pub fn base64(data: &[u8]) -> String {
 
 /// Refresh every pane's foreground command, and auto-named windows' names.
 pub fn refresh_commands(srv: &mut Server) {
+    // One reading of the system's processes for every pane.
+    let processes = tmxr_term::process::Processes::now();
     let ids: Vec<_> = srv.panes.keys().copied().collect();
     for id in ids {
         let Some(p) = srv.panes.get(&id) else {
             continue;
         };
-        if let Some(cmd) = tmxr_term::process::foreground_command(&p.pty) {
+        if let Some(cmd) = processes.foreground_command(&p.pty) {
             srv.commands.insert(id, cmd);
         }
     }

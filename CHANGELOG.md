@@ -529,6 +529,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Windows: one process snapshot a refresh for every pane**, where naming each
+  pane's foreground command took two snapshots of every process a pane (about 5
+  ms each), on the server's thread.
 - **`source-file` applies a file over what is running, as tmux's**: what the
   file sets (options, user options, binds, hooks) takes its value, and
   everything else keeps its own, so a `set -g`, `bind` or `set-hook` made at run

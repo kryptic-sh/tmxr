@@ -426,8 +426,12 @@ table. What has been verified, and how:
   console reader cannot be woken), measured nowhere.
 - **`#{pane_current_command}` on Windows** still reads the copy
   `util::refresh_commands` keeps, up to a refresh old, as a lookup there
-  (`foreground_command_windows`) snapshots every process; Unix reads it when
-  asked (`vars.rs`). Not measured: what a live read would cost on Windows.
+  snapshots every process; Unix reads it when asked (`vars.rs`). Measured
+  2026-10-22 (release build, about 320 processes): a live read cost 9 to 29 ms
+  an expansion (`display -p` with 20 of them, 40 calls, against
+  `#{pane_index}`), the cached copy nothing measurable, so the copy stays; a
+  status line naming each window's command would take a snapshot a window a
+  redraw.
 - **OSC 8 hyperlinks** (decided by the owner 2026-10-22: kept by the vt100 fork,
   doy/vt100-rust#51, which costs a cell 2 bytes of text so it stays 32 bytes):
   render puts a link's number in the frame cell's `underline_color`
@@ -626,16 +630,17 @@ table. What has been verified, and how:
     what worked; tmxr's TOML is read whole.
   - Performance: entering copy mode still copies the whole history
     (`copy::snapshot`), but cheaply since 2026-10-21 (5–6 ms for 50000 lines,
-    see "vt100 is patched"); Windows takes two process snapshots per pane each
-    `status-interval` (5 s by default) in `util::refresh_commands`;
-    `#{pane_current_path}` inspects the process on each expansion: on Windows, a
-    release build showed no measurable cost against `#{pane_index}` (40 calls of
-    20 expansions each, 2026-10-20; a debug build took about 28 ms an
-    expansion). Not cached, as a cache would give
-    `split-window -c '#{pane_current_path}'` a directory from before a `cd`. The
-    process snapshots of `util::refresh_commands` were not measured. (`#{m:…}`
-    and `s/…/` keep their compiled patterns, `format::compiled`: 89 µs an
-    expansion with two patterns before, 7 µs after, release build, 2026-10-20.)
+    see "vt100 is patched"); `util::refresh_commands` takes one process snapshot
+    each `status-interval` (5 s by default) for every pane on Windows
+    (`process::Processes`; it took two a pane before 2026-10-22, and one costs
+    about 5 ms with 348 processes, release build); `#{pane_current_path}`
+    inspects the process on each expansion: on Windows, a release build showed
+    no measurable cost against `#{pane_index}` (40 calls of 20 expansions each,
+    2026-10-20; a debug build took about 28 ms an expansion). Not cached, as a
+    cache would give `split-window -c '#{pane_current_path}'` a directory from
+    before a `cd`. (`#{m:…}` and `s/…/` keep their compiled patterns,
+    `format::compiled`: 89 µs an expansion with two patterns before, 7 µs after,
+    release build, 2026-10-20.)
 - **tmux 3.6 features tmxr lacks** (the same review; compared against tmux's
   `cmd-*.c`, `options-table.c` and `format.c`, not run):
   - Formats: `#()` jobs run as tmux's (`format_jobs.rs`), and a job no format
