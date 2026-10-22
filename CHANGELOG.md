@@ -38,6 +38,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A program's default colours are its pane's**: the foreground and background
+  a program sets with OSC 10 / 11 (reset by OSC 110 / 111) are the pane's, drawn
+  and shown by `#{pane_fg}` / `#{pane_bg}`, as tmux's, under `window-style` in
+  an inactive pane and over it in the active one.
 - **Colour queries are answered**: a program asking for the default foreground,
   background or cursor colour (`OSC 10`, `11`, `12` with `?`, as editors do to
   pick a light or dark theme) gets the colour `window-style` /

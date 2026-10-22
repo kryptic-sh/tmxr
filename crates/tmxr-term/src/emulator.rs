@@ -73,6 +73,11 @@ pub struct Hooks {
     /// The cursor's colour as RGB (OSC 12; OSC 112 resets it), which a
     /// full reset keeps, as tmux's.
     cursor_colour: Option<u32>,
+    /// The default foreground and background the program set as RGB (OSC
+    /// 10 / 11; OSC 110 / 111 or a full reset clear them), as tmux's pane
+    /// palette's `fg` / `bg`.
+    palette_fg: Option<u32>,
+    palette_bg: Option<u32>,
     /// Autowrap turned off (`CSI ? 7 l`, DECAWM), which vt100 does not
     /// keep (it always wraps).
     no_wrap: bool,
@@ -238,6 +243,19 @@ impl vt100::Callbacks for Hooks {
                 }
             }
             [b"112"] | [b"112", b""] => self.cursor_colour = None,
+            // The default colours, as tmux's input_osc_10 / _11; a query
+            // never gets here (`modes::Piece::ColourQuery`).
+            [which @ (b"10" | b"11"), spec @ ..] if !spec.is_empty() => {
+                let spec = String::from_utf8_lossy(&spec.join(&b';')).into_owned();
+                if let Some(rgb) = tmxr_command::colour::parse_x11(&spec) {
+                    match *which {
+                        b"10" => self.palette_fg = Some(rgb),
+                        _ => self.palette_bg = Some(rgb),
+                    }
+                }
+            }
+            [b"110"] | [b"110", b""] => self.palette_fg = None,
+            [b"111"] | [b"111", b""] => self.palette_bg = None,
             [b"7", uri, ..] => {
                 if let Some(path) = file_uri_path(&String::from_utf8_lossy(uri)) {
                     self.cwd = Some(path);
@@ -515,6 +533,7 @@ impl Emulator {
                     let hooks = self.parser.callbacks_mut();
                     hooks.cursor_blinking = false;
                     hooks.cursor_very_visible = false;
+                    (hooks.palette_fg, hooks.palette_bg) = (None, None);
                     self.parser.process(b"\x1bc");
                 }
                 Piece::Repeat { ch, count } => self.repeat(ch, count),
@@ -830,6 +849,13 @@ impl Emulator {
         self.parser.callbacks().cursor_colour
     }
 
+    /// The default foreground and background the program set (OSC 10 /
+    /// 11), as RGB.
+    pub fn palette_colours(&self) -> (Option<u32>, Option<u32>) {
+        let hooks = self.parser.callbacks();
+        (hooks.palette_fg, hooks.palette_bg)
+    }
+
     /// Whether the program made the cursor very visible
     /// (`#{cursor_very_visible}`).
     pub fn cursor_very_visible(&self) -> bool {
@@ -1003,6 +1029,21 @@ mod tests {
         assert!(!e.cursor_very_visible(), "a reset ends it");
         e.process(b"\x1b]112\x07");
         assert_eq!(e.cursor_colour(), None);
+    }
+
+    #[test]
+    fn default_colours_set_by_the_program_are_kept() {
+        let mut e = Emulator::new(6, 20, 0);
+        e.process(b"\x1b]10;#102030\x07\x1b]11;rgb:aa/bb/cc\x1b\\\x1b]11;bogus\x07");
+        assert_eq!(e.palette_colours(), (Some(0x102030), Some(0xaabbcc)));
+        e.process(b"\x1b]110\x07");
+        assert_eq!(e.palette_colours(), (None, Some(0xaabbcc)));
+        e.process(b"\x1bc");
+        assert_eq!(
+            e.palette_colours(),
+            (None, None),
+            "a full reset clears them"
+        );
     }
 
     #[test]

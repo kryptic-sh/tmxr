@@ -968,6 +968,28 @@ checks = [
 ]
 
 [[cases]]
+name = "a_programs_default_colours_are_the_panes"
+# OSC 10 / 11 set the pane's colours under its window style, as tmux's
+# palette fg / bg: the formats show them, and a query reads them back. In the
+# active pane they win over window-style; in another, window-style wins.
+unix_only = true
+steps = [
+  { run = "new-window -d -t o:1 'stty raw -echo; printf \"\\033]10;#aabbcc\\007\\033]11;#102030\\007\\033]11;?\\007\"; exec cat -v'" },
+  { run = "new-window -d -t o:2 'printf \"\\033]11;#102030\\007\"; exec sleep 1000'" },
+  { run = "set -w -t o:2 window-style bg=red" },
+  { run = "split-window -d -t o:2 'printf \"\\033]11;#102030\\007\"; exec sleep 1000'" },
+  { run = "new-window -d -t o:3 'printf \"\\033]11;#102030\\007\\033]111\\007\"; exec sleep 1000'" },
+  { sleep = 0.8 },
+]
+checks = [
+  { command = "display -p -t o:1 '#{pane_fg} #{pane_bg}'", expect = "#aabbcc #102030" },
+  { command = "capture-pane -p -t o:1", expect = "^[]11;rgb:1010/2020/3030^G" },
+  { command = "display -p -t o:2.0 '#{pane_bg}'", expect = "#102030" },
+  { command = "display -p -t o:2.1 '#{pane_bg}'", expect = "red" },
+  { command = "display -p -t o:3 '#{pane_bg}'" },
+]
+
+[[cases]]
 name = "colour_queries_are_answered_from_the_window_style"
 # What a program reads back for OSC 10, 11 and 12 queries, ended as each
 # query was; none for a colour that is the terminal's own (the oracle's

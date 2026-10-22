@@ -818,9 +818,23 @@ pub(crate) fn pane_default_colours(srv: &Server, pid: PaneId) -> format::Style {
         .is_some_and(|w| w.active == pid)
         .then(|| parse(&options.window_active_style));
     let set = |c: Option<Colour>| c.filter(|c| *c != Colour::Default);
+    // Under each style, the colour the program set (OSC 10 / 11), as tmux's
+    // tty_window_default_style; the active pane's style with it under goes
+    // first, so the program's colour wins over `window-style` there.
+    let (palette_fg, palette_bg) = pane.emu.palette_colours();
+    let palette = |rgb: Option<u32>| {
+        rgb.map(|c| {
+            let [_, r, g, b] = c.to_be_bytes();
+            Colour::Rgb(r, g, b)
+        })
+    };
+    let pick = |a: Option<Colour>, w: Option<Colour>, p: Option<u32>| match &active {
+        Some(_) => set(a).or_else(|| palette(p)).or_else(|| set(w)),
+        None => set(w).or_else(|| palette(p)),
+    };
     format::Style {
-        fg: active.and_then(|a| set(a.fg)).or_else(|| set(inactive.fg)),
-        bg: active.and_then(|a| set(a.bg)).or_else(|| set(inactive.bg)),
+        fg: pick(active.as_ref().and_then(|a| a.fg), inactive.fg, palette_fg),
+        bg: pick(active.as_ref().and_then(|a| a.bg), inactive.bg, palette_bg),
         ..format::Style::default()
     }
 }
