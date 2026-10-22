@@ -236,6 +236,14 @@ fn a_pane_that_asked_is_told_when_it_gains_and_loses_focus() {
     // Selecting the shell beside it takes focus away again.
     t.run(&["select-pane", "-t", "fo.1"]);
     wait_log("FocusLost", 2);
+    t.run(&["select-pane", "-t", "fo.0"]);
+    wait_log("FocusGained", 3);
+    // The client's own terminal losing focus reaches the pane too, and
+    // getting it back.
+    s.send(b"\x1b[O");
+    wait_log("FocusLost", 3);
+    s.send(b"\x1b[I");
+    wait_log("FocusGained", 4);
 }
 
 #[test]
