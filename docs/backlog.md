@@ -489,6 +489,19 @@ table. What has been verified, and how:
   polled `capture-pane -p` for the end of the output mostly measured the
   captures (each copied the whole history before `snapshot_lines`, see the
   changelog), which put tmxr at five times tmux's CPU.
+- **crates.io cannot take tmxr-server, tmxr-client or tmxr** while they need the
+  vt100 fork: a `[patch]` does not reach a published package, and
+  `cargo publish` verifies each tarball against crates.io's vt100 0.18.1, which
+  lacks the fork's `Screen::line_cells` / `line_wrapped`, the
+  `normal_screen_row_*` reads and the hyperlink API. v0.10.0 (2026-10-23)
+  published its GitHub Release and every package channel, and on crates.io only
+  tmxr-proto, tmxr-command, tmxr-config and tmxr-term (`Publish to crates.io`
+  failed verifying tmxr-server with 11 errors), so crates.io's tmxr stays at
+  0.9.0. Needs the owner's call before the next release: publish the fork as its
+  own crate (say `tmxr-vt100`, taken as `vt100 = { package = ... }`, a new
+  dependency to own and keep in step with upstream), wait for vt100 releases
+  with doy/vt100-rust#47–#52, or stop publishing those crates to crates.io until
+  then (the publish job would skip them rather than fail the run).
 - **No frame-rate cap**: the server renders after each pass of its loop, and a
   pass stops handling events after `DRAIN_BUDGET` so a flood still repaints.
   Each pane's output waits in a bounded queue (`output::QUEUE_LIMIT`) that
