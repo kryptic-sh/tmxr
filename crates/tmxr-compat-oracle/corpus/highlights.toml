@@ -825,3 +825,29 @@ checks = [
   { screen_background = 3 },
   { screen_background = 4 },
 ]
+
+[[cases]]
+name = "a_rectangle_past_the_edge_shows_a_dollar_as_tmux"
+# tmux's window_copy_write_line: with the cursor past the last column (a
+# rectangle selection's end-of-line), a $ at the right edge of its row.
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'short\\nlonger line here\\nx'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X rectangle-toggle" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X end-of-line" },
+  { sleep = 0.3 },
+]
+checks = [
+  { format = "#{copy_cursor_x},#{copy_cursor_y}" },
+  { screen_find = "$" },
+]
+

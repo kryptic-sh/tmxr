@@ -791,6 +791,18 @@ fn draw_pane(
                 }
             }
         }
+        // The cursor past the last column (a rectangle's end of line) shows
+        // as a `$` at the row's right edge, as tmux's window_copy_write_line.
+        if cm.cx >= usize::from(w)
+            && let Some(row) = cm
+                .cy
+                .checked_sub(cm.top)
+                .and_then(|y| u16::try_from(y).ok())
+            && row < h
+            && let Some(out) = buf.cell_mut((r.x + w - 1, r.y + row))
+        {
+            out.set_symbol("$").set_style(base);
+        }
         // tmux's position indicator: `copy-mode-position-format` drawn
         // over the top line, unless `toggle-position` hid it. A count being
         // typed shows there instead, where tmux prompts `(repeat)`.

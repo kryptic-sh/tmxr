@@ -68,6 +68,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A copy-mode cursor past the last column shows a `$` at the row's edge**, as
+  tmux's does when a rectangle selection's end of line takes it there.
+
 - **An SGR with an underline style or colour no longer loses its other
   attributes**: `CSI 4:3 m` (Neovim's undercurl), `CSI 21 m` and an SGR naming
   an underline colour (`58`) were dropped whole, so such text had no underline

@@ -44,6 +44,13 @@ table. What has been verified, and how:
 
 ## Decisions waiting on the owner
 
+- **How vt100 should keep underline styles and colours** (raised 2026-10-23):
+  Neovim's undercurl and coloured diagnostics underlines are read but drawn as a
+  plain underline with no colour, as vt100's 32-byte cell has no room for them.
+  The options and their costs are under "tmux 3.6 features tmxr lacks" (Formats,
+  overline and underline styles); each touches the vt100 fork's cell layout, and
+  one its hyperlink storage, which is offered upstream as #51.
+
 - **Synchronized updates are asked for, not configured**
   (`terminal::probe_sync`): at its first attach a client sends DECRQM for mode
   2026 and DA1 and reads the answers straight from the terminal (up to
@@ -910,8 +917,6 @@ table. What has been verified, and how:
   copy-mode command was run from one start in tmux 3.6 and tmxr, and the cursor,
   view, selection and search formats compared (a scratch script, not kept; the
   fixes have oracle cases in `corpus/keys.toml`). Still differing:
-  - tmux draws a `$` at the right edge when a rectangle selection takes the
-    cursor past it (`window_copy_write_line`); tmxr does not.
   - Under vi keys a search down from a marked match starts after the whole match
     (`window_copy_move_after_search_mark`); tmxr's starts one cell on, so a
     match overlapping the one at the cursor is found where tmux's skips it.
@@ -920,6 +925,7 @@ table. What has been verified, and how:
     on and off).
   - A search matches within a line, where tmux's also match across a wrap, so
     `#{search_count}` can count fewer.
+
 - **`C-r` in an incremental search does nothing in tmux 3.6**, and tmxr does the
   same on purpose (seen 2026-10-20): `command-prompt -i` passes the text after
   `C-r` as `-text`, which tmux parses as flags of `search-backward-incremental`
