@@ -500,11 +500,16 @@ table. What has been verified, and how:
   published its GitHub Release and every package channel, and on crates.io only
   tmxr-proto, tmxr-command, tmxr-config and tmxr-term (`Publish to crates.io`
   failed verifying tmxr-server with 11 errors), so crates.io's tmxr stays at
-  0.9.0. Needs the owner's call before the next release: publish the fork as its
-  own crate (say `tmxr-vt100`, taken as `vt100 = { package = ... }`, a new
-  dependency to own and keep in step with upstream), wait for vt100 releases
-  with doy/vt100-rust#47–#52, or stop publishing those crates to crates.io until
-  then (the publish job would skip them rather than fail the run).
+  0.9.0. Decided by the owner (2026-10-23): no crates.io publishing for now. The
+  `publish-crates` job is off (`if: false`, out of `tag-release-status`'s needs)
+  and the README installs with `cargo install --git`, which builds with the
+  workspace's `[patch]` (checked: 0.10.0 built and ran that way). Considered and
+  not taken: publishing the forks as crates (`kryptic-vt100` would have worked,
+  as only tmxr uses vt100; a crossterm fork crate would sit beside crates.io's
+  crossterm that hjkl's crates and ratatui use, which crosses at one call,
+  `hjkl_picker_tui::handle_key`'s `KeyEvent`, so it needs a conversion there or
+  hjkl moved to the fork too). Turn the job back on once crates.io's vt100 and
+  crossterm have what tmxr uses.
 - **No frame-rate cap**: the server renders after each pass of its loop, and a
   pass stops handling events after `DRAIN_BUDGET` so a flood still repaints.
   Each pane's output waits in a bounded queue (`output::QUEUE_LIMIT`) that

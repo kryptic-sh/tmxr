@@ -20,6 +20,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   tmux's do. A program's own `CSI ? 996 n` is answered with its pane's scheme:
   light or dark by its background's brightness, else its clients' theme.
 
+### Changed
+
+- **tmxr is no longer published to crates.io**: it builds against forks of
+  crossterm and vt100 that a published crate cannot take, so `tmxr-cli` on
+  crates.io stays at 0.9.0. Install from a release or package, or with
+  `cargo install --locked --git https://github.com/kryptic-sh/tmxr tmxr-cli`.
+
 ## [0.10.0] - 2026-10-23
 
 ### Breaking

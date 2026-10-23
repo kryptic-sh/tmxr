@@ -178,8 +178,8 @@ brew install kryptic-sh/tap/tmxr
 scoop bucket add kryptic-sh https://github.com/kryptic-sh/scoop-bucket
 scoop install tmxr
 
-# crates.io (the package is tmxr-cli; the binary is tmxr)
-cargo install tmxr-cli
+# From this repository with cargo (the package is tmxr-cli; the binary is tmxr)
+cargo install --locked --git https://github.com/kryptic-sh/tmxr tmxr-cli
 
 # Debian/Ubuntu, Fedora, Alpine: the .deb / .rpm / .apk from the latest release
 ```
@@ -197,11 +197,11 @@ ConPTY drops the end of a program's tmux passthrough, so without them inline
 images stay off. The Scoop package includes them; tmxr built from source
 (`cargo install tmxr-cli`) uses Windows' own.
 
-`cargo install tmxr-cli` builds against crates.io's crossterm and vt100, without
-the fixes the release binaries and packages carry (a resize lost when it arrives
-with a key or a focus change, a burst of input over 1024 bytes cut short, a pane
-printing fast costing three to four times the CPU); prefer a release or a build
-from this repository.
+tmxr builds against forks of crossterm and vt100 that carry fixes and features
+those crates have not released yet (patched in by the workspace's `Cargo.toml`),
+so it is no longer published to crates.io: the `tmxr-cli` there stops at 0.9.0,
+built without them. Use a release, a package, or the `cargo install --git`
+above, which builds this repository with the forks.
 
 Shell completions and the man page come from the binary itself:
 `tmxr --completions <bash|zsh|fish|powershell|elvish|nushell>` and `tmxr --man`.

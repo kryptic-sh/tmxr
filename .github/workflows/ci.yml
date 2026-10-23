@@ -769,8 +769,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Off until crates.io's vt100 and crossterm have what tmxr uses from its
+  # forks: a [patch] does not reach a published package, so tmxr-server
+  # failed `cargo publish`'s verify build at v0.10.0, stranding the crates
+  # after it.
+  # Turn it back on (and return it to release-status's needs) then.
   publish-crates:
     name: Publish to crates.io
+    if: false
     needs: [publish-github-release]
     runs-on: ubuntu-latest
     steps:
@@ -1089,7 +1095,6 @@ jobs:
         smoke,
         build,
         publish-github-release,
-        publish-crates,
         aur-bin,
         brew-tap,
         scoop-bucket,
