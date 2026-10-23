@@ -196,7 +196,12 @@ fn copy_mode_draws_its_mark_selection_and_current_match_as_tmux() {
     ] {
         t.run(&["set-option", "-g", option, value]);
     }
-    s.send(b"echo @zq-one; echo @zq-two\r");
+    // Two commands, as cmd.exe takes no `;` between them.
+    s.send(b"echo @zq-one\r");
+    s.wait_for("first echoed", |text| {
+        text.lines().any(|l| l.trim_end() == "@zq-one")
+    });
+    s.send(b"echo @zq-two\r");
     s.wait_for("echoed", |text| {
         text.lines().any(|l| l.trim_end() == "@zq-two")
     });
