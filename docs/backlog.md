@@ -518,6 +518,19 @@ table. What has been verified, and how:
   `hjkl_picker_tui::handle_key`'s `KeyEvent`, so it needs a conversion there or
   hjkl moved to the fork too). Turn the job back on once crates.io's vt100 and
   crossterm have what tmxr uses.
+- **A full history takes four times tmux's memory** (measured 2026-10-24 on the
+  Arch laptop, release builds, a 120x40 pane after `seq -f '%080g' 1 60000` with
+  `history-limit 50000`, server RSS): tmxr 155 MB, 345 MB in copy mode; tmux 3.8
+  38 MB, 69 MB in copy mode. The history is vt100's rows of 36-byte cells
+  (`vt100::Cell`: 20 content bytes, attributes, link), where tmux keeps a plain
+  cell in 5 bytes and the rest beside the line (`grid_cell_entry`, extended
+  cells); copy mode then copies every line into its own 48-byte cells
+  (`copy::Cell`), where tmux's copy of the grid is as compact as the grid. Not
+  started; the ways in, each large: rows of history kept compact in the vt100
+  fork (plain cells packed, the rest in a side table), which changes what
+  `Screen::line_cells` can hand out by reference; copy mode reading the pane's
+  rows lazily instead of copying them, which needs the snapshot frozen against
+  the pane printing on; or a smaller `copy::Cell` (its `Cow<str>` is 24 bytes).
 - **No frame-rate cap**: the server renders after each pass of its loop, and a
   pass stops handling events after `DRAIN_BUDGET` so a flood still repaints.
   Each pane's output waits in a bounded queue (`output::QUEUE_LIMIT`) that
