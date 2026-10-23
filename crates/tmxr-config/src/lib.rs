@@ -952,15 +952,6 @@ pub struct FileSets {
     pub resurrect: bool,
 }
 
-/// What the config file at `path` sets ([`FileSets`]).
-pub fn file_sets(path: &Path) -> Result<FileSets, String> {
-    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let table = text
-        .parse::<toml::Table>()
-        .map_err(|e| format!("{}: {e}", path.display()))?;
-    Ok(sets(&table))
-}
-
 fn sets(table: &toml::Table) -> FileSets {
     let keys_of = |section: &str| -> Vec<String> {
         table
@@ -1053,57 +1044,89 @@ pub fn load_keeping(
                 Some(p) => p.to_path_buf(),
                 None => hjkl_config::config_path::<Config>()?,
             };
-            let text = std::fs::read_to_string(&file).map_err(|e| ConfigError::Io {
-                path: file.clone(),
-                source: e,
-            })?;
-            let user: toml::Table = toml::from_str(&text).map_err(|e| ConfigError::Invalid {
-                path: file.clone(),
-                message: e.to_string(),
-            })?;
-            let mut kept: toml::Table = DEFAULTS
-                .parse()
-                .unwrap_or_else(|e| panic!("bundled defaults.toml is invalid: {e}"));
-            let mut errors = Vec::new();
-            for (key, value) in user {
-                keep(&mut kept, &[key.as_str()], value, &mut errors);
-            }
-            let cfg = toml::Value::Table(kept)
-                .try_into()
-                .map_err(|e: toml::de::Error| ConfigError::Invalid {
-                    path: file.clone(),
-                    message: e.to_string(),
-                })?;
-            Ok((cfg, ConfigSource::File(file), errors))
+            let kept = Kept::read(&file)?;
+            Ok((kept.config, ConfigSource::File(file), kept.left_out))
         }
         Err(e) => Err(e),
     }
 }
 
-/// Merge `value` at `path` into `kept` if the result still reads as a
-/// [`Config`]; else, for a table, each of its keys in turn, and for
-/// anything else an error naming `path`.
-fn keep(kept: &mut toml::Table, path: &[&str], value: toml::Value, errors: &mut Vec<String>) {
-    let mut layer = value.clone();
-    for key in path.iter().rev() {
-        layer = toml::Value::Table(toml::Table::from_iter([((*key).to_owned(), layer)]));
-    }
-    let toml::Value::Table(layer) = layer else {
-        return;
-    };
-    let mut candidate = kept.clone();
-    deep_merge(&mut candidate, layer);
-    let tried: Result<Config, _> = toml::Value::Table(candidate.clone()).try_into();
-    match (tried, value) {
-        (Ok(_), _) => *kept = candidate,
-        (Err(_), toml::Value::Table(table)) if !table.is_empty() => {
-            for (key, value) in table {
-                let mut deeper = path.to_vec();
-                deeper.push(&key);
-                keep(kept, &deeper, value, errors);
-            }
+/// The config file at `path` as [`load_keeping`] keeps it, what the
+/// settings it kept set ([`FileSets`], for `source-file` to apply them and
+/// nothing else), and the settings left out.
+pub fn load_file(path: &Path) -> Result<(Config, FileSets, Vec<String>), String> {
+    let kept = Kept::read(path).map_err(|e| e.to_string())?;
+    Ok((kept.config, sets(&kept.from_file), kept.left_out))
+}
+
+/// A config file read setting by setting.
+struct Kept {
+    config: Config,
+    /// The file's settings that were kept.
+    from_file: toml::Table,
+    left_out: Vec<String>,
+}
+
+impl Kept {
+    fn read(file: &Path) -> Result<Self, ConfigError> {
+        let text = std::fs::read_to_string(file).map_err(|e| ConfigError::Io {
+            path: file.to_path_buf(),
+            source: e,
+        })?;
+        let user: toml::Table = toml::from_str(&text).map_err(|e| ConfigError::Invalid {
+            path: file.to_path_buf(),
+            message: e.to_string(),
+        })?;
+        let mut kept = Self {
+            config: defaults(),
+            from_file: toml::Table::new(),
+            left_out: Vec::new(),
+        };
+        let mut merged: toml::Table = DEFAULTS
+            .parse()
+            .unwrap_or_else(|e| panic!("bundled defaults.toml is invalid: {e}"));
+        for (key, value) in user {
+            kept.keep(&mut merged, &[key.as_str()], value);
         }
-        (Err(e), _) => errors.push(format!("{}: {}", path.join("."), e.message())),
+        kept.config = toml::Value::Table(merged)
+            .try_into()
+            .map_err(|e: toml::de::Error| ConfigError::Invalid {
+                path: file.to_path_buf(),
+                message: e.to_string(),
+            })?;
+        Ok(kept)
+    }
+
+    /// Merge `value` at `path` into `merged` if the result still reads as a
+    /// [`Config`]; else, for a table, each of its keys in turn, and for
+    /// anything else an error naming `path`.
+    fn keep(&mut self, merged: &mut toml::Table, path: &[&str], value: toml::Value) {
+        let mut layer = value.clone();
+        for key in path.iter().rev() {
+            layer = toml::Value::Table(toml::Table::from_iter([((*key).to_owned(), layer)]));
+        }
+        let toml::Value::Table(layer) = layer else {
+            return;
+        };
+        let mut candidate = merged.clone();
+        deep_merge(&mut candidate, layer.clone());
+        let tried: Result<Config, _> = toml::Value::Table(candidate.clone()).try_into();
+        match (tried, value) {
+            (Ok(_), _) => {
+                *merged = candidate;
+                deep_merge(&mut self.from_file, layer);
+            }
+            (Err(_), toml::Value::Table(table)) if !table.is_empty() => {
+                for (key, value) in table {
+                    let mut deeper = path.to_vec();
+                    deeper.push(&key);
+                    self.keep(merged, &deeper, value);
+                }
+            }
+            (Err(e), _) => self
+                .left_out
+                .push(format!("{}: {}", path.join("."), e.message())),
+        }
     }
 }
 

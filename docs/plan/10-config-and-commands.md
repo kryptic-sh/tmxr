@@ -63,21 +63,23 @@ are allowed (formats reference them via `#{@name}` / `#{E:@name}`).
 
 `source-file` (and `prefix R`) applies what the file sets over the running
 server, as tmux's runs a file's commands (`Server::overlay_config`,
-`tmxr_config::file_sets`): each option it names (top-level keys, and `[status]`
+`tmxr_config::load_file`): each option it names (top-level keys, and `[status]`
 keys under the options they set), user option, bind (`false` unbinds) and hook
 takes the file's value, and the rest keep theirs, run-time `set -g`, `bind` and
-`set-hook` included. A `[navigator]` or `[resurrect]` section replaces that
-section whole. `source-file PATH ...` takes several paths, each a glob (the
-`glob` crate), applied in turn so a later file wins; a path matching nothing is
-an error unless `-q`. Sourcing never changes which file is the config
-(`prefix R`, `#{config_files}`): that is the one the server started with, as
-tmux's. A file not named `.toml` is read as tmux commands (`cmds::source`): read
-whole first, with `%if` / `%elif` / `%else` / `%endif`, `%hidden`, `NAME=VALUE`,
-`{ … }` blocks and `\` continuations, then run; a command that does not parse
-runs none of it, as tmux 3.6 (compared by hand). `-v` prints what each TOML file
-set as the commands that set it (`set-option -g`, `bind-key` / `unbind-key`,
-`set-hook -g`), after the file's path. `[hooks]` names are checked against the
-hooks tmxr fires (`hooks::known`); an unknown one is reported and left out.
+`set-hook` included. A setting the file gets wrong is left out and named, and
+the file's others are applied, as at start. A `[navigator]` or `[resurrect]`
+section replaces that section whole. `source-file PATH ...` takes several paths,
+each a glob (the `glob` crate), applied in turn so a later file wins; a path
+matching nothing is an error unless `-q`. Sourcing never changes which file is
+the config (`prefix R`, `#{config_files}`): that is the one the server started
+with, as tmux's. A file not named `.toml` is read as tmux commands
+(`cmds::source`): read whole first, with `%if` / `%elif` / `%else` / `%endif`,
+`%hidden`, `NAME=VALUE`, `{ … }` blocks and `\` continuations, then run; a
+command that does not parse runs none of it, as tmux 3.6 (compared by hand).
+`-v` prints what each TOML file set as the commands that set it
+(`set-option -g`, `bind-key` / `unbind-key`, `set-hook -g`), after the file's
+path. `[hooks]` names are checked against the hooks tmxr fires (`hooks::known`);
+an unknown one is reported and left out.
 
 ### Option scopes
 

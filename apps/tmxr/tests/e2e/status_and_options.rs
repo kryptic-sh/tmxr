@@ -760,6 +760,25 @@ fn source_file_takes_several_paths_and_globs() {
 /// runs a file's commands: options, user options, binds and hooks it names
 /// take its values (one set to its default value included), and everything
 /// else keeps what was set since the server started.
+/// A config file sourced with a bad setting applies the rest and names the
+/// one left out, as tmux keeps a file's lines that work.
+#[test]
+fn source_file_keeps_a_files_good_settings() {
+    let t = Tmxr::new("srcbad");
+    t.run(&["new-session", "-d", "-s", "sb"]);
+    let file = t.dir.path().join("part.toml");
+    std::fs::write(&file, "status-interval = 9\nmouse = \"maybe\"\n").unwrap();
+    let mouse = t.run(&["show", "-gv", "mouse"]);
+    let out = t.output(&["source-file", file.to_str().unwrap()]);
+    assert!(!out.status.success());
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("mouse"),
+        "{out:?}"
+    );
+    assert_eq!(t.run(&["show", "-gv", "status-interval"]).trim(), "9");
+    assert_eq!(t.run(&["show", "-gv", "mouse"]), mouse, "left as it was");
+}
+
 #[test]
 fn source_file_applies_only_what_the_file_sets() {
     let t = Tmxr::new("sourceover");

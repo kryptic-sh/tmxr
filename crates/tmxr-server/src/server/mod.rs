@@ -1379,9 +1379,12 @@ impl Server {
     /// option, bind and hook it names takes its value there, and everything
     /// else keeps its own, changes made since the server started included.
     pub fn overlay_config(&mut self, path: &std::path::Path) -> Result<(), String> {
-        let (file, _) = tmxr_config::load(Some(path)).map_err(|e| e.to_string())?;
-        let sets = tmxr_config::file_sets(path)?;
-        let mut errors = Vec::new();
+        // Its good settings, as tmux keeps the lines of a file that work.
+        let (file, sets, left_out) = tmxr_config::load_file(path)?;
+        let mut errors: Vec<String> = left_out
+            .into_iter()
+            .map(|e| format!("{}: {e}", path.display()))
+            .collect();
         for name in &sets.options {
             self.cfg.copy_option(&file, name);
         }

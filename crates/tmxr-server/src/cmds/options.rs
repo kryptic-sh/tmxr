@@ -239,7 +239,7 @@ const fn on_off(b: bool) -> &'static str {
 /// the server now has: `set-option -g`, `bind-key` / `unbind-key` and
 /// `set-hook -g` / `-gu`.
 fn applied(srv: &Server, path: &std::path::Path) -> Vec<String> {
-    let Ok(sets) = tmxr_config::file_sets(path) else {
+    let Ok((_, sets, _)) = tmxr_config::load_file(path) else {
         return Vec::new();
     };
     let mut lines = Vec::new();

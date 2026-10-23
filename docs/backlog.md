@@ -655,9 +655,9 @@ table. What has been verified, and how:
   - A config error at start leaves out only the settings it is in
     (`tmxr_config::load_keeping`, since 2026-10-23), and the first client to
     attach is told which; a file that is not TOML still gives the defaults, as
-    it has no settings to keep. `source-file` of a `.toml` still applies a file
-    whole or not at all: its overlay copies every option the file names
-    (`file_sets`), so it would need the left-out keys taken from that list.
+    it has no settings to keep. `source-file` of a `.toml` keeps a file's good
+    settings the same way (`tmxr_config::load_file`), applying only those and
+    failing with the rest named.
   - Performance: entering copy mode still copies the whole history
     (`copy::snapshot`), but cheaply since 2026-10-21 (5–6 ms for 50000 lines,
     see "vt100 is patched"); `util::refresh_commands` takes one process snapshot
