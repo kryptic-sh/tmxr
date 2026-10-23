@@ -14,6 +14,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`copy-mode-position-format`, `copy-mode-position-style`,
+  `copy-mode-selection-style` and `copy-mode-mark-style`**, tmux's options: the
+  position indicator is drawn from its format (tmux's default adds the last
+  search's result count), the selection in its own style, and the `set-mark`
+  line in the mark style with the marked cell's colours swapped.
+
 - **Copy mode's search formats**: `#{search_present}` while a search's matches
   are marked, `#{search_count}` over every line, `#{search_match}` (the match at
   the cursor), `#{search_count_partial}` and `#{search_timed_out}`; and
@@ -56,6 +62,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `cargo install --locked --git https://github.com/kryptic-sh/tmxr tmxr-cli`.
 
 ### Fixed
+
+- **The current search match is drawn as tmux's**: the match the cursor is
+  anywhere in, or under emacs keys after a search down the one just before the
+  cursor; tmxr drew it only with the cursor on its first character.
 
 - **A line or word selection moves by lines as tmux's**: after `select-line` or
   `select-word` a move up or down puts the cursor at its line's end, or at its

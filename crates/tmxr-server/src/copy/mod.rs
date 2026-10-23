@@ -87,6 +87,8 @@ pub struct CopyMode {
     pub search_count: usize,
     /// `mode-keys` is emacs, under which more commands clear the marks.
     pub emacs: bool,
+    /// The last search went down, as tmux's searchdirection.
+    pub search_forward: bool,
     /// No search has run in this copy mode yet, so the next marks and
     /// counts every match whatever searched before (tmux's searchall).
     search_all: bool,
@@ -209,6 +211,7 @@ impl CopyMode {
             marks: false,
             search_count: 0,
             emacs: false,
+            search_forward: false,
             search_all: true,
             inherited_search: None,
             unseen_changes: false,
@@ -618,6 +621,11 @@ impl CopyMode {
         self.selflag != SelFlag::Char
             && self.sel_end.is_none()
             && self.selection_end() != self.sel_made_at
+    }
+
+    /// Where `set-mark` put the mark, which tmux shows from then on.
+    pub fn mark_at(&self) -> Option<(usize, usize)> {
+        self.mark
     }
 
     /// `#{rectangle_toggle}`: selections are rectangles.

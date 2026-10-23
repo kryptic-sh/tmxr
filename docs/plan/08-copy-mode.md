@@ -79,8 +79,12 @@ come from tmux-yank's binds.
 
 ## Rendering
 
-The pane shows the snapshot at the view offset with the selection in the
-`mode-style` style, the cursor drawn as a block, and the tmux position indicator
-`[offset/history]` at the top right. The last search's matches on screen are
-drawn in `copy-mode-match-style`, the one under the cursor in
-`copy-mode-current-match-style` (tmux's option names).
+The pane shows the snapshot at the view offset with the selection in
+`copy-mode-selection-style`, the cursor drawn as a block, and
+`copy-mode-position-format` (tmux's default: `[offset/history]` and the last
+search's result count) over the top line in `copy-mode-position-style`. The last
+search's matches on screen are drawn in `copy-mode-match-style`, the current one
+(under the cursor, or under emacs keys after a search down the one just before
+it) in `copy-mode-current-match-style`, and the `set-mark` line in
+`copy-mode-mark-style`, the marked cell with its colours swapped (tmux's option
+names and defaults, its colours from the theme's palette).

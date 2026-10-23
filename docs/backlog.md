@@ -897,8 +897,9 @@ table. What has been verified, and how:
   fixes have oracle cases in `corpus/keys.toml`). Still differing:
   - How a selection is drawn was not compared (the oracle reads text, not
     styles): tmxr's `CopyMode::selected` highlights a line selection's rows
-    across the pane's width, where tmux's reaches the last line's text only, and
-    tmux's `window_copy_update_style` draws the cursor's cell by `mode-keys`.
+    across the pane's width, where tmux's reaches the last line's text only.
+    tmux also draws a `$` at the right edge when a rectangle selection takes the
+    cursor past it (`window_copy_write_line`); tmxr does not.
   - Under vi keys a search down from a marked match starts after the whole match
     (`window_copy_move_after_search_mark`); tmxr's starts one cell on, so a
     match overlapping the one at the cursor is found where tmux's skips it.

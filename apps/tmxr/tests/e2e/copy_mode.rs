@@ -183,6 +183,75 @@ fn copy_mode_highlights_search_matches() {
 }
 
 #[test]
+fn copy_mode_draws_its_mark_selection_and_current_match_as_tmux() {
+    let t = Tmxr::new("cmstyles");
+    let s = t.attach(&["new", "-s", "cs"]);
+    s.wait_for("status line", |text| text.contains("cs"));
+    for (option, value) in [
+        ("copy-mode-mark-style", "bg=red"),
+        ("copy-mode-selection-style", "bg=blue"),
+        ("copy-mode-match-style", "bg=yellow"),
+        ("copy-mode-current-match-style", "bg=green"),
+        ("mode-keys", "emacs"),
+    ] {
+        t.run(&["set-option", "-g", option, value]);
+    }
+    s.send(b"echo @zq-one; echo @zq-two\r");
+    s.wait_for("echoed", |text| {
+        text.lines().any(|l| l.trim_end() == "@zq-two")
+    });
+    // The output line `@zq-two`, as each of its cells' (contents, bg).
+    let line = |s: &Screen| -> Vec<(String, String)> {
+        (0..ROWS - 1)
+            .map(|row| s.row_cells(row))
+            .find(|cells| {
+                let text: String = cells.iter().map(|c| c.0.as_str()).collect();
+                text.trim_end() == "@zq-two"
+            })
+            .map(|cells| cells.into_iter().map(|(c, _, bg)| (c, bg)).collect())
+            .unwrap_or_default()
+    };
+    let x = |args: &[&str]| {
+        let mut all = vec!["send-keys", "-t", "cs", "-X"];
+        all.extend_from_slice(args);
+        t.run(&all);
+    };
+    t.run(&["copy-mode", "-t", "cs"]);
+    x(&["search-backward", "@zq-t"]);
+    s.wait_for_cells("the match found", |s| {
+        line(s).first().is_some_and(|c| c.1 == "Idx(2)")
+    });
+    // clear-selection clears the marks, the cursor staying on the match.
+    x(&["clear-selection"]);
+    s.wait_for_cells("the marks cleared", |s| {
+        line(s)
+            .first()
+            .is_some_and(|c| c.1 != "Idx(2)" && c.1 != "Idx(3)")
+    });
+    // Under emacs keys a search down leaves the cursor past the match,
+    // which is still the current one, as tmux draws it.
+    x(&["search-forward", "@zq-t"]);
+    s.wait_for_cells("the match before the cursor current", |s| {
+        line(s).first().is_some_and(|c| c.1 == "Idx(2)")
+    });
+    // The mark's line in the mark's style, the marked cell (the cursor's,
+    // past the match) with its colours swapped.
+    x(&["set-mark"]);
+    x(&["cursor-up"]);
+    s.wait_for_cells("the mark's line", |s| {
+        let cells = line(s);
+        cells.len() > 6 && cells[6].1 == "Idx(1)" && cells[5].1 == "Default"
+    });
+    // The selection in copy-mode-selection-style.
+    x(&["begin-selection"]);
+    x(&["cursor-right"]);
+    x(&["cursor-right"]);
+    s.wait_for_cells("the selection", |s| {
+        (0..ROWS - 1).any(|row| s.row_cells(row).iter().any(|c| c.2 == "Idx(4)"))
+    });
+}
+
+#[test]
 fn copy_pipe_sends_the_selection_to_copy_command() {
     let t = Tmxr::new("pipe");
     let sink = t.dir.path().join("piped.txt");

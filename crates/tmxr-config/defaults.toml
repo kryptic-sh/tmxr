@@ -212,6 +212,13 @@ mode-style = "fg=#{@thm_fg},bg=#{@thm_selection}"
 # yellow and mauve.
 copy-mode-match-style = "fg=#{@thm_crust},bg=#{@thm_yellow}"
 copy-mode-current-match-style = "fg=#{@thm_crust},bg=#{@thm_mauve}"
+# tmux's: the selection and the position indicator in mode-style, the
+# indicator's place, time and search count as tmux shows them, and the
+# set-mark line in red, here the palette's.
+copy-mode-selection-style = "#{E:mode-style}"
+copy-mode-position-style = "#{E:mode-style}"
+copy-mode-position-format = '#[align=right]#{t/p:top_line_time}#{?#{e|>:#{top_line_time},0}, ,}[#{scroll_position}/#{history_size}]#{?search_timed_out, (timed out),#{?search_count, (#{search_count}#{?search_count_partial,+,} results),}}'
+copy-mode-mark-style = "fg=#{@thm_crust},bg=#{@thm_red}"
 # tmux draws the clock in blue.
 clock-mode-colour = "#{@thm_blue}"
 # tmux's blue and red, from the palette.

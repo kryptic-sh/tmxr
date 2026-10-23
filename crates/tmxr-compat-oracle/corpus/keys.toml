@@ -714,6 +714,63 @@ checks = [
 ]
 
 [[cases]]
+name = "the_position_indicator_shows_a_searchs_count_as_tmux"
+# copy-mode-position-format, tmux's default: the place in the history and
+# the last search's results, on the top line at the right.
+attach = true
+unix_only = true
+size = [50, 10]
+program = "for i in $(seq 1 30); do echo \"row $i foo\"; done; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X search-backward foo" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_find = "(30 results)" },
+  { screen_find = "[0/" },
+]
+
+[[cases]]
+name = "toggle_position_hides_the_indicator_as_tmux"
+attach = true
+unix_only = true
+size = [50, 10]
+program = "for i in $(seq 1 30); do echo \"row $i foo\"; done; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X -N 3 cursor-up" },
+  { run = "send-keys -t o -X toggle-position" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_contains = "]" },
+]
+
+[[cases]]
+name = "a_position_format_of_its_own_as_tmux"
+attach = true
+unix_only = true
+size = [50, 10]
+program = "for i in $(seq 1 30); do echo \"row $i foo\"; done; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g copy-mode-position-format '#[align=centre]<#{scroll_position}>'" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X -N 12 cursor-up" },
+  { sleep = 0.3 },
+]
+checks = [
+  { format = "#{scroll_position}" },
+  { screen_find = "<" },
+  { screen_contains = "]" },
+]
+
+[[cases]]
 name = "copy_mode_rewraps_on_a_width_change_as_tmux"
 # tmux's window_copy_resize rewraps copy mode's copy of the pane, the
 # cursor keeping its place in its line.

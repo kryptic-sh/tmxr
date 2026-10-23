@@ -458,9 +458,17 @@ options_table! {
     "clock-mode-colour" => clock_mode_colour: Word,
     /// How clock mode tells the time: 12 or 24 hours, with seconds or not.
     "clock-mode-style" => clock_mode_style: ClockModeStyle,
-    /// Copy mode search matches under the cursor, and the others.
+        /// Copy mode search matches under the cursor.
     "copy-mode-current-match-style" => copy_mode_current_match_style: String,
+    /// Copy mode's `set-mark` line, its marked cell drawn reversed.
+    "copy-mode-mark-style" => copy_mode_mark_style: String,
+    /// Copy mode search matches not under the cursor.
     "copy-mode-match-style" => copy_mode_match_style: String,
+    /// Copy mode's position indicator on its top line, and its style.
+    "copy-mode-position-format" => copy_mode_position_format: String,
+    "copy-mode-position-style" => copy_mode_position_style: String,
+    /// Copy mode's selection.
+    "copy-mode-selection-style" => copy_mode_selection_style: String,
     /// A pane's cursor colour until its program sets one (OSC 12); `none`
     /// for the terminal's own.
     "cursor-colour" => cursor_colour: Word,

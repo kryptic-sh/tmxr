@@ -403,9 +403,12 @@ fn draw_window(
     let border = style_option(&options.pane_border_style, &vars);
     let active_border = style_option(&options.pane_active_border_style, &vars);
     let copy = PaneStyles {
-        selection: style_option(&options.mode_style, &vars),
+        selection: style_option(&options.copy_mode_selection_style, &vars),
         matched: style_option(&options.copy_mode_match_style, &vars),
         current: style_option(&options.copy_mode_current_match_style, &vars),
+        mark: style_option(&options.copy_mode_mark_style, &vars),
+        position: style_option(&options.copy_mode_position_style, &vars),
+        position_format: options.copy_mode_position_format.clone(),
         clock: style_option(&format!("fg={}", options.clock_mode_colour), &vars),
         clock_style: options.clock_mode_style,
     };
@@ -703,6 +706,9 @@ struct PaneStyles {
     selection: Style,
     matched: Style,
     current: Style,
+    mark: Style,
+    position: Style,
+    position_format: String,
     clock: Style,
     clock_style: tmxr_config::ClockModeStyle,
 }
@@ -725,6 +731,15 @@ fn draw_pane(
         return None;
     }
     if let Some(cm) = &pane.copy {
+        let current = cm.current_match();
+        // tmux's window_copy_update_style: the mark's line in the mark's
+        // style, the marked cell with its colours swapped, and a match's
+        // colours swapped there too.
+        let swapped = |s: Style| Style {
+            fg: s.bg,
+            bg: s.fg,
+            ..s
+        };
         for row in 0..h {
             let y = cm.top + usize::from(row);
             let line = cm.lines.get(y);
@@ -744,9 +759,21 @@ fn draw_pane(
                     ),
                     pane.emu.palette(),
                 );
-                if let Some((start, _)) = matches.iter().find(|(s, e)| (*s..*e).contains(&x)) {
-                    let current = y == cm.cy && *start == cm.cx;
-                    style = style.patch(if current { copy.current } else { copy.matched });
+                let marked = cm.mark_at() == Some((y, x));
+                if cm.mark_at().is_some_and(|(my, _)| my == y) {
+                    style = style.patch(if marked {
+                        swapped(copy.mark)
+                    } else {
+                        copy.mark
+                    });
+                }
+                if let Some(&(start, _)) = matches.iter().find(|(s, e)| (*s..*e).contains(&x)) {
+                    let found = if current == Some((y, start)) {
+                        copy.current
+                    } else {
+                        copy.matched
+                    };
+                    style = style.patch(if marked { swapped(found) } else { found });
                 }
                 if cm.selected(y, x) {
                     style = style.patch(copy.selection);
@@ -764,22 +791,16 @@ fn draw_pane(
                 }
             }
         }
-        // tmux's position indicator, top right.
-        let (offset, total) = cm.position();
-        // A count being typed shows first, as tmux's `(repeat)` prompt;
-        // `toggle-position` hides the position itself.
-        let position = if cm.hide_position {
-            String::new()
-        } else {
-            format!("[{offset}/{total}]")
+        // tmux's position indicator: `copy-mode-position-format` drawn
+        // over the top line, unless `toggle-position` hid it. A count being
+        // typed shows there instead, where tmux prompts `(repeat)`.
+        let text = match cm.count {
+            0 if cm.hide_position => String::new(),
+            0 => format::expand(&copy.position_format, &Vars::for_pane(srv, Some(pid), None)),
+            n => format!("#[align=right](repeat) {n}"),
         };
-        let tag = match cm.count {
-            0 => position,
-            n => format!("(repeat) {n} {position}").trim_end().to_owned(),
-        };
-        let tw = tag.len() as u16;
-        if tw < w {
-            buf.set_string(r.x + w - tw, r.y, &tag, copy.selection);
+        if !text.is_empty() {
+            crate::format_draw::draw_at(buf, (r.x, r.y), w, copy.position, &text, false);
         }
         return None;
     }

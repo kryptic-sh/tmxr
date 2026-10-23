@@ -132,6 +132,7 @@ impl CopyMode {
                 hits.into_iter().rev().find(|&(x, _)| counts(x))
             };
             if let Some((x, end)) = pick {
+                self.search_forward = forward;
                 self.scroll_to((y, x));
                 if past_match {
                     (self.cy, self.cx) = self.after_cell((y, end - 1));
@@ -192,6 +193,28 @@ impl CopyMode {
                     .sum()
             });
         }
+    }
+
+    /// The marked match tmux draws as the current one, as line and start
+    /// column: the one the cursor is on, or under emacs keys after a search
+    /// down the one just before it, as tmux's window_copy_update_style.
+    pub fn current_match(&self) -> Option<(usize, usize)> {
+        let (y, x) = if self.emacs && self.search_forward {
+            match self.cx.checked_sub(1) {
+                Some(x) => (self.cy, x),
+                None => (
+                    self.cy.checked_sub(1)?,
+                    usize::from(self.cols).checked_sub(1)?,
+                ),
+            }
+        } else {
+            (self.cy, self.cx)
+        };
+        let (start, _) = self
+            .match_spans(y)
+            .into_iter()
+            .find(|&(start, end)| (start..end).contains(&x))?;
+        Some((y, start))
     }
 
     /// `#{search_match}`: the marked match the cursor is on, or just past,
