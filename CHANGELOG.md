@@ -71,12 +71,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **A copy-mode cursor past the last column shows a `$` at the row's edge**, as
   tmux's does when a rectangle selection's end of line takes it there.
 
-- **An SGR with an underline style or colour no longer loses its other
-  attributes**: `CSI 4:3 m` (Neovim's undercurl), `CSI 21 m` and an SGR naming
-  an underline colour (`58`) were dropped whole, so such text had no underline
-  at all, and `CSI 4;58;2;255;0;0 m` lost its underline too. They now underline
-  (every style drawn as the plain underline, the colour not kept), and RGB
-  colours in their colon form (`38:2::r:g:b`) are read.
+- **Underline styles and colours are kept and drawn**, as tmux's: double, curly
+  (Neovim's undercurl), dotted and dashed underlines (`CSI 4:n m`, `CSI 21 m`)
+  and the underline's colour (`CSI 58 … m`, `59`) reach a terminal that draws
+  them (`TERM` naming Alacritty, foot, WezTerm, VTE, tmux, kitty or Ghostty),
+  and a plain underline any other; `capture-pane -e` writes them as tmux's does.
+  Before, an SGR holding any of them was dropped whole, so such text had no
+  underline at all, and `CSI 4;58;2;255;0;0 m` lost its underline too. RGB
+  colours in their colon form (`38:2::r:g:b`) are read as well. A pane's history
+  takes about an eighth more memory (each cell 36 bytes, from 32: 138 to 155 MB
+  for 50000 full lines of 80 columns, release build), and copy mode's copy of it
+  a fifth more.
 
 - **The server's thread reading a client no longer wakes for each frame it sends
   that client** (Linux, Unix sockets): it waited in `read`, which Linux wakes

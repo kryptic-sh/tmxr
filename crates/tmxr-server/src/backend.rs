@@ -18,6 +18,8 @@ use ratatui::buffer::Cell;
 use ratatui::layout::{Position, Size};
 use ratatui::style::{Color, Modifier};
 
+use crate::copy::Underline;
+
 pub struct AnsiBackend {
     out: String,
     size: Size,
@@ -27,27 +29,49 @@ pub struct AnsiBackend {
     depth: ColourDepth,
     /// The hyperlinks the renderer put in cells, shared with it.
     links: Rc<RefCell<Links>>,
+    /// The terminal draws underline styles and colours (tmux's `usstyle`);
+    /// without, any underline is sent as a plain one.
+    underline_styles: bool,
 }
 
-/// The OSC 8 hyperlinks a client is sent, each distinct one numbered once
-/// for good. A cell carries its link's number in ratatui's
-/// `underline_color`, which tmxr has no other use for (vt100 keeps no
-/// underline colour): so the frame diff redraws a cell whose link changed,
-/// and [`AnsiBackend`] writes it as OSC 8, never as a colour.
+/// What a client is sent beside a cell's style, each distinct one numbered
+/// once for good: its OSC 8 hyperlink and how it is underlined beyond a
+/// plain underline. A cell carries the number in ratatui's
+/// `underline_color`, which nothing else uses: so the frame diff redraws a
+/// cell whose decoration changed, and [`AnsiBackend`] writes it as OSC 8 and
+/// SGR, never as that colour.
 #[derive(Debug, Default)]
 pub struct Links {
-    /// Each link as OSC 8 writes it: its parameters (`id=…`) and URI.
-    table: Vec<(String, String)>,
+    table: Vec<Decoration>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct Decoration {
+    /// The link as OSC 8 writes it: its parameters (`id=…`) and URI.
+    link: Option<(String, String)>,
+    underline: Underline,
 }
 
 impl Links {
-    /// The `underline_color` that carries `link`.
-    pub fn carrier(&mut self, link: &vt100::Hyperlink) -> Color {
-        let params = link
-            .id
-            .as_ref()
-            .map_or_else(String::new, |id| format!("id={id}"));
-        let entry = (params, link.uri.clone());
+    /// The `underline_color` that carries `link` and `underline`; the
+    /// default colour, carrying nothing, for neither.
+    pub fn carrier(&mut self, link: Option<&vt100::Hyperlink>, underline: Underline) -> Color {
+        let underline = if underline.is_plain() {
+            Underline::NONE
+        } else {
+            underline
+        };
+        if link.is_none() && underline == Underline::NONE {
+            return Color::Reset;
+        }
+        let link = link.map(|link| {
+            let params = link
+                .id
+                .as_ref()
+                .map_or_else(String::new, |id| format!("id={id}"));
+            (params, link.uri.clone())
+        });
+        let entry = Decoration { link, underline };
         let index = self
             .table
             .iter()
@@ -61,8 +85,8 @@ impl Links {
         Color::Rgb(r, g, b)
     }
 
-    /// The link a cell's `underline_color` carries, if any.
-    fn of(&self, c: Color) -> Option<&(String, String)> {
+    /// What a cell's `underline_color` carries, if anything.
+    fn of(&self, c: Color) -> Option<&Decoration> {
         let Color::Rgb(r, g, b) = c else {
             return None;
         };
@@ -89,6 +113,7 @@ impl AnsiBackend {
             size: Size::new(cols, rows),
             cursor: Position::new(0, 0),
             depth: ColourDepth::TrueColour,
+            underline_styles: false,
             links: Rc::default(),
         }
     }
@@ -99,6 +124,11 @@ impl AnsiBackend {
     }
 
     /// The colours to send (`rgb-colour`).
+    /// Send underline styles and colours, for a terminal that takes them.
+    pub fn set_underline_styles(&mut self, on: bool) {
+        self.underline_styles = on;
+    }
+
     pub fn set_depth(&mut self, depth: ColourDepth) {
         self.depth = depth;
     }
@@ -243,7 +273,7 @@ pub(crate) fn styled_bytes(text: &str, cols: u16) -> Vec<u8> {
         let Some(cell) = line.cell((x, 0)) else {
             break;
         };
-        out.push_str(&sgr(cell, ColourDepth::TrueColour));
+        out.push_str(&sgr(cell, ColourDepth::TrueColour, Underline::NONE));
         out.push_str(cell.symbol());
         // A wide character covers the cells after it.
         x += (ratatui::text::Line::raw(cell.symbol()).width() as u16).max(1);
@@ -251,8 +281,10 @@ pub(crate) fn styled_bytes(text: &str, cols: u16) -> Vec<u8> {
     out.into_bytes()
 }
 
-/// A full SGR sequence (starting from a reset) for one cell's style.
-fn sgr(cell: &Cell, depth: ColourDepth) -> String {
+/// A full SGR sequence (starting from a reset) for one cell's style, its
+/// underline's style and colour as `underline` says (sent only to a
+/// terminal that takes them).
+fn sgr(cell: &Cell, depth: ColourDepth, underline: Underline) -> String {
     let mut s = String::from("\x1b[0");
     let m = cell.modifier;
     for (flag, code) in [
@@ -268,12 +300,42 @@ fn sgr(cell: &Cell, depth: ColourDepth) -> String {
     ] {
         if m.contains(flag) {
             let _ = write!(s, ";{code}");
+            // Another style than a single line, as tmux's Smulx: 4:n.
+            if flag == Modifier::UNDERLINED && !underline.is_plain() {
+                let n = underline.style.sgr();
+                if n > 1 {
+                    let _ = write!(s, ":{n}");
+                }
+            }
         }
     }
     sgr_colour(&mut s, cell.fg, true, depth);
     sgr_colour(&mut s, cell.bg, false, depth);
+    if m.contains(Modifier::UNDERLINED) {
+        underline_colour(&mut s, underline.colour, depth);
+    }
     s.push('m');
     s
+}
+
+/// An underline colour's parameters, as tmux's Setulc / Setulc1 send them:
+/// `58:2:r:g:b`, or `58:5:n` for a terminal without 24-bit colour.
+fn underline_colour(out: &mut String, c: vt100::Color, depth: ColourDepth) {
+    let index = match c {
+        vt100::Color::Default => return,
+        vt100::Color::Rgb(r, g, b) if depth == ColourDepth::TrueColour => {
+            let _ = write!(out, ";58:2:{r}:{g}:{b}");
+            return;
+        }
+        vt100::Color::Rgb(r, g, b) => nearest_256(r, g, b),
+        vt100::Color::Idx(i) => i,
+    };
+    let index = if depth == ColourDepth::Colours16 {
+        nearest_16(index)
+    } else {
+        index
+    };
+    let _ = write!(out, ";58:5:{index}");
 }
 
 impl Backend for AnsiBackend {
@@ -293,12 +355,17 @@ impl Backend for AnsiBackend {
                 let _ = write!(self.out, "\x1b[{};{}H", y + 1, x + 1);
             }
             last = Some(Position::new(x, y));
-            let want = sgr(cell, self.depth);
+            let decoration = links.of(cell.underline_color);
+            let underline = decoration
+                .map(|d| d.underline)
+                .filter(|_| self.underline_styles)
+                .unwrap_or(Underline::NONE);
+            let want = sgr(cell, self.depth, underline);
             if style.as_deref() != Some(want.as_str()) {
                 self.out.push_str(&want);
                 style = Some(want);
             }
-            let cell_link = links.of(cell.underline_color);
+            let cell_link = decoration.and_then(|d| d.link.as_ref());
             if cell_link != link {
                 let (params, uri) = cell_link.map_or(("", ""), |(p, u)| (p.as_str(), u.as_str()));
                 let _ = write!(self.out, "\x1b]8;{params};{uri}\x1b\\");
@@ -383,12 +450,81 @@ mod tests {
             uri: "u".into(),
             id: Some("k".into()),
         };
-        let (ca, cb) = (links.carrier(&a), links.carrier(&b));
+        let none = Underline::NONE;
+        let (ca, cb) = (links.carrier(Some(&a), none), links.carrier(Some(&b), none));
         assert_ne!(ca, cb, "an id makes another link");
-        assert_eq!(links.carrier(&a), ca, "the same link, the same number");
-        assert_eq!(links.of(ca), Some(&(String::new(), "u".to_owned())));
-        assert_eq!(links.of(cb), Some(&("id=k".to_owned(), "u".to_owned())));
+        assert_eq!(
+            links.carrier(Some(&a), none),
+            ca,
+            "the same link, the same number"
+        );
+        let link = |c| links.of(c).and_then(|d| d.link.clone());
+        assert_eq!(link(ca), Some((String::new(), "u".to_owned())));
+        assert_eq!(link(cb), Some(("id=k".to_owned(), "u".to_owned())));
         assert_eq!(links.of(Color::Reset), None);
+        // A plain underline says nothing a style does not, so is not carried.
+        let single = Underline {
+            style: vt100::UnderlineStyle::Single,
+            colour: vt100::Color::Default,
+        };
+        assert_eq!(links.carrier(None, single), Color::Reset);
+    }
+
+    /// A curly red underline reaches a terminal that takes underline
+    /// styles as one, read back by vt100; another gets a plain underline.
+    #[test]
+    fn underline_styles_and_colours_reach_a_terminal_that_takes_them() {
+        let area = Rect::new(0, 0, 10, 1);
+        let curly = Underline {
+            style: vt100::UnderlineStyle::Curly,
+            colour: vt100::Color::Rgb(255, 0, 0),
+        };
+        let drawn = |styles: bool, depth: ColourDepth| -> (vt100::UnderlineStyle, vt100::Color) {
+            let mut backend = AnsiBackend::new(10, 1);
+            backend.set_underline_styles(styles);
+            backend.set_depth(depth);
+            let links = backend.links();
+            let mut term = Terminal::with_options(
+                backend,
+                TerminalOptions {
+                    viewport: Viewport::Fixed(area),
+                },
+            )
+            .unwrap();
+            term.draw(|f| {
+                let buf = f.buffer_mut();
+                buf.set_string(
+                    0,
+                    0,
+                    "x",
+                    Style::default().add_modifier(Modifier::UNDERLINED),
+                );
+                if let Some(cell) = buf.cell_mut((0, 0)) {
+                    cell.underline_color = links.borrow_mut().carrier(None, curly);
+                }
+            })
+            .unwrap();
+            let mut vt = vt100::Parser::new(
+                std::num::NonZeroU16::MIN,
+                std::num::NonZeroU16::new(10).unwrap(),
+                0,
+            );
+            vt.process(&term.backend_mut().take());
+            let cell = vt.screen().cell(0, 0).unwrap().clone();
+            (cell.underline_style(), cell.underline_color())
+        };
+        assert_eq!(
+            drawn(true, ColourDepth::TrueColour),
+            (vt100::UnderlineStyle::Curly, vt100::Color::Rgb(255, 0, 0))
+        );
+        assert_eq!(
+            drawn(true, ColourDepth::Colours256),
+            (vt100::UnderlineStyle::Curly, vt100::Color::Idx(196))
+        );
+        assert_eq!(
+            drawn(false, ColourDepth::TrueColour),
+            (vt100::UnderlineStyle::Single, vt100::Color::Default)
+        );
     }
     use ratatui::Terminal;
     use ratatui::TerminalOptions;

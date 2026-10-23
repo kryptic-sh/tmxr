@@ -20,6 +20,7 @@ impl Server {
         let area = Rect::new(0, 0, cols, rows);
         let mut backend = AnsiBackend::new(cols, rows);
         backend.set_depth(self.client_depth(id));
+        backend.set_underline_styles(self.client_underline_styles(id));
         let terminal = Terminal::with_options(
             backend,
             TerminalOptions {
@@ -192,6 +193,33 @@ impl Server {
             }
             _ => ColourDepth::TrueColour,
         }
+    }
+
+    /// Whether client `id`'s terminal draws underline styles and colours
+    /// (SGR 4:1 to 4:5 and 58), tmux's `usstyle`: decided from its `TERM`,
+    /// a terminal whose terminfo entry has tmux's `Smulx` (ncurses 6.5:
+    /// alacritty, foot, wezterm, vte, tmux) or that draws them without one
+    /// shipped (kitty, ghostty). Unlike tmux, the colour goes with the
+    /// styles: those entries lack `Setulc`, though the terminals draw it.
+    pub fn client_underline_styles(&self, id: ClientId) -> bool {
+        const TERMS: &[&str] = &[
+            "alacritty",
+            "foot",
+            "wezterm",
+            "vte",
+            "tmux",
+            "xterm-kitty",
+            "xterm-ghostty",
+        ];
+        let term = self
+            .clients
+            .get(&id)
+            .and_then(|c| c.hello.as_ref())
+            .and_then(|h| h.env.iter().find(|(n, _)| n == "TERM"))
+            .map_or("", |(_, v)| v.as_str());
+        TERMS
+            .iter()
+            .any(|t| term == *t || term.starts_with(&format!("{t}-")))
     }
 
     /// Re-read `rgb-colour` for every attached client.

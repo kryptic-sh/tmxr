@@ -785,8 +785,10 @@ fn draw_pane(
                 if let Some(out) = buf.cell_mut((r.x + col, r.y + row)) {
                     out.set_symbol(sym).set_style(style);
                     let screen = pane.emu.screen();
-                    if let Some(link) = link.and_then(|id| screen.hyperlink(id)) {
-                        out.underline_color = links.borrow_mut().carrier(link);
+                    let link = link.and_then(|id| screen.hyperlink(id));
+                    let underline = cell.map_or(crate::copy::Underline::NONE, |c| c.underline);
+                    if link.is_some() || !underline.is_plain() {
+                        out.underline_color = links.borrow_mut().carrier(link, underline);
                     }
                 }
             }
@@ -936,8 +938,10 @@ fn draw_screen(
                         with_default_colours(cell_style(c), base),
                         palette,
                     ));
-                    if let Some(link) = c.hyperlink_id().and_then(|id| screen.hyperlink(id)) {
-                        out.underline_color = links.borrow_mut().carrier(link);
+                    let link = c.hyperlink_id().and_then(|id| screen.hyperlink(id));
+                    let underline = crate::copy::Underline::of(c);
+                    if link.is_some() || !underline.is_plain() {
+                        out.underline_color = links.borrow_mut().carrier(link, underline);
                     }
                 }
                 None => {

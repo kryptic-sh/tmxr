@@ -13,6 +13,39 @@ pub struct Cell {
     /// the rest.
     pub symbol: Cow<'static, str>,
     pub style: Style,
+    pub underline: Underline,
+}
+
+/// How a cell is underlined, beyond its style's `UNDERLINED` (which any
+/// underline sets): the underline's style and colour, as vt100 keeps them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Underline {
+    pub style: vt100::UnderlineStyle,
+    pub colour: vt100::Color,
+}
+
+impl Underline {
+    /// No underline.
+    pub const NONE: Self = Self {
+        style: vt100::UnderlineStyle::None,
+        colour: vt100::Color::Default,
+    };
+
+    pub fn of(cell: &vt100::Cell) -> Self {
+        Self {
+            style: cell.underline_style(),
+            colour: cell.underline_color(),
+        }
+    }
+
+    /// Says no more than `UNDERLINED` does: none, or a single line in the
+    /// text's colour.
+    pub fn is_plain(self) -> bool {
+        matches!(
+            self.style,
+            vt100::UnderlineStyle::None | vt100::UnderlineStyle::Single
+        ) && self.colour == vt100::Color::Default
+    }
 }
 
 /// Every ASCII character, each at its own code, for [`symbol`] to borrow.
@@ -43,6 +76,7 @@ fn symbol(contents: &str) -> Cow<'static, str> {
 const BLANK: Cell = Cell {
     symbol: Cow::Borrowed(" "),
     style: Style::new().fg(Color::Reset).bg(Color::Reset),
+    underline: Underline::NONE,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -333,10 +367,12 @@ fn cell_of(cell: Option<&vt100::Cell>) -> Cell {
                 Cow::Borrowed(" ")
             },
             style: with_link(cell_style(cell), cell.hyperlink_id()),
+            underline: Underline::of(cell),
         },
         None => Cell {
             symbol: Cow::Borrowed(" "),
             style: Style::default(),
+            underline: Underline::NONE,
         },
     }
 }
@@ -346,7 +382,7 @@ mod tests {
     use super::*;
 
     /// A snapshot keeps each cell's link in its style, and a cell stays as
-    /// small as one without.
+    /// small as one without (its underline's style and colour beside it).
     #[test]
     fn a_snapshot_keeps_a_cells_link() {
         let mut parser = vt100::Parser::new(2.try_into().unwrap(), 10.try_into().unwrap(), 0);
@@ -361,7 +397,7 @@ mod tests {
             .and_then(vt100::Cell::hyperlink_id);
         assert!(id.is_some());
         assert_eq!(links, [None, id, None]);
-        assert_eq!(std::mem::size_of::<Cell>(), 40);
+        assert_eq!(std::mem::size_of::<Cell>(), 48);
     }
 
     /// A ranged capture is the same slice of the full one, wherever the

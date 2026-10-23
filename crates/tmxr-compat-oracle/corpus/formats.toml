@@ -1240,3 +1240,13 @@ checks = [
   { command = "display -p -t o:2 '#{pane_tabs}'" },
   { command = "display -p -t o:3 '#{pane_tabs}'" },
 ]
+
+[[cases]]
+name = "capture_pane_e_writes_underline_styles_and_colours_as_tmux"
+# tmux's grid_string_cells_code: a single underline as 4, another style as
+# 4:n, the underline colour as 58;5;n or 58;2;r;g;b, and a reset where the
+# colour goes back to the default.
+program = "printf 'a\\033[4:3mcurly\\033[0m b\\033[4mplain\\033[0m c\\033[4;58;2;255;0;0mred\\033[59;24m d\\033[21mdbl\\033[0m e\\033[4:4;58:5:9mdot\\033[4:5mdash\\033[4mone\\033[59mx\\033[0m\\n'; exec sleep 1000"
+steps = [{ sleep = 0.5 }]
+checks = [{ command = "capture-pane -p -e -E 0" }]
+

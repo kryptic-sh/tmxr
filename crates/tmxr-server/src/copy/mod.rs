@@ -14,7 +14,8 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 pub use commands::{command, enter, enter_from, refuses_args};
 pub use model::{
-    Cell, Line, cell_style, colour, link_of, snapshot, snapshot_lines, snapshot_normal_rows,
+    Cell, Line, Underline, cell_style, colour, link_of, snapshot, snapshot_lines,
+    snapshot_normal_rows,
 };
 pub use search::Search;
 pub use words::word_at;

@@ -702,7 +702,7 @@ fn capture(
     let width = usize::from(tmxr_term::screen_size(screen).1);
     let mut out = String::new();
     // As tmux's, the last cell's style carries over from line to line.
-    let mut last = Style::default();
+    let mut last = (Style::default(), crate::copy::Underline::NONE);
     for l in &lines {
         let take = if flags.join || flags.written_only {
             l.used
@@ -712,8 +712,8 @@ fn capture(
         let mut text = String::new();
         for c in l.cells().take(take).filter(|c| !c.symbol.is_empty()) {
             if flags.escapes {
-                text.push_str(&sgr_change(last, c.style));
-                last = c.style;
+                text.push_str(&sgr_change(last, (c.style, c.underline)));
+                last = (c.style, c.underline);
             }
             text.push_str(&c.symbol);
         }
@@ -732,40 +732,55 @@ fn capture(
     out
 }
 
-/// The attributes tmux's -e writes, with their SGR codes, in its order
-/// (grid_string_cells_code; the rest `vt100` does not keep).
-const SGR_ATTRS: [(Modifier, u8); 5] = [
-    (Modifier::BOLD, 1),
-    (Modifier::DIM, 2),
-    (Modifier::ITALIC, 3),
-    (Modifier::UNDERLINED, 4),
-    (Modifier::REVERSED, 7),
-];
+/// The attributes tmux's -e writes that a captured cell can have, in its
+/// order (grid_string_cells_code): each whether `style` and `underline`
+/// have it, and its SGR code, a code over 9 written `4:n` (an underline
+/// style other than a single line, which is 4).
+fn sgr_attrs(style: Style, underline: crate::copy::Underline) -> [(bool, u8); 9] {
+    use vt100::UnderlineStyle as U;
+    let m = style.add_modifier;
+    let line = |s: U| m.contains(Modifier::UNDERLINED) && underline.style == s;
+    let single = m.contains(Modifier::UNDERLINED) && matches!(underline.style, U::Single | U::None);
+    [
+        (m.contains(Modifier::BOLD), 1),
+        (m.contains(Modifier::DIM), 2),
+        (m.contains(Modifier::ITALIC), 3),
+        (single, 4),
+        (m.contains(Modifier::REVERSED), 7),
+        (line(U::Double), 42),
+        (line(U::Curly), 43),
+        (line(U::Dotted), 44),
+        (line(U::Dashed), 45),
+    ]
+}
 
 /// The escapes taking a capture from cells styled `last` to `cell`, as
-/// tmux's grid_string_cells_code: any attribute dropped resets all first,
-/// then the attributes added, then each colour that changed (or, after a
-/// reset, that is not the default).
-fn sgr_change(last: Style, cell: Style) -> String {
-    let (mut was, is) = (last.add_modifier, cell.add_modifier);
+/// tmux's grid_string_cells_code: any attribute dropped, or the underline
+/// colour going back to the default, resets all first; then the attributes
+/// added, then each colour that changed (or, after a reset, that is not the
+/// default), the underline colour last.
+fn sgr_change(
+    (last, last_under): (Style, crate::copy::Underline),
+    (cell, under): (Style, crate::copy::Underline),
+) -> String {
+    let (mut was, is) = (sgr_attrs(last, last_under), sgr_attrs(cell, under));
     let mut codes = Vec::new();
-    if SGR_ATTRS
-        .iter()
-        .any(|&(m, _)| was.contains(m) && !is.contains(m))
-    {
-        codes.push(0);
-        was = Modifier::empty();
+    let colour_dropped =
+        last_under.colour != vt100::Color::Default && under.colour == vt100::Color::Default;
+    if colour_dropped || was.iter().zip(&is).any(|(w, i)| w.0 && !i.0) {
+        codes.push("0".to_owned());
+        was = [(false, 0); 9];
     }
-    codes.extend(
-        SGR_ATTRS
-            .iter()
-            .filter(|&&(m, _)| is.contains(m) && !was.contains(m))
-            .map(|&(_, code)| code),
-    );
-    let reset = codes.first() == Some(&0);
+    codes.extend(is.iter().zip(&was).filter(|(i, w)| i.0 && !w.0).map(
+        |(&(_, code), _)| match code {
+            0..=9 => code.to_string(),
+            _ => format!("{}:{}", code / 10, code % 10),
+        },
+    ));
+    let reset = codes.first().is_some_and(|c| c == "0");
     let mut out = String::new();
     if !codes.is_empty() {
-        out = sgr(&codes);
+        out = format!("\x1b[{}m", codes.join(";"));
     }
     for (new, old, base) in [(cell.fg, last.fg, 30), (cell.bg, last.bg, 40)] {
         let new = sgr_colour(new.unwrap_or(Color::Reset), base);
@@ -773,6 +788,16 @@ fn sgr_change(last: Style, cell: Style) -> String {
         if (!reset && new == old) || (reset && new == [base + 9]) {
             continue;
         }
+        out.push_str(&sgr(&new));
+    }
+    // As tmux's grid_string_cells_us: nothing for the default colour.
+    let us = |c: vt100::Color| match c {
+        vt100::Color::Default => Vec::new(),
+        vt100::Color::Idx(i) => vec![58, 5, i],
+        vt100::Color::Rgb(r, g, b) => vec![58, 2, r, g, b],
+    };
+    let (new, old) = (us(under.colour), us(last_under.colour));
+    if !new.is_empty() && (reset || new != old) {
         out.push_str(&sgr(&new));
     }
     out
