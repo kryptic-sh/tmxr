@@ -459,78 +459,44 @@ table. What has been verified, and how:
   there, with tmxr's mouse off, gave Alacritty's hint command the link's URL (an
   X11 Alacritty driven by `xdotool`; the hint set to a command that only records
   it).
-- **vt100 is patched** until a release carries the fixes (doy/vt100-rust#47,
-  #48, #49, #50, #51 and #52, from branches `scroll-alloc`, `visible-row`,
-  `trim-on-scroll`, `line-cells`, `hyperlinks` and `saved-screen` of
-  kryptic-sh/vt100-rust; #49 builds on #47 and #52 on #50; tmxr builds against
-  `tmxr-0.18`, which carries all six and the `reflow`, `sgr-colon` and
-  `underline-styles` branches (none offered upstream yet), pinned by `rev` in
-  the root `Cargo.toml`'s `[patch.crates-io]` and allowed in `deny.toml`, as
-  crossterm is). #49: `set_scrollback` widened each history row it showed to the
-  screen's width and never narrowed it again, so one copy-mode entry on 50000
-  lines of history left the server at 206 MiB for good (now 30 MiB, tmux 23
-  MiB); a whole-history page now costs a reallocation per row instead, 46 ms
-  against 32–35 ms for reading every cell (bare vt100, best of 5). #50 adds
-  `Screen::line_cells` / `line_wrapped`, a line of history and screen by index
-  without moving the view: `copy::snapshot` reads through it, so entering copy
-  mode on 50000 lines costs 5–6 ms of server CPU (tmux 4 ms; 327–362 ms before
-  these changes), and tmxr no longer moves vt100's view at all, so #49 serves
-  other users of vt100. #48: `Grid::visible_row` was `visible_rows().nth(row)`,
-  which steps through every row above, so each `Screen::cell` cost time in
-  proportion to its row. #47: for every line scrolled into history, vt100
-  0.18.1's `Grid::scroll_up` compared each cell against a blank one through an
-  out-of-line `PartialEq`, shrank the row (a reallocation) and allocated a
-  full-width row to replace it. The patch copies the used cells into the history
-  row and clears them in place. Found with a pprof (`setitimer`) profile, as
-  `perf` is not installed: 92.5% of bare vt100's time on `seq 1 2000000` was in
-  `scroll_up`. Measured 2026-10-21 on the Arch laptop (i7-1355U, pinned to its
-  performance cores), a pane printing `seq 1 2000000` with a 120x40 client
-  attached, its end signalled by `wait-for`: the server's CPU went from
-  1.68–2.14 s to 0.50–0.58 s, tmux 3.8's 0.61–0.62 s, wall time from about 2 s
-  to 0.7 s, tmux's 0.8 s. vt100 alone at the default `history-limit` of 50000
-  went from 1.56 s to 0.41 s, with history identical by hash (a check shown to
-  catch three deliberately broken variants). Drop the patch once a vt100 release
-  has it; `cargo install tmxr` from crates.io builds without it. The chip is
-  hybrid, and the same emulator run took 1.5 times as long pinned to an
-  efficiency core (`taskset`), which the scheduler may pick for the server.
-  Measuring note: an earlier harness that polled `capture-pane -p` for the end
-  of the output mostly measured the captures (each copied the whole history
-  before `snapshot_lines`, see the changelog), which put tmxr at five times
-  tmux's CPU.
-- **crates.io cannot take tmxr-server, tmxr-client or tmxr** while they need the
-  vt100 fork: a `[patch]` does not reach a published package, and
-  `cargo publish` verifies each tarball against crates.io's vt100 0.18.1, which
-  lacks the fork's `Screen::line_cells` / `line_wrapped`, the
-  `normal_screen_row_*` reads and the hyperlink API. Since 2026-10-23 the same
-  holds for crossterm: tmxr-server and tmxr-client match the crossterm fork's
-  `Event::ColorScheme`, which crates.io's crossterm 0.29.0 lacks, so the fork
-  would need publishing (or the variant upstream) alike. v0.10.0 (2026-10-23)
-  published its GitHub Release and every package channel, and on crates.io only
-  tmxr-proto, tmxr-command, tmxr-config and tmxr-term (`Publish to crates.io`
-  failed verifying tmxr-server with 11 errors), so crates.io's tmxr stays at
-  0.9.0. Decided by the owner (2026-10-23): no crates.io publishing for now. The
-  `publish-crates` job is off (`if: false`, out of `tag-release-status`'s needs)
-  and the README installs with `cargo install --git`, which builds with the
-  workspace's `[patch]` (checked: 0.10.0 built and ran that way). Considered and
-  not taken: publishing the forks as crates (`kryptic-vt100` would have worked,
-  as only tmxr uses vt100; a crossterm fork crate would sit beside crates.io's
-  crossterm that hjkl's crates and ratatui use, which crosses at one call,
-  `hjkl_picker_tui::handle_key`'s `KeyEvent`, so it needs a conversion there or
-  hjkl moved to the fork too). Turn the job back on once crates.io's vt100 and
-  crossterm have what tmxr uses.
-- **A full history takes four times tmux's memory** (measured 2026-10-24 on the
-  Arch laptop, release builds, a 120x40 pane after `seq -f '%080g' 1 60000` with
-  `history-limit 50000`, server RSS): tmxr 155 MB, 345 MB in copy mode; tmux 3.8
-  38 MB, 69 MB in copy mode. The history is vt100's rows of 36-byte cells
-  (`vt100::Cell`: 20 content bytes, attributes, link), where tmux keeps a plain
-  cell in 5 bytes and the rest beside the line (`grid_cell_entry`, extended
-  cells); copy mode then copies every line into its own 48-byte cells
-  (`copy::Cell`), where tmux's copy of the grid is as compact as the grid. Not
-  started; the ways in, each large: rows of history kept compact in the vt100
-  fork (plain cells packed, the rest in a side table), which changes what
-  `Screen::line_cells` can hand out by reference; copy mode reading the pane's
-  rows lazily instead of copying them, which needs the snapshot frozen against
-  the pane printing on; or a smaller `copy::Cell` (its `Cow<str>` is 24 bytes).
+- **vt1k replaced vt100** (the owner's call, 2026-10-24): each pane's emulator
+  is [vt1k](https://github.com/kryptic-sh/vt1k), kryptic-sh's own crate on vte,
+  pinned by `rev` in the root `Cargo.toml`. Its API and behaviour follow vt100
+  0.18 with the kryptic-sh fork's additions (the fork's branches `scroll-alloc`,
+  `visible-row`, `trim-on-scroll`, `line-cells`, `hyperlinks`, `saved-screen`,
+  `reflow`, `sgr-colon` and `underline-styles`, now retired), held to it by
+  vt1k's `tests/parity.rs`, which feeds random sessions to both and compares
+  everything either shows; entries here that say what vt100 does describe vt1k
+  too. Where vt100 panicked (a combining character after a widened one on a
+  one-column screen, `CSI @` past a row's end) vt1k does not, and viewing its
+  history no longer clears the rows' wrap flags. Rows of history are packed, so
+  `Screen::line_cells` hands out a `Cow`. Measured on the Arch laptop (release
+  builds, 50000 full lines of 80 columns, server RSS): 155 MB with vt100, 21 MB
+  with vt1k (tmux 3.8: 38 MB). Under a flood (`seq 1 2000000` into a detached
+  120x40 pane, end by `wait-for`, four performance cores) the server took
+  0.74–0.86 s against vt100's 0.59–0.73 s: packing each line costs more than
+  vt100's copy; the parsers alone took 517 ms against 486 ms. Not looked into
+  further. The vt100 fork's packed-history branch (`packed-history`, never
+  pushed) is superseded.
+- **crates.io cannot take tmxr-server, tmxr-client or tmxr** while they depend
+  on git: vt1k (kryptic-sh's emulator, not on crates.io yet) and the crossterm
+  fork (tmxr-server and tmxr-client match its `Event::ColorScheme`, which
+  crates.io's crossterm 0.29.0 lacks). v0.10.0 (2026-10-23) published on
+  crates.io only tmxr-proto, tmxr-command, tmxr-config and tmxr-term, so
+  crates.io's tmxr stays at 0.9.0. Decided by the owner (2026-10-23): no
+  crates.io publishing for now; the `publish-crates` job is off (`if: false`,
+  out of `tag-release-status`'s needs) and the README installs with
+  `cargo install --git`. Publishing vt1k would remove one of the two blockers; a
+  crossterm fork crate would sit beside crates.io's crossterm that hjkl's crates
+  and ratatui use, which crosses at one call, (`hjkl_picker_tui::handle_key`'s
+  `KeyEvent`), so it needs a conversion there or hjkl moved to the fork too.
+- **Copy mode's copy of the history takes three times tmux's memory** (measured
+  2026-10-24, release builds, 50000 full lines of 80 columns, server RSS): 212
+  MB in copy mode against 21 MB out of it, where tmux 3.8 takes 69 and 38 MB.
+  Copy mode copies every line into its own 48-byte cells (`copy::Cell`); the
+  history itself is packed since vt1k. Not started; the ways in: copy mode
+  keeping vt1k's packed rows and unpacking the lines it shows, or a smaller
+  `copy::Cell` (its `Cow<str>` is 24 bytes).
 - **No frame-rate cap**: the server renders after each pass of its loop, and a
   pass stops handling events after `DRAIN_BUDGET` so a flood still repaints.
   Each pane's output waits in a bounded queue (`output::QUEUE_LIMIT`) that

@@ -1,6 +1,6 @@
 [package]
 name = "tmxr-term"
-description = "One tmxr pane's terminal: PTY, vt100 emulation, input encoding, process inspection."
+description = "One tmxr pane's terminal: PTY, terminal emulation (vt1k), input encoding, process inspection."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -14,7 +14,7 @@ readme.workspace = true
 crossterm = "0.29.0"
 portable-pty = "0.9.0"
 tmxr-command.workspace = true
-vt100 = "0.18.1"
+vt1k.workspace = true
 
 [lints]
 workspace = true

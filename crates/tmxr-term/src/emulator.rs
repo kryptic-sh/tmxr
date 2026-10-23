@@ -1,4 +1,4 @@
-//! A pane's terminal emulator: `vt100` plus what vt100 hands to its host.
+//! A pane's terminal emulator: `vt1k` plus what vt1k hands to its host.
 
 use std::num::NonZeroU16;
 use std::path::PathBuf;
@@ -15,8 +15,8 @@ const KITTY_STACK_LIMIT: usize = 16;
 /// The columns between the default tab stops.
 const TAB_WIDTH: u16 = 8;
 
-/// `screen`'s rows and columns, which vt100 keeps nonzero, as numbers.
-pub fn screen_size(screen: &vt100::Screen) -> (u16, u16) {
+/// `screen`'s rows and columns, which vt1k keeps nonzero, as numbers.
+pub fn screen_size(screen: &vt1k::Screen) -> (u16, u16) {
     let (rows, cols) = screen.size();
     (rows.get(), cols.get())
 }
@@ -28,7 +28,7 @@ fn default_tabs(cols: u16) -> Vec<bool> {
         .collect()
 }
 
-/// A screen dimension as vt100 takes it: at least 1, as tmux's
+/// A screen dimension as vt1k takes it: at least 1, as tmux's
 /// `PANE_MINIMUM`.
 fn dimension(n: u16) -> NonZeroU16 {
     NonZeroU16::new(n).unwrap_or(NonZeroU16::MIN)
@@ -63,7 +63,7 @@ pub struct Hooks {
     kitty_flags: Vec<u8>,
     /// The program asked for focus reports (`CSI ? 1004 h`).
     focus_reports: bool,
-    /// Insert mode (`CSI 4 h`, IRM), which vt100 does not keep.
+    /// Insert mode (`CSI 4 h`, IRM), which vt1k does not keep.
     insert_mode: bool,
     /// Times the program asked for the color scheme (`CSI ? 996 n`) since
     /// they were last taken, for the server to answer.
@@ -81,7 +81,7 @@ pub struct Hooks {
     /// palette's `fg` / `bg`.
     palette_fg: Option<u32>,
     palette_bg: Option<u32>,
-    /// Autowrap turned off (`CSI ? 7 l`, DECAWM), which vt100 does not
+    /// Autowrap turned off (`CSI ? 7 l`, DECAWM), which vt1k does not
     /// keep (it always wraps).
     no_wrap: bool,
     /// The cursor shape the program asked for (`CSI Ps SP q`, DECSCUSR):
@@ -93,7 +93,7 @@ pub struct Hooks {
 }
 
 impl Hooks {
-    /// DECSCUSR, split out before vt100 (which keeps its own): a cursor
+    /// DECSCUSR, split out before vt1k (which keeps its own): a cursor
     /// shape, 0 to 6; others leave it as it was, as tmux's.
     fn set_cursor_style(&mut self, ps: u32) {
         if let Ok(ps @ 0..=6) = u8::try_from(ps) {
@@ -104,22 +104,22 @@ impl Hooks {
     }
 }
 
-impl vt100::Callbacks for Hooks {
-    fn audible_bell(&mut self, _: &mut vt100::Screen) {
+impl vt1k::Callbacks for Hooks {
+    fn audible_bell(&mut self, _: &mut vt1k::Screen) {
         self.bell = true;
     }
 
-    fn on_scroll(&mut self, _: vt100::capture::RowContents<'_>, alternate_screen: bool) {
+    fn on_scroll(&mut self, _: vt1k::capture::RowContents<'_>, alternate_screen: bool) {
         if !alternate_screen {
             self.dropped += 1;
         }
     }
 
-    fn set_window_title(&mut self, _: &mut vt100::Screen, title: &[u8]) {
+    fn set_window_title(&mut self, _: &mut vt1k::Screen, title: &[u8]) {
         self.title = Some(String::from_utf8_lossy(title).into_owned());
     }
 
-    fn copy_to_clipboard(&mut self, _: &mut vt100::Screen, ty: &[u8], data: &[u8]) {
+    fn copy_to_clipboard(&mut self, _: &mut vt1k::Screen, ty: &[u8], data: &[u8]) {
         self.clipboard.push((
             String::from_utf8_lossy(ty).into_owned(),
             String::from_utf8_lossy(data).into_owned(),
@@ -128,7 +128,7 @@ impl vt100::Callbacks for Hooks {
 
     fn unhandled_csi(
         &mut self,
-        screen: &mut vt100::Screen,
+        screen: &mut vt1k::Screen,
         i1: Option<u8>,
         _i2: Option<u8>,
         params: &[&[u16]],
@@ -136,7 +136,7 @@ impl vt100::Callbacks for Hooks {
     ) {
         let p = |i: usize| params.get(i).and_then(|v| v.first()).copied();
         match (i1, c) {
-            // DEC private modes vt100 does not keep: focus reports and
+            // DEC private modes vt1k does not keep: focus reports and
             // autowrap.
             (Some(b'?'), 'h' | 'l') => {
                 for mode in params.iter().filter_map(|v| v.first()) {
@@ -210,7 +210,7 @@ impl vt100::Callbacks for Hooks {
         }
     }
 
-    fn unhandled_osc(&mut self, screen: &mut vt100::Screen, params: &[&[u8]]) {
+    fn unhandled_osc(&mut self, screen: &mut vt1k::Screen, params: &[&[u8]]) {
         match params {
             // Shell integration (FinalTerm / OSC 133): B ends the prompt, so
             // the input starts at the cursor; A (a new prompt), C (the
@@ -233,7 +233,7 @@ impl vt100::Callbacks for Hooks {
                     marks.insert(line);
                 }
             }
-            // A title holding `;` arrives split, which vt100 leaves alone:
+            // A title holding `;` arrives split, which vt1k leaves alone:
             // all of it after the first `;` is the title, as xterm reads it.
             [b"0" | b"2", rest @ ..] if rest.len() > 1 => {
                 self.title = Some(String::from_utf8_lossy(&rest.join(&b';')).into_owned());
@@ -282,7 +282,7 @@ impl vt100::Callbacks for Hooks {
 /// Windows' built-in ConPTY forwards a program's DCS but drops its closing
 /// `ESC \` (seen on Windows 11 build 26300), so the end of a passthrough
 /// cannot be found and the splitter would hide the pane's later output; there
-/// the output goes to vt100 unsplit, as it would without passthrough.
+/// the output goes to vt1k unsplit, as it would without passthrough.
 /// Microsoft's newer ConPTY keeps the terminator, and portable-pty loads it
 /// when its `conpty.dll` (with the `OpenConsole.exe` it starts) sits beside
 /// the program, which is how tmxr's Windows release ships it.
@@ -317,7 +317,7 @@ const RESET: &[u8] = b"\x18\x1b[0m\x1b[r\x1b[?1l\x1b[?6l\x1b[4l\x1b[?9l\x1b[?100
 
 /// One pane's emulator.
 pub struct Emulator {
-    parser: vt100::Parser<Hooks>,
+    parser: vt1k::Parser<Hooks>,
     dcs: DcsSplitter,
     /// tmux passthrough payloads (`ESC P tmux; … ESC \`) waiting to be
     /// forwarded to the outer terminal.
@@ -332,7 +332,7 @@ pub struct Emulator {
     modes: ModeSplitter,
     /// Cleared with `alternate-screen off`: the switches are dropped.
     alt_allowed: bool,
-    /// Origin mode (`CSI ? 6 h`, DECOM), which vt100 keeps to itself.
+    /// Origin mode (`CSI ? 6 h`, DECOM), which vt1k keeps to itself.
     origin_mode: bool,
     /// Where the cursor was (row, column) when `CSI ? 1049 h` last switched
     /// to the alternate screen, as tmux's `saved_cx` / `saved_cy`: kept
@@ -345,13 +345,13 @@ pub struct Emulator {
     /// The 256 colours' entries the program set (OSC 4).
     palette: crate::palette::Palette,
     /// The scroll region's top and bottom rows, `None` for the whole
-    /// screen. tmux keeps one for the terminal; vt100 keeps one per screen,
-    /// so it is written into vt100's again after each switch.
+    /// screen. tmux keeps one for the terminal; vt1k keeps one per screen,
+    /// so it is written into vt1k's again after each switch.
     region: Option<(u16, u16)>,
-    /// The tab stops, one flag a column, as tmux keeps them (vt100's are
+    /// The tab stops, one flag a column, as tmux keeps them (vt1k's are
     /// fixed every `TAB_WIDTH` columns).
     tabs: Vec<bool>,
-    /// The mouse encodings the program set, apart as tmux keeps them (vt100
+    /// The mouse encodings the program set, apart as tmux keeps them (vt1k
     /// keeps one).
     mouse_utf8: bool,
     mouse_sgr: bool,
@@ -369,7 +369,7 @@ pub struct Emulator {
 
 impl Emulator {
     pub fn new(rows: u16, cols: u16, scrollback: usize) -> Self {
-        let mut parser = vt100::Parser::new_with_callbacks(
+        let mut parser = vt1k::Parser::new_with_callbacks(
             dimension(rows),
             dimension(cols),
             scrollback,
@@ -566,7 +566,7 @@ impl Emulator {
                     mode: mode @ (47 | 1047 | 1049),
                     on,
                 } => self.switch_screen(mode, on),
-                // Origin mode: kept, then given to vt100, which keeps its
+                // Origin mode: kept, then given to vt1k, which keeps its
                 // own to move the cursor by.
                 Piece::Mode { mode: 6, on } => {
                     self.origin_mode = on;
@@ -671,7 +671,7 @@ impl Emulator {
     }
 
     /// DECSTBM as tmux's screen_write_scrollregion: rows past the screen
-    /// are its last, a region of fewer than two rows is ignored (vt100 would
+    /// are its last, a region of fewer than two rows is ignored (vt1k would
     /// take the whole screen), and the cursor goes home.
     fn set_region(&mut self, top: Option<u32>, bottom: Option<u32>) {
         let rows = self.parser.screen().size().0.get();
@@ -687,8 +687,8 @@ impl Emulator {
             .process(format!("\x1b[{};{}r\x1b[H", top + 1, bottom + 1).as_bytes());
     }
 
-    /// The scroll region written into vt100's screen, after a switch to a
-    /// screen whose own region vt100 kept apart, the cursor left where it
+    /// The scroll region written into vt1k's screen, after a switch to a
+    /// screen whose own region vt1k kept apart, the cursor left where it
     /// was.
     fn sync_region(&mut self) {
         let screen = self.parser.screen();
@@ -708,7 +708,7 @@ impl Emulator {
 
     /// IL or DL (`last`, `L` or `M`). With the cursor outside the scroll
     /// region tmux's screen_write_insertline / _deleteline move the rows
-    /// from the cursor to the bottom of the screen, where vt100 does
+    /// from the cursor to the bottom of the screen, where vt1k does
     /// nothing, so they go through a region from the cursor down, then
     /// the region and the cursor are put back. An IL there of as many rows
     /// as are left, or more, changes nothing in tmux (grid_view_insert_lines
@@ -745,8 +745,8 @@ impl Emulator {
     }
 
     /// A mouse mode set or reset as tmux's input_csi_dispatch_sm_private /
-    /// _rm_private, not as vt100 would: 9 (X10) is ignored, resetting any of
-    /// 1000 to 1003 clears whichever is set (vt100 clears only the one
+    /// _rm_private, not as vt1k would: 9 (X10) is ignored, resetting any of
+    /// 1000 to 1003 clears whichever is set (vt1k clears only the one
     /// named), and 1005 / 1006 are kept apart.
     fn mouse_mode(&mut self, mode: u32, on: bool) {
         match (mode, on) {
@@ -767,7 +767,7 @@ impl Emulator {
         }
     }
 
-    /// The one encoding vt100 keeps, from the two the program set: SGR
+    /// The one encoding vt1k keeps, from the two the program set: SGR
     /// before UTF-8, as tmux's input_key_get_mouse picks.
     fn mouse_encoding(&mut self) {
         self.parser.process(b"\x1b[?1005l\x1b[?1006l");
@@ -785,8 +785,8 @@ impl Emulator {
     }
 
     /// Switch to or from the alternate screen as tmux's screen_alternate_on
-    /// / _off, not as vt100 would: on (47, 1047 or 1049, unless already
-    /// there) clears it and keeps the cursor where it was, where vt100 homes
+    /// / _off, not as vt1k would: on (47, 1047 or 1049, unless already
+    /// there) clears it and keeps the cursor where it was, where vt1k homes
     /// it on 1049, keeps the old screen on 47 and ignores 1047; off, 1049
     /// puts back the cursor it saved, and 47 / 1047 keep it where it is.
     fn switch_screen(&mut self, mode: u32, on: bool) {
@@ -842,13 +842,13 @@ impl Emulator {
         std::mem::take(&mut self.parser.callbacks_mut().replies)
     }
 
-    pub fn screen(&self) -> &vt100::Screen {
+    pub fn screen(&self) -> &vt1k::Screen {
         self.parser.screen()
     }
 
     /// For moving the scrollback view; [`Emulator::resize`] resizes, so
     /// the history stays counted.
-    pub fn screen_mut(&mut self) -> &mut vt100::Screen {
+    pub fn screen_mut(&mut self) -> &mut vt1k::Screen {
         self.parser.screen_mut()
     }
 
@@ -856,10 +856,10 @@ impl Emulator {
     /// screen: fewer rows take the rows below the cursor first, then push
     /// rows off the top into the history; more rows take rows back from the
     /// history first, then come in blank at the bottom. (tmux takes back only
-    /// rows scrolled since the screen was last cleared, vt100 any it has.)
+    /// rows scrolled since the screen was last cleared, vt1k any it has.)
     pub fn resize(&mut self, rows: u16, cols: u16) {
         // A resize takes the whole screen as the region, in tmux and in
-        // vt100 alike (which keeps it when the size is the same).
+        // vt1k alike (which keeps it when the size is the same).
         let (old_rows, old_cols) = screen_size(self.parser.screen());
         if (old_rows, old_cols) != (rows.max(1), cols.max(1)) {
             self.region = None;
@@ -927,7 +927,7 @@ impl Emulator {
     }
 
     /// Insert mode and autowrap as the program set them (`#{insert_flag}`,
-    /// `#{wrap_flag}`); vt100 draws as with insert off and wrap on.
+    /// `#{wrap_flag}`); vt1k draws as with insert off and wrap on.
     pub fn insert_and_wrap(&self) -> (bool, bool) {
         let hooks = self.parser.callbacks();
         (hooks.insert_mode, !hooks.no_wrap)
@@ -1114,7 +1114,7 @@ mod tests {
                     .line_cells(i)
                     .unwrap()
                     .iter()
-                    .map(vt100::Cell::contents)
+                    .map(vt1k::Cell::contents)
                     .collect()
             })
             .collect()
@@ -1236,7 +1236,7 @@ mod tests {
         // A scroll region from row 2, origin mode on: row 1 is its top.
         e.process(b"\x1b[2;4r\x1b[?6h\x1b[1;1H");
         assert!(e.origin_mode());
-        assert_eq!(e.screen().cursor_position(), (1, 0), "vt100 still has it");
+        assert_eq!(e.screen().cursor_position(), (1, 0), "vt1k still has it");
         e.process(b"\x1b[?6l");
         assert!(!e.origin_mode());
         e.process(b"\x1b[?6h\x1bc");
@@ -1292,7 +1292,7 @@ mod tests {
         assert_eq!(rows(&emu), (true, (1, 3), "\nalt".to_owned()));
         emu.process(b"\r\nmore\x1b[?1049l");
         assert_eq!(rows(&emu), (false, (1, 0), "main".to_owned()));
-        // 1047, which vt100 ignores, switches and clears as 47 does; going
+        // 1047, which vt1k ignores, switches and clears as 47 does; going
         // off, both keep the cursor where it got to.
         for mode in ["1047", "47"] {
             let mut emu = Emulator::new(4, 20, 100);
@@ -1394,7 +1394,7 @@ mod tests {
     }
 
     #[test]
-    fn csis_vt100_lacks_draw_as_tmuxs() {
+    fn csis_vt1k_lacks_draw_as_tmuxs() {
         // Each row as tmux 3.8 drew the same output in a 20-column pane.
         let mut e = Emulator::new(8, 20, 0);
         e.process(b"\x1b[1;18Hx\x1b[9b");
@@ -1511,7 +1511,7 @@ mod tests {
         assert_eq!(e.input_modes().kitty_flags, 0, "the stack holds the limit");
         e.process(b"\x1b[?1h");
         assert!(e.input_modes().app_cursor);
-        // Focus reports, in a sequence with a mode vt100 keeps.
+        // Focus reports, in a sequence with a mode vt1k keeps.
         assert!(!e.focus_reports());
         e.process(b"\x1b[?25;1004h");
         assert!(e.focus_reports());

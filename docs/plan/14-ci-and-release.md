@@ -47,8 +47,8 @@ State: v0.1.0 shipped `build`, `publish-github-release` and `tag-release-status`
 with the `--completions` / `--man` flags; the crates.io, AUR, Homebrew, Scoop
 and Alpine jobs followed after v0.2.3. The app crate is `tmxr-cli` on crates.io
 (`tmxr` is taken there), published up to 0.9.0: the crates.io job is off since
-v0.10.0, as tmxr needs its crossterm and vt100 forks (see the backlog); the
-binary, `.deb` and `.rpm` are still `tmxr`.
+v0.10.0, as tmxr needs its crossterm fork and vt1k from git (see the backlog);
+the binary, `.deb` and `.rpm` are still `tmxr`.
 
 Add hrdr's release jobs verbatim in shape, renamed for tmxr:
 

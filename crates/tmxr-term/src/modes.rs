@@ -1,17 +1,17 @@
-//! The sequences the emulator makes as tmux does rather than as vt100
+//! The sequences the emulator makes as tmux does rather than as vt1k
 //! would, split from a program's output: the DEC private modes for the
 //! alternate screen (47, 1047 and 1049, `Emulator::switch_screen`, dropped
 //! for `alternate-screen off`), the mouse (9, 1000 to 1003, 1005 and 1006,
 //! `Emulator::mouse_mode`) and origin (6, kept for `#{origin_flag}` and
 //! passed on), a full reset (`ESC c`), which clears what the emulator keeps
-//! of them, and CSIs from tmux's input_csi_table that vt100 lacks or makes
+//! of them, and CSIs from tmux's input_csi_table that vt1k lacks or makes
 //! differently: SCP and RCP (`s`, `u`) as `ESC 7` and `ESC 8`, REP (`b`),
 //! which repeats only a character printed just before, CBT (`Z`), which
 //! needs the emulator's cursor, DECSCUSR (`SP q`), whose shape and
 //! blinking the emulator keeps itself, and DECSTBM (`r`), IL (`L`) and DL
-//! (`M`), as the emulator keeps the scroll region (vt100 keeps one per
+//! (`M`), as the emulator keeps the scroll region (vt1k keeps one per
 //! screen, and its IL and DL do nothing outside it), and HT, HTS (`ESC H`)
-//! and TBC (`g`), as it keeps the tab stops (vt100's are fixed).
+//! and TBC (`g`), as it keeps the tab stops (vt1k's are fixed).
 
 /// The DEC private modes split out.
 const SPLIT_MODES: [u32; 11] = [6, 9, 47, 1000, 1001, 1002, 1003, 1005, 1006, 1047, 1049];
@@ -689,7 +689,7 @@ mod tests {
         let mut f = ModeSplitter::default();
         assert_eq!(text(f.split(b"\x1b[s\x1b[u")), b"\x1b7\x1b8");
         // With a marker or an intermediate they are other sequences, as
-        // are the ones vt100 makes as tmux does.
+        // are the ones vt1k makes as tmux does.
         assert_eq!(
             text(f.split(b"\x1b[?5s\x1b[>1u\x1b[1 u\x1b[3;5f")),
             b"\x1b[?5s\x1b[>1u\x1b[1 u\x1b[3;5f"

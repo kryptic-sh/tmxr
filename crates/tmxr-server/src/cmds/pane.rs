@@ -671,7 +671,7 @@ fn allocated(used: usize, width: usize) -> usize {
 /// with -T or -J, to what was written), its trailing spaces cut unless -N
 /// or -J.
 fn capture(
-    screen: &mut vt100::Screen,
+    screen: &mut vt1k::Screen,
     (start, end): (Option<&str>, Option<&str>),
     flags: CaptureFlags,
 ) -> String {
@@ -737,7 +737,7 @@ fn capture(
 /// have it, and its SGR code, a code over 9 written `4:n` (an underline
 /// style other than a single line, which is 4).
 fn sgr_attrs(style: Style, underline: crate::copy::Underline) -> [(bool, u8); 9] {
-    use vt100::UnderlineStyle as U;
+    use vt1k::UnderlineStyle as U;
     let m = style.add_modifier;
     let line = |s: U| m.contains(Modifier::UNDERLINED) && underline.style == s;
     let single = m.contains(Modifier::UNDERLINED) && matches!(underline.style, U::Single | U::None);
@@ -766,7 +766,7 @@ fn sgr_change(
     let (mut was, is) = (sgr_attrs(last, last_under), sgr_attrs(cell, under));
     let mut codes = Vec::new();
     let colour_dropped =
-        last_under.colour != vt100::Color::Default && under.colour == vt100::Color::Default;
+        last_under.colour != vt1k::Color::Default && under.colour == vt1k::Color::Default;
     if colour_dropped || was.iter().zip(&is).any(|(w, i)| w.0 && !i.0) {
         codes.push("0".to_owned());
         was = [(false, 0); 9];
@@ -791,10 +791,10 @@ fn sgr_change(
         out.push_str(&sgr(&new));
     }
     // As tmux's grid_string_cells_us: nothing for the default colour.
-    let us = |c: vt100::Color| match c {
-        vt100::Color::Default => Vec::new(),
-        vt100::Color::Idx(i) => vec![58, 5, i],
-        vt100::Color::Rgb(r, g, b) => vec![58, 2, r, g, b],
+    let us = |c: vt1k::Color| match c {
+        vt1k::Color::Default => Vec::new(),
+        vt1k::Color::Idx(i) => vec![58, 5, i],
+        vt1k::Color::Rgb(r, g, b) => vec![58, 2, r, g, b],
     };
     let (new, old) = (us(under.colour), us(last_under.colour));
     if !new.is_empty() && (reset || new != old) {

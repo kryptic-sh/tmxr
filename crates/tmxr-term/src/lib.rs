@@ -8,7 +8,7 @@
 //!   stream its output and exit as [`pty::PtyEvent`]s.
 //! - [`modes`]: split a program's switches to the alternate screen from
 //!   its output, to make them as tmux does or drop them.
-//! - [`emulator`]: the per-pane `vt100` screen plus the side channels vt100
+//! - [`emulator`]: the per-pane `vt1k` screen plus the side channels vt1k
 //!   leaves to its host (title, bell, OSC 52, OSC 7, replies to terminal
 //!   queries, extended-key modes, tmux passthrough via [`dcs`]).
 //! - [`encode`]: turn crossterm key and paste events into the bytes the

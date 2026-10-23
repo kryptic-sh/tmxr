@@ -711,7 +711,7 @@ fn round_the_grid(t: &Tmxr, s: &Screen, form: &str, keys: [&[u8]; 4]) {
 /// C-h / C-j / C-k / C-l as a terminal without kitty keys sends them.
 const CTRL_HJKL_BYTES: [&[u8]; 4] = [b"\x08", b"\x0a", b"\x0b", b"\x0c"];
 
-/// The Tokyo Night palette as `Debug` text of a vt100 colour.
+/// The Tokyo Night palette as `Debug` text of a vt1k colour.
 fn rgb(hex: u32) -> String {
     format!("Rgb({}, {}, {})", hex >> 16, (hex >> 8) & 0xff, hex & 0xff)
 }

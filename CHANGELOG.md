@@ -55,6 +55,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Each pane's terminal emulator is
+  [vt1k](https://github.com/kryptic-sh/vt1k)**, kryptic-sh's own, in place of
+  vt100: it behaves as vt100 with tmxr's fork did (checked by a differential
+  test), and packs the rows of history, so a pane's full 50000-line history
+  takes about a seventh of the memory (21 MB against 155 MB for 80-column
+  lines). Where vt100 panicked on some input it does not.
+
 - **A config with a bad setting keeps the rest**: an unknown option or a value
   of the wrong kind leaves out only that setting, and the first client to attach
   is told which, as tmux keeps the config lines that work; tmxr used to start

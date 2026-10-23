@@ -197,11 +197,12 @@ ConPTY drops the end of a program's tmux passthrough, so without them inline
 images stay off. The Scoop package includes them; tmxr built from source
 (`cargo install tmxr-cli`) uses Windows' own.
 
-tmxr builds against forks of crossterm and vt100 that carry fixes and features
-those crates have not released yet (patched in by the workspace's `Cargo.toml`),
-so it is no longer published to crates.io: the `tmxr-cli` there stops at 0.9.0,
-built without them. Use a release, a package, or the `cargo install --git`
-above, which builds this repository with the forks.
+tmxr builds against a fork of crossterm that carries fixes and features it has
+not released yet (patched in by the workspace's `Cargo.toml`), and its panes'
+terminal emulator is [vt1k](https://github.com/kryptic-sh/vt1k), kryptic-sh's
+own, taken from git; so it is no longer published to crates.io: the `tmxr-cli`
+there stops at 0.9.0. Use a release, a package, or the `cargo install --git`
+above.
 
 Shell completions and the man page come from the binary itself:
 `tmxr --completions <bash|zsh|fish|powershell|elvish|nushell>` and `tmxr --man`.
@@ -222,7 +223,7 @@ The workspace MSRV is **Rust 1.95** (`rust-version` in `Cargo.toml`).
 | `tmxr-proto`   | Client/server wire protocol                                              |
 | `tmxr-command` | tmux-compatible command language, key names, formats                     |
 | `tmxr-config`  | TOML config and the built-in default binds                               |
-| `tmxr-term`    | One pane's terminal: PTY, vt100, input encoding, process inspection      |
+| `tmxr-term`    | One pane's terminal: PTY, vt1k, input encoding, process inspection       |
 | `tmxr-server`  | Sessions, windows, panes, key tables, rendering                          |
 | `tmxr-client`  | Attach client: terminal setup, input pump, output writer                 |
 

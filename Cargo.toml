@@ -23,6 +23,8 @@ use_self = "warn"
 redundant_pub_crate = "warn"
 
 [workspace.dependencies]
+# The panes' terminal emulator, kryptic-sh's own (it replaced vt100).
+vt1k = { git = "https://github.com/kryptic-sh/vt1k", rev = "f73f321c093692914fdc25b9fcf9112d35367080", version = "0.1.0" }
 # internal
 tmxr-proto = { path = "crates/tmxr-proto", version = "0.10.0" }
 tmxr-command = { path = "crates/tmxr-command", version = "0.10.0" }
@@ -40,14 +42,5 @@ strip = true
 # a SIGWINCH that comes with input kept, an unknown CSI ? report no longer
 # swallowing later input (crossterm-rs/crossterm#1106) and the terminal's
 # color-scheme reports read; drop once a crossterm release carries them all.
-# vt100 0.18.1 without the allocations per line scrolled into history
-# (doy/vt100-rust#47), with a cell read in constant time (#48), history rows
-# narrowed again once scrolled past (#49), a line of history read without
-# scrolling (#50), OSC 8 hyperlinks kept (#51), the normal screen read under
-# the alternate one (#52), lines rewrapped on a width change (branch
-# `reflow`, not offered yet) and underline styles and colours kept
-# (branches `sgr-colon` and `underline-styles`, not offered yet); drop once a
-# vt100 release carries them all.
 [patch.crates-io]
 crossterm = { git = "https://github.com/kryptic-sh/crossterm", rev = "ef87b584d18ea0190ee2fc2f821c71c0324f4947" }
-vt100 = { git = "https://github.com/kryptic-sh/vt100-rust", rev = "51c4c7addeb13ababcfa2a9aef1051964eeeaa22" }

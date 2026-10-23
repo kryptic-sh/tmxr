@@ -17,7 +17,7 @@ restore).
 | Layout ops         | `tmxr-server`  | split / kill / resize / zoom / swap / presets, `window_rects` sums to the window   |
 | Navigation         | `tmxr-server`  | `select-pane` direction + wrap, navigator pattern on real process names            |
 | Status line        | `tmxr-server`  | rendered status row (text + colours per cell) for representative states            |
-| Pane widget        | `tmxr-server`  | vt100 screen → ratatui buffer cells (wide chars, colours, attributes)              |
+| Pane widget        | `tmxr-server`  | vt1k screen → ratatui buffer cells (wide chars, colours, attributes)               |
 | Protocol           | `tmxr-proto`   | round-trip every message; **golden bytes** so wire changes need a version bump     |
 | Picker source      | `tmxr-server`  | MRU order, fuzzy filtering, selection → action                                     |
 | Resurrect          | `tmxr-server`  | save → JSON → restore round-trip of a model; skip-existing; allowlist              |
@@ -26,7 +26,7 @@ restore).
 
 Start a server on a temp socket inside the test process, connect a test client
 over the real transport, and drive it with `ClientMsg::Input`. The client side
-feeds received `Output` bytes into its own `vt100::Parser`, so assertions are on
+feeds received `Output` bytes into its own `vt1k::Parser`, so assertions are on
 **what the user would see**: "the status line reads `0  zsh`", "pane 1 is to the
 right of pane 0", "the border of the active pane is blue".
 
@@ -43,7 +43,7 @@ picker switch; copy-mode copy → buffer; resize; `kill-server` cleanup.
 
 The hjkl/hrdr pattern (`hjkl/apps/hjkl/tests/pty_harness`): spawn the real
 `tmxr` binary inside a `portable-pty`, send keystrokes as bytes, parse its
-output with `vt100`, poll the screen until an expected state appears (with a
+output with `vt1k`, poll the screen until an expected state appears (with a
 timeout), and dump the screen on failure. A few high-value flows only — full
 attach with the default config, split + navigate, detach + reattach, server
 auto-spawn — because these are the slowest and most timing-sensitive tests.

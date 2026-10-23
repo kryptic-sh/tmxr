@@ -13,10 +13,10 @@ only the cells that changed since the last frame that client received.
 A frame is drawn as:
 
 1. **Panes** — for each `(pane, rect)` from `window_rects` (or the zoomed pane
-   full-size), copy the `vt100::Screen` cells (or the copy-mode view) into the
+   full-size), copy the `vt1k::Screen` cells (or the copy-mode view) into the
    buffer: character (wide chars occupy two cells), fg/bg (indexed and RGB),
    bold/dim/italic/underline/inverse. A `PaneWidget` does this; it is small and
-   tested against vt100 directly.
+   tested against vt1k directly.
 2. **Borders** — one-cell separators between panes, drawn with tmux's
    box-drawing junctions; the active pane's border segments use the active
    style. `pane-border-lines single`.
@@ -109,9 +109,9 @@ number  text      (window list, left-justified, status-left empty)
 - **Right side**: two modules, each `█` (fg = block colour) + icon block (fg
   `crust` on the module colour) + ` text` block (fg `text` on `surface0`) + `█`
   (fg `surface0`):
-  - session: icon ``, text `#S`, colour `green` — `red` while the prefix key is
-    pending (catppuccin's `client_prefix` cue, which is the user's current
-    "prefix pressed" indicator);
+  - session: icon
+    ``, text `#S`, colour `green`—`red`while the prefix key is pending (catppuccin's`client_prefix`
+    cue, which is the user's current "prefix pressed" indicator);
   - host: icon `󰒋`, text `#H` (short hostname), colour `magenta`.
 - Icons are Nerd Font glyphs, as in catppuccin; the user's terminals already use
   a Nerd Font.

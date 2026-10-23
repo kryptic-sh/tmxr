@@ -29,15 +29,15 @@ retries the connection with backoff. See [12-platforms.md](12-platforms.md).
 
 Follows the org convention of `apps/<bin>` + `crates/<bin>-*`.
 
-| Path                  | Crate          | Owns                                                                                                                                    |
-| --------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/tmxr`           | `tmxr`         | The binary: clap CLI, dispatch to client / command client / server, tracing setup                                                       |
-| `crates/tmxr-proto`   | `tmxr-proto`   | Wire types (`ClientMsg`, `ServerMsg`), framing codec, protocol version, socket path resolution                                          |
-| `crates/tmxr-command` | `tmxr-command` | tmux command language: tokenizer, command-list parser, command table + flag specs, key-name parsing, `#{format}` expansion              |
-| `crates/tmxr-config`  | `tmxr-config`  | TOML schema, embedded defaults (the tmux.conf port), load/layer/validate via `hjkl-config`                                              |
-| `crates/tmxr-term`    | `tmxr-term`    | One pane's terminal: PTY spawn (portable-pty), reader thread, `vt100` parser, OSC hooks, key/mouse → bytes encoding, process inspection |
-| `crates/tmxr-server`  | `tmxr-server`  | Session/window/pane model, layouts, command execution, key tables, copy mode, picker, renderer/compositor, status line, resurrect       |
-| `crates/tmxr-client`  | `tmxr-client`  | Terminal setup/teardown (raw mode, alt screen, mouse, kitty keys), event pump, output writer, server spawn + connect                    |
+| Path                  | Crate          | Owns                                                                                                                                   |
+| --------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/tmxr`           | `tmxr`         | The binary: clap CLI, dispatch to client / command client / server, tracing setup                                                      |
+| `crates/tmxr-proto`   | `tmxr-proto`   | Wire types (`ClientMsg`, `ServerMsg`), framing codec, protocol version, socket path resolution                                         |
+| `crates/tmxr-command` | `tmxr-command` | tmux command language: tokenizer, command-list parser, command table + flag specs, key-name parsing, `#{format}` expansion             |
+| `crates/tmxr-config`  | `tmxr-config`  | TOML schema, embedded defaults (the tmux.conf port), load/layer/validate via `hjkl-config`                                             |
+| `crates/tmxr-term`    | `tmxr-term`    | One pane's terminal: PTY spawn (portable-pty), reader thread, `vt1k` parser, OSC hooks, key/mouse → bytes encoding, process inspection |
+| `crates/tmxr-server`  | `tmxr-server`  | Session/window/pane model, layouts, command execution, key tables, copy mode, picker, renderer/compositor, status line, resurrect      |
+| `crates/tmxr-client`  | `tmxr-client`  | Terminal setup/teardown (raw mode, alt screen, mouse, kitty keys), event pump, output writer, server spawn + connect                   |
 
 Splitting `tmxr-term` and `tmxr-command` out of the server is deliberate: both
 are pure enough to unit-test without a server, and both are where most of the
@@ -74,7 +74,7 @@ mutation is sequential without locks.
   thread (sends `Output`, then `Eof`) and a waiter thread (sends `Exited`).
   Writes to the PTY happen on the state thread (they are small).
 - **Parsing.** The state thread feeds `Output` into the pane's
-  `tmxr_term::Emulator` (`vt100` plus reply/OSC hooks) and marks the pane's
+  `tmxr_term::Emulator` (`vt1k` plus reply/OSC hooks) and marks the pane's
   window dirty.
 - **Timers.** The state thread waits on the channel until the soonest of
   `tick`'s timed duties falls due (`Server::next_due`: message and key-repeat
@@ -133,7 +133,7 @@ House-precedent versions, added with `cargo add`, not hand-written.
 | `crossterm` 0.29 (+ `serde`)                 | client, server      | terminal I/O, event types on the wire            |
 | `ratatui` 0.30                               | server              | frame buffer + widgets                           |
 | `portable-pty` 0.9                           | term                | PTYs                                             |
-| `vt100` 0.16                                 | term                | terminal emulation per pane                      |
+| `vt1k` (git)                                 | term                | terminal emulation per pane                      |
 | `regex`                                      | server              | navigator pattern                                |
 | `hjkl-layout`                                | server              | pane trees                                       |
 | `hjkl-picker`, `hjkl-picker-tui`             | server              | session picker (fuzzy scoring via `hjkl-fuzzy`)  |
@@ -141,6 +141,6 @@ House-precedent versions, added with `cargo add`, not hand-written.
 | `serde_json`                                 | server              | resurrect save files                             |
 | `hjkl-clipboard`                             | server              | local clipboard for copy mode                    |
 | `libc` (unix) / `windows-sys` 0.61 (windows) | term, client        | setsid, process inspection, toolhelp snapshots   |
-| dev: `tempfile`, `portable-pty`, `vt100`     | tests               | temp sockets/dirs, e2e PTY harness (hjkl/hrdr)   |
+| dev: `tempfile`, `portable-pty`, `vt1k`      | tests               | temp sockets/dirs, e2e PTY harness (hjkl/hrdr)   |
 
 Anything not on this list needs a call before it is added.

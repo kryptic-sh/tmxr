@@ -14,7 +14,7 @@ directly), as tmux does.
 ## Model
 
 On entry the pane's scrollback + visible screen is **snapshotted** into a text
-grid with per-cell styles (vt100's `Screen` with `set_scrollback(offset)` gives
+grid with per-cell styles (vt1k's `Screen` with `set_scrollback(offset)` gives
 rows at any offset). The pane keeps running underneath; new output goes to the
 live parser and tmxr shows the frozen view, exactly like tmux; leaving and
 re-entering copy mode picks up new output.

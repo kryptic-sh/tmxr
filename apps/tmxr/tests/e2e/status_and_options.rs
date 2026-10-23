@@ -369,7 +369,7 @@ fn window_entries_take_their_styles_and_separators() {
     let line = s.text().lines().last().unwrap_or_default().to_owned();
     let bg = |c: &str| {
         let col = line.find(c).unwrap() as u16;
-        // vt100's colour by its debug form: the tests do not depend on it.
+        // vt1k's colour by its debug form: the tests do not depend on it.
         let emu = s.emu.lock().unwrap();
         format!("{:?}", emu.screen().cell(row, col).unwrap().bgcolor())
     };

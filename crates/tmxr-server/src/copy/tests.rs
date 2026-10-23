@@ -2,7 +2,7 @@ use super::*;
 
 fn mode(text: &str) -> CopyMode {
     let size = |n| std::num::NonZeroU16::new(n).unwrap();
-    let mut p = vt100::Parser::new(size(5), size(20), 100);
+    let mut p = vt1k::Parser::new(size(5), size(20), 100);
     p.process(text.as_bytes());
     CopyMode::new(p.screen_mut())
 }

@@ -293,7 +293,7 @@ impl Drop for Server {
 /// A client attached on a pseudo-terminal.
 pub struct Client {
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
-    parser: Arc<Mutex<vt100::Parser>>,
+    parser: Arc<Mutex<vt1k::Parser>>,
     _master: Box<dyn MasterPty + Send>,
     _child: Box<dyn portable_pty::Child + Send + Sync>,
     rows: u16,
@@ -328,7 +328,7 @@ impl Client {
             pair.master.take_writer().map_err(|e| e.to_string())?,
         ));
         let size = |n| std::num::NonZeroU16::new(n).ok_or("a client size of 0");
-        let parser = Arc::new(Mutex::new(vt100::Parser::new(size(rows)?, size(cols)?, 0)));
+        let parser = Arc::new(Mutex::new(vt1k::Parser::new(size(rows)?, size(cols)?, 0)));
         let feed = Arc::clone(&parser);
         let answer = Arc::clone(&writer);
         std::thread::spawn(move || {
@@ -363,7 +363,7 @@ impl Client {
         loop {
             let ready = {
                 let p = client.lock();
-                p.screen().mouse_protocol_mode() != vt100::MouseProtocolMode::None
+                p.screen().mouse_protocol_mode() != vt1k::MouseProtocolMode::None
                     && !p.screen().contents().trim().is_empty()
             };
             if ready {
@@ -378,7 +378,7 @@ impl Client {
         Ok(client)
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, vt100::Parser> {
+    fn lock(&self) -> std::sync::MutexGuard<'_, vt1k::Parser> {
         self.parser
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -421,7 +421,7 @@ impl Client {
             let on = |col| {
                 screen
                     .cell(row, col)
-                    .is_some_and(|c| c.bgcolor() == vt100::Color::Idx(index))
+                    .is_some_and(|c| c.bgcolor() == vt1k::Color::Idx(index))
             };
             let mut col = 0;
             while col < cols {

@@ -19,15 +19,15 @@
 
 ## Emulation
 
-One `vt100::Parser` per pane, sized to the pane, with scrollback `history-limit`
+One `vt1k::Parser` per pane, sized to the pane, with scrollback `history-limit`
 (50 000 — tmux-sensible's value).
 
-What vt100 gives us directly: the cell grid with attributes and colours, wide
+What vt1k gives us directly: the cell grid with attributes and colours, wide
 characters, alternate screen, cursor position/visibility, application cursor and
 keypad modes, bracketed paste mode, mouse protocol mode and encoding,
 scrollback, title, bell.
 
-What we hook through `vt100::Callbacks`:
+What we hook through `vt1k::Callbacks`:
 
 | Callback                     | Use                                                                                                                |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -38,14 +38,14 @@ What we hook through `vt100::Callbacks`:
 | `unhandled_csi`              | `CSI > 4 ; n m` (modifyOtherKeys) and `CSI > flags u` / `CSI < u` (kitty keys) → the pane's extended-keys state    |
 
 DCS passthrough (`allow-passthrough on` in the config, used for image
-protocols), which vt100 has no hook for, goes through a pre-parser
-(`tmxr_term::dcs`) in front of vt100: DCS strings are taken out of the stream
+protocols), which vt1k has no hook for, goes through a pre-parser
+(`tmxr_term::dcs`) in front of vt1k: DCS strings are taken out of the stream
 whole, `ESC P tmux; … ESC \` payloads come back with their doubled `ESC`s
 undoubled, and the server writes them as is to the clients showing that pane.
-Other DCS strings are dropped, as vt100 dropped them before. Not on Windows:
-ConPTY forwards a DCS but drops its `ESC \` (seen on Windows 11 build 26300), so
-the end of a passthrough cannot be found; there the output goes to vt100 unsplit
-and `allow-passthrough` logs that it is unsupported.
+Other DCS strings are dropped, as vt100 (and so vt1k) dropped them before. Not
+on Windows: ConPTY forwards a DCS but drops its `ESC \` (seen on Windows 11
+build 26300), so the end of a passthrough cannot be found; there the output goes
+to vt1k unsplit and `allow-passthrough` logs that it is unsupported.
 
 ## Input encoding (key → bytes)
 

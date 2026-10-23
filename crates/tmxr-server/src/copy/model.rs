@@ -17,21 +17,21 @@ pub struct Cell {
 }
 
 /// How a cell is underlined, beyond its style's `UNDERLINED` (which any
-/// underline sets): the underline's style and colour, as vt100 keeps them.
+/// underline sets): the underline's style and colour, as vt1k keeps them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Underline {
-    pub style: vt100::UnderlineStyle,
-    pub colour: vt100::Color,
+    pub style: vt1k::UnderlineStyle,
+    pub colour: vt1k::Color,
 }
 
 impl Underline {
     /// No underline.
     pub const NONE: Self = Self {
-        style: vt100::UnderlineStyle::None,
-        colour: vt100::Color::Default,
+        style: vt1k::UnderlineStyle::None,
+        colour: vt1k::Color::Default,
     };
 
-    pub fn of(cell: &vt100::Cell) -> Self {
+    pub fn of(cell: &vt1k::Cell) -> Self {
         Self {
             style: cell.underline_style(),
             colour: cell.underline_color(),
@@ -43,8 +43,8 @@ impl Underline {
     pub fn is_plain(self) -> bool {
         matches!(
             self.style,
-            vt100::UnderlineStyle::None | vt100::UnderlineStyle::Single
-        ) && self.colour == vt100::Color::Default
+            vt1k::UnderlineStyle::None | vt1k::UnderlineStyle::Single
+        ) && self.colour == vt1k::Color::Default
     }
 }
 
@@ -89,7 +89,7 @@ pub struct Line {
     /// them when copied.
     pub wrapped: bool,
     /// How many cells from the left were written, as tmux's cellused: up to
-    /// the last holding a character or a background colour. (vt100 keeps
+    /// the last holding a character or a background colour. (vt1k keeps
     /// an erased cell as it keeps one never written, where tmux counts an
     /// erased cell inside what was written.)
     pub used: usize,
@@ -131,7 +131,7 @@ impl Line {
 
 /// Copy mode's lines rewrapped to `cols` columns, as tmux's
 /// window_copy_resize rewraps its copy of the pane, and by the same rules
-/// the pane's own lines are (the vt100 fork's `Grid::reflow`, after tmux's
+/// the pane's own lines are (the vt1k fork's `Grid::reflow`, after tmux's
 /// `grid_reflow`): each line's rows, as written, joined and split again at
 /// the new width, a wide character counted three columns where a row
 /// breaks. Gives the lines (at least `rows` of them), each old line's new
@@ -225,15 +225,15 @@ fn line_of_cells(mut cells: Vec<Cell>, cols: usize, wrapped: bool) -> Line {
     }
 }
 
-pub fn colour(c: vt100::Color) -> Color {
+pub fn colour(c: vt1k::Color) -> Color {
     match c {
-        vt100::Color::Default => Color::Reset,
-        vt100::Color::Idx(i) => Color::Indexed(i),
-        vt100::Color::Rgb(r, g, b) => Color::Rgb(r, g, b),
+        vt1k::Color::Default => Color::Reset,
+        vt1k::Color::Idx(i) => Color::Indexed(i),
+        vt1k::Color::Rgb(r, g, b) => Color::Rgb(r, g, b),
     }
 }
 
-pub fn cell_style(cell: &vt100::Cell) -> Style {
+pub fn cell_style(cell: &vt1k::Cell) -> Style {
     let mut s = Style::default()
         .fg(colour(cell.fgcolor()))
         .bg(colour(cell.bgcolor()));
@@ -258,15 +258,16 @@ pub fn cell_style(cell: &vt100::Cell) -> Style {
 }
 
 /// Capture every line of history plus the visible screen.
-pub fn snapshot(screen: &vt100::Screen) -> Vec<Line> {
+pub fn snapshot(screen: &vt1k::Screen) -> Vec<Line> {
     let total = screen.scrollback_len() + usize::from(tmxr_term::screen_size(screen).0);
     snapshot_lines(screen, 0..total)
 }
 
 /// Capture the lines `range` of history and screen, numbered as
-/// [`snapshot`]'s, the oldest line of history 0, read straight from vt100's
-/// rows (`Screen::line_cells`) without moving the pane's view.
-pub fn snapshot_lines(screen: &vt100::Screen, range: std::ops::Range<usize>) -> Vec<Line> {
+/// [`snapshot`]'s, the oldest line of history 0, read straight from vt1k's
+/// rows (`Screen::line_cells`, which unpacks a row of history) without
+/// moving the pane's view.
+pub fn snapshot_lines(screen: &vt1k::Screen, range: std::ops::Range<usize>) -> Vec<Line> {
     lines_from(screen, range, |idx| {
         Some((screen.line_cells(idx)?, screen.line_wrapped(idx)))
     })
@@ -275,11 +276,11 @@ pub fn snapshot_lines(screen: &vt100::Screen, range: std::ops::Range<usize>) -> 
 /// Capture the rows `range` of the normal screen the alternate screen hides,
 /// as it was when the alternate screen came on (`capture-pane -a`): no rows
 /// when the alternate screen is not shown.
-pub fn snapshot_normal_rows(screen: &vt100::Screen, range: std::ops::Range<usize>) -> Vec<Line> {
+pub fn snapshot_normal_rows(screen: &vt1k::Screen, range: std::ops::Range<usize>) -> Vec<Line> {
     lines_from(screen, range, |idx| {
         let row = u16::try_from(idx).ok()?;
         Some((
-            screen.normal_screen_row_cells(row)?,
+            std::borrow::Cow::Borrowed(screen.normal_screen_row_cells(row)?),
             screen.normal_screen_row_wrapped(row),
         ))
     })
@@ -288,9 +289,9 @@ pub fn snapshot_normal_rows(screen: &vt100::Screen, range: std::ops::Range<usize
 /// The lines `range`, each read by `row` as its cells and whether it wraps;
 /// a line `row` has none for is empty.
 fn lines_from<'s>(
-    screen: &vt100::Screen,
+    screen: &vt1k::Screen,
     range: std::ops::Range<usize>,
-    row: impl Fn(usize) -> Option<(&'s [vt100::Cell], bool)>,
+    row: impl Fn(usize) -> Option<(std::borrow::Cow<'s, [vt1k::Cell]>, bool)>,
 ) -> Vec<Line> {
     let width = usize::from(tmxr_term::screen_size(screen).1);
     range
@@ -308,9 +309,10 @@ fn lines_from<'s>(
         .collect()
 }
 
-/// `style` carrying the cell's OSC 8 link, as vt100 numbers it, in its
-/// `underline_color`, which nothing else in a snapshot sets (vt100 keeps no
-/// underline colour): so a cell stays as small. [`link_of`] reads it back,
+/// `style` carrying the cell's OSC 8 link, as vt1k numbers it, in its
+/// `underline_color`, which nothing else in a snapshot sets (the underline's
+/// own colour is kept in [`Cell::underline`]): so a cell stays as small.
+/// [`link_of`] reads it back,
 /// and a style drawn from a snapshot must drop it first.
 fn with_link(style: Style, link: Option<std::num::NonZeroU16>) -> Style {
     let Some(link) = link else {
@@ -332,12 +334,10 @@ pub fn link_of(style: &Style) -> Option<std::num::NonZeroU16> {
     }
 }
 
-/// A copy of one row of vt100 cells, `width` wide.
-fn line_of(cells: &[vt100::Cell], width: usize, wrapped: bool) -> Line {
-    let written = |cell: &vt100::Cell| {
-        cell.has_contents()
-            || cell.is_wide_continuation()
-            || cell.bgcolor() != vt100::Color::Default
+/// A copy of one row of vt1k cells, `width` wide.
+fn line_of(cells: &[vt1k::Cell], width: usize, wrapped: bool) -> Line {
+    let written = |cell: &vt1k::Cell| {
+        cell.has_contents() || cell.is_wide_continuation() || cell.bgcolor() != vt1k::Color::Default
     };
     let used = cells.iter().rposition(written).map_or(0, |c| c + 1);
     // Every cell before the last written one is kept (a written space reads
@@ -356,7 +356,7 @@ fn line_of(cells: &[vt100::Cell], width: usize, wrapped: bool) -> Line {
 }
 
 /// A copy of `cell`, one of what a screen shows.
-fn cell_of(cell: Option<&vt100::Cell>) -> Cell {
+fn cell_of(cell: Option<&vt1k::Cell>) -> Cell {
     match cell {
         Some(cell) => Cell {
             symbol: if cell.is_wide_continuation() {
@@ -385,7 +385,7 @@ mod tests {
     /// small as one without (its underline's style and colour beside it).
     #[test]
     fn a_snapshot_keeps_a_cells_link() {
-        let mut parser = vt100::Parser::new(2.try_into().unwrap(), 10.try_into().unwrap(), 0);
+        let mut parser = vt1k::Parser::new(2.try_into().unwrap(), 10.try_into().unwrap(), 0);
         parser.process(b"a\x1b]8;;u\x07b\x1b]8;;\x07c");
         let line = &snapshot(parser.screen())[0];
         let links: Vec<_> = (0..3)
@@ -394,7 +394,7 @@ mod tests {
         let id = parser
             .screen()
             .cell(0, 1)
-            .and_then(vt100::Cell::hyperlink_id);
+            .and_then(vt1k::Cell::hyperlink_id);
         assert!(id.is_some());
         assert_eq!(links, [None, id, None]);
         assert_eq!(std::mem::size_of::<Cell>(), 48);
@@ -407,13 +407,13 @@ mod tests {
     /// change the line.
     #[test]
     fn a_cell_never_written_is_blank() {
-        let parser = vt100::Parser::new(2.try_into().unwrap(), 4.try_into().unwrap(), 0);
+        let parser = vt1k::Parser::new(2.try_into().unwrap(), 4.try_into().unwrap(), 0);
         assert_eq!(cell_of(parser.screen().cell(1, 3)), BLANK);
     }
 
     #[test]
     fn a_line_reads_as_wide_as_the_pane_with_blanks_after_its_cells() {
-        let mut parser = vt100::Parser::new(2.try_into().unwrap(), 6.try_into().unwrap(), 0);
+        let mut parser = vt1k::Parser::new(2.try_into().unwrap(), 6.try_into().unwrap(), 0);
         parser.process(b"ab\x1b[7m \x1b[m");
         let lines = snapshot(parser.screen_mut());
         let line = &lines[0];
@@ -431,7 +431,7 @@ mod tests {
     /// nothing was written to them, so `used` stops before them.
     #[test]
     fn a_line_keeps_cells_past_the_last_written_one() {
-        let mut parser = vt100::Parser::new(2.try_into().unwrap(), 6.try_into().unwrap(), 0);
+        let mut parser = vt1k::Parser::new(2.try_into().unwrap(), 6.try_into().unwrap(), 0);
         parser.process(b"ab\x1b[1m\x1b[K\x1b[m");
         let line = &snapshot(parser.screen_mut())[0];
         assert_eq!(line.used, 2);
@@ -449,7 +449,7 @@ mod tests {
     /// written: the line keeps everything before it, as a prompt ends in one.
     #[test]
     fn a_line_ending_in_a_written_space_keeps_its_text() {
-        let mut parser = vt100::Parser::new(2.try_into().unwrap(), 6.try_into().unwrap(), 0);
+        let mut parser = vt1k::Parser::new(2.try_into().unwrap(), 6.try_into().unwrap(), 0);
         parser.process(b"$ ");
         let line = &snapshot(parser.screen_mut())[0];
         assert_eq!(line.used, 2);
@@ -470,7 +470,7 @@ mod tests {
 
     #[test]
     fn a_range_of_lines_is_that_slice_of_the_whole_snapshot() {
-        let mut parser = vt100::Parser::new(5.try_into().unwrap(), 12.try_into().unwrap(), 100);
+        let mut parser = vt1k::Parser::new(5.try_into().unwrap(), 12.try_into().unwrap(), 100);
         for n in 0..37 {
             parser
                 .process(format!("\x1b[3{}mline {n} {}\r\n", n % 8, "x".repeat(n % 15)).as_bytes());

@@ -1,7 +1,7 @@
-//! Take DCS strings (`ESC P … ESC \`) out of a pane's output before `vt100`
+//! Take DCS strings (`ESC P … ESC \`) out of a pane's output before `vt1k`
 //! sees it, and screen's window-name strings (`ESC k … ESC \`) with them.
 //!
-//! vt100 has no DCS hook, and its parser ends a DCS at the first `ESC`. tmux's
+//! vt1k has no DCS hook, and its parser ends a DCS at the first `ESC`. tmux's
 //! passthrough (`ESC P tmux; …`, with every `ESC` inside doubled) would then
 //! leak its payload onto the screen as text. The splitter runs in front of the
 //! parser: ordinary bytes pass through, DCS strings are taken out whole even

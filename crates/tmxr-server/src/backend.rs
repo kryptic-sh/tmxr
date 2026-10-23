@@ -55,7 +55,7 @@ struct Decoration {
 impl Links {
     /// The `underline_color` that carries `link` and `underline`; the
     /// default colour, carrying nothing, for neither.
-    pub fn carrier(&mut self, link: Option<&vt100::Hyperlink>, underline: Underline) -> Color {
+    pub fn carrier(&mut self, link: Option<&vt1k::Hyperlink>, underline: Underline) -> Color {
         let underline = if underline.is_plain() {
             Underline::NONE
         } else {
@@ -320,15 +320,15 @@ fn sgr(cell: &Cell, depth: ColourDepth, underline: Underline) -> String {
 
 /// An underline colour's parameters, as tmux's Setulc / Setulc1 send them:
 /// `58:2:r:g:b`, or `58:5:n` for a terminal without 24-bit colour.
-fn underline_colour(out: &mut String, c: vt100::Color, depth: ColourDepth) {
+fn underline_colour(out: &mut String, c: vt1k::Color, depth: ColourDepth) {
     let index = match c {
-        vt100::Color::Default => return,
-        vt100::Color::Rgb(r, g, b) if depth == ColourDepth::TrueColour => {
+        vt1k::Color::Default => return,
+        vt1k::Color::Rgb(r, g, b) if depth == ColourDepth::TrueColour => {
             let _ = write!(out, ";58:2:{r}:{g}:{b}");
             return;
         }
-        vt100::Color::Rgb(r, g, b) => nearest_256(r, g, b),
-        vt100::Color::Idx(i) => i,
+        vt1k::Color::Rgb(r, g, b) => nearest_256(r, g, b),
+        vt1k::Color::Idx(i) => i,
     };
     let index = if depth == ColourDepth::Colours16 {
         nearest_16(index)
@@ -442,11 +442,11 @@ mod tests {
     #[test]
     fn a_link_is_carried_and_read_back() {
         let mut links = Links::default();
-        let a = vt100::Hyperlink {
+        let a = vt1k::Hyperlink {
             uri: "u".into(),
             id: None,
         };
-        let b = vt100::Hyperlink {
+        let b = vt1k::Hyperlink {
             uri: "u".into(),
             id: Some("k".into()),
         };
@@ -464,22 +464,22 @@ mod tests {
         assert_eq!(links.of(Color::Reset), None);
         // A plain underline says nothing a style does not, so is not carried.
         let single = Underline {
-            style: vt100::UnderlineStyle::Single,
-            colour: vt100::Color::Default,
+            style: vt1k::UnderlineStyle::Single,
+            colour: vt1k::Color::Default,
         };
         assert_eq!(links.carrier(None, single), Color::Reset);
     }
 
     /// A curly red underline reaches a terminal that takes underline
-    /// styles as one, read back by vt100; another gets a plain underline.
+    /// styles as one, read back by vt1k; another gets a plain underline.
     #[test]
     fn underline_styles_and_colours_reach_a_terminal_that_takes_them() {
         let area = Rect::new(0, 0, 10, 1);
         let curly = Underline {
-            style: vt100::UnderlineStyle::Curly,
-            colour: vt100::Color::Rgb(255, 0, 0),
+            style: vt1k::UnderlineStyle::Curly,
+            colour: vt1k::Color::Rgb(255, 0, 0),
         };
-        let drawn = |styles: bool, depth: ColourDepth| -> (vt100::UnderlineStyle, vt100::Color) {
+        let drawn = |styles: bool, depth: ColourDepth| -> (vt1k::UnderlineStyle, vt1k::Color) {
             let mut backend = AnsiBackend::new(10, 1);
             backend.set_underline_styles(styles);
             backend.set_depth(depth);
@@ -504,7 +504,7 @@ mod tests {
                 }
             })
             .unwrap();
-            let mut vt = vt100::Parser::new(
+            let mut vt = vt1k::Parser::new(
                 std::num::NonZeroU16::MIN,
                 std::num::NonZeroU16::new(10).unwrap(),
                 0,
@@ -515,15 +515,15 @@ mod tests {
         };
         assert_eq!(
             drawn(true, ColourDepth::TrueColour),
-            (vt100::UnderlineStyle::Curly, vt100::Color::Rgb(255, 0, 0))
+            (vt1k::UnderlineStyle::Curly, vt1k::Color::Rgb(255, 0, 0))
         );
         assert_eq!(
             drawn(true, ColourDepth::Colours256),
-            (vt100::UnderlineStyle::Curly, vt100::Color::Idx(196))
+            (vt1k::UnderlineStyle::Curly, vt1k::Color::Idx(196))
         );
         assert_eq!(
             drawn(false, ColourDepth::TrueColour),
-            (vt100::UnderlineStyle::Single, vt100::Color::Default)
+            (vt1k::UnderlineStyle::Single, vt1k::Color::Default)
         );
     }
     use ratatui::Terminal;
@@ -551,13 +551,13 @@ mod tests {
         let bytes = term.backend_mut().take();
 
         let size = |n| std::num::NonZeroU16::new(n).unwrap();
-        let mut vt = vt100::Parser::new(size(3), size(20), 0);
+        let mut vt = vt1k::Parser::new(size(3), size(20), 0);
         vt.process(&bytes);
         let s = vt.screen();
         assert_eq!(s.contents_between(0, 0, 0, 20).trim_end(), "hello");
         assert_eq!(s.contents_between(2, 2, 2, 20).trim_end(), "wide 漢字");
-        assert_eq!(s.cell(0, 0).unwrap().fgcolor(), vt100::Color::Rgb(1, 2, 3));
-        assert_eq!(s.cell(2, 2).unwrap().bgcolor(), vt100::Color::Idx(200));
+        assert_eq!(s.cell(0, 0).unwrap().fgcolor(), vt1k::Color::Rgb(1, 2, 3));
+        assert_eq!(s.cell(2, 2).unwrap().bgcolor(), vt1k::Color::Idx(200));
 
         // A second identical frame sends no cells at all.
         term.draw(|f| {

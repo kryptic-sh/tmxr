@@ -2475,7 +2475,7 @@ dependencies = [
  "tempfile",
  "tmxr-term",
  "toml",
- "vt100",
+ "vt1k",
 ]
 
 [[package]]
@@ -2527,7 +2527,7 @@ dependencies = [
  "tmxr-proto",
  "tmxr-term",
  "tracing",
- "vt100",
+ "vt1k",
  "windows-sys",
 ]
 
@@ -2539,7 +2539,7 @@ dependencies = [
  "libc",
  "portable-pty",
  "tmxr-command",
- "vt100",
+ "vt1k",
  "windows-sys",
 ]
 
@@ -2753,11 +2753,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
-name = "vt100"
-version = "0.18.1"
-source = "git+https://github.com/kryptic-sh/vt100-rust?rev=51c4c7addeb13ababcfa2a9aef1051964eeeaa22#51c4c7addeb13ababcfa2a9aef1051964eeeaa22"
+name = "vt1k"
+version = "0.1.0"
+source = "git+https://github.com/kryptic-sh/vt1k?rev=f73f321c093692914fdc25b9fcf9112d35367080#f73f321c093692914fdc25b9fcf9112d35367080"
 dependencies = [
- "itoa",
  "unicode-width",
  "vte",
 ]

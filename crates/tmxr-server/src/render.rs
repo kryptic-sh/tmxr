@@ -1387,7 +1387,7 @@ fn draw_preview(srv: &Server, pane: PaneId, buf: &mut Buffer, area: Rect) {
             let cell = screen.cell(first + row, col);
             let style = with_palette(cell.map(cell_style).unwrap_or_default(), p.emu.palette());
             let sym = cell
-                .map(vt100::Cell::contents)
+                .map(vt1k::Cell::contents)
                 .filter(|s| !s.is_empty())
                 .unwrap_or(" ");
             if let Some(out) = buf.cell_mut((area.x + col, area.y + row)) {

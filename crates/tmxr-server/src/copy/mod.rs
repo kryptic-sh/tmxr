@@ -193,7 +193,7 @@ impl Jump {
 }
 
 impl CopyMode {
-    pub fn new(screen: &mut vt100::Screen) -> Self {
+    pub fn new(screen: &mut vt1k::Screen) -> Self {
         let (rows, cols) = tmxr_term::screen_size(screen);
         let lines = snapshot(screen);
         let (crow, ccol) = screen.cursor_position();

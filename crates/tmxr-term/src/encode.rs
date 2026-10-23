@@ -9,7 +9,7 @@
 use crossterm::event::{
     KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
-use vt100::{MouseProtocolEncoding, MouseProtocolMode};
+use vt1k::{MouseProtocolEncoding, MouseProtocolMode};
 
 /// The pane state key encoding depends on.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

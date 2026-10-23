@@ -359,7 +359,7 @@ pub fn mouse_var(
             let screen = p.emu.screen();
             match &p.copy {
                 Some(cm) => cm.view_link(usize::from(y), usize::from(x)),
-                None => screen.cell(y, x).and_then(vt100::Cell::hyperlink_id),
+                None => screen.cell(y, x).and_then(vt1k::Cell::hyperlink_id),
             }
             .and_then(|id| screen.hyperlink(id))
             .map(|h| h.uri.clone())
@@ -1061,11 +1061,11 @@ impl<'a> Context for Vars<'a> {
             "history_size" => pane?.emu.history_size().to_string(),
             "pane_pipe" => flag(pane?.pipe.is_some()),
             "mouse_any_flag" => {
-                flag(pane?.emu.screen().mouse_protocol_mode() != vt100::MouseProtocolMode::None)
+                flag(pane?.emu.screen().mouse_protocol_mode() != vt1k::MouseProtocolMode::None)
             }
             // The mouse mode the pane's program set: 1000, 1002, 1003.
             "mouse_standard_flag" | "mouse_button_flag" | "mouse_all_flag" => {
-                use vt100::MouseProtocolMode::{AnyMotion, ButtonMotion, PressRelease};
+                use vt1k::MouseProtocolMode::{AnyMotion, ButtonMotion, PressRelease};
                 let mode = pane?.emu.screen().mouse_protocol_mode();
                 flag(match name {
                     "mouse_standard_flag" => mode == PressRelease,
@@ -1075,7 +1075,7 @@ impl<'a> Context for Vars<'a> {
             }
             "mouse_utf8_flag" => flag(pane?.emu.mouse_utf8()),
             "mouse_sgr_flag" => flag(
-                pane?.emu.screen().mouse_protocol_encoding() == vt100::MouseProtocolEncoding::Sgr,
+                pane?.emu.screen().mouse_protocol_encoding() == vt1k::MouseProtocolEncoding::Sgr,
             ),
             "pane_width" => pane?.rect.w.to_string(),
             "pane_height" => pane?.rect.h.to_string(),
