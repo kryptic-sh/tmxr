@@ -551,28 +551,10 @@ impl Server {
     /// was. A colour nothing gives gets no answer.
     fn colour_answers(&self, pid: PaneId, queries: &[(u8, bool)]) -> Vec<u8> {
         let mut out = Vec::new();
-        if queries.is_empty() {
-            return out;
-        }
-        let rgb = |c: tmxr_command::format::Colour| match c {
-            tmxr_command::format::Colour::Default => None,
-            tmxr_command::format::Colour::Indexed(n) => Some(tmxr_command::colour::indexed(n)),
-            tmxr_command::format::Colour::Rgb(r, g, b) => Some(u32::from_be_bytes([0, r, g, b])),
-        };
-        let colours = crate::render::pane_default_colours(self, pid);
-        let window = self.panes.get(&pid).map(|p| p.window);
-        let client = |fg: bool| {
-            self.clients.values().find_map(|c| {
-                let session = self.sessions.get(&c.att.as_ref()?.session)?;
-                session.index_of(window?)?;
-                let (cfg, cbg) = c.terminal_colours;
-                if fg { cfg } else { cbg }
-            })
-        };
         for &(which, bel) in queries {
             let colour = match which {
-                10 => colours.fg.and_then(rgb).or_else(|| client(true)),
-                11 => colours.bg.and_then(rgb).or_else(|| client(false)),
+                10 => self.pane_colour(pid, true),
+                11 => self.pane_colour(pid, false),
                 _ => self
                     .panes
                     .get(&pid)
@@ -589,6 +571,61 @@ impl Server {
             }
         }
         out
+    }
+
+    /// Pane `pid`'s foreground (`fg`) or background as RGB, as tmux's
+    /// window_pane_get_fg / _bg: what its styles and program give, else
+    /// the colour of the terminal of the first client attached to a session
+    /// holding its window that said it (window_get_bg_client).
+    fn pane_colour(&self, pid: PaneId, fg: bool) -> Option<u32> {
+        let colours = crate::render::pane_default_colours(self, pid);
+        let own = match if fg { colours.fg } else { colours.bg } {
+            None | Some(tmxr_command::format::Colour::Default) => None,
+            Some(tmxr_command::format::Colour::Indexed(n)) => {
+                Some(tmxr_command::colour::indexed(n))
+            }
+            Some(tmxr_command::format::Colour::Rgb(r, g, b)) => {
+                Some(u32::from_be_bytes([0, r, g, b]))
+            }
+        };
+        own.or_else(|| {
+            self.clients_on(pid).find_map(|c| {
+                let (cfg, cbg) = c.terminal_colours;
+                if fg { cfg } else { cbg }
+            })
+        })
+    }
+
+    /// The attached clients whose session holds pane `pid`'s window.
+    fn clients_on(&self, pid: PaneId) -> impl Iterator<Item = &super::Client> {
+        let window = self.panes.get(&pid).map(|p| p.window);
+        self.clients.values().filter(move |c| {
+            c.att
+                .as_ref()
+                .and_then(|a| self.sessions.get(&a.session))
+                .zip(window)
+                .is_some_and(|(s, w)| s.index_of(w).is_some())
+        })
+    }
+
+    /// Pane `pid`'s color scheme, as tmux's window_pane_get_theme: its
+    /// background's (light where its red, green and blue add up to more
+    /// than half their most, as colour_totheme), else the one theme its
+    /// clients have, if they agree.
+    fn pane_theme(&self, pid: PaneId) -> Option<crossterm::event::ColorScheme> {
+        use crossterm::event::ColorScheme;
+        if let Some(bg) = self.pane_colour(pid, false) {
+            let [_, r, g, b] = bg.to_be_bytes();
+            let brightness = u32::from(r) + u32::from(g) + u32::from(b);
+            return Some(if brightness > 382 {
+                ColorScheme::Light
+            } else {
+                ColorScheme::Dark
+            });
+        }
+        let mut themes = self.clients_on(pid).filter_map(|c| c.theme);
+        let first = themes.next()?;
+        themes.all(|t| t == first).then_some(first)
     }
 
     pub(super) fn pty_event(&mut self, pid: PaneId, ev: PtyEvent) {
@@ -615,6 +652,7 @@ impl Server {
                 let title = p.emu.title().map(str::to_owned);
                 let replies = p.emu.process(&bytes);
                 let queries = p.emu.take_colour_queries();
+                let theme_queries = p.emu.take_theme_queries();
                 // Output copy mode does not show, as tmux's
                 // PANE_UNSEENCHANGES.
                 if let Some(cm) = p.copy.as_mut() {
@@ -637,7 +675,18 @@ impl Server {
                     self.refit_scrollbar(pid);
                 }
                 self.copy_line_output(pid);
-                let answers = self.colour_answers(pid, &queries);
+                let mut answers = self.colour_answers(pid, &queries);
+                if theme_queries > 0
+                    && let Some(scheme) = self.pane_theme(pid)
+                {
+                    let report = match scheme {
+                        crossterm::event::ColorScheme::Dark => b"\x1b[?997;1n",
+                        crossterm::event::ColorScheme::Light => b"\x1b[?997;2n",
+                    };
+                    for _ in 0..theme_queries {
+                        answers.extend_from_slice(report);
+                    }
+                }
                 let Some(p) = self.panes.get_mut(&pid) else {
                     return;
                 };

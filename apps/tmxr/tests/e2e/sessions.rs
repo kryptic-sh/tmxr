@@ -1593,7 +1593,7 @@ fn the_terminals_color_scheme_is_the_clients_theme() {
 
 /// A program asking for the default colours, where the window's style leaves
 /// the terminal's own, gets those of the client's terminal, which the client
-/// asked at attach, as tmux's.
+/// asked at attach, and its color scheme from that background, as tmux's.
 #[cfg(unix)]
 #[test]
 fn colour_queries_get_the_client_terminals_colours() {
@@ -1603,13 +1603,15 @@ fn colour_queries_get_the_client_terminals_colours() {
         "-d",
         "-s",
         "tc",
-        r"stty raw -echo; head -c 1 >/dev/null; printf '\033]11;?\007\033]10;?\033\\'; exec cat -v",
+        r"stty raw -echo; head -c 1 >/dev/null; printf '\033]11;?\007\033]10;?\033\\\033[?996n'; exec cat -v",
     ]);
     let s = t.attach_sync(&["attach", "-t", "tc"]);
     s.wait_for("the status line", |text| text.contains("tc"));
     t.run(&["send-keys", "-t", "tc", "x"]);
     s.wait_for("the answers", |text| {
-        text.contains("^[]11;rgb:1a1a/1b1b/2626^G^[]10;rgb:c0c0/caca/f5f5^[\\")
+        // The answers wrap past the screen's width.
+        text.replace('\n', "")
+            .contains("^[]11;rgb:1a1a/1b1b/2626^G^[]10;rgb:c0c0/caca/f5f5^[\\^[[?997;1n")
     });
 }
 

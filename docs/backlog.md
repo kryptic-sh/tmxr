@@ -493,7 +493,10 @@ table. What has been verified, and how:
   vt100 fork: a `[patch]` does not reach a published package, and
   `cargo publish` verifies each tarball against crates.io's vt100 0.18.1, which
   lacks the fork's `Screen::line_cells` / `line_wrapped`, the
-  `normal_screen_row_*` reads and the hyperlink API. v0.10.0 (2026-10-23)
+  `normal_screen_row_*` reads and the hyperlink API. Since 2026-10-23 the same
+  holds for crossterm: tmxr-server and tmxr-client match the crossterm fork's
+  `Event::ColorScheme`, which crates.io's crossterm 0.29.0 lacks, so the fork
+  would need publishing (or the variant upstream) alike. v0.10.0 (2026-10-23)
   published its GitHub Release and every package channel, and on crates.io only
   tmxr-proto, tmxr-command, tmxr-config and tmxr-term (`Publish to crates.io`
   failed verifying tmxr-server with 11 errors), so crates.io's tmxr stays at
@@ -799,17 +802,22 @@ table. What has been verified, and how:
     `SIGUSR1` to `light` and back, each running its hook; Alacritty 0.17 does
     not report, answering DECRQM for 2031 with `0`). Unlike tmux, the client
     does not ask for its terminal's colours again on a change, so an answer to a
-    pane's OSC 10 / 11 query keeps the colours from attach, and the reports are
-    not yet passed on to panes (a pane's mode 2031 and its own `CSI ? 996 n`).
-    Copy mode's `next-prompt` / `previous-prompt` (compared with tmux 3.6 in
-    `corpus/keys.toml`) read OSC 133 marks the emulator keeps by line number
-    (`Emulator::prompt_lines`, rows lost off the history counted by vt100's
-    `on_scroll`); a mark stays on its number where a scroll region or a line
-    insert or delete moves lines within the screen, where tmux's line flags move
-    with the line (shells do neither). Word and line selection moving away and
-    back to where `select-word` / `select-line` left the cursor (by characters,
-    words and lines) is compared with tmux (`*_selection_back_*` in
-    `corpus/keys.toml`); other paths back were not.
+    pane's OSC 10 / 11 query keeps the colours from attach, A pane's
+    `CSI ? 996 n` is answered as tmux's window*pane_get_theme
+    (`Server::pane_theme`; `a_panes_color_scheme_query_is_answered`). A pane's
+    mode 2031 is not kept and gets no reports: tmux 3.6 sends them only when
+    something marks the pane's theme changed (a new pane, a style option,
+    `select-pane`, OSC 10 / 11, a pane moved), not when a client's theme
+    changes, which is little use; not done. Copy mode's `next-prompt` /
+    `previous-prompt` (compared with tmux 3.6 in `corpus/keys.toml`) read OSC
+    133 marks the emulator keeps by line number (`Emulator::prompt_lines`, rows
+    lost off the history counted by vt100's `on_scroll`); a mark stays on its
+    number where a scroll region or a line insert or delete moves lines within
+    the screen, where tmux's line flags move with the line (shells do neither).
+    Word and line selection moving away and back to where `select-word` /
+    `select-line` left the cursor (by characters, words and lines) is compared
+    with tmux (`\*\_selection_back*\*`in`corpus/keys.toml`); other paths back
+    were not.
 
 - **`server did not start` under a full `cargo test`** (Windows, three times on
   2026-10-20: `lock_hands_the_keys_to_the_lock_command`, then

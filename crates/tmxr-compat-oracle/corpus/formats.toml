@@ -1007,6 +1007,29 @@ checks = [
 ]
 
 [[cases]]
+name = "a_panes_color_scheme_query_is_answered"
+# CSI ? 996 n gets the pane's scheme from its background's brightness, as
+# tmux's window_pane_get_theme; with neither a style nor a client that says
+# one, no answer.
+unix_only = true
+steps = [
+  { run = "set -g window-style bg=colour255" },
+  { run = "new-window -d -t o:1 'stty raw -echo; printf \"\\033[?996n\"; exec cat -v'" },
+  { run = "new-window -d -t o:2" },
+  { run = "set -w -t o:2 window-style bg=colour17" },
+  { run = "respawn-pane -k -t o:2 'stty raw -echo; printf \"\\033[?996n\"; exec cat -v'" },
+  { run = "new-window -d -t o:3" },
+  { run = "set -w -t o:3 window-style default" },
+  { run = "respawn-pane -k -t o:3 'stty raw -echo; printf \"\\033[?996nx\"; exec cat -v'" },
+  { sleep = 0.8 },
+]
+checks = [
+  { command = "capture-pane -p -t o:1", expect = "^[[?997;2n" },
+  { command = "capture-pane -p -t o:2", expect = "^[[?997;1n" },
+  { command = "capture-pane -p -t o:3" },
+]
+
+[[cases]]
 name = "colour_queries_are_answered_from_the_window_style"
 # What a program reads back for OSC 10, 11 and 12 queries, ended as each
 # query was; none for a colour that is the terminal's own (the oracle's

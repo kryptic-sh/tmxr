@@ -65,6 +65,9 @@ pub struct Hooks {
     focus_reports: bool,
     /// Insert mode (`CSI 4 h`, IRM), which vt100 does not keep.
     insert_mode: bool,
+    /// Times the program asked for the color scheme (`CSI ? 996 n`) since
+    /// they were last taken, for the server to answer.
+    theme_queries: usize,
     /// The cursor blinks: an odd DECSCUSR, or `CSI ? 12 h`.
     cursor_blinking: bool,
     /// The cursor made very visible, as tmux's `MODE_CURSOR_VERY_VISIBLE`
@@ -160,6 +163,7 @@ impl vt100::Callbacks for Hooks {
             // DA2: tmux reports terminal type 84.
             (Some(b'>'), 'c') => self.replies.extend(b"\x1b[>84;0;0c"),
             // DSR: status and cursor position (1-based).
+            (Some(b'?'), 'n') if p(0) == Some(996) => self.theme_queries += 1,
             (None, 'n') => match p(0) {
                 Some(5) => self.replies.extend(b"\x1b[0n"),
                 Some(6) => {
@@ -857,6 +861,12 @@ impl Emulator {
     /// The palette entries the program set (OSC 4).
     pub fn palette(&self) -> &crate::palette::Palette {
         &self.palette
+    }
+
+    /// How many times the program asked for the color scheme
+    /// (`CSI ? 996 n`) since the last call.
+    pub fn take_theme_queries(&mut self) -> usize {
+        std::mem::take(&mut self.parser.callbacks_mut().theme_queries)
     }
 
     /// The colour queries since the last call (`which` of 10, 11 or 12, and
