@@ -76,9 +76,22 @@ pub fn close_inherited_fds() {
 /// Bind `endpoint` and serve until the last session exits or `kill-server`.
 /// `config` is the `-f` path, if any.
 pub fn run(endpoint: Endpoint, config: Option<PathBuf>) -> std::io::Result<()> {
-    let (cfg, cfg_file, errors) = match tmxr_config::load(config.as_deref()) {
-        Ok((cfg, source)) => (cfg, server::config_file(source), None),
-        Err(e) => (tmxr_config::defaults(), None, Some(e.to_string())),
+    // Settings the file gets wrong are left out and named, the rest kept,
+    // as tmux keeps the config lines that work.
+    let (cfg, cfg_file, errors) = match tmxr_config::load_keeping(config.as_deref()) {
+        Ok((cfg, source, left_out)) if left_out.is_empty() => {
+            (cfg, server::config_file(source), None)
+        }
+        Ok((cfg, source, left_out)) => (
+            cfg,
+            server::config_file(source),
+            Some(format!("settings left out: {}", left_out.join("; "))),
+        ),
+        Err(e) => (
+            tmxr_config::defaults(),
+            None,
+            Some(format!("using defaults: {e}")),
+        ),
     };
     let socket_access = match cfg.socket_access.as_str() {
         "users" => tmxr_proto::socket::Access::Users,
@@ -99,7 +112,7 @@ pub fn run(endpoint: Endpoint, config: Option<PathBuf>) -> std::io::Result<()> {
     srv.socket_access = socket_access;
     if let Some(e) = errors {
         tracing::warn!("config: {e}");
-        let message = format!("config error, using defaults: {e}");
+        let message = format!("config error, {e}");
         srv.log_message(message.clone());
         srv.config_error = Some(message);
     }

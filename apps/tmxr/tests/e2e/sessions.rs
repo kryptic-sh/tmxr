@@ -329,15 +329,18 @@ fn a_config_that_cannot_be_used_is_shown_to_the_first_client() {
     let t = Tmxr::new("badcfg");
     std::fs::write(
         &t.config,
-        "mouse = \"maybe\"
+        "status-interval = 7
+mouse = \"maybe\"
 ",
     )
     .unwrap();
     let s = t.attach(&["new", "-s", "bc"]);
     s.wait_for("the error", |text| {
-        text.contains("config error, using defaults")
+        text.contains("config error, settings left out: mouse")
     });
     assert!(t.run(&["show-messages"]).contains("config error"));
+    // The setting beside it is kept.
+    assert_eq!(t.run(&["show", "-gv", "status-interval"]).trim(), "7");
     // Once: a second client is not told again.
     let second = t.attach(&["attach", "-t", "bc"]);
     second.wait_for("the status line", |text| text.contains("bc"));

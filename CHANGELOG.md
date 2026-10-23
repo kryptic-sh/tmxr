@@ -24,6 +24,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **A config with a bad setting keeps the rest**: an unknown option or a value
+  of the wrong kind leaves out only that setting, and the first client to attach
+  is told which, as tmux keeps the config lines that work; tmxr used to start
+  with the defaults instead. A file that is not TOML still gives the defaults.
 - **tmxr is no longer published to crates.io**: it builds against forks of
   crossterm and vt100 that a published crate cannot take, so `tmxr-cli` on
   crates.io stays at 0.9.0. Install from a release or package, or with

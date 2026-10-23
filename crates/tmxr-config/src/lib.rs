@@ -1038,6 +1038,89 @@ pub fn load(path: Option<&Path>) -> Result<(Config, ConfigSource), ConfigError> 
     }
 }
 
+/// [`load`], keeping what works: where the file reads as TOML but some of
+/// its settings do not (an unknown key, a value of the wrong kind), the
+/// others are kept and each one left out is named, as tmux runs a config
+/// line by line and keeps what worked. A file that is not TOML, or cannot
+/// be read, is still an error, as there are no settings in it to keep.
+pub fn load_keeping(
+    path: Option<&Path>,
+) -> Result<(Config, ConfigSource, Vec<String>), ConfigError> {
+    match load(path) {
+        Ok((cfg, source)) => Ok((cfg, source, Vec::new())),
+        Err(ConfigError::Invalid { .. }) => {
+            let file = match path {
+                Some(p) => p.to_path_buf(),
+                None => hjkl_config::config_path::<Config>()?,
+            };
+            let text = std::fs::read_to_string(&file).map_err(|e| ConfigError::Io {
+                path: file.clone(),
+                source: e,
+            })?;
+            let user: toml::Table = toml::from_str(&text).map_err(|e| ConfigError::Invalid {
+                path: file.clone(),
+                message: e.to_string(),
+            })?;
+            let mut kept: toml::Table = DEFAULTS
+                .parse()
+                .unwrap_or_else(|e| panic!("bundled defaults.toml is invalid: {e}"));
+            let mut errors = Vec::new();
+            for (key, value) in user {
+                keep(&mut kept, &[key.as_str()], value, &mut errors);
+            }
+            let cfg = toml::Value::Table(kept)
+                .try_into()
+                .map_err(|e: toml::de::Error| ConfigError::Invalid {
+                    path: file.clone(),
+                    message: e.to_string(),
+                })?;
+            Ok((cfg, ConfigSource::File(file), errors))
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// Merge `value` at `path` into `kept` if the result still reads as a
+/// [`Config`]; else, for a table, each of its keys in turn, and for
+/// anything else an error naming `path`.
+fn keep(kept: &mut toml::Table, path: &[&str], value: toml::Value, errors: &mut Vec<String>) {
+    let mut layer = value.clone();
+    for key in path.iter().rev() {
+        layer = toml::Value::Table(toml::Table::from_iter([((*key).to_owned(), layer)]));
+    }
+    let toml::Value::Table(layer) = layer else {
+        return;
+    };
+    let mut candidate = kept.clone();
+    deep_merge(&mut candidate, layer);
+    let tried: Result<Config, _> = toml::Value::Table(candidate.clone()).try_into();
+    match (tried, value) {
+        (Ok(_), _) => *kept = candidate,
+        (Err(_), toml::Value::Table(table)) if !table.is_empty() => {
+            for (key, value) in table {
+                let mut deeper = path.to_vec();
+                deeper.push(&key);
+                keep(kept, &deeper, value, errors);
+            }
+        }
+        (Err(e), _) => errors.push(format!("{}: {}", path.join("."), e.message())),
+    }
+}
+
+/// `from` merged into `into` as hjkl_config layers a file over its defaults
+/// (tables key by key, anything else replaced), which that crate does not
+/// export.
+fn deep_merge(into: &mut toml::Table, from: toml::Table) {
+    for (key, value) in from {
+        match (into.get_mut(&key), value) {
+            (Some(toml::Value::Table(into)), toml::Value::Table(from)) => deep_merge(into, from),
+            (_, value) => {
+                into.insert(key, value);
+            }
+        }
+    }
+}
+
 /// The editor tmux starts with: `$VISUAL`, else `$EDITOR`, else tmux's
 /// `/usr/bin/vi` (`_PATH_VI`); on Windows, which has neither, Notepad.
 fn default_editor() -> String {
@@ -1054,6 +1137,38 @@ fn default_editor() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Settings a file gets wrong are left out and named; the rest stay.
+    #[test]
+    fn a_files_good_settings_stay_beside_its_bad_ones() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            "escape-time = 7\nstatus-interval = \"often\"\nno-such-option = 1\n\
+             [status]\nleft = \"LEFT\"\nleft-length = \"long\"\n",
+        )
+        .unwrap();
+        assert!(load(Some(&path)).is_err(), "one error fails the whole file");
+        let (cfg, _, errors) = load_keeping(Some(&path)).unwrap();
+        assert_eq!(cfg.escape_time, 7);
+        assert_eq!(
+            cfg.session.status_interval,
+            defaults().session.status_interval
+        );
+        assert_eq!(cfg.session.status_left, "LEFT");
+        let named: Vec<&str> = errors
+            .iter()
+            .map(|e| e.split(':').next().unwrap())
+            .collect();
+        assert_eq!(
+            named,
+            ["no-such-option", "status.left-length", "status-interval"]
+        );
+        // A file that is not TOML has nothing to keep.
+        std::fs::write(&path, "escape-time = = 7\n").unwrap();
+        assert!(load_keeping(Some(&path)).is_err());
+    }
 
     /// Every option the defaults set is found by [`options_set`] and known to
     /// [`Config::copy_option`], and every `[status]` key has its option, so
