@@ -105,7 +105,12 @@ pub const NAMES: &[&str] = &[
     "scroll_position",
     "scroll_region_lower",
     "scroll_region_upper",
+    "selection_active",
+    "selection_end_x",
+    "selection_end_y",
     "selection_present",
+    "selection_start_x",
+    "selection_start_y",
     "server_sessions",
     "session_activity",
     "session_activity_flag",
@@ -996,7 +1001,25 @@ impl<'a> Context for Vars<'a> {
             // tmux's: how far the copy-mode view is above the bottom, and
             // whether something is selected; only in copy mode.
             "scroll_position" => pane?.copy.as_ref()?.position().0.to_string(),
-            "selection_present" => flag(pane?.copy.as_ref()?.anchor.is_some()),
+            // As tmux's window_copy_formats: where the selection began (its
+            // line counted from the history's oldest) and its other end, the
+            // cursor until stop-selection fixes it; active while it follows
+            // the cursor, present while its ends differ.
+            "selection_present" => {
+                let cm = pane?.copy.as_ref()?;
+                flag(
+                    cm.anchor
+                        .is_some_and(|a| Some(a) != cm.selection_other_end()),
+                )
+            }
+            "selection_active" => {
+                let cm = pane?.copy.as_ref()?;
+                flag(cm.anchor.is_some() && cm.sel_end.is_none())
+            }
+            "selection_start_x" => pane?.copy.as_ref()?.selection_bounds()?.0.1.to_string(),
+            "selection_start_y" => pane?.copy.as_ref()?.selection_bounds()?.0.0.to_string(),
+            "selection_end_x" => pane?.copy.as_ref()?.selection_bounds()?.1.1.to_string(),
+            "selection_end_y" => pane?.copy.as_ref()?.selection_bounds()?.1.0.to_string(),
             "pane_in_mode" => flag(pane?.copy.is_some()),
             "history_size" => pane?.emu.history_size().to_string(),
             "pane_pipe" => flag(pane?.pipe.is_some()),

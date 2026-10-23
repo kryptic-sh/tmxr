@@ -135,6 +135,57 @@ checks = [
 ]
 
 [[cases]]
+name = "scrolling_keeps_the_cursors_row_and_history_bottom_its_end_as_tmux"
+# scroll-up / -down move the cursor with the view, keeping its column as
+# cursor-up / -down do; history-bottom goes to the last line's end.
+unix_only = true
+size = [40, 12]
+program = "for i in $(seq 1 40); do echo \"line $i ( foo bar.baz )\"; echo; done; printf 'last line'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 4 -X cursor-down" },
+  { run = "send-keys -t o -N 7 -X cursor-right" },
+  { run = "send-keys -t o -N 2 -X scroll-down" },
+  { run = "set -gF @down '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position}'" },
+  { run = "send-keys -t o -X scroll-up" },
+  { run = "set -gF @up '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position}'" },
+  { run = "send-keys -t o -X history-bottom" },
+]
+checks = [
+  { format = "#{@down} #{@up} #{copy_cursor_x},#{copy_cursor_y} #{scroll_position}" },
+]
+
+[[cases]]
+name = "selection_formats_and_other_end_as_tmux"
+# tmux keeps where a selection began and where it ends; other-end moves
+# the cursor between them without swapping them.
+unix_only = true
+size = [40, 12]
+program = "for i in $(seq 1 40); do echo \"line $i ( foo bar.baz )\"; done; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 2 -X cursor-down" },
+  { run = "send-keys -t o -N 5 -X cursor-right" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -N 2 -X cursor-right" },
+  { run = "set -gF @begun '#{selection_present}#{selection_active} #{selection_start_x}.#{selection_start_y}-#{selection_end_x}.#{selection_end_y}'" },
+  { run = "send-keys -t o -X other-end" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "set -gF @swapped '#{copy_cursor_x},#{copy_cursor_y} #{selection_start_x}.#{selection_start_y}-#{selection_end_x}.#{selection_end_y}'" },
+  { run = "send-keys -t o -X stop-selection" },
+  { run = "send-keys -t o -X cursor-left" },
+  { run = "set -gF @stopped '#{selection_present}#{selection_active} #{selection_start_x}.#{selection_start_y}-#{selection_end_x}.#{selection_end_y}'" },
+  { run = "send-keys -t o -X other-end" },
+]
+checks = [
+  { format = "#{@begun} | #{@swapped} | #{@stopped} | #{copy_cursor_x},#{copy_cursor_y} #{selection_present}#{selection_active} #{selection_start_x}.#{selection_start_y}-#{selection_end_x}.#{selection_end_y}" },
+]
+
+[[cases]]
 name = "copy_mode_rewraps_on_a_width_change_as_tmux"
 # tmux's window_copy_resize rewraps copy mode's copy of the pane, the
 # cursor keeping its place in its line.

@@ -14,6 +14,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`#{selection_start_x}`, `#{selection_start_y}`, `#{selection_end_x}`,
+  `#{selection_end_y}` and `#{selection_active}`**, as tmux's; and
+  `#{selection_present}` is 0 while the selection's ends are the same cell, as
+  tmux's.
+
 - **Lines rewrap when a pane's width changes**, as tmux's reflow: a wrapped line
   joins and splits again at the new width, its history too, and the cursor keeps
   its place in its line. Under a program on the alternate screen, the normal
@@ -42,6 +47,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `cargo install --locked --git https://github.com/kryptic-sh/tmxr tmxr-cli`.
 
 ### Fixed
+
+- **Copy mode's `scroll-up` and `scroll-down` move the cursor with the view**,
+  keeping its row on the screen and its column as `cursor-up` / `-down` do,
+  where the cursor stayed on its line until the view left it behind; and
+  `history-bottom` goes to the last line's end, as tmux's.
+- **`other-end` keeps where the selection began**: it moves the cursor between
+  the selection's ends without swapping them, so `other-end` after
+  `stop-selection` goes to the end tmux's does.
 
 - **`top-line`, `middle-line` and `bottom-line` go to the row's start** in copy
   mode, as tmux's do, and `middle-line` to tmux's middle row on an even number

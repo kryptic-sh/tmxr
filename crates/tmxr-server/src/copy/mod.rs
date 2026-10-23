@@ -55,6 +55,10 @@ pub struct CopyMode {
     /// was, so the cursor moves without it (tmux's cursordrag none); `None`
     /// while the cursor is that end.
     pub sel_end: Option<(usize, usize)>,
+    /// `other-end` has put the cursor on the end the selection began at,
+    /// so that is the other end ([`Self::selection_other_end`]) and the
+    /// anchor is where it ends, as tmux's cursordrag sel.
+    pub drags_start: bool,
     pub kind: SelKind,
     pub rows: u16,
     pub cols: u16,
@@ -169,6 +173,7 @@ impl CopyMode {
             outputs: Vec::new(),
             anchor: None,
             sel_end: None,
+            drags_start: false,
             kind: SelKind::Char,
             rows,
             cols,
@@ -204,6 +209,7 @@ impl CopyMode {
         self.top = old.top.min(last);
         self.anchor = old.anchor.map(clamp);
         self.sel_end = old.sel_end.map(clamp);
+        self.drags_start = old.drags_start;
         self.kind = old.kind;
         self.search.clone_from(&old.search);
         self.inherited_search.clone_from(&old.inherited_search);
@@ -454,6 +460,26 @@ impl CopyMode {
     /// as the pane's `Screen::hyperlink` numbers it.
     pub fn view_link(&self, row: usize, col: usize) -> Option<std::num::NonZeroU16> {
         link_of(&self.lines.get(self.top + row)?.cell(col)?.style)
+    }
+
+    /// The end of the selection that is not the anchor (line, column):
+    /// where stop-selection fixed it, else the cursor; `None` without a
+    /// selection.
+    pub fn selection_other_end(&self) -> Option<(usize, usize)> {
+        self.anchor?;
+        Some(self.sel_end.unwrap_or((self.cy, self.cx)))
+    }
+
+    /// Where the selection began and where it ends, as tmux's selx / sely
+    /// and endselx / endsely: `other-end` moves the cursor between them
+    /// without swapping them.
+    pub fn selection_bounds(&self) -> Option<((usize, usize), (usize, usize))> {
+        let (anchor, other) = (self.anchor?, self.selection_other_end()?);
+        Some(if self.drags_start {
+            (other, anchor)
+        } else {
+            (anchor, other)
+        })
     }
 
     /// The text of the line shown `row` rows down the view.
@@ -757,7 +783,8 @@ impl CopyMode {
                 self.jump_to_prompt(name == "next-prompt", arg == Some("-o"));
             }
             "history-top" => (self.cy, self.cx) = (0, 0),
-            "history-bottom" => self.cy = last,
+            // The last line, at its end, as tmux's window_copy_cmd_history_bottom.
+            "history-bottom" => (self.cy, self.cx) = (last, self.line_len(last)),
             // To the view's first, middle or last row, at its start, as
             // tmux's window_copy_cmd_top_line and the rest.
             "top-line" => (self.cy, self.cx) = (self.top, 0),
@@ -767,20 +794,26 @@ impl CopyMode {
             "halfpage-down" => self.page(true, true),
             "page-up" => self.page(false, false),
             "page-down" => self.page(true, false),
+            // The view a line up or down, the cursor keeping its row on the
+            // screen, so moving a line as cursor-up / -down move it, as
+            // tmux's window_copy_cursor_up / _down with scroll_only.
             "scroll-up" => {
-                self.top = self.top.saturating_sub(1);
-                if self.cy >= self.top + rows {
-                    self.cy = self.top + rows - 1;
+                if self.top > 0 {
+                    self.top -= 1;
+                    self.vertical(false);
                 }
             }
             "scroll-down" => {
-                self.top = (self.top + 1).min(self.lines.len().saturating_sub(rows));
-                self.cy = self.cy.max(self.top);
+                if self.top < self.lines.len().saturating_sub(rows) {
+                    self.top += 1;
+                    self.vertical(true);
+                }
             }
             "begin-selection" => {
                 self.selflag = SelFlag::Char;
                 self.anchor = Some((self.cy, self.cx));
                 self.sel_end = None;
+                self.drags_start = false;
                 self.kind = if self.rect {
                     SelKind::Rect
                 } else {
@@ -795,6 +828,7 @@ impl CopyMode {
                 self.sel_origin = (self.cy, self.cx);
                 self.anchor = Some((self.cy, 0));
                 self.sel_end = None;
+                self.drags_start = false;
                 self.kind = SelKind::Line;
                 self.end_of_line();
                 self.sel_reset = ((self.cy, 0), (self.cy, self.line_len(self.cy)));
@@ -810,6 +844,7 @@ impl CopyMode {
                 self.selflag = SelFlag::Word;
                 self.anchor = Some(start);
                 self.sel_end = None;
+                self.drags_start = false;
                 self.kind = SelKind::Char;
                 (self.cy, self.cx) = end;
                 self.sel_reset = (start, end);
@@ -843,12 +878,21 @@ impl CopyMode {
                 self.selflag = SelFlag::Char;
                 // After stop-selection the cursor goes to the selection's
                 // end, which follows it again, as tmux's cursordrag none
-                // becomes endsel.
-                if let Some(end) = self.sel_end.take() {
-                    (self.cy, self.cx) = end;
+                // becomes endsel; else it swaps with the anchor, from
+                // dragging one end to the other.
+                if let Some(stopped) = self.sel_end.take() {
+                    match self.anchor {
+                        Some(end) if self.drags_start => {
+                            self.anchor = Some(stopped);
+                            (self.cy, self.cx) = end;
+                        }
+                        _ => (self.cy, self.cx) = stopped,
+                    }
+                    self.drags_start = false;
                 } else if let Some(other) = self.anchor {
                     self.anchor = Some((self.cy, self.cx));
                     (self.cy, self.cx) = other;
+                    self.drags_start = !self.drags_start;
                 }
             }
             // The selection stays where it is and the cursor moves alone,
