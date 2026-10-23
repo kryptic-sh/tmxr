@@ -57,6 +57,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Copied text follows `mode-keys`, as tmux's**: under emacs keys the character
+  under the cursor is left out; under vi keys a selection reaching past its last
+  line's text keeps that line's newline, so `copy-line` copies the line with its
+  newline. A wrapped line copied to its end keeps its trailing blanks.
+  `copy-line` and `copy-end-of-line` clear the selection after, where tmxr kept
+  it.
+
 - **A search's highlights are cleared by the commands that clear tmux's**: any
   command but a search, a move under vi keys, `toggle-position` and the
   `-no-clear` copies; before, they stayed until the next search.

@@ -264,6 +264,136 @@ checks = [
 ]
 
 [[cases]]
+name = "copied_text_under_vi_keys_as_tmux"
+# tmux's window_copy_get_selection: under vi keys the cell at the end is
+# copied and a selection past its last line's text keeps the newline;
+# under emacs keys neither. copy-line clears the selection after.
+unix_only = true
+size = [30, 10]
+program = "printf 'short\\nhello world  \\nabcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJ\\n\\n  indented line\\nlast'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g mode-keys vi" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 2 cursor-right" },
+  { run = "send-keys -t o -X copy-selection" },
+  { run = "set -gF @char '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X copy-line" },
+  { run = "set -gF @line '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X -N 2 cursor-right" },
+  { run = "send-keys -t o -X copy-end-of-line" },
+  { run = "set -gF @eol '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X end-of-line" },
+  { run = "send-keys -t o -X copy-selection" },
+  { run = "set -gF @wrapped '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X copy-selection" },
+  { run = "set -gF @rows '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X -N 3 cursor-right" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 2 cursor-up" },
+  { run = "send-keys -t o -X copy-selection" },
+  { run = "set -gF @up '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X -N 3 cursor-right" },
+  { run = "send-keys -t o -X rectangle-toggle" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X -N 2 cursor-left" },
+  { run = "send-keys -t o -X copy-selection" },
+  { run = "send-keys -t o -X rectangle-toggle" },
+  { run = "set -gF @rect '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X cursor-right" },
+  { run = "send-keys -t o -X copy-line" },
+  { run = "set -gF @kept '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+]
+checks = [
+  { format = "#{@char} | #{@line} | #{@eol} | #{@wrapped} | #{@rows} | #{@up} | #{@rect} | #{@kept}" },
+]
+
+[[cases]]
+name = "copied_text_under_emacs_keys_as_tmux"
+# tmux's window_copy_get_selection: under vi keys the cell at the end is
+# copied and a selection past its last line's text keeps the newline;
+# under emacs keys neither. copy-line clears the selection after.
+unix_only = true
+size = [30, 10]
+program = "printf 'short\\nhello world  \\nabcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJ\\n\\n  indented line\\nlast'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g mode-keys emacs" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 2 cursor-right" },
+  { run = "send-keys -t o -X copy-selection" },
+  { run = "set -gF @char '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X copy-line" },
+  { run = "set -gF @line '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X -N 2 cursor-right" },
+  { run = "send-keys -t o -X copy-end-of-line" },
+  { run = "set -gF @eol '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X end-of-line" },
+  { run = "send-keys -t o -X copy-selection" },
+  { run = "set -gF @wrapped '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X copy-selection" },
+  { run = "set -gF @rows '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X -N 3 cursor-right" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 2 cursor-up" },
+  { run = "send-keys -t o -X copy-selection" },
+  { run = "set -gF @up '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X -N 3 cursor-right" },
+  { run = "send-keys -t o -X rectangle-toggle" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X -N 2 cursor-left" },
+  { run = "send-keys -t o -X copy-selection" },
+  { run = "send-keys -t o -X rectangle-toggle" },
+  { run = "set -gF @rect '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X cursor-right" },
+  { run = "send-keys -t o -X copy-line" },
+  { run = "set -gF @kept '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+]
+checks = [
+  { format = "#{@char} | #{@line} | #{@eol} | #{@wrapped} | #{@rows} | #{@up} | #{@rect} | #{@kept}" },
+]
+
+[[cases]]
 name = "copy_mode_rewraps_on_a_width_change_as_tmux"
 # tmux's window_copy_resize rewraps copy mode's copy of the pane, the
 # cursor keeping its place in its line.

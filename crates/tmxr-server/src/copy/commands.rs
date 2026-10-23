@@ -5,7 +5,7 @@ use crate::cmds::Ctx;
 use crate::model::PaneId;
 use crate::server::Server;
 
-use super::{CopyMode, SelKind};
+use super::CopyMode;
 
 /// Give `pane`'s copy mode the options it reads: `word-separators`,
 /// `wrap-search` and `mode-keys`.
@@ -252,35 +252,24 @@ fn run_command(
                     | "copy-pipe-line"
                     | "copy-pipe-line-and-cancel"
             );
-            let text = if whole_lines {
-                // The cursor's line, and the count's lines below it, whole,
-                // leaving the cursor and any selection as they were, as
-                // tmux's window_copy_do_copy_line.
-                let (cursor, anchor, kind) = ((cm.cy, cm.cx), cm.anchor, cm.kind);
-                let sel_end = cm.sel_end.take();
+            let text = if whole_lines || name.contains("end-of-line") {
+                // From the cursor, or its line's start, to the end of the
+                // line the count's lines below, then the selection cleared
+                // and the cursor and view put back, as tmux's
+                // window_copy_do_copy_line / _end_of_line.
+                let (cy, cx, top) = (cm.cy, cm.cx, cm.top);
                 let lines = std::mem::take(&mut cm.count).max(1);
-                cm.cx = 0;
-                cm.anchor = Some((cm.cy, 0));
-                cm.kind = SelKind::Char;
+                if whole_lines {
+                    cm.cx = 0;
+                }
+                cm.apply("begin-selection", None);
                 for _ in 1..lines {
                     cm.apply("cursor-down", None);
                 }
                 cm.apply("end-of-line", None);
                 let text = cm.selection_text();
-                ((cm.cy, cm.cx), cm.anchor, cm.kind) = (cursor, anchor, kind);
-                cm.sel_end = sel_end;
-                text
-            } else if name.contains("end-of-line") {
-                // From the cursor to the end of its line, leaving the
-                // cursor and any selection as they were.
-                let (cursor, anchor, kind) = ((cm.cy, cm.cx), cm.anchor, cm.kind);
-                let sel_end = cm.sel_end.take();
-                cm.anchor = Some(cursor);
-                cm.kind = SelKind::Char;
-                cm.apply("end-of-line", None);
-                let text = cm.selection_text();
-                ((cm.cy, cm.cx), cm.anchor, cm.kind) = (cursor, anchor, kind);
-                cm.sel_end = sel_end;
+                cm.apply("clear-selection", None);
+                (cm.cy, cm.cx, cm.top) = (cy, cx, top);
                 text
             } else {
                 cm.selection_text()

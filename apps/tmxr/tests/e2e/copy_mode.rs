@@ -407,10 +407,11 @@ fn emacs_copy_mode_selects_with_its_own_keys() {
     s.wait_for("search prompt", |text| text.contains("(search up)"));
     s.send(b"@emacs-copy\r");
     s.wait_for("search done", |text| !text.contains("(search up)"));
-    // C-Space, then M-1 M-0 C-f: ten cells right, and M-w copies.
+    // C-Space, then M-1 M-1 C-f: eleven cells right, and M-w copies up to
+    // the cursor, not the cell under it, as tmux's emacs keys copy.
     s.send(b"\x00");
     s.send(b"\x1b1");
-    s.send(b"\x1b0");
+    s.send(b"\x1b1");
     s.send(b"\x06");
     s.send(b"\x1bw");
     t.wait_run(&["show-buffer"], "the selection copied", |o| {
@@ -536,10 +537,11 @@ fn emacs_search_moves_as_you_type() {
     s.wait_for("typed", |text| text.contains("(search up) @inc-search"));
     s.send(b"\x1b");
     s.wait_for("prompt closed", |text| !text.contains("(search up)"));
-    // C-Space, M-1 M-0 C-f, M-w: the eleven cells from the match.
+    // C-Space, M-1 M-1 C-f, M-w: the eleven cells from the match, up to
+    // the cursor as tmux's emacs keys copy.
     s.send(b"\x00");
     s.send(b"\x1b1");
-    s.send(b"\x1b0");
+    s.send(b"\x1b1");
     s.send(b"\x06");
     s.send(b"\x1bw");
     t.wait_run(&["show-buffer"], "the match copied", |o| {

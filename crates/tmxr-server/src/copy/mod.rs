@@ -735,36 +735,81 @@ impl CopyMode {
         })
     }
 
-    /// Selected text, or `None` without a selection.
+    /// Selected text, as tmux's window_copy_get_selection makes it, or
+    /// `None` without a selection or with nothing in it. Under vi keys the
+    /// cell at the selection's end is copied, and a selection reaching past
+    /// its last line's text keeps that line's newline; under emacs keys
+    /// neither. A rectangle is the columns between its other end and the
+    /// cursor.
     pub fn selection_text(&self) -> Option<String> {
-        let ((ay, ax), end) = self.selection_ends()?;
-        let ((sy, sx), (ey, ex)) = if (ay, ax) <= end {
-            ((ay, ax), end)
+        let (start, end) = self.selection_bounds()?;
+        let ((sy, sx), (ey, ex)) = if end < start {
+            (end, start)
         } else {
-            (end, (ay, ax))
+            (start, end)
         };
-        let cols = usize::from(self.cols);
+        let ey_last = self.line_len(ey);
+        let ex = ex.min(ey_last);
+        let inclusive = usize::from(!self.emacs);
+        let (firstsx, restsx, lastex, restex) = if self.kind == SelKind::Rect {
+            // The end the cursor is not dragging, as tmux's cursordrag
+            // picks it.
+            let held = if self.sel_end.is_some() || self.drags_start {
+                end.1
+            } else {
+                start.1
+            };
+            if held < self.cx {
+                let ex = self.cx + inclusive;
+                (held, held, ex, ex)
+            } else {
+                (self.cx, self.cx, held + 1, held + 1)
+            }
+        } else {
+            (sx, 0, ex + inclusive, usize::from(self.cols))
+        };
         let mut out = String::new();
         for y in sy..=ey {
-            let Some(line) = self.lines.get(y) else { break };
-            let (from, to) = match self.kind {
-                SelKind::Line => (0, cols),
-                SelKind::Rect => (ax.min(end.1), ax.max(end.1) + 1),
-                SelKind::Char => (
-                    if y == sy { sx } else { 0 },
-                    if y == ey { ex + 1 } else { cols },
-                ),
-            };
-            out.push_str(&line.text(from, to));
-            let soft = line.wrapped && self.kind == SelKind::Char && y != ey;
-            if y != ey && !soft {
-                out.push('\n');
-            }
+            let (from, to) = (
+                if y == sy { firstsx } else { restsx },
+                if y == ey { lastex } else { restex },
+            );
+            self.copy_line(&mut out, y, from, to);
         }
-        if self.kind == SelKind::Line {
-            out.push('\n');
+        if out.is_empty() {
+            return None;
+        }
+        if (self.emacs || lastex <= ey_last)
+            && (!self.lines.get(ey).is_some_and(|l| l.wrapped) || lastex != ey_last)
+        {
+            out.pop();
         }
         Some(out)
+    }
+
+    /// Columns `sx..ex` of line `y` and its newline, as tmux's
+    /// window_copy_copy_line: up to the line's text (all of a wrapped
+    /// line's cells), and no newline where a wrapped line is copied to its
+    /// end.
+    fn copy_line(&self, out: &mut String, y: usize, sx: usize, ex: usize) {
+        let Some(line) = self.lines.get(y) else {
+            return;
+        };
+        if sx > ex {
+            return;
+        }
+        let len = if line.wrapped {
+            line.used
+        } else {
+            self.line_len(y)
+        };
+        let (sx, ex) = (sx.min(len), ex.min(len));
+        for cell in line.cells().take(ex).skip(sx) {
+            out.push_str(&cell.symbol);
+        }
+        if !line.wrapped || ex != len {
+            out.push('\n');
+        }
     }
 
     /// Whether `(y, x)` is inside the selection, for drawing.

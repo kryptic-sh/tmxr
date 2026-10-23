@@ -899,10 +899,13 @@ table. What has been verified, and how:
     after them snaps the cursor to the line's start or end and moves the
     selection by whole lines, and `history-top` / `-bottom` call `other-end`;
     tmxr has no lineflag (its `selflag` only snaps the selection's ends).
-  - Copied text ignores `mode-keys`: tmux's emacs keys leave out the character
-    under the cursor and its vi keys keep the last newline of a selection past
-    its line's end (`window_copy_get_selection`); tmxr always copies as vi does
-    and never keeps the newline.
+    - Under emacs keys tmux moves differently and tmxr moves as under vi keys:
+      `next-word-end` / `next-space-end` stop one past the word (and so does the
+      end `select-word` snaps to), `previous-word` stops at a line's end, a
+      forward search leaves the cursor after the match, and the bracket matches
+      try the next or previous cell before giving up
+      (`window_copy_cursor_next_word_end`, `window_copy_cursor_previous_word`,
+      `window_copy_search`, `window_copy_cmd_*_matching_bracket`).
   - `search-backward foo` then `search-again` twice landed on another match than
     tmux's; `jump-to-mark` scrolls the view differently. Not looked into.
   - A search matches within a line, where tmux's also match across a wrap, so
