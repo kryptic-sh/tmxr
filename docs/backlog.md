@@ -409,24 +409,29 @@ table. What has been verified, and how:
   bright ones; there is no 8-colour mode (bold for bright, as tmux uses on a
   terminal with 8).
 - **Idle cost** (measured 2026-10-21 on the Arch laptop, an attached session
-  doing nothing, context switches a second): tmxr's client 0.2 and server 0.6,
-  tmux 3.8's 0.0 and 0.1, from tmxr's 20.2 and 4.5 before the client waited for
-  input and the server for its next deadline (`Server::next_due`,
-  `an_idle_client_and_server_do_not_wake`), and 0.8 for the server before
-  `util::refresh_commands` (foreground processes, for automatic renames) rode on
-  the status line's redraw (`refresh_deadline`): it had kept its own timer, a
-  few milliseconds out of phase, so the two woke the server apart. What is left
-  is one status redraw per `status-interval`, 5 as tmux-sensible sets it where
-  tmux's own is 15, costing a wakeup on the server's main, client-write and
-  client-read threads each. The read thread waking although the client sends
-  nothing (checked with a debug log of every message) is probably the kernel
-  waking every waiter on the socket once the client has read the frame; not
-  proven. With `status-interval 0` the server wakes once a second instead, for
-  `refresh_commands`, which then keeps a one-second floor; tmux checks a pane's
-  name when the pane prints. `Server::next_due` must name every timed duty
-  `tick` runs; one added to `tick` without a deadline there runs only when
-  something else wakes the server. Windows' client still polls (crossterm's
-  console reader cannot be woken), measured nowhere.
+  doing nothing, context switches a second): tmxr's client 0.2 and server 0.6
+  (0.4 since 2026-10-23, below), tmux 3.8's 0.0 and 0.1, from tmxr's 20.2 and
+  4.5 before the client waited for input and the server for its next deadline
+  (`Server::next_due`, `an_idle_client_and_server_do_not_wake`), and 0.8 for the
+  server before `util::refresh_commands` (foreground processes, for automatic
+  renames) rode on the status line's redraw (`refresh_deadline`): it had kept
+  its own timer, a few milliseconds out of phase, so the two woke the server
+  apart. What is left is one status redraw per `status-interval`, 5 as
+  tmux-sensible sets it where tmux's own is 15, costing a wakeup on the server's
+  main and client-write threads each (measured 2026-10-23, release build, 60 s:
+  12 each, the client's main thread 12, every other thread 0). The client-read
+  thread woke as often until `conn::wait_readable`: blocked in `read`, Linux
+  woke it each time the client took a frame off the socket (a socketpair probe:
+  50 wakeups for 50 writes, none with `poll` first); it now waits in `poll` for
+  input (`a_clients_reader_sleeps_while_frames_go_out`). The writer thread's
+  wakeup is the design: the main thread hands each frame to it through a queue,
+  where tmux writes from its one thread. With `status-interval 0` the server
+  wakes once a second instead, for `refresh_commands`, which then keeps a
+  one-second floor; tmux checks a pane's name when the pane prints.
+  `Server::next_due` must name every timed duty `tick` runs; one added to `tick`
+  without a deadline there runs only when something else wakes the server.
+  Windows' client still polls (crossterm's console reader cannot be woken),
+  measured nowhere.
 - **`#{pane_current_command}` on Windows** still reads the copy
   `util::refresh_commands` keeps, up to a refresh old, as a lookup there
   snapshots every process; Unix reads it when asked (`vars.rs`). Measured

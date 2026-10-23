@@ -98,6 +98,7 @@ pub fn accept_loop(
             .name(format!("tmxr-client-{id}-read"))
             .spawn(move || {
                 loop {
+                    wait_readable(&recv);
                     match read_msg::<_, ClientMsg>(&mut recv) {
                         Ok(Some(msg)) => {
                             if ev.send(Event::Msg(id, msg)).is_err() {
@@ -154,6 +155,37 @@ pub fn accept_loop(
         }
     }
 }
+
+/// Wait until the client has sent something, or the connection ended, so
+/// the read after it does not block. A thread blocked in `read` on a Unix
+/// socket is woken each time the client takes what the writer thread sent
+/// (Linux wakes every waiter on the socket for the room freed, seen with a
+/// socketpair on 2026-10-23: one wakeup a write, none with `poll` first),
+/// so reading straight away woke the reader with every frame; `poll` for
+/// input wakes only for input. Verified on Linux only.
+#[cfg(unix)]
+fn wait_readable(recv: &interprocess::local_socket::RecvHalf) {
+    use std::os::fd::{AsFd as _, AsRawFd as _};
+    let interprocess::local_socket::RecvHalf::UdSocket(half) = recv;
+    let mut pfd = libc::pollfd {
+        fd: half.as_fd().as_raw_fd(),
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    loop {
+        // SAFETY: polls one pollfd naming the socket, which `recv` keeps
+        // open for the call.
+        let ready = unsafe { libc::poll(&mut pfd, 1, -1) };
+        if ready >= 0 || std::io::Error::last_os_error().kind() != std::io::ErrorKind::Interrupted {
+            return;
+        }
+    }
+}
+
+/// On Windows the named pipe's read waits by itself; whether it wakes
+/// for frames sent the other way was not measured.
+#[cfg(windows)]
+fn wait_readable(_: &interprocess::local_socket::RecvHalf) {}
 
 /// A reply too large for one frame (`size` bytes): its output in pieces
 /// the client writes as they come, then the reply without it; if that is

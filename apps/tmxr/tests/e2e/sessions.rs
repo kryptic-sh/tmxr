@@ -1570,6 +1570,59 @@ fn an_idle_client_and_server_do_not_wake() {
     );
 }
 
+/// The server's thread reading a client sleeps while frames go out to that
+/// client: blocked in `read` on the socket, Linux woke it each time the
+/// client took a frame; it now waits in `poll` for input. Linux only: it
+/// counts context switches in `/proc`.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_clients_reader_sleeps_while_frames_go_out() {
+    const LINES: usize = 40;
+    let t = Tmxr::new("quietread");
+    let s = t.attach(&["new", "-s", "qr"]);
+    s.wait_for("the status line", |text| text.contains("qr"));
+    t.wait_prompt("qr");
+    let server: u32 = t
+        .run(&["display-message", "-p", "#{pid}"])
+        .trim()
+        .parse()
+        .unwrap();
+    // The attaching client's connection is the server's first.
+    let reader = || -> u64 {
+        let tasks = std::fs::read_dir(format!("/proc/{server}/task")).unwrap();
+        let task = tasks
+            .flatten()
+            .find(|task| {
+                std::fs::read_to_string(task.path().join("comm"))
+                    .is_ok_and(|comm| comm.trim_end() == "tmxr-client-1-r")
+            })
+            .expect("the attached client's reader thread");
+        let status = std::fs::read_to_string(task.path().join("status")).unwrap();
+        status
+            .lines()
+            .filter(|l| l.contains("ctxt_switches"))
+            .filter_map(|l| l.split_whitespace().nth(1)?.parse::<u64>().ok())
+            .sum()
+    };
+    s.send(
+        format!("sleep 0.5; for i in $(seq {LINES}); do echo tick$i; sleep 0.05; done\r")
+            .as_bytes(),
+    );
+    s.wait_for("the first line", |text| {
+        text.lines().any(|l| l.trim_end() == "tick1")
+    });
+    let before = reader();
+    let last = format!("tick{LINES}");
+    s.wait_for("the last line", |text| {
+        text.lines().any(|l| l.trim_end() == last)
+    });
+    let woke = reader() - before;
+    assert!(
+        woke <= 3,
+        "the reader woke {woke} times for {LINES} lines' frames"
+    );
+}
+
 /// A client in a terminal that takes synchronized updates (it answers
 /// DECRQM for mode 2026) writes each frame as one, so the terminal never
 /// shows a frame half drawn; in one that does not, it writes none. Unix

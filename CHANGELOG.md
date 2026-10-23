@@ -68,6 +68,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The server's thread reading a client no longer wakes for each frame it sends
+  that client** (Linux, Unix sockets): it waited in `read`, which Linux wakes
+  whenever the client takes data off the socket; it now waits in `poll` for
+  input. An idle attached session wakes the server a third less often.
+
 - **A copy-mode selection is highlighted as tmux's**: a line selection up to its
   last line's text, not across the pane; under emacs keys without the cell at
   its end; and an upward selection begun at a line's start leaves that line out,
