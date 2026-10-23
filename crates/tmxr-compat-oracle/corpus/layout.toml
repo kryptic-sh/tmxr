@@ -138,6 +138,59 @@ checks = [
 ]
 
 [[cases]]
+name = "a_width_change_rewraps_lines_as_tmux"
+# tmux's reflow: a wrapped line joins and splits at the new width, history
+# included, and the cursor keeps its place in its line.
+unix_only = true
+size = [20, 4]
+program = "printf 'abcdefghijklmnopqrstuvwxyz0123\\nx'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "resize-window -t o -x 10 -y 4" },
+  { sleep = 0.3 },
+  { run = "set -g @narrow '#{history_size} #{cursor_x},#{cursor_y}'" },
+  { run = "resize-window -t o -x 40 -y 4" },
+  { sleep = 0.3 },
+]
+checks = [
+  { command = "capture-pane -p -S - -t o" },
+  { format = "#{history_size} #{cursor_x},#{cursor_y}" },
+]
+
+[[cases]]
+name = "a_narrowed_lines_history_and_cursor_as_tmux"
+unix_only = true
+size = [20, 4]
+program = "printf 'abcdefghijklmnopqrstuvwxyz0123\\nab\\033[6G'; exec sleep 1000"
+steps = [{ sleep = 0.5 }, { run = "resize-window -t o -x 10 -y 4" }, { sleep = 0.3 }]
+checks = [
+  { command = "capture-pane -p -S - -t o" },
+  { format = "#{history_size} #{cursor_x},#{cursor_y}" },
+]
+
+[[cases]]
+name = "a_wide_character_at_a_break_as_tmux"
+unix_only = true
+size = [20, 4]
+program = "printf 'abc\\344\\270\\255def'; exec sleep 1000"
+steps = [{ sleep = 0.5 }, { run = "resize-window -t o -x 4 -y 4" }, { sleep = 0.3 }]
+checks = [
+  { command = "capture-pane -p -S - -t o" },
+  { format = "#{history_size} #{cursor_x},#{cursor_y}" },
+]
+
+[[cases]]
+name = "a_resize_under_the_alternate_screen_reflows_as_it_goes"
+unix_only = true
+size = [20, 4]
+program = "printf 'abcdefghijklmnopqrstuvwxy\\n\\033[?1049h'; sleep 1; printf '\\033[?1049l'; exec sleep 1000"
+steps = [{ sleep = 0.4 }, { run = "resize-window -t o -x 10 -y 4" }, { sleep = 1.2 }]
+checks = [
+  { command = "capture-pane -p -S - -t o" },
+  { format = "#{history_size} #{cursor_x},#{cursor_y}" },
+]
+
+[[cases]]
 name = "capture_pane_prints_each_row_and_j_joins_wrapped_ones"
 unix_only = true
 size = [20, 6]

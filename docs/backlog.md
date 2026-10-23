@@ -457,38 +457,39 @@ table. What has been verified, and how:
   #48, #49, #50, #51 and #52, from branches `scroll-alloc`, `visible-row`,
   `trim-on-scroll`, `line-cells`, `hyperlinks` and `saved-screen` of
   kryptic-sh/vt100-rust; #49 builds on #47 and #52 on #50; tmxr builds against
-  `tmxr-0.18`, which carries all six, pinned by `rev` in the root `Cargo.toml`'s
-  `[patch.crates-io]` and allowed in `deny.toml`, as crossterm is). #49:
-  `set_scrollback` widened each history row it showed to the screen's width and
-  never narrowed it again, so one copy-mode entry on 50000 lines of history left
-  the server at 206 MiB for good (now 30 MiB, tmux 23 MiB); a whole-history page
-  now costs a reallocation per row instead, 46 ms against 32–35 ms for reading
-  every cell (bare vt100, best of 5). #50 adds `Screen::line_cells` /
-  `line_wrapped`, a line of history and screen by index without moving the view:
-  `copy::snapshot` reads through it, so entering copy mode on 50000 lines costs
-  5–6 ms of server CPU (tmux 4 ms; 327–362 ms before these changes), and tmxr no
-  longer moves vt100's view at all, so #49 serves other users of vt100. #48:
-  `Grid::visible_row` was `visible_rows().nth(row)`, which steps through every
-  row above, so each `Screen::cell` cost time in proportion to its row. #47: for
-  every line scrolled into history, vt100 0.18.1's `Grid::scroll_up` compared
-  each cell against a blank one through an out-of-line `PartialEq`, shrank the
-  row (a reallocation) and allocated a full-width row to replace it. The patch
-  copies the used cells into the history row and clears them in place. Found
-  with a pprof (`setitimer`) profile, as `perf` is not installed: 92.5% of bare
-  vt100's time on `seq 1 2000000` was in `scroll_up`. Measured 2026-10-21 on the
-  Arch laptop (i7-1355U, pinned to its performance cores), a pane printing
-  `seq 1 2000000` with a 120x40 client attached, its end signalled by
-  `wait-for`: the server's CPU went from 1.68–2.14 s to 0.50–0.58 s, tmux 3.8's
-  0.61–0.62 s, wall time from about 2 s to 0.7 s, tmux's 0.8 s. vt100 alone at
-  the default `history-limit` of 50000 went from 1.56 s to 0.41 s, with history
-  identical by hash (a check shown to catch three deliberately broken variants).
-  Drop the patch once a vt100 release has it; `cargo install tmxr` from
-  crates.io builds without it. The chip is hybrid, and the same emulator run
-  took 1.5 times as long pinned to an efficiency core (`taskset`), which the
-  scheduler may pick for the server. Measuring note: an earlier harness that
-  polled `capture-pane -p` for the end of the output mostly measured the
-  captures (each copied the whole history before `snapshot_lines`, see the
-  changelog), which put tmxr at five times tmux's CPU.
+  `tmxr-0.18`, which carries all six and the `reflow` branch, pinned by `rev` in
+  the root `Cargo.toml`'s `[patch.crates-io]` and allowed in `deny.toml`, as
+  crossterm is). #49: `set_scrollback` widened each history row it showed to the
+  screen's width and never narrowed it again, so one copy-mode entry on 50000
+  lines of history left the server at 206 MiB for good (now 30 MiB, tmux 23
+  MiB); a whole-history page now costs a reallocation per row instead, 46 ms
+  against 32–35 ms for reading every cell (bare vt100, best of 5). #50 adds
+  `Screen::line_cells` / `line_wrapped`, a line of history and screen by index
+  without moving the view: `copy::snapshot` reads through it, so entering copy
+  mode on 50000 lines costs 5–6 ms of server CPU (tmux 4 ms; 327–362 ms before
+  these changes), and tmxr no longer moves vt100's view at all, so #49 serves
+  other users of vt100. #48: `Grid::visible_row` was `visible_rows().nth(row)`,
+  which steps through every row above, so each `Screen::cell` cost time in
+  proportion to its row. #47: for every line scrolled into history, vt100
+  0.18.1's `Grid::scroll_up` compared each cell against a blank one through an
+  out-of-line `PartialEq`, shrank the row (a reallocation) and allocated a
+  full-width row to replace it. The patch copies the used cells into the history
+  row and clears them in place. Found with a pprof (`setitimer`) profile, as
+  `perf` is not installed: 92.5% of bare vt100's time on `seq 1 2000000` was in
+  `scroll_up`. Measured 2026-10-21 on the Arch laptop (i7-1355U, pinned to its
+  performance cores), a pane printing `seq 1 2000000` with a 120x40 client
+  attached, its end signalled by `wait-for`: the server's CPU went from
+  1.68–2.14 s to 0.50–0.58 s, tmux 3.8's 0.61–0.62 s, wall time from about 2 s
+  to 0.7 s, tmux's 0.8 s. vt100 alone at the default `history-limit` of 50000
+  went from 1.56 s to 0.41 s, with history identical by hash (a check shown to
+  catch three deliberately broken variants). Drop the patch once a vt100 release
+  has it; `cargo install tmxr` from crates.io builds without it. The chip is
+  hybrid, and the same emulator run took 1.5 times as long pinned to an
+  efficiency core (`taskset`), which the scheduler may pick for the server.
+  Measuring note: an earlier harness that polled `capture-pane -p` for the end
+  of the output mostly measured the captures (each copied the whole history
+  before `snapshot_lines`, see the changelog), which put tmxr at five times
+  tmux's CPU.
 - **crates.io cannot take tmxr-server, tmxr-client or tmxr** while they need the
   vt100 fork: a `[patch]` does not reach a published package, and
   `cargo publish` verifies each tarball against crates.io's vt100 0.18.1, which
@@ -926,14 +927,19 @@ table. What has been verified, and how:
   `DEAD_LINE_QUIET` or ended (`PtyEvent::Eof`). Not tested: that a pane reads
   nothing after the line, as tmux closes its terminal there; on Linux the
   shell's exit hangs the terminal up, so no output came after it in any attempt.
-- **A width change does not reflow the screen**: vt100 0.18's `Grid::set_size`
-  cuts or pads each row in place (read 2026-10-21), where tmux rewraps wrapped
-  lines to the new width (`screen_reflow`). One effect probed with tmux 3.6 the
-  same day: after a width change tmux moves a cursor that was past the end of
-  its line's text back to that end (`[5G` on an empty line: column 4 to 0;
-  `ab[6G`: 5 to 2), and a height change leaves it; tmxr keeps the column. Not
-  compared otherwise; the oracle's `tab_stops_reset_as_tmux` checks only the tab
-  stops after its resize for this reason.
+- **A width change reflows the screen** as tmux's `screen_reflow`, through the
+  vt100 fork's `Screen::set_reflow` (branch `reflow`, carried on `tmxr-0.18`;
+  not offered upstream yet, as it builds on #47–#52): each line's rows joined
+  and split at the new width (history included, blank rows below counted, as
+  tmux's grid keeps them), the cursor kept in its line or moved to its end, the
+  normal screen left as it was under the alternate screen until that goes, and a
+  wide character counted three columns where a row breaks, as tmux's
+  `grid_reflow` counts its padding cell (all compared with tmux 3.6:
+  `a_width_change_rewraps_lines_as_tmux` and the three after it in
+  `corpus/layout.toml`). Prompt marks follow their lines
+  (`Emulator::follow_reflow`); the input mark is dropped, so `prefix y` falls
+  back to the shell's line keys until the next prompt. Seen in Alacritty 0.17
+  under Hyprland's retiling (2026-10-23).
 - **Alternate screen switches are made over vt100's**
   (`Emulator::switch_screen`, matching tmux 3.6 in the oracle for 47, 1047 and
   1049, on and off): switching on goes through vt100's 1049, which saves the

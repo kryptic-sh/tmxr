@@ -14,6 +14,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Lines rewrap when a pane's width changes**, as tmux's reflow: a wrapped line
+  joins and splits again at the new width, its history too, and the cursor keeps
+  its place in its line. Under a program on the alternate screen, the normal
+  screen is rewrapped as the program leaves it. Before, rows were cut or padded
+  where they stood.
 - **`clear-history -H` clears the pane's hyperlinks**, those on its screen
   included, as tmux's does.
 - **The client's theme follows its terminal**: where the terminal reports its

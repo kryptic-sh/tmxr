@@ -364,13 +364,16 @@ pub struct Emulator {
 
 impl Emulator {
     pub fn new(rows: u16, cols: u16, scrollback: usize) -> Self {
+        let mut parser = vt100::Parser::new_with_callbacks(
+            dimension(rows),
+            dimension(cols),
+            scrollback,
+            Hooks::default(),
+        );
+        // A width change rewraps the lines, as tmux's reflow.
+        parser.screen_mut().set_reflow(true);
         Self {
-            parser: vt100::Parser::new_with_callbacks(
-                dimension(rows),
-                dimension(cols),
-                scrollback,
-                Hooks::default(),
-            ),
+            parser,
             dcs: DcsSplitter::default(),
             passthrough: Vec::new(),
             rename: None,
@@ -791,6 +794,9 @@ impl Emulator {
         } else {
             self.feed(bytes);
         }
+        // Leaving the alternate screen reflows a normal screen resized
+        // under it.
+        self.follow_reflow();
         self.count_history();
         std::mem::take(&mut self.parser.callbacks_mut().replies)
     }
@@ -824,7 +830,35 @@ impl Emulator {
         self.parser
             .screen_mut()
             .set_size(dimension(rows), dimension(cols));
+        self.follow_reflow();
         self.count_history();
+    }
+
+    /// After a reflow, the line numbers the emulator keeps follow their
+    /// lines: each prompt mark goes to its line's new number, those whose
+    /// line fell off the history go, and the input mark goes (its column
+    /// is not kept through a rewrap), as tmux's line flags move with their
+    /// lines.
+    fn follow_reflow(&mut self) {
+        let Some(reflow) = self.parser.screen_mut().take_reflow() else {
+            return;
+        };
+        let hooks = self.parser.callbacks_mut();
+        let before = hooks.dropped;
+        let after = before + reflow.dropped;
+        let follow = |marks: &std::collections::BTreeSet<usize>| {
+            marks
+                .iter()
+                .filter_map(|&mark| {
+                    let line = (*reflow.lines.get(mark.checked_sub(before)?)?)?;
+                    Some(after + line)
+                })
+                .collect()
+        };
+        hooks.prompts = follow(&hooks.prompts);
+        hooks.outputs = follow(&hooks.outputs);
+        hooks.dropped = after;
+        hooks.input_mark = None;
     }
 
     /// Whether the program asked to be told of focus changes (mode 1004),
@@ -1082,6 +1116,17 @@ mod tests {
             (None, None),
             "a full reset clears them"
         );
+    }
+
+    #[test]
+    fn a_prompt_mark_follows_its_line_through_a_reflow() {
+        let mut e = Emulator::new(3, 10, 10);
+        e.process(b"0123456789abcdefghij\r\n\x1b]133;A\x07$ ");
+        assert_eq!(e.prompt_lines(false), [2]);
+        // Wider, the wrapped line takes one row: the prompt is on the next.
+        e.resize(3, 20);
+        assert_eq!(e.prompt_lines(false), [1]);
+        assert_eq!(e.screen().contents(), "0123456789abcdefghij\n$ ");
     }
 
     #[test]
