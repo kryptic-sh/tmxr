@@ -75,6 +75,11 @@ fn keys_match_tmux() {
 }
 
 #[test]
+fn copy_mode_highlights_match_tmux() {
+    assert_passes("highlights.toml");
+}
+
+#[test]
 fn option_scopes_match_tmux() {
     assert_passes("options.toml");
 }

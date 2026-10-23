@@ -134,6 +134,13 @@ pub enum Check {
         #[serde(default)]
         expect: Option<String>,
     },
+    /// The client's cells drawn on this colour (a palette index, as `bg=`
+    /// sets one by name or `colourN`), as runs `row:from-to`.
+    Background {
+        screen_background: u8,
+        #[serde(default)]
+        expect: Option<String>,
+    },
 }
 
 impl Check {
@@ -145,6 +152,9 @@ impl Check {
                 screen_contains, ..
             } => format!("screen contains {screen_contains:?}"),
             Self::Find { screen_find, .. } => format!("screen position of {screen_find:?}"),
+            Self::Background {
+                screen_background, ..
+            } => format!("screen cells on colour {screen_background}"),
         }
     }
 
@@ -152,7 +162,8 @@ impl Check {
         match self {
             Self::Format { expect, .. }
             | Self::Command { expect, .. }
-            | Self::Find { expect, .. } => expect.clone(),
+            | Self::Find { expect, .. }
+            | Self::Background { expect, .. } => expect.clone(),
             Self::Screen { expect, .. } => expect.map(|e| e.to_string()),
         }
     }

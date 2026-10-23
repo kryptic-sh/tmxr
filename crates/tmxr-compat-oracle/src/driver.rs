@@ -262,6 +262,9 @@ impl Server {
                 .screen()
                 .contains(screen_contains.as_str())
                 .to_string()),
+            Check::Background {
+                screen_background, ..
+            } => Ok(self.client()?.background_runs(*screen_background)),
             Check::Find { screen_find, .. } => {
                 let at = At::Text {
                     text: screen_find.clone(),
@@ -404,6 +407,35 @@ impl Client {
     /// The screen's text, row by row.
     pub fn screen(&self) -> String {
         self.lock().screen().contents()
+    }
+
+    /// The runs of cells drawn on palette colour `index`, `row:from-to`
+    /// each, row by row.
+    fn background_runs(&self, index: u8) -> String {
+        let parser = self.lock();
+        let screen = parser.screen();
+        let (rows, cols) = screen.size();
+        let (rows, cols) = (rows.get(), cols.get());
+        let mut runs = Vec::new();
+        for row in 0..rows {
+            let on = |col| {
+                screen
+                    .cell(row, col)
+                    .is_some_and(|c| c.bgcolor() == vt100::Color::Idx(index))
+            };
+            let mut col = 0;
+            while col < cols {
+                if on(col) {
+                    let from = col;
+                    while col + 1 < cols && on(col + 1) {
+                        col += 1;
+                    }
+                    runs.push(format!("{row}:{from}-{col}"));
+                }
+                col += 1;
+            }
+        }
+        runs.join(" ")
     }
 
     /// The cell `at` names on the screen now.

@@ -50,9 +50,14 @@ checks = [
   { command = "show-buffer" },              # must match tmux
   { format = "#{pane_in_mode}", expect = "0" }, # and this value
   { screen_contains = "alpha", expect = true },
-  { screen_find = "┌", expect = "3,8" },     # col,row or none
+    { screen_find = "┌", expect = "3,8" },     # col,row or none
+  { screen_background = 4 },                # cells on colour 4: "row:from-to …"
 ]
 ```
+
+`screen_background` compares how a case draws, not only what: set the styles
+under test to palette colours (`set -g copy-mode-selection-style bg=colour4`) so
+both sides draw the same colours whatever their themes.
 
 Mouse actions: `click`, `double-click`, `triple-click`, `down`, `up`, `drag`
 (`at` to `to`), `wheel-up`, `wheel-down`; `button` 1, 2 or 3. `at` is

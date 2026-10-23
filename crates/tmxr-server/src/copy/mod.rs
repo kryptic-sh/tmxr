@@ -1067,20 +1067,43 @@ impl CopyMode {
         }
     }
 
-    /// Whether `(y, x)` is inside the selection, for drawing.
+    /// Whether `(y, x)` is drawn as selected, as tmux's
+    /// screen_check_selection: between where the selection began and where
+    /// it ends, whole lines between them; under emacs keys without the
+    /// cell at its bottom-right end, and a selection upwards not on its
+    /// first line when it began at that line's start. A rectangle takes the
+    /// columns between its ends on each of its lines.
     pub fn selected(&self, y: usize, x: usize) -> bool {
-        let Some(((ay, ax), end)) = self.selection_ends() else {
+        let Some(((sy, sx), (ey, ex))) = self.selection_bounds() else {
             return false;
         };
-        let (s, e) = if (ay, ax) <= end {
-            ((ay, ax), end)
-        } else {
-            (end, (ay, ax))
+        // The last column of an end at column `at`.
+        let last = |at: usize| {
+            if self.emacs {
+                at.checked_sub(1)
+            } else {
+                Some(at)
+            }
         };
-        match self.kind {
-            SelKind::Line => y >= s.0 && y <= e.0,
-            SelKind::Rect => y >= s.0 && y <= e.0 && x >= ax.min(end.1) && x <= ax.max(end.1),
-            SelKind::Char => (y, x) >= s && (y, x) <= e,
+        if self.kind == SelKind::Rect {
+            return (sy.min(ey)..=sy.max(ey)).contains(&y)
+                && (sx.min(ex)..=sx.max(ex)).contains(&x);
+        }
+        match sy.cmp(&ey) {
+            std::cmp::Ordering::Less => {
+                (sy..=ey).contains(&y)
+                    && (y != sy || x >= sx)
+                    && (y != ey || x <= last(ex).unwrap_or(0))
+            }
+            std::cmp::Ordering::Greater => {
+                (ey..=sy).contains(&y)
+                    && (y != ey || x >= ex)
+                    && (y != sy || (sx != 0 && last(sx).is_some_and(|l| x <= l)))
+            }
+            std::cmp::Ordering::Equal if ex < sx => {
+                y == sy && x >= ex && last(sx).is_some_and(|l| x <= l)
+            }
+            std::cmp::Ordering::Equal => y == sy && x >= sx && x <= last(ex).unwrap_or(0),
         }
     }
 

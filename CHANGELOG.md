@@ -68,6 +68,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A copy-mode selection is highlighted as tmux's**: a line selection up to its
+  last line's text, not across the pane; under emacs keys without the cell at
+  its end; and an upward selection begun at a line's start leaves that line out,
+  as tmux's `screen_check_selection` draws them.
+
 - **The current search match is drawn as tmux's**: the match the cursor is
   anywhere in, or under emacs keys after a search down the one just before the
   cursor; tmxr drew it only with the cursor on its first character.

@@ -1,0 +1,827 @@
+# Copy mode's highlights, cell by cell, as tmux's screen_check_selection
+# and window_copy_update_style draw them.
+[[cases]]
+name = "down_drawn_under_vi_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys vi" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 6 cursor-right" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X -N 3 cursor-right" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "up_drawn_under_vi_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys vi" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 3 cursor-down" },
+  { run = "send-keys -t o -X -N 2 cursor-right" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 2 cursor-up" },
+  { run = "send-keys -t o -X cursor-left" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "upfromstart_drawn_under_vi_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys vi" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 3 cursor-down" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 2 cursor-up" },
+  { run = "send-keys -t o -X -N 4 cursor-right" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "sameleft_drawn_under_vi_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys vi" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 8 cursor-right" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 4 cursor-left" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "sameright_drawn_under_vi_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys vi" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 2 cursor-right" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 4 cursor-right" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "line_drawn_under_vi_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys vi" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X select-line" },
+  { run = "send-keys -t o -X cursor-down" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "lineup_drawn_under_vi_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys vi" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X select-line" },
+  { run = "send-keys -t o -X cursor-up" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "word_drawn_under_vi_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys vi" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 7 cursor-right" },
+  { run = "send-keys -t o -X select-word" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "rect_drawn_under_vi_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys vi" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 2 cursor-right" },
+  { run = "send-keys -t o -X rectangle-toggle" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X -N 3 cursor-right" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "rectleft_drawn_under_vi_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys vi" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 6 cursor-right" },
+  { run = "send-keys -t o -X rectangle-toggle" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X -N 3 cursor-left" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "stopped_drawn_under_vi_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys vi" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 2 cursor-right" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X stop-selection" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "mark_drawn_under_vi_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys vi" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X -N 5 cursor-right" },
+  { run = "send-keys -t o -X set-mark" },
+  { run = "send-keys -t o -X history-top" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "search_drawn_under_vi_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys vi" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X search-forward eta" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "searchback_drawn_under_vi_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys vi" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-bottom" },
+  { run = "send-keys -t o -X search-backward eta" },
+  { run = "send-keys -t o -X cursor-right" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "down_drawn_under_emacs_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys emacs" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 6 cursor-right" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X -N 3 cursor-right" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "up_drawn_under_emacs_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys emacs" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 3 cursor-down" },
+  { run = "send-keys -t o -X -N 2 cursor-right" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 2 cursor-up" },
+  { run = "send-keys -t o -X cursor-left" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "upfromstart_drawn_under_emacs_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys emacs" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 3 cursor-down" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 2 cursor-up" },
+  { run = "send-keys -t o -X -N 4 cursor-right" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "sameleft_drawn_under_emacs_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys emacs" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 8 cursor-right" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 4 cursor-left" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "sameright_drawn_under_emacs_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys emacs" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 2 cursor-right" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 4 cursor-right" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "line_drawn_under_emacs_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys emacs" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X select-line" },
+  { run = "send-keys -t o -X cursor-down" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "lineup_drawn_under_emacs_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys emacs" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X select-line" },
+  { run = "send-keys -t o -X cursor-up" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "word_drawn_under_emacs_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys emacs" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 7 cursor-right" },
+  { run = "send-keys -t o -X select-word" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "rect_drawn_under_emacs_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys emacs" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 2 cursor-right" },
+  { run = "send-keys -t o -X rectangle-toggle" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X -N 3 cursor-right" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "rectleft_drawn_under_emacs_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys emacs" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 6 cursor-right" },
+  { run = "send-keys -t o -X rectangle-toggle" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X -N 3 cursor-left" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "stopped_drawn_under_emacs_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys emacs" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 2 cursor-right" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X stop-selection" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "mark_drawn_under_emacs_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys emacs" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X -N 5 cursor-right" },
+  { run = "send-keys -t o -X set-mark" },
+  { run = "send-keys -t o -X history-top" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "search_drawn_under_emacs_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys emacs" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X search-forward eta" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
+
+[[cases]]
+name = "searchback_drawn_under_emacs_keys_as_tmux"
+unix_only = true
+attach = true
+size = [30, 8]
+program = "printf 'alpha beta gamma\\n  delta epsilon\\nzeta eta theta iota\\nkappa\\nlambda mu nu\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "set -g mode-keys emacs" },
+  { run = "set -g copy-mode-mark-style 'bg=colour1'" },
+  { run = "set -g copy-mode-current-match-style 'bg=colour2'" },
+  { run = "set -g copy-mode-match-style 'bg=colour3'" },
+  { run = "set -g copy-mode-selection-style 'bg=colour4'" },
+  { run = "set -g copy-mode-position-format ''" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-bottom" },
+  { run = "send-keys -t o -X search-backward eta" },
+  { run = "send-keys -t o -X cursor-right" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_background = 1 },
+  { screen_background = 2 },
+  { screen_background = 3 },
+  { screen_background = 4 },
+]
