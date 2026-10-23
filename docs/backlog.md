@@ -436,15 +436,15 @@ table. What has been verified, and how:
   status line naming each window's command would take a snapshot a window a
   redraw.
 - **OSC 8 hyperlinks** (decided by the owner 2026-10-22: kept by the vt100 fork,
-  doy/vt100-rust#51, which costs a cell 2 bytes of text so it stays 32 bytes):
-  render puts a link's number in the frame cell's `underline_color`
-  (`backend::Links`; tmxr has no other use for it, as vt100 keeps no underline
-  colour), so ratatui's diff redraws a cell whose link alone changed, and
-  `AnsiBackend::draw` writes it as OSC 8
-  (`a_programs_hyperlink_reaches_the_client`). The owner chose this over an
-  overdraw pass or tmxr's own diff; underline colours, if they ever come, need
-  another carrier. Still unlike tmux: links go to every client, where tmux sends
-  them only to terminals whose `terminal-features` have `hyperlinks`. Copy
+  doy/vt100-rust#51 (with `Screen::clear_hyperlinks` for `clear-history -H`),
+  which costs a cell 2 bytes of text so it stays 32 bytes): render puts a link's
+  number in the frame cell's `underline_color` (`backend::Links`; tmxr has no
+  other use for it, as vt100 keeps no underline colour), so ratatui's diff
+  redraws a cell whose link alone changed, and `AnsiBackend::draw` writes it as
+  OSC 8 (`a_programs_hyperlink_reaches_the_client`). The owner chose this over
+  an overdraw pass or tmxr's own diff; underline colours, if they ever come,
+  need another carrier. Still unlike tmux: links go to every client, where tmux
+  sends them only to terminals whose `terminal-features` have `hyperlinks`. Copy
   mode's snapshot keeps a cell's link the same way, in its style's
   `underline_color` (`copy::link_of`, a cell stays 40 bytes), resolved through
   the pane's vt100 table when drawn (`copy_mode_keeps_a_lines_hyperlink`). A
@@ -868,10 +868,10 @@ table. What has been verified, and how:
   matter are implemented or refused since). Harmless, as what happens anyway:
   `customize-mode -N` (tmxr's picker has no preview), `-v` on `split-window` /
   `join-pane` / `move-pane`, `rotate-window -U`, `choose-tree -s`,
-  `set-option -s` (tmxr picks the table from the name), `clear-history -H` (tmxr
-  keeps no hyperlinks), and `-Z` on `choose-buffer`, `choose-client`,
-  `choose-tree`, `find-window` and `customize-mode` (tmux zooms the pane under
-  its pane modes; tmxr's pickers are full-screen overlays).
+  `set-option -s` (tmxr picks the table from the name), and `-Z` on
+  `choose-buffer`, `choose-client`, `choose-tree`, `find-window` and
+  `customize-mode` (tmux zooms the pane under its pane modes; tmxr's pickers are
+  full-screen overlays).
 - **What `list-keys` prints of a bind**: its commands re-parsed and its `{ … }`
   blocks in braces, as tmux's (`blocks_print_in_braces_as_tmux`; a
   `tmxr_command::Line` carries which words were blocks to `bind-key`). A bind

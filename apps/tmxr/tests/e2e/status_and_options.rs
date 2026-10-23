@@ -1588,6 +1588,13 @@ fn a_programs_hyperlink_reaches_the_client() {
     t.wait_run(&["show-options", "-gv", "@link"], "off the link", |o| {
         o.trim() == "[]"
     });
+    // clear-history -H forgets the links, the screen's too.
+    t.run(&["clear-history", "-H", "-t", "hl"]);
+    t.run(&["set-option", "-g", "@link", "x"]);
+    s.click(2, 2, 0);
+    t.wait_run(&["show-options", "-gv", "@link"], "the link gone", |o| {
+        o.trim() == "[]"
+    });
 }
 
 /// A colour of the 256 a program sets (OSC 4) is drawn as it set it.

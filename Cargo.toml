@@ -47,4 +47,4 @@ strip = true
 # the alternate one (#52); drop once a vt100 release carries all six.
 [patch.crates-io]
 crossterm = { git = "https://github.com/kryptic-sh/crossterm", rev = "ef87b584d18ea0190ee2fc2f821c71c0324f4947" }
-vt100 = { git = "https://github.com/kryptic-sh/vt100-rust", rev = "765fea942137316cf05a8de968de059b25ebbea0" }
+vt100 = { git = "https://github.com/kryptic-sh/vt100-rust", rev = "ac0d1696411849ec6319086ab9e0cea4f628f176" }

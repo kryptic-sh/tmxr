@@ -14,6 +14,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`clear-history -H` clears the pane's hyperlinks**, those on its screen
+  included, as tmux's does.
 - **The client's theme follows its terminal**: where the terminal reports its
   color scheme (mode 2031, as foot does), `#{client_theme}` is `dark` or `light`
   and the `client-dark-theme` / `client-light-theme` hooks run as it changes, as

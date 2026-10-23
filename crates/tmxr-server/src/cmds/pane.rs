@@ -257,10 +257,14 @@ pub(super) fn run(
             }
         }
         "clear-history" => {
-            // -H also drops hyperlinks in tmux; tmxr keeps none.
             let (_, _, pid) = target::pane(srv, ctx, a.value('t'))?;
             let p = srv.panes.get_mut(&pid).ok_or("no such pane")?;
             p.emu.clear_history();
+            // -H: the pane's hyperlinks go too, those on the screen
+            // included, as tmux's screen_reset_hyperlinks.
+            if a.has('H') {
+                p.emu.screen_mut().clear_hyperlinks();
+            }
             let window = p.window;
             srv.mark_window_dirty(window);
         }
