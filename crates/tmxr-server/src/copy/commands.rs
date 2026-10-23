@@ -7,14 +7,16 @@ use crate::server::Server;
 
 use super::{CopyMode, SelKind};
 
-/// Give `pane`'s copy mode the options it reads: `word-separators` and
-/// `wrap-search`.
+/// Give `pane`'s copy mode the options it reads: `word-separators`,
+/// `wrap-search` and `mode-keys`.
 fn take_options(srv: &mut Server, pane: PaneId) {
     let separators = srv.pane_session_options(Some(pane)).word_separators.clone();
     let wrap = srv.pane_options(pane).wrap_search;
+    let emacs = srv.pane_options(pane).mode_keys == tmxr_config::ModeKeys::Emacs;
     if let Some(cm) = srv.panes.get_mut(&pane).and_then(|p| p.copy.as_mut()) {
         cm.word_separators = separators;
         cm.wrap_search = wrap;
+        cm.emacs = emacs;
     }
 }
 
@@ -165,6 +167,11 @@ pub fn command(
     args: &[String],
 ) -> Result<(), String> {
     let result = run_command(srv, ctx, pane, name, args);
+    if let Some(cm) = srv.panes.get_mut(&pane).and_then(|p| p.copy.as_mut())
+        && super::clears_marks(name, cm.emacs)
+    {
+        cm.marks = false;
+    }
     if let Some(p) = srv.panes.get_mut(&pane)
         && let Some(search) = p.copy.as_ref().and_then(|cm| cm.search.clone())
     {

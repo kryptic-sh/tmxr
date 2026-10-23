@@ -13,7 +13,12 @@ pub const NAMES: &[&str] = &[
     "alternate_on",
     "alternate_saved_x",
     "alternate_saved_y",
+    "buffer_created",
+    "buffer_full",
     "buffer_mode_format",
+    "buffer_name",
+    "buffer_sample",
+    "buffer_size",
     "client_activity",
     "client_created",
     "client_flags",
@@ -34,6 +39,8 @@ pub const NAMES: &[&str] = &[
     "client_width",
     "command",
     "config_files",
+    "copy_cursor_hyperlink",
+    "copy_cursor_line",
     "copy_cursor_word",
     "copy_cursor_x",
     "copy_cursor_y",
@@ -102,9 +109,15 @@ pub const NAMES: &[&str] = &[
     "pane_unseen_changes",
     "pane_width",
     "pid",
+    "rectangle_toggle",
     "scroll_position",
     "scroll_region_lower",
     "scroll_region_upper",
+    "search_count",
+    "search_count_partial",
+    "search_match",
+    "search_present",
+    "search_timed_out",
     "selection_active",
     "selection_end_x",
     "selection_end_y",
@@ -971,6 +984,31 @@ impl<'a> Context for Vars<'a> {
                 .map(|t| t.display().to_string())
                 .unwrap_or_default(),
             "copy_cursor_word" => pane?.copy.as_ref()?.cursor_word(),
+            "copy_cursor_line" => pane?.copy.as_ref()?.cursor_line(),
+            "copy_cursor_hyperlink" => {
+                let pane = pane?;
+                pane.copy
+                    .as_ref()?
+                    .cursor_link()
+                    .and_then(|id| pane.emu.screen().hyperlink(id))
+                    .map(|h| h.uri.clone())
+                    .unwrap_or_default()
+            }
+            "rectangle_toggle" => flag(pane?.copy.as_ref()?.rectangle()),
+            // A search's marks, its match count and the match at the
+            // cursor, as tmux's window_copy_formats; tmxr's searches never
+            // stop short, so never time out or count only part.
+            "search_present" => flag(pane?.copy.as_ref()?.marks),
+            "search_count" => pane?.copy.as_ref()?.search_count.to_string(),
+            "search_count_partial" | "search_timed_out" => {
+                pane?.copy.as_ref()?;
+                "0".to_owned()
+            }
+            "search_match" => pane?.copy.as_ref()?.match_at_cursor().unwrap_or_default(),
+            // tmux's top paste buffer's, as format_defaults adds them.
+            "buffer_created" | "buffer_full" | "buffer_name" | "buffer_sample" | "buffer_size" => {
+                srv.buffers.front()?.var(name)?
+            }
             // tmux's: the column, and the row in the view.
             "copy_cursor_x" => pane?.copy.as_ref()?.cx.to_string(),
             "copy_cursor_y" => {
@@ -1006,11 +1044,8 @@ impl<'a> Context for Vars<'a> {
             // cursor until stop-selection fixes it; active while it follows
             // the cursor, present while its ends differ.
             "selection_present" => {
-                let cm = pane?.copy.as_ref()?;
-                flag(
-                    cm.anchor
-                        .is_some_and(|a| Some(a) != cm.selection_other_end()),
-                )
+                let bounds = pane?.copy.as_ref()?.selection_bounds();
+                flag(bounds.is_some_and(|(start, end)| start != end))
             }
             "selection_active" => {
                 let cm = pane?.copy.as_ref()?;

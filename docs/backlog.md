@@ -891,6 +891,23 @@ table. What has been verified, and how:
   signalling a process group the session belongs to (`detach-client -P` sends
   SIGHUP to client parents). Workaround: log to a file in `$HOME` and read it
   from a new session.
+- **Copy mode against tmux 3.6, command by command** (2026-10-23): each
+  copy-mode command was run from one start in tmux 3.6 and tmxr, and the cursor,
+  view, selection and search formats compared (a scratch script, not kept; the
+  fixes have oracle cases in `corpus/keys.toml`). Still differing:
+  - `select-line` / `select-word` keep tmux's lineflag in tmux: a cursor move
+    after them snaps the cursor to the line's start or end and moves the
+    selection by whole lines, and `history-top` / `-bottom` call `other-end`;
+    tmxr has no lineflag (its `selflag` only snaps the selection's ends).
+  - Copied text ignores `mode-keys`: tmux's emacs keys leave out the character
+    under the cursor and its vi keys keep the last newline of a selection past
+    its line's end (`window_copy_get_selection`); tmxr always copies as vi does
+    and never keeps the newline.
+  - `search-backward foo` then `search-again` twice landed on another match than
+    tmux's; `jump-to-mark` scrolls the view differently. Not looked into.
+  - A search matches within a line, where tmux's also match across a wrap, so
+    `#{search_count}` can count fewer.
+  - `#{top_line_time}` is missing: vt100 keeps no time for a line.
 - **`C-r` in an incremental search does nothing in tmux 3.6**, and tmxr does the
   same on purpose (seen 2026-10-20): `command-prompt -i` passes the text after
   `C-r` as `-text`, which tmux parses as flags of `search-backward-incremental`

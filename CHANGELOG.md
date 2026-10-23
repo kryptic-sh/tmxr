@@ -14,6 +14,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Copy mode's search formats**: `#{search_present}` while a search's matches
+  are marked, `#{search_count}` over every line, `#{search_match}` (the match at
+  the cursor), `#{search_count_partial}` and `#{search_timed_out}`; and
+  `#{rectangle_toggle}`, `#{copy_cursor_line}` and `#{copy_cursor_hyperlink}`,
+  as tmux's.
+- **`#{buffer_name}`, `#{buffer_sample}`, `#{buffer_size}`, `#{buffer_full}` and
+  `#{buffer_created}` outside a buffer list**, as the newest buffer's, as
+  tmux's.
+
 - **`#{selection_start_x}`, `#{selection_start_y}`, `#{selection_end_x}`,
   `#{selection_end_y}` and `#{selection_active}`**, as tmux's; and
   `#{selection_present}` is 0 while the selection's ends are the same cell, as
@@ -47,6 +56,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `cargo install --locked --git https://github.com/kryptic-sh/tmxr tmxr-cli`.
 
 ### Fixed
+
+- **A search's highlights are cleared by the commands that clear tmux's**: any
+  command but a search, a move under vi keys, `toggle-position` and the
+  `-no-clear` copies; before, they stayed until the next search.
+- **An incremental search whose text does not start with `=`, `+` or `-`
+  searches nothing**, as tmux's; tmxr took its first character as the prefix and
+  searched for the rest.
 
 - **Copy mode's `scroll-up` and `scroll-down` move the cursor with the view**,
   keeping its row on the screen and its column as `cursor-up` / `-down` do,

@@ -63,6 +63,15 @@ pub struct CopyMode {
     pub rows: u16,
     pub cols: u16,
     pub search: Option<Search>,
+    /// The last search's matches are marked and highlighted, as tmux's
+    /// searchmark (`#{search_present}`); the commands tmux's table says
+    /// clear them do ([`clears_marks`]).
+    pub marks: bool,
+    /// How many matches the last search had across every line
+    /// (`#{search_count}`), kept when the marks are cleared.
+    pub search_count: usize,
+    /// `mode-keys` is emacs, under which more commands clear the marks.
+    pub emacs: bool,
     /// The pane's last search from an earlier copy mode, which
     /// `search-again` / `search-reverse` repeat upwards until this mode
     /// makes its own, as tmux's window_copy_common_init takes it.
@@ -178,6 +187,9 @@ impl CopyMode {
             rows,
             cols,
             search: None,
+            marks: false,
+            search_count: 0,
+            emacs: false,
             inherited_search: None,
             unseen_changes: false,
             search_origin: None,
@@ -212,6 +224,7 @@ impl CopyMode {
         self.drags_start = old.drags_start;
         self.kind = old.kind;
         self.search.clone_from(&old.search);
+        self.search_count = old.search_count;
         self.inherited_search.clone_from(&old.inherited_search);
         self.unseen_changes = old.unseen_changes;
         self.mark = old.mark.map(clamp);
@@ -420,6 +433,9 @@ impl CopyMode {
             self.anchor = None;
             self.sel_end = None;
             self.search_origin = None;
+            if self.marks {
+                self.mark_matches(true);
+            }
         }
         self.cols = cols;
         self.rows = rows;
@@ -462,24 +478,41 @@ impl CopyMode {
         link_of(&self.lines.get(self.top + row)?.cell(col)?.style)
     }
 
-    /// The end of the selection that is not the anchor (line, column):
-    /// where stop-selection fixed it, else the cursor; `None` without a
-    /// selection.
-    pub fn selection_other_end(&self) -> Option<(usize, usize)> {
-        self.anchor?;
-        Some(self.sel_end.unwrap_or((self.cy, self.cx)))
-    }
-
     /// Where the selection began and where it ends, as tmux's selx / sely
     /// and endselx / endsely: `other-end` moves the cursor between them
     /// without swapping them.
     pub fn selection_bounds(&self) -> Option<((usize, usize), (usize, usize))> {
-        let (anchor, other) = (self.anchor?, self.selection_other_end()?);
+        let (anchor, other) = self.selection_ends()?;
         Some(if self.drags_start {
             (other, anchor)
         } else {
             (anchor, other)
         })
+    }
+
+    /// `#{rectangle_toggle}`: selections are rectangles.
+    pub fn rectangle(&self) -> bool {
+        self.rect
+    }
+
+    /// `#{copy_cursor_line}`: the text of the cursor's line as shown, as
+    /// tmux's format_grid_line.
+    pub fn cursor_line(&self) -> String {
+        self.lines
+            .get(self.cy)
+            .map(|l| l.text(0, l.width()))
+            .unwrap_or_default()
+    }
+
+    /// The link of the cell under the cursor, or of the wide character it
+    /// is the right half of, as tmux's format_grid_hyperlink.
+    pub fn cursor_link(&self) -> Option<std::num::NonZeroU16> {
+        let line = self.lines.get(self.cy)?;
+        let mut x = self.cx;
+        while x > 0 && line.cell(x).is_some_and(|c| c.symbol.is_empty()) {
+            x -= 1;
+        }
+        link_of(&line.cell(x)?.style)
     }
 
     /// The text of the line shown `row` rows down the view.
@@ -926,12 +959,13 @@ impl CopyMode {
                 let forward = name.starts_with("search-forward");
                 let regex = !name.ends_with("-text");
                 let needle = arg.unwrap_or_default().to_owned();
-                self.find(&needle, forward, regex, true);
+                let found = self.find(&needle, forward, regex, true);
                 self.search = Some(Search {
                     needle,
                     forward,
                     regex,
                 });
+                self.mark_matches(found);
             }
             // Run by `command-prompt -i` as the text is typed, as tmux's:
             // the first character is the prompt's prefix, `-` or `+` for
@@ -950,22 +984,27 @@ impl CopyMode {
                     }
                     Some(_) => {}
                 }
+                // `=` is the command's own way; any other prefix searches
+                // nothing, as tmux's.
                 let forward = match prefix {
-                    Some('+') => true,
-                    Some('-') => false,
-                    _ => name == "search-forward-incremental",
+                    Some('+') => Some(true),
+                    Some('-') => Some(false),
+                    Some('=') => Some(name == "search-forward-incremental"),
+                    _ => None,
                 };
                 if needle.is_empty() {
                     self.search = None;
-                } else {
+                    self.marks = false;
+                } else if let Some(forward) = forward {
                     // Up, the cursor's own place never counts; down, it
                     // does until the search moves on.
-                    self.find(needle, forward, false, !forward || repeat);
+                    let found = self.find(needle, forward, false, !forward || repeat);
                     self.search = Some(Search {
                         needle: needle.to_owned(),
                         forward,
                         regex: false,
                     });
+                    self.mark_matches(found);
                 }
             }
             "jump-forward" | "jump-backward" | "jump-to-forward" | "jump-to-backward" => {
@@ -1024,8 +1063,9 @@ impl CopyMode {
                     } else {
                         !search.forward
                     };
-                    self.find(&search.needle, forward, search.regex, true);
+                    let found = self.find(&search.needle, forward, search.regex, true);
                     self.search = Some(search);
+                    self.mark_matches(found);
                 }
             }
             _ => return false,
@@ -1036,6 +1076,60 @@ impl CopyMode {
         }
         true
     }
+}
+
+/// Whether copy-mode command `name` clears a search's marks, as tmux's
+/// window_copy_cmd_table says: searches never do, nor the commands that
+/// copy without clearing or only hide the position; moves keep them under
+/// vi keys (`emacs` false); everything else clears them.
+pub fn clears_marks(name: &str, emacs: bool) -> bool {
+    const NEVER: &[&str] = &[
+        "copy-pipe-no-clear",
+        "copy-selection-no-clear",
+        "pipe-no-clear",
+        "toggle-position",
+    ];
+    const EMACS_ONLY: &[&str] = &[
+        "bottom-line",
+        "cursor-centre-horizontal",
+        "cursor-centre-vertical",
+        "cursor-down",
+        "cursor-left",
+        "cursor-right",
+        "cursor-up",
+        "end-of-line",
+        "goto-line",
+        "halfpage-down",
+        "halfpage-up",
+        "history-bottom",
+        "history-top",
+        "jump-again",
+        "jump-backward",
+        "jump-forward",
+        "jump-reverse",
+        "jump-to-backward",
+        "jump-to-forward",
+        "middle-line",
+        "next-paragraph",
+        "next-space",
+        "next-space-end",
+        "next-word",
+        "next-word-end",
+        "other-end",
+        "page-down",
+        "page-up",
+        "previous-paragraph",
+        "previous-space",
+        "previous-word",
+        "scroll-down",
+        "scroll-up",
+        "start-of-line",
+        "top-line",
+    ];
+    if name.starts_with("search-") || NEVER.contains(&name) {
+        return false;
+    }
+    emacs || !EMACS_ONLY.contains(&name)
 }
 
 #[cfg(test)]
