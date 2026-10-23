@@ -28,6 +28,16 @@ pub enum SelFlag {
     Line,
 }
 
+/// tmux's lineflag: after `select-line` / `select-word` a move up or down
+/// puts the cursor at its line's end (`LeftRight`), or its start once
+/// `other-end` has turned the selection round (`RightLeft`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LineFlag {
+    None,
+    LeftRight,
+    RightLeft,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelKind {
     Char,
@@ -119,6 +129,7 @@ pub struct CopyMode {
     /// word or line (`sel_reset`, tmux's selrx / endselrx) and grows by
     /// words or lines from where it was made (`sel_origin`, tmux's dx, dy).
     selflag: SelFlag,
+    lineflag: LineFlag,
     sel_reset: ((usize, usize), (usize, usize)),
     sel_origin: (usize, usize),
     /// Where `select-word` / `select-line` left the cursor: until it moves
@@ -215,6 +226,7 @@ impl CopyMode {
             rect: false,
             source: None,
             selflag: SelFlag::Char,
+            lineflag: LineFlag::None,
             sel_reset: ((0, 0), (0, 0)),
             sel_origin: (0, 0),
             sel_made_at: (0, 0),
@@ -231,6 +243,7 @@ impl CopyMode {
         self.anchor = old.anchor.map(clamp);
         self.sel_end = old.sel_end.map(clamp);
         self.drags_start = old.drags_start;
+        self.lineflag = old.lineflag;
         self.kind = old.kind;
         self.search.clone_from(&old.search);
         self.search_count = old.search_count;
@@ -434,6 +447,17 @@ impl CopyMode {
             return self.apply(name, None);
         }
         let times = std::mem::take(&mut self.count).max(1);
+        // A count selects that many lines down, as tmux's
+        // window_copy_cmd_select_line.
+        if name == "select-line" {
+            self.apply(name, arg);
+            for _ in 1..times {
+                self.vertical(true);
+                self.end_of_line();
+            }
+            self.scroll_to_cursor();
+            return true;
+        }
         (0..times).all(|_| self.apply(name, arg))
     }
 
@@ -532,6 +556,7 @@ impl CopyMode {
             self.top = cy.min(bottom);
             self.anchor = None;
             self.sel_end = None;
+            self.lineflag = LineFlag::None;
             self.search_origin = None;
         }
         self.cols = cols;
@@ -580,11 +605,19 @@ impl CopyMode {
     /// without swapping them.
     pub fn selection_bounds(&self) -> Option<((usize, usize), (usize, usize))> {
         let (anchor, other) = self.selection_ends()?;
-        Some(if self.drags_start {
+        Some(if self.drags_start && !self.snapping() {
             (other, anchor)
         } else {
             (anchor, other)
         })
+    }
+
+    /// The selection grows by words or lines from where it was made, so its
+    /// ends are tmux's whichever end the cursor drags.
+    fn snapping(&self) -> bool {
+        self.selflag != SelFlag::Char
+            && self.sel_end.is_none()
+            && self.selection_end() != self.sel_made_at
     }
 
     /// `#{rectangle_toggle}`: selections are rectangles.
@@ -695,6 +728,7 @@ impl CopyMode {
     /// window_copy_rectangle_set.
     fn set_rect(&mut self, on: bool) {
         self.rect = on;
+        self.lineflag = LineFlag::None;
         self.kind = if on { SelKind::Rect } else { SelKind::Char };
         self.cx = self.cx.min(self.line_len(self.cy));
     }
@@ -723,6 +757,13 @@ impl CopyMode {
         if !rect && self.cx != ox {
             (self.last_cx, self.last_sx) = (self.cx, ox);
         }
+        // Leaving a line selection's first line upwards, or its last
+        // downwards, turns it round, as tmux's cursor_up / _down.
+        self.turn_line_selection(if down {
+            LineFlag::RightLeft
+        } else {
+            LineFlag::LeftRight
+        });
         self.cy = if down {
             (self.cy + 1).min(self.last_line())
         } else {
@@ -733,6 +774,68 @@ impl CopyMode {
             if self.past_line_end() {
                 self.cx = self.line_len(self.cy);
             }
+        }
+        match self.lineflag {
+            LineFlag::LeftRight if self.rect => self.cx = usize::from(self.cols),
+            LineFlag::LeftRight => self.cx = self.line_len(self.cy),
+            LineFlag::RightLeft => self.cx = 0,
+            LineFlag::None => {}
+        }
+    }
+
+    /// Turn the selection round (`other_end`) when the line flag is `flag`
+    /// and the cursor is on the selection's first line (`LeftRight`) or its
+    /// last (`RightLeft`).
+    fn turn_line_selection(&mut self, flag: LineFlag) {
+        if self.lineflag != flag {
+            return;
+        }
+        let Some((start, end)) = self.selection_bounds() else {
+            return;
+        };
+        let edge = if flag == LineFlag::LeftRight {
+            start
+        } else {
+            end
+        };
+        if self.cy == edge.0 {
+            self.other_end();
+        }
+    }
+
+    /// The cursor to the selection's other end, as tmux's
+    /// window_copy_other_end: after stop-selection to the selection's end,
+    /// which follows it again (cursordrag none becomes endsel); else from
+    /// dragging one end to dragging the other. A line selection turns
+    /// round with it.
+    fn other_end(&mut self) {
+        if self.anchor.is_none() && self.lineflag == LineFlag::None {
+            return;
+        }
+        self.lineflag = match self.lineflag {
+            LineFlag::LeftRight => LineFlag::RightLeft,
+            LineFlag::RightLeft => LineFlag::LeftRight,
+            LineFlag::None => LineFlag::None,
+        };
+        if let Some(stopped) = self.sel_end.take() {
+            match self.anchor {
+                Some(end) if self.drags_start => {
+                    self.anchor = Some(stopped);
+                    (self.cy, self.cx) = end;
+                }
+                _ => (self.cy, self.cx) = stopped,
+            }
+            self.drags_start = false;
+        } else if let Some((start, end)) = self.selection_bounds() {
+            // The end the cursor drags keeps where it was snapped to.
+            self.drags_start = !self.drags_start;
+            let (to, held) = if self.drags_start {
+                (start, end)
+            } else {
+                (end, start)
+            };
+            self.anchor = Some(held);
+            (self.cy, self.cx) = to;
         }
     }
 
@@ -827,7 +930,8 @@ impl CopyMode {
 
     /// The selection's two ends, its anchor first: in word or line mode
     /// snapped as tmux's window_copy_synchronize_cursor_end, the first word
-    /// or line kept on whichever side the cursor is not.
+    /// or line kept on whichever side the cursor is not, and in tmux's
+    /// order (where it began, then where it ends).
     fn selection_ends(&self) -> Option<((usize, usize), (usize, usize))> {
         let anchor = self.anchor?;
         let cursor = self.selection_end();
@@ -838,7 +942,7 @@ impl CopyMode {
         let backwards = self.sel_origin > cursor;
         Some(match self.selflag {
             SelFlag::Char => (anchor, cursor),
-            SelFlag::Word if backwards => (end, self.word_start_pos(cursor)),
+            SelFlag::Word if backwards => (self.word_start_pos(cursor), end),
             SelFlag::Word => {
                 let (y, x) = cursor;
                 let snapped = if x >= self.line_len(y) || self.class(y, x + 1, false) != 0 {
@@ -848,7 +952,7 @@ impl CopyMode {
                 };
                 (start, snapped)
             }
-            SelFlag::Line if self.sel_origin.0 > cursor.0 => (end, (cursor.0, 0)),
+            SelFlag::Line if self.sel_origin.0 > cursor.0 => ((cursor.0, 0), end),
             SelFlag::Line => {
                 let y = cursor.0.max(end.0);
                 (start, (y, self.line_len(y)))
@@ -981,9 +1085,15 @@ impl CopyMode {
             "next-prompt" | "previous-prompt" => {
                 self.jump_to_prompt(name == "next-prompt", arg == Some("-o"));
             }
-            "history-top" => (self.cy, self.cx) = (0, 0),
+            "history-top" => {
+                self.turn_line_selection(LineFlag::LeftRight);
+                (self.cy, self.cx) = (0, 0);
+            }
             // The last line, at its end, as tmux's window_copy_cmd_history_bottom.
-            "history-bottom" => (self.cy, self.cx) = (last, self.line_len(last)),
+            "history-bottom" => {
+                self.turn_line_selection(LineFlag::RightLeft);
+                (self.cy, self.cx) = (last, self.line_len(last));
+            }
             // To the view's first, middle or last row, at its start, as
             // tmux's window_copy_cmd_top_line and the rest.
             "top-line" => (self.cy, self.cx) = (self.top, 0),
@@ -1010,6 +1120,7 @@ impl CopyMode {
             }
             "begin-selection" => {
                 self.selflag = SelFlag::Char;
+                self.lineflag = LineFlag::None;
                 self.anchor = Some((self.cy, self.cx));
                 self.sel_end = None;
                 self.drags_start = false;
@@ -1024,6 +1135,7 @@ impl CopyMode {
             "select-line" => {
                 self.rect = false;
                 self.selflag = SelFlag::Line;
+                self.lineflag = LineFlag::LeftRight;
                 self.sel_origin = (self.cy, self.cx);
                 self.anchor = Some((self.cy, 0));
                 self.sel_end = None;
@@ -1038,6 +1150,7 @@ impl CopyMode {
                 // there, or a one-character word alone, as tmux's
                 // window_copy_cmd_select_word; not a rectangle.
                 self.rect = false;
+                self.lineflag = LineFlag::LeftRight;
                 let origin = (self.cy, self.cx);
                 let start =
                     self.reader_previous_word(origin, &self.word_separators, false, self.emacs);
@@ -1076,6 +1189,7 @@ impl CopyMode {
             "rectangle-off" => self.set_rect(false),
             "clear-selection" => {
                 self.selflag = SelFlag::Char;
+                self.lineflag = LineFlag::None;
                 self.anchor = None;
                 self.sel_end = None;
                 self.cx = self.cx.min(self.line_len(self.cy));
@@ -1083,34 +1197,26 @@ impl CopyMode {
             // tmux's: the cursor goes to the selection's other end, which is
             // where the selection is now held from. A count swaps that many
             // times.
+            // tmux's selection is snapped as it goes, so its other end is
+            // where words or lines put it before the selection grows by
+            // characters again; tmxr snaps when asked, so moves first.
             "other-end" => {
+                self.other_end();
                 self.selflag = SelFlag::Char;
-                // After stop-selection the cursor goes to the selection's
-                // end, which follows it again, as tmux's cursordrag none
-                // becomes endsel; else it swaps with the anchor, from
-                // dragging one end to the other.
-                if let Some(stopped) = self.sel_end.take() {
-                    match self.anchor {
-                        Some(end) if self.drags_start => {
-                            self.anchor = Some(stopped);
-                            (self.cy, self.cx) = end;
-                        }
-                        _ => (self.cy, self.cx) = stopped,
-                    }
-                    self.drags_start = false;
-                } else if let Some(other) = self.anchor {
-                    self.anchor = Some((self.cy, self.cx));
-                    (self.cy, self.cx) = other;
-                    self.drags_start = !self.drags_start;
-                }
             }
             // The selection stays where it is and the cursor moves alone,
             // as tmux's window_copy_cmd_stop_selection.
             "stop-selection" => {
-                self.selflag = SelFlag::Char;
-                if self.anchor.is_some() && self.sel_end.is_none() {
-                    self.sel_end = Some((self.cy, self.cx));
+                // The ends stay where they are, snapped as they were; the
+                // anchor is where it began, so other-end goes to its end.
+                if self.sel_end.is_none()
+                    && let Some((start, end)) = self.selection_bounds()
+                {
+                    (self.anchor, self.sel_end) = (Some(start), Some(end));
+                    self.drags_start = false;
                 }
+                self.selflag = SelFlag::Char;
+                self.lineflag = LineFlag::None;
             }
             "cursor-centre-vertical" => self.cy = (self.top + rows / 2).min(last),
             "cursor-centre-horizontal" => self.cx = usize::from(self.cols) / 2,

@@ -633,6 +633,87 @@ checks = [
 ]
 
 [[cases]]
+name = "line_and_word_selections_move_by_lines_as_tmux"
+# tmux's lineflag: after select-line or select-word a move up or down puts
+# the cursor at its line's end, or its start once the selection is turned
+# round at its first line; the ends keep their words and lines.
+unix_only = true
+size = [30, 8]
+program = "for i in $(seq 1 20); do echo \"line $i has some words\"; echo \"  short $i\"; done; printf end; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g mode-keys vi" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 10 -X cursor-down" },
+  { run = "send-keys -t o -N 7 -X cursor-right" },
+  { run = "send-keys -t o -X select-line" },
+  { run = "send-keys -t o -X cursor-up" },
+  { run = "set -gF @lineup '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{selection_start_x}.#{selection_start_y}-#{selection_end_x}.#{selection_end_y}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 10 -X cursor-down" },
+  { run = "send-keys -t o -N 7 -X cursor-right" },
+  { run = "send-keys -t o -X select-line" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "set -gF @linedown '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{selection_start_x}.#{selection_start_y}-#{selection_end_x}.#{selection_end_y}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 10 -X cursor-down" },
+  { run = "send-keys -t o -N 7 -X cursor-right" },
+  { run = "send-keys -t o -X select-line" },
+  { run = "send-keys -t o -X cursor-up" },
+  { run = "send-keys -t o -X other-end" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "set -gF @lineturn '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{selection_start_x}.#{selection_start_y}-#{selection_end_x}.#{selection_end_y}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 10 -X cursor-down" },
+  { run = "send-keys -t o -N 7 -X cursor-right" },
+  { run = "send-keys -t o -X -N 3 select-line" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "set -gF @lines3 '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{selection_start_x}.#{selection_start_y}-#{selection_end_x}.#{selection_end_y}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 10 -X cursor-down" },
+  { run = "send-keys -t o -N 7 -X cursor-right" },
+  { run = "send-keys -t o -X select-word" },
+  { run = "send-keys -t o -X cursor-up" },
+  { run = "set -gF @wordup '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{selection_start_x}.#{selection_start_y}-#{selection_end_x}.#{selection_end_y}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 10 -X cursor-down" },
+  { run = "send-keys -t o -N 7 -X cursor-right" },
+  { run = "send-keys -t o -X select-word" },
+  { run = "send-keys -t o -X cursor-up" },
+  { run = "send-keys -t o -X other-end" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "set -gF @wordturn '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{selection_start_x}.#{selection_start_y}-#{selection_end_x}.#{selection_end_y}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 10 -X cursor-down" },
+  { run = "send-keys -t o -N 7 -X cursor-right" },
+  { run = "send-keys -t o -X select-word" },
+  { run = "send-keys -t o -X cursor-up" },
+  { run = "send-keys -t o -X history-bottom" },
+  { run = "set -gF @wordbottom '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{selection_start_x}.#{selection_start_y}-#{selection_end_x}.#{selection_end_y}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 10 -X cursor-down" },
+  { run = "send-keys -t o -N 7 -X cursor-right" },
+  { run = "send-keys -t o -X select-word" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X stop-selection" },
+  { run = "send-keys -t o -X cursor-up" },
+  { run = "set -gF @stopped '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{selection_start_x}.#{selection_start_y}-#{selection_end_x}.#{selection_end_y}'" },
+  { run = "send-keys -t o -X clear-selection" },
+]
+checks = [
+  { format = "#{@lineup} | #{@linedown} | #{@lineturn} | #{@lines3} | #{@wordup} | #{@wordturn} | #{@wordbottom} | #{@stopped}" },
+]
+
+[[cases]]
 name = "copy_mode_rewraps_on_a_width_change_as_tmux"
 # tmux's window_copy_resize rewraps copy mode's copy of the pane, the
 # cursor keeping its place in its line.

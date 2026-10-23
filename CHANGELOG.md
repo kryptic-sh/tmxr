@@ -57,6 +57,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A line or word selection moves by lines as tmux's**: after `select-line` or
+  `select-word` a move up or down puts the cursor at its line's end, or at its
+  start once the selection has turned round at its first line, and `history-top`
+  / `-bottom` turn it round as tmux's do. The selection's start and end keep the
+  words and lines they snapped to through `other-end` and `stop-selection`, and
+  `select-line` with a count selects that many lines.
+
 - **Copy mode's searches place the cursor and view as tmux's**: a match off the
   screen is shown a quarter of the screen up from the bottom (also for bracket
   and paragraph moves), `jump-to-mark` puts the mark's line at the top, and
