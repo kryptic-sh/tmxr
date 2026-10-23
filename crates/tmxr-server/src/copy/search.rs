@@ -85,6 +85,11 @@ pub(super) fn match_starts(line: &[char], needle: &str) -> Vec<usize> {
 }
 
 impl CopyMode {
+    /// To the next match of `needle` up or down from the cursor, round
+    /// past the end when `wrap-search` says, as tmux's window_copy_search:
+    /// a match at the cursor itself counts unless `skip_current`. Under
+    /// emacs keys a search down starts at the cursor and leaves it just
+    /// past the match.
     pub(super) fn find(
         &mut self,
         needle: &str,
@@ -95,6 +100,8 @@ impl CopyMode {
         if needle.is_empty() {
             return false;
         }
+        let past_match = forward && self.emacs;
+        let skip_current = skip_current && !past_match;
         let n = self.lines.len();
         let matcher = Needle::new(needle, regex);
         for step in 0..=n {
@@ -113,25 +120,41 @@ impl CopyMode {
             } else {
                 (self.cy + n - step % n) % n
             };
-            let hits = matcher
-                .find_in(&self.lines[y].chars())
-                .into_iter()
-                .map(|(x, _)| x);
-            let pick = if forward {
-                hits.into_iter()
-                    .find(|x| step > 0 || *x > self.cx || (!skip_current && *x == self.cx))
-            } else {
-                hits.collect::<Vec<_>>()
-                    .into_iter()
-                    .rev()
-                    .find(|x| step > 0 || *x < self.cx || (!skip_current && *x == self.cx))
+            let hits = matcher.find_in(&self.lines[y].chars());
+            let counts = |x: usize| {
+                step > 0
+                    || (if forward { x > self.cx } else { x < self.cx })
+                    || (!skip_current && x == self.cx)
             };
-            if let Some(x) = pick {
-                (self.cy, self.cx) = (y, x);
+            let pick = if forward {
+                hits.into_iter().find(|&(x, _)| counts(x))
+            } else {
+                hits.into_iter().rev().find(|&(x, _)| counts(x))
+            };
+            if let Some((x, end)) = pick {
+                self.scroll_to((y, x));
+                if past_match {
+                    (self.cy, self.cx) = self.after_cell((y, end - 1));
+                }
                 return true;
             }
         }
         false
+    }
+
+    /// The cell after `(y, x)`, on to the next line's start from the last
+    /// column, and round to the first line's past the last when
+    /// `wrap-search` says, as tmux's window_copy_move_right.
+    fn after_cell(&self, (y, x): (usize, usize)) -> (usize, usize) {
+        if x + 1 < usize::from(self.cols) {
+            (y, x + 1)
+        } else if y < self.lines.len().saturating_sub(1) {
+            (y + 1, 0)
+        } else if self.wrap_search {
+            (0, 0)
+        } else {
+            (y, x)
+        }
     }
 
     /// Columns `(start, end)` of the last search's matches on line `y`, for
@@ -143,18 +166,32 @@ impl CopyMode {
         Needle::new(&search.needle, search.regex).find_in(&line.chars())
     }
 
-    /// Mark the last search's matches, as tmux's window_copy_search_marks
-    /// after a search that `found` one, and count them across every line
-    /// (`#{search_count}`); one that found none leaves nothing marked.
-    pub(super) fn mark_matches(&mut self, found: bool) {
-        self.marks = found;
-        self.search_count = self.search.as_ref().map_or(0, |search| {
-            let needle = Needle::new(&search.needle, search.regex);
-            self.lines
-                .iter()
-                .map(|l| needle.find_in(&l.chars()).len())
-                .sum()
-        });
+    /// Mark the last search's matches after it ran, as tmux's
+    /// window_copy_search: a copy mode's first search, or one for other
+    /// text than the search before it (`previous`), clears the marks and,
+    /// when it `found` a match, marks and counts them across every line
+    /// (`#{search_count}`); the same search again keeps the marks and the
+    /// count, and only adds marks when it found one.
+    pub(super) fn mark_matches(&mut self, found: bool, previous: Option<&Search>) {
+        let effective = |s: &Search| (s.needle.clone(), s.regex && s.needle.contains(REGEX_CHARS));
+        let same = !std::mem::take(&mut self.search_all)
+            && previous.map(effective) == self.search.as_ref().map(effective);
+        if !same {
+            self.marks = false;
+        }
+        if !found {
+            return;
+        }
+        self.marks = true;
+        if !same {
+            self.search_count = self.search.as_ref().map_or(0, |search| {
+                let needle = Needle::new(&search.needle, search.regex);
+                self.lines
+                    .iter()
+                    .map(|l| needle.find_in(&l.chars()).len())
+                    .sum()
+            });
+        }
     }
 
     /// `#{search_match}`: the marked match the cursor is on, or just past,

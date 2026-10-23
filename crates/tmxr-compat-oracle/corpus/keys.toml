@@ -558,6 +558,81 @@ checks = [
 ]
 
 [[cases]]
+name = "a_search_places_the_view_as_tmux"
+# tmux's window_copy_scroll_to: a match off the screen goes a quarter of
+# the screen up from the bottom; jump-to-mark tops the view with the
+# mark's line.
+unix_only = true
+size = [40, 12]
+program = "for i in $(seq 1 40); do echo \"line $i ( foo bar.baz )   indented-$i\"; echo; echo \"  second {para} $i\"; done; printf 'last line'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g mode-keys vi" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 5 -X cursor-down" },
+  { run = "send-keys -t o -X search-backward foo" },
+  { run = "send-keys -t o -N 2 -X search-again" },
+  { run = "set -gF @again '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 5 -X cursor-down" },
+  { run = "send-keys -t o -X set-mark" },
+  { run = "send-keys -t o -N 2 -X cursor-down" },
+  { run = "send-keys -t o -X jump-to-mark" },
+  { run = "set -gF @mark '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position}'" },
+  { run = "send-keys -t o -X jump-to-mark" },
+]
+checks = [
+  { format = "#{@again} | #{@mark} | #{copy_cursor_x},#{copy_cursor_y} #{scroll_position}" },
+]
+
+[[cases]]
+name = "an_emacs_search_down_leaves_the_cursor_past_the_match_as_tmux"
+unix_only = true
+size = [30, 8]
+program = "for i in $(seq 1 30); do echo \"row $i foo bar foofoo\"; done; printf 'end foo'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g mode-keys emacs" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X search-forward foo" },
+  { run = "set -gF @first '#{copy_cursor_x},#{copy_cursor_y} [#{search_match}]'" },
+  { run = "send-keys -t o -N 2 -X search-again" },
+  { run = "set -gF @again '#{copy_cursor_x},#{copy_cursor_y}'" },
+  { run = "send-keys -t o -X search-reverse" },
+]
+checks = [
+  { format = "#{@first} | #{@again} | #{copy_cursor_x},#{copy_cursor_y} #{scroll_position}" },
+]
+
+[[cases]]
+name = "the_same_search_again_keeps_its_marks_and_count_as_tmux"
+# Without wrap-search a search that finds nothing keeps the marks of the
+# same search before it, and only a copy mode's first search, or new
+# text, counts the matches again.
+unix_only = true
+size = [30, 8]
+program = "for i in $(seq 1 30); do echo \"row $i foo bar foofoo\"; done; printf 'end foo'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g mode-keys vi" },
+  { run = "set -g wrap-search off" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X search-backward foo" },
+  { run = "set -gF @failed '#{search_present} #{search_count}'" },
+  { run = "send-keys -t o -X search-reverse" },
+  { run = "set -gF @same '#{search_present} #{search_count}'" },
+  { run = "send-keys -t o -X search-reverse" },
+  { run = "set -gF @kept '#{search_present} #{search_count}'" },
+  { run = "send-keys -t o -X search-forward bar" },
+]
+checks = [
+  { format = "#{@failed} | #{@same} | #{@kept} | #{search_present} #{search_count}" },
+]
+
+[[cases]]
 name = "copy_mode_rewraps_on_a_width_change_as_tmux"
 # tmux's window_copy_resize rewraps copy mode's copy of the pane, the
 # cursor keeping its place in its line.

@@ -77,6 +77,9 @@ pub struct CopyMode {
     pub search_count: usize,
     /// `mode-keys` is emacs, under which more commands clear the marks.
     pub emacs: bool,
+    /// No search has run in this copy mode yet, so the next marks and
+    /// counts every match whatever searched before (tmux's searchall).
+    search_all: bool,
     /// The pane's last search from an earlier copy mode, which
     /// `search-again` / `search-reverse` repeat upwards until this mode
     /// makes its own, as tmux's window_copy_common_init takes it.
@@ -195,6 +198,7 @@ impl CopyMode {
             marks: false,
             search_count: 0,
             emacs: false,
+            search_all: true,
             inherited_search: None,
             unseen_changes: false,
             search_origin: None,
@@ -310,7 +314,7 @@ impl CopyMode {
                 _ => {}
             }
         }
-        (self.cy, self.cx) = (py, px);
+        self.scroll_to((py, px));
     }
 
     /// `next-matching-bracket`, as tmux's
@@ -332,13 +336,13 @@ impl CopyMode {
             let c = self.byte_at((py, px));
             if !self.emacs && c.is_some_and(|c| CLOSE_BRACKETS.contains(c)) {
                 let back = (self.cy, self.cx);
-                (self.cy, self.cx) = (py, px);
+                self.scroll_to((py, px));
                 self.previous_matching_bracket();
                 if self
                     .byte_at((self.cy, self.cx))
                     .is_some_and(|c| CLOSE_BRACKETS.contains(c))
                 {
-                    (self.cy, self.cx) = back;
+                    self.scroll_to(back);
                 }
                 return;
             }
@@ -384,7 +388,7 @@ impl CopyMode {
                 _ => {}
             }
         }
-        (self.cy, self.cx) = (py, px);
+        self.scroll_to((py, px));
     }
 
     /// Keys copy mode takes before its key table: the character a pending
@@ -529,9 +533,6 @@ impl CopyMode {
             self.anchor = None;
             self.sel_end = None;
             self.search_origin = None;
-            if self.marks {
-                self.mark_matches(true);
-            }
         }
         self.cols = cols;
         self.rows = rows;
@@ -645,6 +646,27 @@ impl CopyMode {
         let history = self.lines.len().saturating_sub(usize::from(self.rows));
         (self.cy, self.cx) = (line, 0);
         self.top = if line > history { history } else { line };
+    }
+
+    /// The cursor to `(y, x)`, as tmux's window_copy_scroll_to: the view
+    /// stays if it shows line `y`, else moves to show it a quarter of the
+    /// screen up from the bottom, or to the history's top or bottom when
+    /// `y` is that near one.
+    pub(super) fn scroll_to(&mut self, (y, x): (usize, usize)) {
+        (self.cy, self.cx) = (y, x);
+        let rows = usize::from(self.rows.max(1));
+        if (self.top..self.top + rows).contains(&y) {
+            return;
+        }
+        let bottom = self.lines.len().saturating_sub(rows);
+        let gap = rows / 4;
+        self.top = if y < rows {
+            0
+        } else if y > bottom + rows - gap {
+            bottom
+        } else {
+            y + gap - rows
+        };
     }
 
     fn scroll_to_cursor(&mut self) {
@@ -791,7 +813,10 @@ impl CopyMode {
         {
             y = n;
         }
-        (self.cy, self.cx) = (y, 0);
+        // As tmux's window_copy_next_paragraph / _previous_paragraph:
+        // forward at the line's end (a blank line's start).
+        let x = if forward { self.line_len(y) } else { 0 };
+        self.scroll_to((y, x));
     }
 
     /// The selection's moving end: the cursor, unless `stop-selection`
@@ -1111,12 +1136,12 @@ impl CopyMode {
                 let regex = !name.ends_with("-text");
                 let needle = arg.unwrap_or_default().to_owned();
                 let found = self.find(&needle, forward, regex, true);
-                self.search = Some(Search {
+                let previous = self.search.replace(Search {
                     needle,
                     forward,
                     regex,
                 });
-                self.mark_matches(found);
+                self.mark_matches(found, previous.as_ref());
             }
             // Run by `command-prompt -i` as the text is typed, as tmux's:
             // the first character is the prompt's prefix, `-` or `+` for
@@ -1150,12 +1175,12 @@ impl CopyMode {
                     // Up, the cursor's own place never counts; down, it
                     // does until the search moves on.
                     let found = self.find(needle, forward, false, !forward || repeat);
-                    self.search = Some(Search {
+                    let previous = self.search.replace(Search {
                         needle: needle.to_owned(),
                         forward,
                         regex: false,
                     });
-                    self.mark_matches(found);
+                    self.mark_matches(found, previous.as_ref());
                 }
             }
             "jump-forward" | "jump-backward" | "jump-to-forward" | "jump-to-backward" => {
@@ -1169,9 +1194,14 @@ impl CopyMode {
                 }
             }
             "set-mark" => self.mark = Some((self.cy, self.cx)),
+            // To the mark, which goes where the cursor was; the mark's line
+            // tops the view if it is in the history, else the view is at
+            // the bottom, as tmux's window_copy_jump_to_mark.
             "jump-to-mark" => {
-                if let Some(m) = self.mark.replace((self.cy, self.cx)) {
-                    (self.cy, self.cx) = m;
+                if let Some((y, x)) = self.mark.replace((self.cy, self.cx)) {
+                    let bottom = self.lines.len().saturating_sub(rows);
+                    (self.cy, self.cx) = (y, x);
+                    self.top = y.min(bottom);
                 }
             }
             "next-matching-bracket" => self.next_matching_bracket(),
@@ -1215,8 +1245,8 @@ impl CopyMode {
                         !search.forward
                     };
                     let found = self.find(&search.needle, forward, search.regex, true);
-                    self.search = Some(search);
-                    self.mark_matches(found);
+                    let previous = self.search.replace(search);
+                    self.mark_matches(found, previous.as_ref());
                 }
             }
             _ => return false,

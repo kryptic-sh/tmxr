@@ -57,6 +57,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Copy mode's searches place the cursor and view as tmux's**: a match off the
+  screen is shown a quarter of the screen up from the bottom (also for bracket
+  and paragraph moves), `jump-to-mark` puts the mark's line at the top, and
+  under emacs keys a search down starts at the cursor and leaves it just past
+  the match. Searching the same text again keeps the marks and count it had when
+  it finds nothing, as tmux's.
+
 - **Copy mode's word moves and bracket matching follow tmux's, by `mode-keys`**:
   under emacs keys `next-word-end` and `next-space-end` stop just past the word
   and `previous-word` stops at a line ending in a blank; `select-word` takes a

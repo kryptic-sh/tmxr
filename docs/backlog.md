@@ -899,13 +899,12 @@ table. What has been verified, and how:
     after them snaps the cursor to the line's start or end and moves the
     selection by whole lines, and `history-top` / `-bottom` call `other-end`;
     tmxr has no lineflag (its `selflag` only snaps the selection's ends).
-    - Under emacs keys tmux's forward search leaves the cursor after the match,
-      and under vi keys a search from a marked match starts after it
-      (`window_copy_search`); tmxr searches as from the cursor in both. Word
-      moves, word selection and bracket matching follow `mode-keys` as tmux's
-      (ported from tmux's grid reader in `copy/words.rs`).
-  - `search-backward foo` then `search-again` twice landed on another match than
-    tmux's; `jump-to-mark` scrolls the view differently. Not looked into.
+  - Under vi keys a search down from a marked match starts after the whole match
+    (`window_copy_move_after_search_mark`); tmxr's starts one cell on, so a
+    match overlapping the one at the cursor is found where tmux's skips it.
+    Searches, word moves, word selection and bracket matching otherwise follow
+    `mode-keys` as tmux's (compared from many starts, both modes, `wrap-search`
+    on and off).
   - A search matches within a line, where tmux's also match across a wrap, so
     `#{search_count}` can count fewer.
   - `#{top_line_time}` is missing: vt100 keeps no time for a line.
@@ -914,10 +913,9 @@ table. What has been verified, and how:
   `C-r` as `-text`, which tmux parses as flags of `search-backward-incremental`
   (its table takes none), so the command is dropped without a word; it works
   only when the template puts `--` first, as tmux's own default bind does not.
-  tmxr's `copy::refuses_args` drops the same commands. Not compared on its own:
-  where a search down leaves the cursor under emacs keys (tmux moves it past the
-  match, `window_copy_search`); tmxr's default `C-r` / `C-s` binds also lack
-  tmux's `-I "#{pane_search_string}"`, as tmxr has no `pane_search_string`.
+  tmxr's `copy::refuses_args` drops the same commands. tmxr's default `C-r` /
+  `C-s` binds also lack tmux's `-I "#{pane_search_string}"`, as tmxr has no
+  `pane_search_string`.
 - **Session groups follow tmux by comparison, not by call** (`groups.rs`): tmux
   calls `session_group_synchronize_from` wherever a command changes a session's
   windows; tmxr keeps each group's window list as last synchronised and, after
