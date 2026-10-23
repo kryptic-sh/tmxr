@@ -153,6 +153,7 @@ pub const NAMES: &[&str] = &[
     "sixel_support",
     "socket_path",
     "start_time",
+    "top_line_time",
     "tree_mode_format",
     "uid",
     "user",
@@ -995,6 +996,7 @@ impl<'a> Context for Vars<'a> {
                     .unwrap_or_default()
             }
             "rectangle_toggle" => flag(pane?.copy.as_ref()?.rectangle()),
+            "top_line_time" => pane?.copy.as_ref()?.top_line_time().to_string(),
             // A search's marks, its match count and the match at the
             // cursor, as tmux's window_copy_formats; tmxr's searches never
             // stop short, so never time out or count only part.

@@ -908,7 +908,6 @@ table. What has been verified, and how:
     on and off).
   - A search matches within a line, where tmux's also match across a wrap, so
     `#{search_count}` can count fewer.
-  - `#{top_line_time}` is missing: vt100 keeps no time for a line.
 - **`C-r` in an incremental search does nothing in tmux 3.6**, and tmxr does the
   same on purpose (seen 2026-10-20): `command-prompt -i` passes the text after
   `C-r` as `-text`, which tmux parses as flags of `search-backward-incremental`

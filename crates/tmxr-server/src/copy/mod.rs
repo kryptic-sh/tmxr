@@ -60,6 +60,9 @@ pub struct CopyMode {
     /// output (C), for `next-prompt` / `previous-prompt` (`-o`).
     pub prompts: Vec<usize>,
     pub outputs: Vec<usize>,
+    /// When each line went into the pane's history, as
+    /// [`tmxr_term::Emulator::line_time`]; lines past its end have none.
+    pub times: Vec<u64>,
     /// First line shown.
     pub top: usize,
     /// Cursor (line, column).
@@ -201,6 +204,7 @@ impl CopyMode {
             lines,
             prompts: Vec::new(),
             outputs: Vec::new(),
+            times: Vec::new(),
             anchor: None,
             sel_end: None,
             drags_start: false,
@@ -553,6 +557,18 @@ impl CopyMode {
             };
             self.prompts = follow(&self.prompts);
             self.outputs = follow(&self.outputs);
+            // A line's time goes to its first row, as tmux's grid_reflow:
+            // rows joined onto it keep its time, rows split off it have none.
+            let mut times = vec![0; lines.len()];
+            for (old, &time) in self.times.iter().enumerate() {
+                let new = map.get(old).copied();
+                if (old == 0 || map.get(old - 1).copied() != new)
+                    && let Some(slot) = new.and_then(|new| times.get_mut(new))
+                {
+                    *slot = time;
+                }
+            }
+            self.times = times;
             self.lines = lines;
             (self.cy, self.cx) = (cy, cx);
             let bottom = self.lines.len().saturating_sub(usize::from(rows.max(1)));
@@ -626,6 +642,12 @@ impl CopyMode {
     /// Where `set-mark` put the mark, which tmux shows from then on.
     pub fn mark_at(&self) -> Option<(usize, usize)> {
         self.mark
+    }
+
+    /// `#{top_line_time}`: when the view's top line went into the
+    /// history, 0 for a line of the screen.
+    pub fn top_line_time(&self) -> u64 {
+        self.times.get(self.top).copied().unwrap_or(0)
     }
 
     /// `#{rectangle_toggle}`: selections are rectangles.

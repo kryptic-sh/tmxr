@@ -14,6 +14,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`#{top_line_time}`**: when the copy-mode view's top line went into the
+  history, as tmux keeps a time for each line of history, so the default
+  position indicator shows it (`16:49 [25/25]`) as tmux's does. A line keeps its
+  time through a rewrap; rows a rewrap makes have none, as tmux's.
+
 - **`copy-mode-position-format`, `copy-mode-position-style`,
   `copy-mode-selection-style` and `copy-mode-mark-style`**, tmux's options: the
   position indicator is drawn from its format (tmux's default adds the last

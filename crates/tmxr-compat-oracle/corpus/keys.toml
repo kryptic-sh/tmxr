@@ -771,6 +771,38 @@ checks = [
 ]
 
 [[cases]]
+name = "the_top_lines_time_as_tmux"
+# tmux's top_line_time: when the view's top line went into the history,
+# 0 for a line of the screen, shown by the default position format; a
+# line copy mode rewraps keeps its time on its first row only.
+unix_only = true
+attach = true
+size = [40, 8]
+program = "for i in $(seq 1 30); do echo \"line $i of the history, long enough to wrap\"; done; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g status off" },
+  { run = "copy-mode -t o" },
+  { run = "set -gF @bottom '#{top_line_time}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "set -gF @top '#{e|>:#{top_line_time},1000}'" },
+  { sleep = 0.3 },
+  { run = "resize-window -t o -x 20" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X scroll-down" },
+  { run = "set -gF @made '#{top_line_time}'" },
+  { run = "send-keys -t o -X scroll-down" },
+  { run = "set -gF @moved '#{e|>:#{top_line_time},1000}'" },
+  { run = "resize-window -t o -x 40" },
+  { run = "send-keys -t o -X history-top" },
+  { sleep = 0.3 },
+]
+checks = [
+  { format = "#{@bottom} #{@top} #{@made} #{@moved}" },
+  { screen_find = ":" },
+]
+
+[[cases]]
 name = "copy_mode_rewraps_on_a_width_change_as_tmux"
 # tmux's window_copy_resize rewraps copy mode's copy of the pane, the
 # cursor keeping its place in its line.

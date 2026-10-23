@@ -360,6 +360,11 @@ pub struct Emulator {
     /// Lines of history above the screen, counted whenever they can change
     /// ([`Emulator::count_history`]): a scrollbar reads it every frame.
     history: usize,
+    /// When each line of history went into it, in seconds since the epoch,
+    /// as tmux's grid line time; `times_from` is the first one's number (as
+    /// [`Hooks::dropped`] counts lines). 0 for a line a rewrap made.
+    times: std::collections::VecDeque<u64>,
+    times_from: usize,
 }
 
 impl Emulator {
@@ -390,6 +395,8 @@ impl Emulator {
             mouse_sgr: false,
             scrollback,
             history: 0,
+            times: std::collections::VecDeque::new(),
+            times_from: 0,
         }
     }
 
@@ -420,6 +427,40 @@ impl Emulator {
 
     fn count_history(&mut self) {
         self.history = self.parser.screen().scrollback_len();
+        self.stamp_history();
+    }
+
+    /// Lines new to the history take the time now, as tmux's
+    /// grid_scroll_history stamps them; lines it lost take theirs away.
+    fn stamp_history(&mut self) {
+        let dropped = self.parser.callbacks().dropped;
+        while self.times_from < dropped && self.times.pop_front().is_some() {
+            self.times_from += 1;
+        }
+        if self.times.is_empty() {
+            self.times_from = dropped;
+        }
+        let end = dropped + self.history;
+        let known = self.times_from + self.times.len();
+        if known > end {
+            self.times.truncate(end.saturating_sub(self.times_from));
+        } else {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_secs());
+            self.times.extend(std::iter::repeat_n(now, end - known));
+        }
+    }
+
+    /// When line `line` of the history (the oldest 0) went into it, in
+    /// seconds since the epoch (tmux's `#{top_line_time}` for a view
+    /// starting there); 0 for a line of the screen or one a rewrap made.
+    pub fn line_time(&self, line: usize) -> u64 {
+        let number = self.parser.callbacks().dropped + line;
+        number
+            .checked_sub(self.times_from)
+            .and_then(|i| self.times.get(i).copied())
+            .unwrap_or(0)
     }
 
     /// Drop the history above the screen (tmux's `clear-history`), keeping
@@ -859,6 +900,24 @@ impl Emulator {
         hooks.outputs = follow(&hooks.outputs);
         hooks.dropped = after;
         hooks.input_mark = None;
+        // A line's time goes with its first row, as tmux's grid_reflow moves
+        // it: rows joined onto it keep its time, rows split off it have none.
+        let history = self.parser.screen().scrollback_len();
+        let mut times = std::collections::VecDeque::from(vec![0; history]);
+        let mut last = None;
+        for (i, &time) in self.times.iter().enumerate() {
+            let line = (self.times_from + i)
+                .checked_sub(before)
+                .and_then(|old| reflow.lines.get(old).copied().flatten());
+            if line != last
+                && let Some(slot) = line.and_then(|l| times.get_mut(l))
+            {
+                *slot = time;
+            }
+            last = line;
+        }
+        self.times = times;
+        self.times_from = after;
     }
 
     /// Whether the program asked to be told of focus changes (mode 1004),
@@ -1116,6 +1175,33 @@ mod tests {
             (None, None),
             "a full reset clears them"
         );
+    }
+
+    #[test]
+    fn history_lines_keep_when_they_went_in() {
+        let mut e = Emulator::new(2, 10, 100);
+        e.process(b"0123456789\r\nb\r\nc");
+        assert_eq!(e.history_size(), 1);
+        let went_in = e.line_time(0);
+        assert!(went_in > 0);
+        assert_eq!(e.line_time(1), 0, "a line of the screen");
+        // Narrowed, the line rewraps into two rows of history: its first
+        // keeps the time, the row the rewrap made has none, as tmux's.
+        e.resize(2, 5);
+        assert_eq!(e.history_size(), 2);
+        assert_eq!((e.line_time(0), e.line_time(1)), (went_in, 0));
+        // Widened again, the rows join and the line keeps its time.
+        e.resize(2, 10);
+        assert_eq!(e.history_size(), 1);
+        assert_eq!(e.line_time(0), went_in);
+        // Lines the history loses past its limit take their times away.
+        let mut e = Emulator::new(2, 10, 3);
+        for _ in 0..10 {
+            e.process(b"x\r\n");
+        }
+        assert_eq!(e.history_size(), 3);
+        assert!((0..3).all(|l| e.line_time(l) > 0));
+        assert_eq!(e.line_time(3), 0);
     }
 
     #[test]
