@@ -394,6 +394,170 @@ checks = [
 ]
 
 [[cases]]
+name = "word_and_bracket_moves_under_vi_keys_as_tmux"
+# tmux's grid reader word moves and bracket matching, which differ by
+# mode-keys: emacs keys stop past a word's end, previous-word stops at a
+# line's end, and the brackets try the cell beside before falling back
+# to a word move.
+unix_only = true
+size = [30, 10]
+program = "printf 'a, b  foo.bar(baz) x;y  zz\\nf(a[1], {b}) x) (y\\nz] g(h(i)\\n) end {\\n\\n} q\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g mode-keys vi" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X start-of-line" },
+  { run = "send-keys -t o -N 6 -X cursor-right" },
+  { run = "send-keys -t o -X next-word-end" },
+  { run = "set -gF @wordend '#{copy_cursor_x},#{copy_cursor_y}#{?selection_present, #{selection_start_x}-#{selection_end_x},}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X start-of-line" },
+  { run = "send-keys -t o -N 6 -X cursor-right" },
+  { run = "send-keys -t o -X next-space-end" },
+  { run = "set -gF @spaceend '#{copy_cursor_x},#{copy_cursor_y}#{?selection_present, #{selection_start_x}-#{selection_end_x},}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X start-of-line" },
+  { run = "send-keys -t o -X select-word" },
+  { run = "set -gF @word '#{copy_cursor_x},#{copy_cursor_y}#{?selection_present, #{selection_start_x}-#{selection_end_x},}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X start-of-line" },
+  { run = "send-keys -t o -N 9 -X cursor-right" },
+  { run = "send-keys -t o -X select-word" },
+  { run = "set -gF @dotword '#{copy_cursor_x},#{copy_cursor_y}#{?selection_present, #{selection_start_x}-#{selection_end_x},}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 1 -X cursor-down" },
+  { run = "send-keys -t o -X start-of-line" },
+  { run = "send-keys -t o -X previous-word" },
+  { run = "set -gF @prevword '#{copy_cursor_x},#{copy_cursor_y}#{?selection_present, #{selection_start_x}-#{selection_end_x},}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 1 -X cursor-down" },
+  { run = "send-keys -t o -X start-of-line" },
+  { run = "send-keys -t o -N 1 -X cursor-right" },
+  { run = "send-keys -t o -X next-matching-bracket" },
+  { run = "set -gF @next '#{copy_cursor_x},#{copy_cursor_y}#{?selection_present, #{selection_start_x}-#{selection_end_x},}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 1 -X cursor-down" },
+  { run = "send-keys -t o -X start-of-line" },
+  { run = "send-keys -t o -N 14 -X cursor-right" },
+  { run = "send-keys -t o -X next-matching-bracket" },
+  { run = "set -gF @nextoff '#{copy_cursor_x},#{copy_cursor_y}#{?selection_present, #{selection_start_x}-#{selection_end_x},}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 1 -X cursor-down" },
+  { run = "send-keys -t o -X start-of-line" },
+  { run = "send-keys -t o -N 11 -X cursor-right" },
+  { run = "send-keys -t o -X previous-matching-bracket" },
+  { run = "set -gF @prev '#{copy_cursor_x},#{copy_cursor_y}#{?selection_present, #{selection_start_x}-#{selection_end_x},}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 1 -X cursor-down" },
+  { run = "send-keys -t o -X start-of-line" },
+  { run = "send-keys -t o -N 8 -X cursor-right" },
+  { run = "send-keys -t o -X previous-matching-bracket" },
+  { run = "set -gF @prevoff '#{copy_cursor_x},#{copy_cursor_y}#{?selection_present, #{selection_start_x}-#{selection_end_x},}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 2 -X cursor-down" },
+  { run = "send-keys -t o -X start-of-line" },
+  { run = "send-keys -t o -N 5 -X cursor-right" },
+  { run = "send-keys -t o -X next-matching-bracket" },
+  { run = "set -gF @down '#{copy_cursor_x},#{copy_cursor_y}#{?selection_present, #{selection_start_x}-#{selection_end_x},}'" },
+  { run = "send-keys -t o -X clear-selection" },
+]
+checks = [
+  { format = "#{@wordend} | #{@spaceend} | #{@word} | #{@dotword} | #{@prevword} | #{@next} | #{@nextoff} | #{@prev} | #{@prevoff} | #{@down}" },
+]
+
+[[cases]]
+name = "word_and_bracket_moves_under_emacs_keys_as_tmux"
+# tmux's grid reader word moves and bracket matching, which differ by
+# mode-keys: emacs keys stop past a word's end, previous-word stops at a
+# line's end, and the brackets try the cell beside before falling back
+# to a word move.
+unix_only = true
+size = [30, 10]
+program = "printf 'a, b  foo.bar(baz) x;y  zz\\nf(a[1], {b}) x) (y\\nz] g(h(i)\\n) end {\\n\\n} q\\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g mode-keys emacs" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X start-of-line" },
+  { run = "send-keys -t o -N 6 -X cursor-right" },
+  { run = "send-keys -t o -X next-word-end" },
+  { run = "set -gF @wordend '#{copy_cursor_x},#{copy_cursor_y}#{?selection_present, #{selection_start_x}-#{selection_end_x},}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X start-of-line" },
+  { run = "send-keys -t o -N 6 -X cursor-right" },
+  { run = "send-keys -t o -X next-space-end" },
+  { run = "set -gF @spaceend '#{copy_cursor_x},#{copy_cursor_y}#{?selection_present, #{selection_start_x}-#{selection_end_x},}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X start-of-line" },
+  { run = "send-keys -t o -X select-word" },
+  { run = "set -gF @word '#{copy_cursor_x},#{copy_cursor_y}#{?selection_present, #{selection_start_x}-#{selection_end_x},}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X start-of-line" },
+  { run = "send-keys -t o -N 9 -X cursor-right" },
+  { run = "send-keys -t o -X select-word" },
+  { run = "set -gF @dotword '#{copy_cursor_x},#{copy_cursor_y}#{?selection_present, #{selection_start_x}-#{selection_end_x},}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 1 -X cursor-down" },
+  { run = "send-keys -t o -X start-of-line" },
+  { run = "send-keys -t o -X previous-word" },
+  { run = "set -gF @prevword '#{copy_cursor_x},#{copy_cursor_y}#{?selection_present, #{selection_start_x}-#{selection_end_x},}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 1 -X cursor-down" },
+  { run = "send-keys -t o -X start-of-line" },
+  { run = "send-keys -t o -N 1 -X cursor-right" },
+  { run = "send-keys -t o -X next-matching-bracket" },
+  { run = "set -gF @next '#{copy_cursor_x},#{copy_cursor_y}#{?selection_present, #{selection_start_x}-#{selection_end_x},}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 1 -X cursor-down" },
+  { run = "send-keys -t o -X start-of-line" },
+  { run = "send-keys -t o -N 14 -X cursor-right" },
+  { run = "send-keys -t o -X next-matching-bracket" },
+  { run = "set -gF @nextoff '#{copy_cursor_x},#{copy_cursor_y}#{?selection_present, #{selection_start_x}-#{selection_end_x},}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 1 -X cursor-down" },
+  { run = "send-keys -t o -X start-of-line" },
+  { run = "send-keys -t o -N 11 -X cursor-right" },
+  { run = "send-keys -t o -X previous-matching-bracket" },
+  { run = "set -gF @prev '#{copy_cursor_x},#{copy_cursor_y}#{?selection_present, #{selection_start_x}-#{selection_end_x},}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 1 -X cursor-down" },
+  { run = "send-keys -t o -X start-of-line" },
+  { run = "send-keys -t o -N 8 -X cursor-right" },
+  { run = "send-keys -t o -X previous-matching-bracket" },
+  { run = "set -gF @prevoff '#{copy_cursor_x},#{copy_cursor_y}#{?selection_present, #{selection_start_x}-#{selection_end_x},}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 2 -X cursor-down" },
+  { run = "send-keys -t o -X start-of-line" },
+  { run = "send-keys -t o -N 5 -X cursor-right" },
+  { run = "send-keys -t o -X next-matching-bracket" },
+  { run = "set -gF @down '#{copy_cursor_x},#{copy_cursor_y}#{?selection_present, #{selection_start_x}-#{selection_end_x},}'" },
+  { run = "send-keys -t o -X clear-selection" },
+]
+checks = [
+  { format = "#{@wordend} | #{@spaceend} | #{@word} | #{@dotword} | #{@prevword} | #{@next} | #{@nextoff} | #{@prev} | #{@prevoff} | #{@down}" },
+]
+
+[[cases]]
 name = "copy_mode_rewraps_on_a_width_change_as_tmux"
 # tmux's window_copy_resize rewraps copy mode's copy of the pane, the
 # cursor keeping its place in its line.

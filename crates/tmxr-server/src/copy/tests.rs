@@ -109,14 +109,21 @@ fn percent_finds_the_matching_bracket_across_lines() {
 }
 
 #[test]
-fn previous_matching_bracket_looks_back_from_the_cursor() {
-    let mut cm = at_start("a (b [c] d) e");
-    cm.cx = 12;
-    cm.apply("previous-matching-bracket", None);
-    assert_eq!(cm.cx, 2, "from after the ) back to its (");
-    cm.cx = 7;
-    cm.apply("previous-matching-bracket", None);
-    assert_eq!(cm.cx, 5, "on a ] itself");
+fn previous_matching_bracket_goes_back_from_a_closing_one() {
+    // As tmux 3.6 does from each column, seen on "a (b [c] d) e".
+    let from = |emacs: bool, x: usize| {
+        let mut cm = at_start("a (b [c] d) e");
+        cm.emacs = emacs;
+        cm.cx = x;
+        cm.apply("previous-matching-bracket", None);
+        cm.cx
+    };
+    assert_eq!(from(false, 10), 2, "on a ) to its (");
+    assert_eq!(from(false, 7), 5, "on a ] to its [");
+    assert_eq!(from(false, 11), 11, "vi keys: off a bracket, no move");
+    assert_eq!(from(true, 11), 2, "emacs keys: the ) just before");
+    assert_eq!(from(true, 12), 10, "emacs keys: else back a word");
+    assert_eq!(from(true, 9), 7, "to the ] that ends the word before");
 }
 
 #[test]

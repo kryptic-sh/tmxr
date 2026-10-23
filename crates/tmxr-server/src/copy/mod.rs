@@ -35,6 +35,11 @@ pub enum SelKind {
     Rect,
 }
 
+/// The brackets `next-matching-bracket` / `previous-matching-bracket`
+/// pair, each opening one at the index of its closing one, as tmux's.
+const OPEN_BRACKETS: &str = "{[(";
+const CLOSE_BRACKETS: &str = "}])";
+
 #[derive(Debug, Clone)]
 pub struct CopyMode {
     /// The pane whose screen and history this shows, when not its own
@@ -235,60 +240,151 @@ impl CopyMode {
         self.scroll_to_cursor();
     }
 
-    /// vi's `%`: from the first bracket at or after the cursor on its line,
-    /// to the bracket that matches it, across lines.
-    /// `previous-matching-bracket` (emacs `C-M-b`) looks for the bracket at
-    /// or before the cursor instead.
-    fn matching_bracket(&mut self, before: bool) {
-        const PAIRS: [(char, char); 3] = [('(', ')'), ('[', ']'), ('{', '}')];
-        let line = self.lines.get(self.cy).map(Line::chars).unwrap_or_default();
-        let is_bracket = |c: &char| PAIRS.iter().any(|(o, cl)| c == o || c == cl);
-        let found = if before {
-            line.iter()
-                .enumerate()
-                .take(self.cx + 1)
-                .rev()
-                .find(|(_, c)| is_bracket(c))
-        } else {
-            line.iter()
-                .enumerate()
-                .skip(self.cx)
-                .find(|(_, c)| is_bracket(c))
-        };
-        let Some((x, c)) = found else {
+    /// The character at `(y, x)` if it is one byte, as tmux's bracket
+    /// matching reads cells.
+    fn byte_at(&self, (y, x): (usize, usize)) -> Option<char> {
+        let c = self.lines.get(y)?.cell(x)?.symbol.chars().next()?;
+        c.is_ascii().then_some(c)
+    }
+
+    /// `previous-matching-bracket`, as tmux's
+    /// window_copy_cmd_previous_matching_bracket: from a closing bracket
+    /// back to the bracket opening it, over each line's text. Under emacs
+    /// keys a closing bracket just before the cursor counts, and off one
+    /// the cursor goes back a word, with the closing brackets as its
+    /// separators.
+    fn previous_matching_bracket(&mut self) {
+        let (mut py, mut px) = (self.cy, self.cx);
+        if self.line_len(py) == 0 {
             return;
-        };
-        let (forward, open, close) = match PAIRS.iter().find(|(o, cl)| c == o || c == cl) {
-            Some(&(o, cl)) => (*c == o, o, cl),
-            None => return,
-        };
-        let mut depth = 0usize;
-        let mut pos = Some((self.cy, x));
-        while let Some((y, px)) = pos {
-            let ch = self.char_at(y, px);
-            if ch == open {
-                depth = if forward {
-                    depth + 1
-                } else {
-                    depth.saturating_sub(1)
-                };
-            } else if ch == close {
-                depth = if forward {
-                    depth.saturating_sub(1)
-                } else {
-                    depth + 1
-                };
+        }
+        let mut tried = false;
+        let found = loop {
+            match self
+                .byte_at((py, px))
+                .filter(|c| CLOSE_BRACKETS.contains(*c))
+            {
+                Some(c) => break c,
+                None if self.emacs && !tried && px > 0 => {
+                    px -= 1;
+                    tried = true;
+                }
+                None => {
+                    if self.emacs {
+                        (self.cy, self.cx) = self.reader_previous_word(
+                            (self.cy, self.cx),
+                            CLOSE_BRACKETS,
+                            true,
+                            true,
+                        );
+                    }
+                    return;
+                }
             }
-            if depth == 0 {
-                (self.cy, self.cx) = (y, px);
+        };
+        let start = OPEN_BRACKETS.as_bytes()[CLOSE_BRACKETS.find(found).unwrap_or(0)] as char;
+        let mut depth = 1;
+        while depth != 0 {
+            if px == 0 {
+                if py == 0 {
+                    return;
+                }
+                let mut len;
+                loop {
+                    py -= 1;
+                    len = self.line_len(py);
+                    if len != 0 || py == 0 {
+                        break;
+                    }
+                }
+                if len == 0 {
+                    return;
+                }
+                px = len - 1;
+            } else {
+                px -= 1;
+            }
+            match self.byte_at((py, px)) {
+                Some(c) if c == found => depth += 1,
+                Some(c) if c == start => depth -= 1,
+                _ => {}
+            }
+        }
+        (self.cy, self.cx) = (py, px);
+    }
+
+    /// `next-matching-bracket`, as tmux's
+    /// window_copy_cmd_next_matching_bracket: from an opening bracket on to
+    /// the bracket closing it. Under vi keys the first bracket on from the
+    /// cursor (across wrapped lines) is taken, a closing one matched
+    /// backwards; under emacs keys an opening bracket just after the cursor
+    /// counts, and off one the cursor goes to a word's end, with the
+    /// opening brackets as its separators.
+    fn next_matching_bracket(&mut self) {
+        let (mut py, mut px) = (self.cy, self.cx);
+        let mut len = self.line_len(py);
+        let last = self.last_line();
+        if len == 0 {
+            return;
+        }
+        let mut tried = false;
+        let found = loop {
+            let c = self.byte_at((py, px));
+            if !self.emacs && c.is_some_and(|c| CLOSE_BRACKETS.contains(c)) {
+                let back = (self.cy, self.cx);
+                (self.cy, self.cx) = (py, px);
+                self.previous_matching_bracket();
+                if self
+                    .byte_at((self.cy, self.cx))
+                    .is_some_and(|c| CLOSE_BRACKETS.contains(c))
+                {
+                    (self.cy, self.cx) = back;
+                }
                 return;
             }
-            pos = if forward {
-                self.next_pos(y, px)
+            if let Some(c) = c.filter(|c| OPEN_BRACKETS.contains(*c)) {
+                break c;
+            }
+            if self.emacs {
+                if !tried && px <= len {
+                    px += 1;
+                    tried = true;
+                    continue;
+                }
+                (self.cy, self.cx) = self.reader_next_word_end((self.cy, self.cx), OPEN_BRACKETS);
+                return;
+            }
+            // Under vi keys on along the line, and on into the next when
+            // this one wraps.
+            if px > len {
+                if py == last || !self.lines[py].wrapped {
+                    return;
+                }
+                (py, px) = (py + 1, 0);
+                len = self.line_len(py);
             } else {
-                self.prev_pos(y, px)
-            };
+                px += 1;
+            }
+        };
+        let end = CLOSE_BRACKETS.as_bytes()[OPEN_BRACKETS.find(found).unwrap_or(0)] as char;
+        let mut depth = 1;
+        while depth != 0 {
+            if px > len {
+                if py == last {
+                    return;
+                }
+                (py, px) = (py + 1, 0);
+                len = self.line_len(py);
+            } else {
+                px += 1;
+            }
+            match self.byte_at((py, px)) {
+                Some(c) if c == found => depth += 1,
+                Some(c) if c == end => depth -= 1,
+                _ => {}
+            }
         }
+        (self.cy, self.cx) = (py, px);
     }
 
     /// Keys copy mode takes before its key table: the character a pending
@@ -913,12 +1009,22 @@ impl CopyMode {
                 self.sel_made_at = (self.cy, self.cx);
             }
             "select-word" => {
-                // The run of same-class cells (word, punctuation or blank)
-                // under the cursor, across wrapped lines as tmux's grid
-                // reader; not a rectangle.
+                // From the word's start to where next-word-end goes from
+                // there, or a one-character word alone, as tmux's
+                // window_copy_cmd_select_word; not a rectangle.
                 self.rect = false;
                 let origin = (self.cy, self.cx);
-                let (start, end) = self.class_run(origin);
+                let start =
+                    self.reader_previous_word(origin, &self.word_separators, false, self.emacs);
+                let lone = start.1 < self.line_len(start.0)
+                    && self
+                        .cell_after(start)
+                        .is_some_and(|next| self.blank_at(next));
+                let end = if lone {
+                    start
+                } else {
+                    self.word_end_pos(start, false)
+                };
                 self.selflag = SelFlag::Word;
                 self.anchor = Some(start);
                 self.sel_end = None;
@@ -1068,8 +1174,8 @@ impl CopyMode {
                     (self.cy, self.cx) = m;
                 }
             }
-            "next-matching-bracket" => self.matching_bracket(false),
-            "previous-matching-bracket" => self.matching_bracket(true),
+            "next-matching-bracket" => self.next_matching_bracket(),
+            "previous-matching-bracket" => self.previous_matching_bracket(),
             "next-paragraph" => self.paragraph(true),
             "previous-paragraph" => self.paragraph(false),
             "goto-line" => {

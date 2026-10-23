@@ -57,6 +57,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Copy mode's word moves and bracket matching follow tmux's, by `mode-keys`**:
+  under emacs keys `next-word-end` and `next-space-end` stop just past the word
+  and `previous-word` stops at a line ending in a blank; `select-word` takes a
+  one-letter word with what follows it as tmux's does;
+  `previous-matching-bracket` under vi keys moves only from a closing bracket,
+  and under emacs keys both bracket matches try the cell beside the cursor, then
+  move by a word, as tmux's. tmxr searched along the line for any bracket.
+
 - **Copied text follows `mode-keys`, as tmux's**: under emacs keys the character
   under the cursor is left out; under vi keys a selection reaching past its last
   line's text keeps that line's newline, so `copy-line` copies the line with its
