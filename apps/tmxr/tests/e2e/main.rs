@@ -215,8 +215,9 @@ impl Tmxr {
     }
 
     /// [`Tmxr::attach`] in a terminal that takes synchronized updates and
-    /// tells its colours, as Alacritty does: it answers DECRQM for mode 2026
-    /// as set, and OSC 10 and 11 with [`TERMINAL_FG`] and [`TERMINAL_BG`].
+    /// tells its colours and color scheme, as foot does: it answers DECRQM
+    /// for mode 2026 as set, OSC 10 and 11 with [`TERMINAL_FG`] and
+    /// [`TERMINAL_BG`], and `CSI ? 996 n` with [`TERMINAL_THEME`].
     #[cfg(unix)]
     fn attach_sync(&self, rest: &[&str]) -> Screen {
         self.terminal(
@@ -240,8 +241,8 @@ impl Tmxr {
     }
 
     /// [`Tmxr::spawn_at`], the terminal answering DECRQM for mode 2026 as
-    /// set and OSC 10 / 11 with its colours when `sync` (else, as one that
-    /// knows neither, not at all).
+    /// set, OSC 10 / 11 with its colours and `CSI ? 996 n` with its color
+    /// scheme when `sync` (else, as one that knows none of them, not at all).
     fn terminal(
         &self,
         cwd: &Path,
@@ -299,9 +300,11 @@ impl Tmxr {
                     if sync && asked(SYNC_QUERY) {
                         let _ = writer.lock().unwrap().write_all(b"\x1b[?2026;2$y");
                     }
-                    for (query, colour) in
-                        [(b"\x1b]10;?", TERMINAL_FG), (b"\x1b]11;?", TERMINAL_BG)]
-                    {
+                    for (query, colour) in [
+                        (&b"\x1b]10;?"[..], TERMINAL_FG),
+                        (&b"\x1b]11;?"[..], TERMINAL_BG),
+                        (&b"\x1b[?996n"[..], TERMINAL_THEME),
+                    ] {
                         if sync && asked(query) {
                             let _ = writer.lock().unwrap().write_all(colour);
                         }
@@ -536,6 +539,10 @@ const SYNC_QUERY: &[u8] = b"\x1b[?2026$p";
 /// 11 with, as Alacritty does (its colours, ended as asked).
 const TERMINAL_FG: &[u8] = b"\x1b]10;rgb:c0c0/caca/f5f5\x1b\\";
 const TERMINAL_BG: &[u8] = b"\x1b]11;rgb:1a1a/1b1b/2626\x1b\\";
+
+/// What [`Tmxr::attach_sync`]'s terminal answers `CSI ? 996 n` with: a dark
+/// color scheme, as foot does.
+const TERMINAL_THEME: &[u8] = b"\x1b[?997;1n";
 
 /// Where [`key_log_fixture`] logs the keys it reads, when a test starts it.
 const KEY_LOG: &str = "TMXR_E2E_KEY_LOG";

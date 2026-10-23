@@ -84,6 +84,8 @@ pub struct Client {
     /// The default foreground and background colours its terminal said
     /// it has, as RGB, for programs' colour queries.
     pub terminal_colours: (Option<u32>, Option<u32>),
+    /// Its terminal's color scheme, as last reported (`#{client_theme}`).
+    pub theme: Option<crossterm::event::ColorScheme>,
 }
 
 impl Client {
@@ -648,6 +650,7 @@ impl Server {
                         stdin: None,
                         created: std::time::SystemTime::now(),
                         terminal_colours: (None, None),
+                        theme: None,
                     },
                 );
             }

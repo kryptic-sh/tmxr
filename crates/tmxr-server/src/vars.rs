@@ -27,6 +27,7 @@ pub const NAMES: &[&str] = &[
     "client_readonly",
     "client_session",
     "client_termname",
+    "client_theme",
     "client_tty",
     "client_uid",
     "client_user",
@@ -612,6 +613,10 @@ impl<'a> Context for Vars<'a> {
             "client_last_session" => srv.sessions.get(&att?.last_session?)?.name.clone(),
             "client_height" => att?.rows.to_string(),
             "client_session" => srv.sessions.get(&att?.session)?.name.clone(),
+            "client_theme" => match srv.clients.get(&self.client?)?.theme? {
+                crossterm::event::ColorScheme::Dark => "dark".to_owned(),
+                crossterm::event::ColorScheme::Light => "light".to_owned(),
+            },
             "client_termname" => srv
                 .clients
                 .get(&self.client?)?

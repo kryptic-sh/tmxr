@@ -26,12 +26,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`customize-mode` refuses `-a` and `-F`**, which it accepted and ignored:
   tmux's has no `-a`, and its `-F` formats tree lines tmxr's picker does not
   have.
-- **The client-server protocol is now 11** (the client sends its process id, for
+- **The client-server protocol is now 12** (the client sends its process id, for
   `#{client_pid}`, its terminal's device, for `#{client_tty}`, its terminal's
-  colours, and the input events it reads together as one message; the server
-  tells it whether to ask for focus reports, `focus-events`, and what to run in
-  its place, `detach-client -E`): after upgrading, a running server must be
-  restarted (`tmxr kill-server`); the client says so if it meets one.
+  colours and color scheme, and the input events it reads together as one
+  message; the server tells it whether to ask for focus reports, `focus-events`,
+  and what to run in its place, `detach-client -E`): after upgrading, a running
+  server must be restarted (`tmxr kill-server`); the client says so if it meets
+  one.
 - **`break-pane -t` is the window the pane becomes**, as tmux's, not the pane to
   break: that is `-s` now (the current pane without it). `-t` takes an index
   (`-t :5`), `-a` / `-b` place it next to the target window, and `-n` names it
@@ -40,6 +41,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The client's theme follows its terminal**: where the terminal reports its
+  color scheme (mode 2031, as foot does), `#{client_theme}` is `dark` or `light`
+  and the `client-dark-theme` / `client-light-theme` hooks run as it changes, as
+  tmux's do.
 - **Pane, session and user ranges in the status line**: `status-format`'s
   `#[range=pane|%N]`, `#[range=session|$N]` and `#[range=user|text]` take clicks
   as tmux's do, and `#{mouse_status_range}` names the range clicked (a user

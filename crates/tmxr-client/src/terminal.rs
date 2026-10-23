@@ -145,8 +145,8 @@ fn restore(kitty: bool) {
         crossterm::cursor::Show
     );
     // Reset attributes and the cursor shape and colour the panes may have
-    // changed.
-    let _ = out.write_all(b"\x1b[0m\x1b[0 q\x1b]112\x07");
+    // changed, and stop the color-scheme reports.
+    let _ = out.write_all(b"\x1b[0m\x1b[0 q\x1b]112\x07\x1b[?2031l");
     let _ = out.flush();
     let _ = disable_raw_mode();
 }
@@ -164,6 +164,9 @@ impl Guard {
         let probe = *PROBE.get_or_init(|| probe(&mut out).unwrap_or_default());
         #[cfg(windows)]
         let probe = *PROBE.get_or_init(Probe::default);
+        // The terminal's color scheme now and on each change (mode 2031), as
+        // tmux asks as its terminal starts.
+        out.write_all(b"\x1b[?2031h\x1b[?996n")?;
         // Unambiguous key reports (C-h vs Backspace, C-i vs Tab, Escape vs
         // Alt) where the terminal supports the kitty protocol.
         let kitty = crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false);

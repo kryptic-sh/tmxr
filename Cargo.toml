@@ -36,14 +36,15 @@ lto = "thin"
 codegen-units = 1
 strip = true
 
-# crossterm 0.29.0 with Alt+Esc parsed on Unix (crossterm-rs/crossterm#1143)
-# and a SIGWINCH that comes with input kept; drop once a crossterm release
-# carries both.
+# crossterm 0.29.0 with Alt+Esc parsed on Unix (crossterm-rs/crossterm#1143),
+# a SIGWINCH that comes with input kept, an unknown CSI ? report no longer
+# swallowing later input (crossterm-rs/crossterm#1106) and the terminal's
+# color-scheme reports read; drop once a crossterm release carries them all.
 # vt100 0.18.1 without the allocations per line scrolled into history
 # (doy/vt100-rust#47), with a cell read in constant time (#48), history rows
 # narrowed again once scrolled past (#49), a line of history read without
 # scrolling (#50), OSC 8 hyperlinks kept (#51) and the normal screen read under
 # the alternate one (#52); drop once a vt100 release carries all six.
 [patch.crates-io]
-crossterm = { git = "https://github.com/kryptic-sh/crossterm", rev = "08697c050383371f02bf957109a3583e48930c0f" }
+crossterm = { git = "https://github.com/kryptic-sh/crossterm", rev = "ef87b584d18ea0190ee2fc2f821c71c0324f4947" }
 vt100 = { git = "https://github.com/kryptic-sh/vt100-rust", rev = "765fea942137316cf05a8de968de059b25ebbea0" }

@@ -88,6 +88,23 @@ impl Server {
         match ev {
             TermEvent::Key(k) if k.kind != KeyEventKind::Release => self.client_key(id, k, false),
             TermEvent::Key(_) => {}
+            // The terminal's color scheme, as tmux's
+            // server_client_report_theme: kept, and its hook run on every
+            // report.
+            TermEvent::ColorScheme(scheme) => {
+                if let Some(c) = self.clients.get_mut(&id) {
+                    c.theme = Some(scheme);
+                }
+                let hook = match scheme {
+                    crossterm::event::ColorScheme::Dark => "client-dark-theme",
+                    crossterm::event::ColorScheme::Light => "client-light-theme",
+                };
+                let ctx = crate::cmds::Ctx {
+                    client: Some(id),
+                    ..crate::cmds::Ctx::default()
+                };
+                self.queue_hook(hook, ctx, crate::hooks::HookScope::default());
+            }
             TermEvent::Paste(text) => {
                 if let Some(ov) = self
                     .clients

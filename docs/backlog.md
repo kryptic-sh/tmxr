@@ -143,10 +143,14 @@ table. What has been verified, and how:
   tty event of a poll's batch, so a SIGWINCH ready in the same wakeup as a key
   was never seen, and it stopped reading once a read that filled its 1024-byte
   buffer gave an event, so the rest of a burst waited for the next key (now read
-  on while `FIONREAD` says bytes wait). tmxr builds against all three on 0.29.0
-  (branch `alt-escape-0.29`, pinned by `rev` in the root `Cargo.toml`'s
-  `[patch.crates-io]`, and allowed in `deny.toml`); each event-source fix has an
-  e2e test that fails without it (run on Linux)
+  on while `FIONREAD` says bytes wait). Also on that branch: upstream's fix for
+  an unknown finished `CSI ?` report read as incomplete, which swallowed every
+  later key (crossterm-rs/crossterm#1106, cherry-picked), and the terminal's
+  color-scheme report read as `Event::ColorScheme`, which upstream drops (not
+  offered upstream yet; it adds a variant to `Event`). tmxr builds against all
+  of them on 0.29.0 (branch `alt-escape-0.29`, pinned by `rev` in the root
+  `Cargo.toml`'s `[patch.crates-io]`, and allowed in `deny.toml`); each
+  event-source fix has an e2e test that fails without it (run on Linux)
   (`a_resize_and_a_key_arriving_together_both_reach_the_server`,
   `keys_typed_faster_than_the_client_reads_all_arrive`). The owner's report of
   the first in use (2026-10-20, Hyprland with Alacritty: closing the window
@@ -204,9 +208,8 @@ table. What has been verified, and how:
     checked against tmux 3.6 by `corpus/options.toml`): in tmux's table order,
     the global tables listing every hook (the unset ones bare) and the others
     only the hooks set, each command re-parsed as tmux prints it; the global
-    session table leaves out the three hooks tmxr does not fire (`after-queue`,
-    `client-light-theme`, `client-dark-theme`; known divergence
-    `show_hooks_g_lists_the_hooks_tmxr_fires`).
+    session table leaves out the one hook tmxr does not fire (`after-queue`;
+    known divergence `show_hooks_g_lists_the_hooks_tmxr_fires`).
   - **`show-options` quoting is tmux's, quirk included** (`escape_arg`, from
     `args_escape`): a value with a `"` and a backslash but none of ` #';${}%` is
     single-quoted with the backslash doubled, which reads back doubled, in tmux
@@ -773,19 +776,19 @@ table. What has been verified, and how:
     a session's windows, the `target` and `window-target` types; `prompt_tab_*`
     in `corpus/keys.toml`), though which ten names a long menu keeps was matched
     by result (the last ten), not read from tmux's code.
-  - Hooks and modes: tmux hooks tmxr does not fire: `client-light-theme` /
-    `-dark-theme` (tmux turns on mode 2031 and reads `CSI ? 997 ; 1 / 2 n`;
-    Alacritty 0.17 answers DECRQM for 2031 with `0`, not known, and the
-    `CSI ? 996 n` query with nothing, 2026-10-22, so a real check needs another
-    terminal, foot or kitty, none installed here on 2026-10-22). What it would
-    take, from tmux 3.6's tty.c and server-client.c: the client sends
-    `CSI ? 2031 h` and `CSI ? 996 n` as its terminal starts and `CSI ? 2031 l`
-    as it stops, and the terminal's `CSI ? 997 ; 1 n` (dark) / `2 n` (light)
-    sets the client's theme (`#{client_theme}`), fires the hook and asks for its
-    colours again; panes that set mode 2031 get the report passed on. The client
-    reads its input through crossterm, which drops a CSI it does not know, so
-    the patched crossterm would need to hand the report on first. Copy mode's
-    `next-prompt` / `previous-prompt` (compared with tmux 3.6 in
+  - Hooks and modes: the client's theme follows its terminal as tmux's: the
+    client sends `CSI ? 2031 h` and `CSI ? 996 n` as its terminal starts and
+    `CSI ? 2031 l` as it stops, and the terminal's `CSI ? 997 ; 1 / 2 n`
+    (through the patched crossterm's `Event::ColorScheme`) sets
+    `#{client_theme}` and runs `client-dark-theme` / `client-light-theme`
+    (`the_terminals_color_scheme_is_the_clients_theme`; in foot 1.28 on
+    2026-10-23 a client read `dark` at attach and followed foot's `SIGUSR2` /
+    `SIGUSR1` to `light` and back, each running its hook; Alacritty 0.17 does
+    not report, answering DECRQM for 2031 with `0`). Unlike tmux, the client
+    does not ask for its terminal's colours again on a change, so an answer to a
+    pane's OSC 10 / 11 query keeps the colours from attach, and the reports are
+    not yet passed on to panes (a pane's mode 2031 and its own `CSI ? 996 n`).
+    Copy mode's `next-prompt` / `previous-prompt` (compared with tmux 3.6 in
     `corpus/keys.toml`) read OSC 133 marks the emulator keeps by line number
     (`Emulator::prompt_lines`, rows lost off the history counted by vt100's
     `on_scroll`); a mark stays on its number where a scroll region or a line

@@ -1572,6 +1572,25 @@ fn an_idle_client_and_server_do_not_wake() {
 /// shows a frame half drawn; in one that does not, it writes none. Unix
 /// only: a Windows client does not ask, its console handing over input
 /// records rather than the terminal's answers.
+/// A client's terminal's color scheme, asked at attach and reported again
+/// as it changes, is `#{client_theme}` and runs tmux's theme hooks.
+#[cfg(unix)]
+#[test]
+fn the_terminals_color_scheme_is_the_clients_theme() {
+    let t = Tmxr::new("theme");
+    t.run(&["new-session", "-d", "-s", "th"]);
+    t.run(&["set-hook", "-g", "client-dark-theme", "set -ga @hooks d"]);
+    t.run(&["set-hook", "-g", "client-light-theme", "set -ga @hooks l"]);
+    let s = t.attach_sync(&["attach", "-t", "th"]);
+    s.wait_for("the status line", |text| text.contains("th"));
+    let query = ["display", "-p", "-t", "th", "#{client_theme} #{@hooks}"];
+    t.wait_run(&query, "dark", |o| o.trim() == "dark d");
+    // The terminal turned light: it says so, as mode 2031 is on.
+    assert!(s.raw_text().contains("\x1b[?2031h"), "2031 not set");
+    s.send(b"\x1b[?997;2n");
+    t.wait_run(&query, "light", |o| o.trim() == "light dl");
+}
+
 /// A program asking for the default colours, where the window's style leaves
 /// the terminal's own, gets those of the client's terminal, which the client
 /// asked at attach, as tmux's.
