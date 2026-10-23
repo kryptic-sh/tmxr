@@ -68,6 +68,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An SGR with an underline style or colour no longer loses its other
+  attributes**: `CSI 4:3 m` (Neovim's undercurl), `CSI 21 m` and an SGR naming
+  an underline colour (`58`) were dropped whole, so such text had no underline
+  at all, and `CSI 4;58;2;255;0;0 m` lost its underline too. They now underline
+  (every style drawn as the plain underline, the colour not kept), and RGB
+  colours in their colon form (`38:2::r:g:b`) are read.
+
 - **The server's thread reading a client no longer wakes for each frame it sends
   that client** (Linux, Unix sockets): it waited in `read`, which Linux wakes
   whenever the client takes data off the socket; it now waits in `poll` for

@@ -44,8 +44,10 @@ strip = true
 # (doy/vt100-rust#47), with a cell read in constant time (#48), history rows
 # narrowed again once scrolled past (#49), a line of history read without
 # scrolling (#50), OSC 8 hyperlinks kept (#51), the normal screen read under
-# the alternate one (#52) and lines rewrapped on a width change (branch
-# `reflow`, not offered yet); drop once a vt100 release carries them all.
+# the alternate one (#52), lines rewrapped on a width change (branch
+# `reflow`, not offered yet) and SGRs with underline styles or colours kept
+# (branch `sgr-colon`, not offered yet); drop once a vt100 release carries
+# them all.
 [patch.crates-io]
 crossterm = { git = "https://github.com/kryptic-sh/crossterm", rev = "ef87b584d18ea0190ee2fc2f821c71c0324f4947" }
-vt100 = { git = "https://github.com/kryptic-sh/vt100-rust", rev = "693984f7499ed8ede4058a53e24b1e5cb6bf19dc" }
+vt100 = { git = "https://github.com/kryptic-sh/vt100-rust", rev = "6704ad85abbadd982de91b1f075a58e25da0cc93" }

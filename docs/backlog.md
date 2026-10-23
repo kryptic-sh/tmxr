@@ -462,39 +462,39 @@ table. What has been verified, and how:
   #48, #49, #50, #51 and #52, from branches `scroll-alloc`, `visible-row`,
   `trim-on-scroll`, `line-cells`, `hyperlinks` and `saved-screen` of
   kryptic-sh/vt100-rust; #49 builds on #47 and #52 on #50; tmxr builds against
-  `tmxr-0.18`, which carries all six and the `reflow` branch, pinned by `rev` in
-  the root `Cargo.toml`'s `[patch.crates-io]` and allowed in `deny.toml`, as
-  crossterm is). #49: `set_scrollback` widened each history row it showed to the
-  screen's width and never narrowed it again, so one copy-mode entry on 50000
-  lines of history left the server at 206 MiB for good (now 30 MiB, tmux 23
-  MiB); a whole-history page now costs a reallocation per row instead, 46 ms
-  against 32–35 ms for reading every cell (bare vt100, best of 5). #50 adds
-  `Screen::line_cells` / `line_wrapped`, a line of history and screen by index
-  without moving the view: `copy::snapshot` reads through it, so entering copy
-  mode on 50000 lines costs 5–6 ms of server CPU (tmux 4 ms; 327–362 ms before
-  these changes), and tmxr no longer moves vt100's view at all, so #49 serves
-  other users of vt100. #48: `Grid::visible_row` was `visible_rows().nth(row)`,
-  which steps through every row above, so each `Screen::cell` cost time in
-  proportion to its row. #47: for every line scrolled into history, vt100
-  0.18.1's `Grid::scroll_up` compared each cell against a blank one through an
-  out-of-line `PartialEq`, shrank the row (a reallocation) and allocated a
-  full-width row to replace it. The patch copies the used cells into the history
-  row and clears them in place. Found with a pprof (`setitimer`) profile, as
-  `perf` is not installed: 92.5% of bare vt100's time on `seq 1 2000000` was in
-  `scroll_up`. Measured 2026-10-21 on the Arch laptop (i7-1355U, pinned to its
-  performance cores), a pane printing `seq 1 2000000` with a 120x40 client
-  attached, its end signalled by `wait-for`: the server's CPU went from
-  1.68–2.14 s to 0.50–0.58 s, tmux 3.8's 0.61–0.62 s, wall time from about 2 s
-  to 0.7 s, tmux's 0.8 s. vt100 alone at the default `history-limit` of 50000
-  went from 1.56 s to 0.41 s, with history identical by hash (a check shown to
-  catch three deliberately broken variants). Drop the patch once a vt100 release
-  has it; `cargo install tmxr` from crates.io builds without it. The chip is
-  hybrid, and the same emulator run took 1.5 times as long pinned to an
-  efficiency core (`taskset`), which the scheduler may pick for the server.
-  Measuring note: an earlier harness that polled `capture-pane -p` for the end
-  of the output mostly measured the captures (each copied the whole history
-  before `snapshot_lines`, see the changelog), which put tmxr at five times
-  tmux's CPU.
+  `tmxr-0.18`, which carries all six and the `reflow` and `sgr-colon` branches
+  (neither offered upstream yet), pinned by `rev` in the root `Cargo.toml`'s
+  `[patch.crates-io]` and allowed in `deny.toml`, as crossterm is). #49:
+  `set_scrollback` widened each history row it showed to the screen's width and
+  never narrowed it again, so one copy-mode entry on 50000 lines of history left
+  the server at 206 MiB for good (now 30 MiB, tmux 23 MiB); a whole-history page
+  now costs a reallocation per row instead, 46 ms against 32–35 ms for reading
+  every cell (bare vt100, best of 5). #50 adds `Screen::line_cells` /
+  `line_wrapped`, a line of history and screen by index without moving the view:
+  `copy::snapshot` reads through it, so entering copy mode on 50000 lines costs
+  5–6 ms of server CPU (tmux 4 ms; 327–362 ms before these changes), and tmxr no
+  longer moves vt100's view at all, so #49 serves other users of vt100. #48:
+  `Grid::visible_row` was `visible_rows().nth(row)`, which steps through every
+  row above, so each `Screen::cell` cost time in proportion to its row. #47: for
+  every line scrolled into history, vt100 0.18.1's `Grid::scroll_up` compared
+  each cell against a blank one through an out-of-line `PartialEq`, shrank the
+  row (a reallocation) and allocated a full-width row to replace it. The patch
+  copies the used cells into the history row and clears them in place. Found
+  with a pprof (`setitimer`) profile, as `perf` is not installed: 92.5% of bare
+  vt100's time on `seq 1 2000000` was in `scroll_up`. Measured 2026-10-21 on the
+  Arch laptop (i7-1355U, pinned to its performance cores), a pane printing
+  `seq 1 2000000` with a 120x40 client attached, its end signalled by
+  `wait-for`: the server's CPU went from 1.68–2.14 s to 0.50–0.58 s, tmux 3.8's
+  0.61–0.62 s, wall time from about 2 s to 0.7 s, tmux's 0.8 s. vt100 alone at
+  the default `history-limit` of 50000 went from 1.56 s to 0.41 s, with history
+  identical by hash (a check shown to catch three deliberately broken variants).
+  Drop the patch once a vt100 release has it; `cargo install tmxr` from
+  crates.io builds without it. The chip is hybrid, and the same emulator run
+  took 1.5 times as long pinned to an efficiency core (`taskset`), which the
+  scheduler may pick for the server. Measuring note: an earlier harness that
+  polled `capture-pane -p` for the end of the output mostly measured the
+  captures (each copied the whole history before `snapshot_lines`, see the
+  changelog), which put tmxr at five times tmux's CPU.
 - **crates.io cannot take tmxr-server, tmxr-client or tmxr** while they need the
   vt100 fork: a `[patch]` does not reach a published package, and
   `cargo publish` verifies each tarball against crates.io's vt100 0.18.1, which
@@ -733,9 +733,19 @@ table. What has been verified, and how:
     `wrap_flag` are kept from the sequences vt100 passes on unhandled, but vt100
     itself still draws as with insert off and wrap on; `origin_flag` from
     `CSI ? 6`, split out by `modes::ModeSplitter` and passed on to vt100);
-    overline, and underline styles and colours (`double-`, `curly-`, `dotted-`
-    and `dashed-underscore` draw as the plain underline; vt100 0.18, re-checked
-    2026-10-21, still keeps one on/off underline in `Attrs` and no overline).
+    overline, and underline styles and colours: `4:1`–`4:5`, `21` and the
+    underline colour (`58` / `59`) are read (the fork's `sgr-colon`; before it
+    such an SGR was dropped whole, so Neovim's undercurl showed no underline at
+    all), but every style draws as the plain underline and the colour is not
+    kept: vt100 keeps one on/off underline in `Attrs` and no overline. Keeping
+    them needs room in a `Cell`, which the fork holds at 32 bytes (asserted):
+    its 20 content bytes, attributes and link index fill it. Options, not
+    decided: grow the cell to 36 bytes (about 24 MB more for a full 50000-line
+    history 120 columns wide), take the room from the content bytes (cutting the
+    longest emoji sequences short), or keep styles and colours in a per-screen
+    table indexed from the cell, as its hyperlinks are; tmxr would then send
+    them only to terminals that take them (tmux reads `Smulx` / `Setulc` from
+    terminfo; Alacritty and foot have both).
   - Options: every status row is drawn from its `status-format` item by
     `format_draw` (the first from tmux's default unless set), which takes tmux's
     `align`, `fill`, `default` / `push-default` / `pop-default`, lists (cut
