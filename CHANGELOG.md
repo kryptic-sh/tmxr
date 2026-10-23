@@ -17,8 +17,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Lines rewrap when a pane's width changes**, as tmux's reflow: a wrapped line
   joins and splits again at the new width, its history too, and the cursor keeps
   its place in its line. Under a program on the alternate screen, the normal
-  screen is rewrapped as the program leaves it. Before, rows were cut or padded
-  where they stood.
+  screen is rewrapped as the program leaves it, and copy mode rewraps what it
+  shows, its cursor keeping its place. Before, rows were cut or padded where
+  they stood.
 - **`clear-history -H` clears the pane's hyperlinks**, those on its screen
   included, as tmux's does.
 - **The client's theme follows its terminal**: where the terminal reports its
@@ -39,6 +40,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   crossterm and vt100 that a published crate cannot take, so `tmxr-cli` on
   crates.io stays at 0.9.0. Install from a release or package, or with
   `cargo install --locked --git https://github.com/kryptic-sh/tmxr tmxr-cli`.
+
+### Fixed
+
+- **`top-line`, `middle-line` and `bottom-line` go to the row's start** in copy
+  mode, as tmux's do, and `middle-line` to tmux's middle row on an even number
+  of rows; `#{copy_cursor_word}` follows a word across a wrapped line, as
+  tmux's.
 
 ## [0.10.0] - 2026-10-23
 

@@ -115,6 +115,51 @@ steps = [
 checks = [{ format = "#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{copy_cursor_word}" }]
 
 [[cases]]
+name = "top_middle_and_bottom_line_go_to_a_rows_start_as_tmux"
+unix_only = true
+size = [20, 5]
+program = "printf 'aaaa\\nbbbb\\ncccc\\ndddd'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X top-line" },
+  { run = "set -gF @top '#{copy_cursor_x},#{copy_cursor_y}'" },
+  { run = "send-keys -t o -X end-of-line" },
+  { run = "send-keys -t o -X middle-line" },
+  { run = "set -gF @middle '#{copy_cursor_x},#{copy_cursor_y}'" },
+  { run = "send-keys -t o -X end-of-line" },
+  { run = "send-keys -t o -X bottom-line" },
+]
+checks = [
+  { format = "#{@top} #{@middle} #{copy_cursor_x},#{copy_cursor_y}" },
+]
+
+[[cases]]
+name = "copy_mode_rewraps_on_a_width_change_as_tmux"
+# tmux's window_copy_resize rewraps copy mode's copy of the pane, the
+# cursor keeping its place in its line.
+unix_only = true
+size = [20, 5]
+program = "printf 'one two three four five six seven\\nalpha beta gamma\\nlast'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X top-line" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X next-word" },
+  { run = "send-keys -t o -X next-word" },
+  { run = "resize-window -t o -x 10 -y 5" },
+  { sleep = 0.3 },
+  { run = "set -gF @narrow '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{copy_cursor_word}'" },
+  { run = "resize-window -t o -x 40 -y 5" },
+  { sleep = 0.3 },
+]
+checks = [
+  { format = "#{@narrow}" },
+  { format = "#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{copy_cursor_word}" },
+]
+
+[[cases]]
 name = "a_root_bind_runs_in_copy_mode"
 # Neither copy mode table binds F5: the root table's runs.
 attach = true

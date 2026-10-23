@@ -95,6 +95,102 @@ impl Line {
     }
 }
 
+/// Copy mode's lines rewrapped to `cols` columns, as tmux's
+/// window_copy_resize rewraps its copy of the pane, and by the same rules
+/// the pane's own lines are (the vt100 fork's `Grid::reflow`, after tmux's
+/// `grid_reflow`): each line's rows, as written, joined and split again at
+/// the new width, a wide character counted three columns where a row
+/// breaks. Gives the lines (at least `rows` of them), each old line's new
+/// number, and where the cursor `(y, x)` goes: its place in its line, or
+/// the line's end if it was past it, as tmux's `grid_wrap_position`.
+pub fn reflow(
+    lines: &[Line],
+    cols: usize,
+    rows: usize,
+    (cy, cx): (usize, usize),
+) -> (Vec<Line>, Vec<usize>, (usize, usize)) {
+    // Each line as written: its cells, and the old lines it was made of
+    // with where each began; the cursor's line and its cell, `None` past
+    // the end.
+    let mut logical: Vec<Written> = Vec::new();
+    let mut cursor = (0, None);
+    let mut joining = false;
+    for (y, line) in lines.iter().enumerate() {
+        if !joining {
+            logical.push((Vec::new(), Vec::new()));
+        }
+        let n = logical.len() - 1;
+        let (cells, starts) = &mut logical[n];
+        starts.push((y, cells.len()));
+        if y == cy {
+            cursor = (n, (cx < line.used).then(|| cells.len() + cx));
+        }
+        cells.extend(line.cells().take(line.used).cloned());
+        joining = line.wrapped;
+    }
+    let mut out: Vec<Line> = Vec::new();
+    let mut map = vec![0; lines.len()];
+    let mut new_cursor = (0, 0);
+    for (n, (cells, starts)) in logical.iter().enumerate() {
+        let mut row: Vec<Cell> = Vec::new();
+        let mut counted = 0;
+        let mut starts = starts.iter().peekable();
+        for (i, cell) in cells.iter().enumerate() {
+            let wide = cells.get(i + 1).is_some_and(|c| c.symbol.is_empty());
+            let need = match (wide, cell.symbol.is_empty()) {
+                (true, _) => 3,
+                (_, true) => 0,
+                _ => 1,
+            };
+            if need > 0 && !row.is_empty() && counted + need > cols {
+                out.push(line_of_cells(std::mem::take(&mut row), cols, true));
+                counted = 0;
+            }
+            counted += need;
+            while let Some(&&(y, at)) = starts.peek() {
+                if at > i {
+                    break;
+                }
+                map[y] = out.len();
+                starts.next();
+            }
+            if cursor == (n, Some(i)) {
+                new_cursor = (out.len(), row.len());
+            }
+            row.push(cell.clone());
+        }
+        for &(y, _) in starts {
+            map[y] = out.len();
+        }
+        if cursor == (n, None) {
+            new_cursor = (out.len(), row.len().min(cols.saturating_sub(1)));
+        }
+        out.push(line_of_cells(row, cols, false));
+    }
+    while out.len() < rows {
+        out.push(line_of_cells(Vec::new(), cols, false));
+    }
+    (out, map, new_cursor)
+}
+
+/// A line as written, before it wrapped: its cells, and each line it was
+/// made of with the index of that line's first cell.
+type Written = (Vec<Cell>, Vec<(usize, usize)>);
+
+/// A line of `cols` columns holding `cells` from the left, all of them
+/// used.
+fn line_of_cells(mut cells: Vec<Cell>, cols: usize, wrapped: bool) -> Line {
+    let used = cells.len().min(cols);
+    let kept = cells.iter().rposition(|c| *c != BLANK).map_or(0, |i| i + 1);
+    cells.truncate(kept.min(cols));
+    Line {
+        cells,
+        width: cols,
+        wrapped,
+        used,
+    }
+}
+
 pub fn colour(c: vt100::Color) -> Color {
     match c {
         vt100::Color::Default => Color::Reset,

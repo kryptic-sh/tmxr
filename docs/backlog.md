@@ -936,10 +936,13 @@ table. What has been verified, and how:
   wide character counted three columns where a row breaks, as tmux's
   `grid_reflow` counts its padding cell (all compared with tmux 3.6:
   `a_width_change_rewraps_lines_as_tmux` and the three after it in
-  `corpus/layout.toml`). Prompt marks follow their lines
-  (`Emulator::follow_reflow`); the input mark is dropped, so `prefix y` falls
-  back to the shell's line keys until the next prompt. Seen in Alacritty 0.17
-  under Hyprland's retiling (2026-10-23).
+  `corpus/layout.toml`). Copy mode rewraps its own copy the same way
+  (`copy::model::reflow`, as tmux's `window_copy_resize`;
+  `copy_mode_rewraps_on_a_width_change_as_tmux`), a second implementation of the
+  same rules on copy mode's cells, kept beside the fork's. Prompt marks follow
+  their lines (`Emulator::follow_reflow`); the input mark is dropped, so
+  `prefix y` falls back to the shell's line keys until the next prompt. Seen in
+  Alacritty 0.17 under Hyprland's retiling (2026-10-23).
 - **Alternate screen switches are made over vt100's**
   (`Emulator::switch_screen`, matching tmux 3.6 in the oracle for 47, 1047 and
   1049, on and off): switching on goes through vt100's 1049, which saves the

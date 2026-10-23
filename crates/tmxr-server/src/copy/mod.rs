@@ -387,6 +387,34 @@ impl CopyMode {
     }
 
     pub fn resize(&mut self, cols: u16, rows: u16) {
+        // A new width rewraps the lines copy mode shows, as tmux's
+        // window_copy_resize does its copy: the cursor keeps its place in
+        // its line, the view goes to the bottom unless that would hide the
+        // cursor, which is then its top row, and the selection goes.
+        let width = usize::from(cols.max(1));
+        if self.lines.first().is_some_and(|l| l.width() != width) {
+            let (lines, map, (cy, cx)) = model::reflow(
+                &self.lines,
+                width,
+                usize::from(rows.max(1)),
+                (self.cy, self.cx),
+            );
+            let follow = |marks: &[usize]| -> Vec<usize> {
+                let mut moved: Vec<usize> =
+                    marks.iter().filter_map(|&m| map.get(m).copied()).collect();
+                moved.dedup();
+                moved
+            };
+            self.prompts = follow(&self.prompts);
+            self.outputs = follow(&self.outputs);
+            self.lines = lines;
+            (self.cy, self.cx) = (cy, cx);
+            let bottom = self.lines.len().saturating_sub(usize::from(rows.max(1)));
+            self.top = cy.min(bottom);
+            self.anchor = None;
+            self.sel_end = None;
+            self.search_origin = None;
+        }
         self.cols = cols;
         self.rows = rows;
         self.scroll_to_cursor();
@@ -400,11 +428,26 @@ impl CopyMode {
 
     /// `#{copy_cursor_word}`: the word at the cursor as tmux 3.6's
     /// `format_grid_word` finds it, the run of non-separators around the
-    /// cursor, or on a separator the word just after it. tmux also follows a
-    /// word across a wrapped line; this keeps to the cursor's line.
+    /// cursor, or on a separator the word just after it, followed across
+    /// the lines the cursor's line wraps from and into.
     pub fn cursor_word(&self) -> String {
-        let line = self.lines.get(self.cy).map(Line::chars).unwrap_or_default();
-        word_at(&line, self.cx, &self.word_separators)
+        if self.cy >= self.lines.len() {
+            return String::new();
+        }
+        let mut first = self.cy;
+        while first > 0 && self.lines[first - 1].wrapped {
+            first -= 1;
+        }
+        let mut last = self.cy;
+        while self.lines[last].wrapped && last + 1 < self.lines.len() {
+            last += 1;
+        }
+        let before: usize = self.lines[first..self.cy].iter().map(Line::width).sum();
+        let text: Vec<char> = self.lines[first..=last]
+            .iter()
+            .flat_map(Line::chars)
+            .collect();
+        word_at(&text, before + self.cx, &self.word_separators)
     }
 
     /// The OSC 8 link of the cell shown at `col`, `row` rows down the view,
@@ -715,9 +758,11 @@ impl CopyMode {
             }
             "history-top" => (self.cy, self.cx) = (0, 0),
             "history-bottom" => self.cy = last,
-            "top-line" => self.cy = self.top,
-            "middle-line" => self.cy = (self.top + rows / 2).min(last),
-            "bottom-line" => self.cy = (self.top + rows - 1).min(last),
+            // To the view's first, middle or last row, at its start, as
+            // tmux's window_copy_cmd_top_line and the rest.
+            "top-line" => (self.cy, self.cx) = (self.top, 0),
+            "middle-line" => (self.cy, self.cx) = ((self.top + (rows - 1) / 2).min(last), 0),
+            "bottom-line" => (self.cy, self.cx) = ((self.top + rows - 1).min(last), 0),
             "halfpage-up" => self.page(false, true),
             "halfpage-down" => self.page(true, true),
             "page-up" => self.page(false, false),
