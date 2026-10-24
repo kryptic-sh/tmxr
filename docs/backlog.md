@@ -380,14 +380,12 @@ table. What has been verified, and how:
   overlays too (tmux's are pane modes) but leave the pane focused, as tmux's
   would. Checked end to end on Windows and Linux
   (`a_pane_that_asked_is_told_when_it_gains_and_loses_focus`), a client's own
-  focus out and back in included. The test's fixture reads the reports as raw
-  bytes on Unix (`log_focus_bytes`): crossterm's reader lost the first one in
-  about half of the Linux runs although tmxr had written it (seen with a log
-  line in `update_pane_focus`; WSL Ubuntu, 2026-10-18). Why crossterm lost it
-  was not found. With today's patched crossterm (2026-10-21, Arch) the fixture
-  reading through crossterm instead lost none: 20 runs of the test alone and 6
-  full e2e suites. Not tried in WSL or CI, so the raw-byte reading stays;
-  switching it back to crossterm would test crossterm's focus path too.
+  focus out and back in included. The test's fixture reads the reports through
+  crossterm on every platform (since 2026-10-24: 20 of 20 runs on Arch); it read
+  them as raw bytes on Unix before, as crossterm's reader lost the first one in
+  about half of the Linux runs (WSL Ubuntu, 2026-10-18), which the patched
+  crossterm and the fixture polling before it says `ready` no longer do. Not
+  tried in WSL since.
 - **tmux default binds**: most of tmux's defaults are bound (see above);
   `prefix C-z` (suspend-client) errors on Windows, which has no job control.
   Alerts follow tmux 3.6's, as recorded from a running tmux on 2026-10-10 (WSL
