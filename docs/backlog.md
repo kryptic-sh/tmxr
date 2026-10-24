@@ -474,10 +474,10 @@ table. What has been verified, and how:
   builds, 50000 full lines of 80 columns, server RSS): 155 MB with vt100, 21 MB
   with vt1k (tmux 3.8: 38 MB). Under a flood (`seq 1 2000000` into a detached
   120x40 pane, end by `wait-for`, four performance cores) the server took
-  0.74–0.86 s against vt100's 0.59–0.73 s: packing each line costs more than
-  vt100's copy; the parsers alone took 517 ms against 486 ms. Not looked into
-  further. The vt100 fork's packed-history branch (`packed-history`, never
-  pushed) is superseded.
+  0.58–0.68 s against vt100's 0.58–0.72 s, and the parsers alone 340–366 ms
+  against 507–538 ms; before vt1k's `Row` kept where its written cells end,
+  finding it took 40% of the server's time (pprof). The vt100 fork's
+  packed-history branch (`packed-history`, never pushed) is superseded.
 - **crates.io cannot take tmxr-server, tmxr-client or tmxr** while they depend
   on git: vt1k (kryptic-sh's emulator, not on crates.io yet) and the crossterm
   fork (tmxr-server and tmxr-client match its `Event::ColorScheme`, which
