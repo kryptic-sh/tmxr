@@ -2755,7 +2755,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 [[package]]
 name = "vt1k"
 version = "0.1.0"
-source = "git+https://github.com/kryptic-sh/vt1k?rev=a391adf0508a46d30308fb1d07339091b8516211#a391adf0508a46d30308fb1d07339091b8516211"
+source = "git+https://github.com/kryptic-sh/vt1k?rev=fa678ef5b2af91b2db3ee3fecdd8190ab4790d69#fa678ef5b2af91b2db3ee3fecdd8190ab4790d69"
 dependencies = [
  "unicode-width",
  "vte",

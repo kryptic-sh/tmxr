@@ -86,24 +86,22 @@ table. What has been verified, and how:
   (hyprwm/Hyprland discussion 16612).
 - **CSIs the emulator makes beside vt100** (`modes::ModeSplitter`, from tmux's
   `input_csi_table`): SCP / RCP, REP (only right after a printed character, as
-  tmux's), CBT and DECSCUSR (the shape and blinking tmxr keeps); HVP and HPA are
+  tmux's) and DECSCUSR (the shape and blinking tmxr keeps); HVP and HPA are
   vt100's own since 0.18. btop's boxes, which broke for want of HVP (vt100
   0.16), matched tmux 3.8 on every row by their box-drawing cells (2026-10-20,
   120x40, Linux). Not compared: btop's colours (`capture-pane -e` differs run to
   run with its live graphs). SCP / RCP go through vt100's `ESC 7` / `ESC 8`,
   which save the attributes too, as tmux's `input_save_state` does. HT, CBT, HTS
-  (`ESC H`) and TBC (`CSI g`) use tab stops the emulator keeps as tmux does
-  (`Emulator::tab`, compared by `tab_stops_as_tmux` and
-  `tab_stops_reset_as_tmux`), where vt100's are fixed every 8 columns; an HT
-  inside an OSC or DCS string stays the string's. CHT (`CSI n I`) is ignored, as
-  tmux 3.8 ignores it (probed the same day). The scroll region is kept by the
-  emulator as tmux keeps it (`Emulator::set_region`, compared by
-  `scroll_region_as_tmux` and `scroll_region_kept_across_screens_as_tmux`): one
-  for the terminal, where vt100 keeps one per screen, so it is written into
-  vt100's again after each switch; a region of fewer than two rows is ignored,
-  where vt100 takes the whole screen; and IL / DL outside it move the rows from
-  the cursor to the bottom, through a region set for the moment
-  (`Emulator::lines`, compared by
+  (`ESC H`) and TBC (`CSI g`) use the tab stops vt1k keeps as tmux does
+  (compared by `tab_stops_as_tmux` and `tab_stops_reset_as_tmux`), where vt100's
+  were fixed every 8 columns. CHT (`CSI n I`) is ignored, as tmux 3.8 ignores it
+  (probed the same day). The scroll region is kept by the emulator as tmux keeps
+  it (`Emulator::set_region`, compared by `scroll_region_as_tmux` and
+  `scroll_region_kept_across_screens_as_tmux`): one for the terminal, where
+  vt100 keeps one per screen, so it is written into vt100's again after each
+  switch; a region of fewer than two rows is ignored, where vt100 takes the
+  whole screen; and IL / DL outside it move the rows from the cursor to the
+  bottom, through a region set for the moment (`Emulator::lines`, compared by
   `lines_inserted_and_deleted_outside_the_region_as_tmux`), including tmux's IL
   there of as many rows as are left changing nothing. Not compared: the region
   with origin mode on across a screen switch (vt100 keeps origin mode per screen
