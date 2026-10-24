@@ -453,6 +453,12 @@ checks = [
 ]
 
 [[cases]]
+name = "capture_pane_e_writes_blink_hidden_strikethrough_and_overline_as_tmux"
+program = 'printf "\033[5mblink\033[25m \033[8mhidden\033[28m \033[9mstrike\033[29m \033[53mover\033[55m\n\033[1;5;9;53mall\033[0m \033[3;6;8mmore\033[m\n"; exec sleep 1000'
+steps = [{ sleep = 1.0 }]
+checks = [{ command = "capture-pane -p -e -E 1" }]
+
+[[cases]]
 name = "alternate_screen_1049_keeps_the_cursor_as_tmux"
 program = 'sleep 0.5; printf "main\nabc\033[?1049hxy"; exec sleep 1000'
 steps = [{ sleep = 1.5 }]

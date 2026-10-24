@@ -465,7 +465,7 @@ mod tests {
         // A plain underline says nothing a style does not, so is not carried.
         let single = Underline {
             style: vt1k::UnderlineStyle::Single,
-            colour: vt1k::Color::Default,
+            ..Underline::NONE
         };
         assert_eq!(links.carrier(None, single), Color::Reset);
     }
@@ -478,6 +478,7 @@ mod tests {
         let curly = Underline {
             style: vt1k::UnderlineStyle::Curly,
             colour: vt1k::Color::Rgb(255, 0, 0),
+            ..Underline::NONE
         };
         let drawn = |styles: bool, depth: ColourDepth| -> (vt1k::UnderlineStyle, vt1k::Color) {
             let mut backend = AnsiBackend::new(10, 1);

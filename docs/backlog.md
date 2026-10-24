@@ -639,18 +639,20 @@ table. What has been verified, and how:
     settings the same way (`tmxr_config::load_file`), applying only those and
     failing with the rest named.
   - Performance: entering copy mode still copies the whole history
-    (`copy::snapshot`), but cheaply since 2026-10-21 (5–6 ms for 50000 lines,
-    see "vt100 is patched"); `util::refresh_commands` takes one process snapshot
-    each `status-interval` (5 s by default) for every pane on Windows
-    (`process::Processes`; it took two a pane before 2026-10-22, and one costs
-    about 5 ms with 348 processes, release build); `#{pane_current_path}`
-    inspects the process on each expansion: on Windows, a release build showed
-    no measurable cost against `#{pane_index}` (40 calls of 20 expansions each,
-    2026-10-20; a debug build took about 28 ms an expansion). Not cached, as a
-    cache would give `split-window -c '#{pane_current_path}'` a directory from
-    before a `cd`. (`#{m:…}` and `s/…/` keep their compiled patterns,
-    `format::compiled`: 89 µs an expansion with two patterns before, 7 µs after,
-    release build, 2026-10-20.)
+    (`copy::snapshot`), each line as its text and runs of styles (30–38 MB in
+    copy mode over 50000 lines of 80 columns, 2026-10-24; it took 5–6 ms for
+    50000 lines on 2026-10-21, not timed since); `util::refresh_commands` takes
+    one process snapshot each `status-interval` (5 s by default) for every pane
+    on Windows (`process::Processes`; it took two a pane before 2026-10-22, and
+    one costs about 5 ms with 348 processes, release build);
+    `#{pane_current_path}` inspects the process on each expansion: on Windows, a
+    release build showed no measurable cost against `#{pane_index}` (40 calls of
+    20 expansions each, 2026-10-20; a debug build took about 28 ms an
+    expansion). Not cached, as a cache would give
+    `split-window -c '#{pane_current_path}'` a directory from before a `cd`.
+    (`#{m:…}` and `s/…/` keep their compiled patterns, `format::compiled`: 89 µs
+    an expansion with two patterns before, 7 µs after, release build,
+    2026-10-20.)
 - **tmux 3.6 features tmxr lacks** (the same review; compared against tmux's
   `cmd-*.c`, `options-table.c` and `format.c`, not run):
   - Formats: `#()` jobs run as tmux's (`format_jobs.rs`), and a job no format
@@ -706,22 +708,23 @@ table. What has been verified, and how:
     `cursor_blinking` are kept from DECSCUSR and `CSI ? 12`; insert mode and
     autowrap are kept, and drawn, by vt1k
     (`insert_mode_and_no_autowrap_draw_as_tmux`); `origin_flag` from `CSI ? 6`,
-    split out by `modes::ModeSplitter` and passed on to vt100); and overline
-    (vt100 keeps none). Underline styles and colours are kept (the fork's
-    `underline-styles`; the owner chose on 2026-10-23 to grow its cell from 32
-    to 36 bytes for them, over a per-screen table or fewer content bytes) and
-    sent as tmux's `usstyle` would to a client whose `TERM` names a terminal
-    with `Smulx` in ncurses 6.5's terminfo, or kitty or Ghostty
-    (`Server::client_underline_styles`); tmxr reads no terminfo, so a terminal
-    outside that list gets a plain underline. Unlike tmux, the colour goes with
-    the styles: those entries lack `Setulc`, so tmux 3.6 sends no underline
-    colour to Alacritty or foot unless `terminal-features` adds `usstyle`,
-    though both draw it. Seen in Alacritty 0.17 (2026-10-24, nested Hyprland):
-    single, double, curly, coloured curly, dotted and dashed as written.
-    Measured the same day (release builds, 50000 full lines of 80 columns): the
-    server took 138 MB before and 155 MB after, and in copy mode 298 and 345 MB,
-    its snapshot cell (`copy::Cell`) grown from 40 to 48 bytes by
-    `copy::Underline`.
+    split out by `modes::ModeSplitter` and passed on to vt1k); and overline is
+    kept and captured but not drawn, as tmux draws it only to a terminal it has
+    identified as having it (`tty_feature_overline`), which Alacritty is not.
+    Underline styles and colours are kept (the fork's `underline-styles`; the
+    owner chose on 2026-10-23 to grow its cell from 32 to 36 bytes for them,
+    over a per-screen table or fewer content bytes) and sent as tmux's `usstyle`
+    would to a client whose `TERM` names a terminal with `Smulx` in ncurses
+    6.5's terminfo, or kitty or Ghostty (`Server::client_underline_styles`);
+    tmxr reads no terminfo, so a terminal outside that list gets a plain
+    underline. Unlike tmux, the colour goes with the styles: those entries lack
+    `Setulc`, so tmux 3.6 sends no underline colour to Alacritty or foot unless
+    `terminal-features` adds `usstyle`, though both draw it. Seen in Alacritty
+    0.17 (2026-10-24, nested Hyprland): single, double, curly, coloured curly,
+    dotted and dashed as written. Measured the same day (release builds, 50000
+    full lines of 80 columns): the server took 138 MB before and 155 MB after,
+    and in copy mode 298 and 345 MB, its snapshot cell (`copy::Cell`) grown from
+    40 to 48 bytes by `copy::Underline`.
   - Options: every status row is drawn from its `status-format` item by
     `format_draw` (the first from tmux's default unless set), which takes tmux's
     `align`, `fill`, `default` / `push-default` / `pop-default`, lists (cut
@@ -768,14 +771,15 @@ table. What has been verified, and how:
     the alternate one (doy/vt100-rust#52), where tmux's is a copy taken when the
     alternate screen came on; the two could differ if the pane is resized while
     the alternate screen shows (vt100 resizes the hidden grid too; not
-    compared). `capture-pane -e` writes only the attributes `vt100` keeps (bold,
-    dim, italics, underline, reverse; not blink, hidden, strikethrough, overline
-    or the underline styles and colour), and `38;5;n` for n below 16 as the
-    plain or bright code, as `vt100` stores both alike. A line's allocation
-    (what `-N`, `-e` and a plain capture run to) is worked out from what was
-    written (`allocated` in `cmds/pane.rs`, as `grid_expand_line` rounds), where
-    tmux's comes from the line's whole history, so a line written long and then
-    cut short differs; an erased cell counts as unwritten (known divergence
+    compared). `capture-pane -e` writes the attributes as tmux's
+    grid*string_cells_code, the overline as `5:3` as tmux does
+    (`capture_pane_e_writes_blink_hidden_strikethrough_and_overline_as_tmux`),
+    and `38;5;n` for n below 16 as the plain or bright code, as vt1k stores both
+    alike. A line's allocation (what `-N`, `-e` and a plain capture run to) is
+    worked out from what was written (`allocated` in `cmds/pane.rs`, as
+    `grid_expand_line` rounds), where tmux's comes from the line's whole
+    history, so a line written long and then cut short differs; an erased cell
+    counts as unwritten (known divergence
     `capture_pane_t_counts_an_erased_cell_as_written`). The oracle cannot catch
     a difference on a capture's last line, as it trims the output's end. tmux
     also keeps a tab as the tab character, where `vt100` keeps the spaces it
@@ -788,9 +792,9 @@ table. What has been verified, and how:
     `O`), which tmxr's picker has no counterpart for; `choose-tree -F` replaces
     the text after a row's mark, where tmux's is the whole tree line;
     `command-prompt` Tab completes and offers menus as tmux's (names, sessions,
-    a session's windows, the `target` and `window-target` types; `prompt_tab_*`
-    in `corpus/keys.toml`), though which ten names a long menu keeps was matched
-    by result (the last ten), not read from tmux's code.
+    a session's windows, the `target` and `window-target` types;
+    `prompt_tab*\*`in`corpus/keys.toml`), though which ten names a long menu
+    keeps was matched by result (the last ten), not read from tmux's code.
   - Hooks and modes: the client's theme follows its terminal as tmux's: the
     client sends `CSI ? 2031 h` and `CSI ? 996 n` as its terminal starts and
     `CSI ? 2031 l` as it stops, and the terminal's `CSI ? 997 ; 1 / 2 n`

@@ -14,6 +14,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Blink, hidden and struck-through text**: a program's SGR 5 / 6, 8 and 9 are
+  drawn on the client's terminal, as tmux draws them, and `capture-pane -e`
+  writes them and the overline (SGR 53, written `5:3` as tmux writes it). tmxr
+  dropped all four before. Like tmux, tmxr keeps the overline but does not draw
+  it.
+
 - **`#{top_line_time}`**: when the copy-mode view's top line went into the
   history, as tmux keeps a time for each line of history, so the default
   position indicator shows it (`16:49 [25/25]`) as tmux's does. A line keeps its

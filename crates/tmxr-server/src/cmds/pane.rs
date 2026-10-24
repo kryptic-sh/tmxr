@@ -732,11 +732,12 @@ fn capture(
     out
 }
 
-/// The attributes tmux's -e writes that a captured cell can have, in its
-/// order (grid_string_cells_code): each whether `style` and `underline`
-/// have it, and its SGR code, a code over 9 written `4:n` (an underline
-/// style other than a single line, which is 4).
-fn sgr_attrs(style: Style, underline: crate::copy::Underline) -> [(bool, u8); 9] {
+/// The attributes tmux's -e writes, in its order (grid_string_cells_code):
+/// each whether `style` and `underline` have it, and its SGR code, a code
+/// over 9 written as its two digits apart, `4:n` for an underline style
+/// other than a single line (which is 4) and so `5:3` for the overline,
+/// as tmux writes it.
+fn sgr_attrs(style: Style, underline: crate::copy::Underline) -> [(bool, u8); 13] {
     use vt1k::UnderlineStyle as U;
     let m = style.add_modifier;
     let line = |s: U| m.contains(Modifier::UNDERLINED) && underline.style == s;
@@ -746,11 +747,15 @@ fn sgr_attrs(style: Style, underline: crate::copy::Underline) -> [(bool, u8); 9]
         (m.contains(Modifier::DIM), 2),
         (m.contains(Modifier::ITALIC), 3),
         (single, 4),
+        (m.contains(Modifier::SLOW_BLINK), 5),
         (m.contains(Modifier::REVERSED), 7),
+        (m.contains(Modifier::HIDDEN), 8),
+        (m.contains(Modifier::CROSSED_OUT), 9),
         (line(U::Double), 42),
         (line(U::Curly), 43),
         (line(U::Dotted), 44),
         (line(U::Dashed), 45),
+        (underline.overline, 53),
     ]
 }
 
@@ -769,7 +774,7 @@ fn sgr_change(
         last_under.colour != vt1k::Color::Default && under.colour == vt1k::Color::Default;
     if colour_dropped || was.iter().zip(&is).any(|(w, i)| w.0 && !i.0) {
         codes.push("0".to_owned());
-        was = [(false, 0); 9];
+        was.fill((false, 0));
     }
     codes.extend(is.iter().zip(&was).filter(|(i, w)| i.0 && !w.0).map(
         |(&(_, code), _)| match code {

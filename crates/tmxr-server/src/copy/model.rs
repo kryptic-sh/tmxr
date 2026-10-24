@@ -16,25 +16,31 @@ pub struct Cell {
     pub underline: Underline,
 }
 
-/// How a cell is underlined, beyond its style's `UNDERLINED` (which any
-/// underline sets): the underline's style and colour, as vt1k keeps them.
+/// The lines a cell is drawn with that its style cannot say: its
+/// underline's style and colour beyond the style's `UNDERLINED` (which any
+/// underline sets), and an overline, as vt1k keeps them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Underline {
     pub style: vt1k::UnderlineStyle,
     pub colour: vt1k::Color,
+    /// A line over the text (SGR 53), which tmxr captures but, as tmux to a
+    /// terminal it has not identified, does not draw.
+    pub overline: bool,
 }
 
 impl Underline {
-    /// No underline.
+    /// No underline or overline.
     pub const NONE: Self = Self {
         style: vt1k::UnderlineStyle::None,
         colour: vt1k::Color::Default,
+        overline: false,
     };
 
     pub fn of(cell: &vt1k::Cell) -> Self {
         Self {
             style: cell.underline_style(),
             colour: cell.underline_color(),
+            overline: cell.overline(),
         }
     }
 
@@ -331,6 +337,15 @@ pub fn cell_style(cell: &vt1k::Cell) -> Style {
     }
     if cell.inverse() {
         m |= Modifier::REVERSED;
+    }
+    if cell.blink() {
+        m |= Modifier::SLOW_BLINK;
+    }
+    if cell.hidden() {
+        m |= Modifier::HIDDEN;
+    }
+    if cell.strikethrough() {
+        m |= Modifier::CROSSED_OUT;
     }
     s = s.add_modifier(m);
     s

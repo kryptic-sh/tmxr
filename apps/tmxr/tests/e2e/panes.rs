@@ -802,3 +802,49 @@ fn a_pane_without_a_command_runs_a_login_shell() {
         );
     }
 }
+
+#[test]
+fn struck_blinking_and_hidden_text_reach_the_client() {
+    let t = Tmxr::new("attrs");
+    #[cfg(unix)]
+    let program = [
+        "/bin/sh",
+        "-c",
+        r"printf '\033[9mSTRUCK\033[29m \033[5mBLINKS\033[25m \033[8mHIDDEN\033[28m plain'; sleep 30",
+    ];
+    #[cfg(windows)]
+    let program = [
+        "powershell.exe",
+        "-NoProfile",
+        "-Command",
+        r"$e=[char]27; [Console]::Out.Write($e+'[9mSTRUCK'+$e+'[29m '+$e+'[5mBLINKS'+$e+'[25m '+$e+'[8mHIDDEN'+$e+'[28m plain'); Start-Sleep 30",
+    ];
+    let mut args = vec!["new", "-s", "at"];
+    args.extend(program);
+    let s = t.attach(&args);
+    s.wait_for("the text", |text| text.contains("plain"));
+    // Each cell of `word` as the client's screen shows it: struck, blinking,
+    // hidden.
+    let flags = |word: &str| -> Vec<[bool; 3]> {
+        let emu = s.emu.lock().unwrap();
+        let screen = emu.screen();
+        let len = word.chars().count();
+        (0..ROWS)
+            .find_map(|row| {
+                let cells: Vec<_> = (0..COLS).filter_map(|col| screen.cell(row, col)).collect();
+                cells.windows(len).find_map(|w| {
+                    let text: String = w.iter().map(|c| c.contents()).collect();
+                    (text == word).then(|| {
+                        w.iter()
+                            .map(|c| [c.strikethrough(), c.blink(), c.hidden()])
+                            .collect()
+                    })
+                })
+            })
+            .unwrap_or_else(|| panic!("{word} not on screen:\n{}", s.text()))
+    };
+    assert_eq!(flags("STRUCK"), [[true, false, false]; 6]);
+    assert_eq!(flags("BLINKS"), [[false, true, false]; 6]);
+    assert_eq!(flags("HIDDEN"), [[false, false, true]; 6]);
+    assert_eq!(flags("plain"), [[false, false, false]; 5]);
+}
