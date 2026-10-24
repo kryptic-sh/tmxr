@@ -1689,3 +1689,27 @@ fn frames_are_synchronized_updates_where_the_terminal_takes_them() {
     assert_eq!(frames, synced.matches(END).count(), "{synced:?}");
     assert!(!plain.contains(BEGIN), "{plain:?}");
 }
+
+/// A terminal resized after the client said hello but before it watches for
+/// resizes (here while its first command runs), as a tiling window manager
+/// resizes a new window, still gets the session at its new size.
+#[test]
+fn a_resize_while_the_client_attaches_is_seen() {
+    let t = Tmxr::new("early-resize");
+    t.run(&["new", "-d", "-s", "er"]);
+    let s = t.attach(&["run-shell", "sleep 1", ";", "attach", "-t", "er"]);
+    std::thread::sleep(Duration::from_millis(400));
+    s.resize(ROWS - 6, COLS - 20);
+    let want = format!("{}x{}", COLS - 20, ROWS - 6);
+    t.wait_run(
+        &[
+            "display-message",
+            "-p",
+            "-t",
+            "er",
+            "#{client_width}x#{client_height}",
+        ],
+        "the new size",
+        |o| o.trim() == want,
+    );
+}

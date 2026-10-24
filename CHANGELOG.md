@@ -87,6 +87,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A terminal resized while its client attaches gets the session at its new
+  size**: a resize between the client's start and its first read of input, as a
+  tiling window manager such as Hyprland makes when it places a new window, was
+  lost and the session kept the size the terminal had at start.
+
 - **Insert mode and autowrap turned off draw as tmux's**: a program's `CSI 4 h`
   makes its text push the rest of the row right, and `CSI ? 7 l` keeps text at
   the last column instead of wrapping. tmxr showed both in `#{insert_flag}` and

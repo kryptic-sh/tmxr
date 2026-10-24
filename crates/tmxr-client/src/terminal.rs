@@ -316,7 +316,11 @@ fn wake_reader() -> io::Result<()> {
 }
 
 /// Forward terminal events to the server until either side goes away.
-pub fn spawn_input(send: Arc<Mutex<SendHalf>>) -> Input {
+/// `size` is the terminal's size as the hello gave it: crossterm watches
+/// for SIGWINCH only once its reader exists, and a resize before then (a
+/// tiling window manager placing the new window) is lost, so the reader is
+/// made first and the size sent again if it has changed since.
+pub fn spawn_input(send: Arc<Mutex<SendHalf>>, size: Option<(u16, u16)>) -> Input {
     let input = Input {
         paused: Arc::new(AtomicBool::new(false)),
         gate: Arc::new(Mutex::new(())),
@@ -326,6 +330,16 @@ pub fn spawn_input(send: Arc<Mutex<SendHalf>>) -> Input {
     let _ = std::thread::Builder::new()
         .name("tmxr-input".into())
         .spawn(move || {
+            if crossterm::event::poll(Duration::ZERO).is_ok()
+                && let Ok((cols, rows)) = crossterm::terminal::size()
+                && size != Some((cols, rows))
+            {
+                let resized = vec![crossterm::event::Event::Resize(cols, rows)];
+                let Ok(mut send) = send.lock() else { return };
+                if write_msg(&mut *send, &ClientMsg::Input(resized)).is_err() {
+                    return;
+                }
+            }
             loop {
                 if paused.load(Ordering::Acquire) {
                     std::thread::sleep(INPUT_POLL);

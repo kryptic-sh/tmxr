@@ -617,16 +617,15 @@ table. What has been verified, and how:
   resize every time with the old crossterm and none with the fix
   (`a_resize_and_a_key_arriving_together_both_reach_the_server`, which passes
   with the old crossterm when no key comes). The flags test resizes once again.
-  A separate gap, not shown to matter: the hello's size is read at connect,
-  before crossterm watches for resizes, so a resize between connect and attach
-  would be missed. Not established: whether the same fix explains the focus
-  report the e2e key-log fixture lost in about one full Linux run in four when
-  it arrived before the fixture's first crossterm `read` (none in twelve once
-  the fixture polled first, `key_log_fixture`), or the one the "Pane focus"
-  entry describes. A standalone probe the same day (a program sleeping in raw
-  mode while `CSI I` was written, then reading with crossterm) lost none of 20,
-  with the old crossterm, so input that comes before the reader exists is not
-  lost by itself.
+  A resize between the client's hello and crossterm's first read was lost too
+  until 2026-10-24 (`a_resize_while_the_client_attaches_is_seen`). Not
+  established: whether the same fix explains the focus report the e2e key-log
+  fixture lost in about one full Linux run in four when it arrived before the
+  fixture's first crossterm `read` (none in twelve once the fixture polled
+  first, `key_log_fixture`), or the one the "Pane focus" entry describes. A
+  standalone probe the same day (a program sleeping in raw mode while `CSI I`
+  was written, then reading with crossterm) lost none of 20, with the old
+  crossterm, so input that comes before the reader exists is not lost by itself.
 - **From a code review by a sub-agent (2026-10-18).** Found by reading code and
   tmux 3.6's source; nothing was run. Items marked _checked_ were confirmed by
   reading the code again; the rest are as reported.

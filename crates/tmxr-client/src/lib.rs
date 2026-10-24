@@ -134,7 +134,9 @@ fn hello() -> Hello {
 fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
     let (mut recv, mut send) = stream.split();
     let to_io = |e: tmxr_proto::ProtoError| io::Error::other(e.to_string());
-    write_msg(&mut send, &ClientMsg::Hello(hello())).map_err(to_io)?;
+    let hello = hello();
+    let size = hello.terminal.as_ref().map(|t| (t.cols, t.rows));
+    write_msg(&mut send, &ClientMsg::Hello(hello)).map_err(to_io)?;
     // `load-buffer -` reads this process's standard input: all of it goes
     // ahead of the command, in pieces a frame holds (one, empty, for none).
     if tmxr_command::reads_stdin(&args) {
@@ -184,7 +186,7 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                 if let Some(mut s) = send.take() {
                     write_msg(&mut s, &ClientMsg::TerminalColours { fg, bg }).map_err(to_io)?;
                     let shared = Arc::new(Mutex::new(s));
-                    input = Some(terminal::spawn_input(Arc::clone(&shared)));
+                    input = Some(terminal::spawn_input(Arc::clone(&shared), size));
                     writer = Some(shared);
                 }
             }
