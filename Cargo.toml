@@ -24,7 +24,7 @@ redundant_pub_crate = "warn"
 
 [workspace.dependencies]
 # The panes' terminal emulator, kryptic-sh's own (it replaced vt100).
-vt1k = { git = "https://github.com/kryptic-sh/vt1k", rev = "fa678ef5b2af91b2db3ee3fecdd8190ab4790d69", version = "0.1.0" }
+vt1k = { git = "https://github.com/kryptic-sh/vt1k", rev = "73767a7573d3fc2b202126d38b2f064e56377f9b", version = "0.1.0" }
 # internal
 tmxr-proto = { path = "crates/tmxr-proto", version = "0.10.0" }
 tmxr-command = { path = "crates/tmxr-command", version = "0.10.0" }

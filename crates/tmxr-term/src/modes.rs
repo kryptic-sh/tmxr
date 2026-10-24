@@ -5,9 +5,8 @@
 //! `Emulator::mouse_mode`) and origin (6, kept for `#{origin_flag}` and
 //! passed on), a full reset (`ESC c`), which clears what the emulator keeps
 //! of them, and CSIs from tmux's input_csi_table that vt1k lacks or makes
-//! differently: SCP and RCP (`s`, `u`) as `ESC 7` and `ESC 8`, REP (`b`),
-//! which repeats only a character printed just before, DECSCUSR (`SP q`),
-//! whose shape and blinking the emulator keeps itself, and DECSTBM (`r`),
+//! differently: DECSCUSR (`SP q`), whose shape and blinking the emulator
+//! keeps itself, and DECSTBM (`r`),
 //! IL (`L`) and DL (`M`), as the emulator keeps the scroll region (vt1k
 //! keeps one per screen, and its IL and DL do nothing outside it).
 
@@ -17,9 +16,6 @@ const SPLIT_MODES: [u32; 11] = [6, 9, 47, 1000, 1001, 1002, 1003, 1005, 1006, 10
 /// The longest sequence held back waiting for its end; one longer is
 /// passed on as it is.
 const MAX_SEQUENCE: usize = 64;
-
-/// The most bytes one UTF-8 character takes.
-const MAX_CHAR: usize = 4;
 
 /// A stretch of program output, or one sequence in it the emulator makes
 /// itself.
@@ -33,11 +29,6 @@ pub enum Piece {
     },
     /// `ESC c`, the terminal's full reset.
     Reset,
-    /// REP: the character printed just before, `count` more times.
-    Repeat {
-        ch: char,
-        count: u32,
-    },
     /// DECSCUSR: the cursor shape `Ps` asks for.
     CursorStyle(u32),
     /// DECSTBM: the scroll region's top and bottom rows as written,
@@ -70,10 +61,6 @@ pub enum Piece {
 #[derive(Debug, Default)]
 pub struct ModeSplitter {
     pending: Vec<u8>,
-    /// The last bytes of text since the last control sequence, for REP:
-    /// tmux repeats only a character with nothing after it but the REP
-    /// (input_print's `INPUT_LAST`, which every control clears).
-    tail: Vec<u8>,
 }
 
 enum Scan {
@@ -254,16 +241,6 @@ fn region(params: &[u8]) -> Option<(Option<u32>, Option<u32>)> {
     Some((next()?, next()?))
 }
 
-/// The character `tail` ends with, unless it ends with a control or a
-/// partial character.
-fn last_char(tail: &[u8]) -> Option<char> {
-    (0..tail.len())
-        .rev()
-        .find_map(|start| std::str::from_utf8(&tail[start..]).ok())
-        .and_then(|s| s.chars().next_back())
-        .filter(|c| !c.is_control())
-}
-
 /// Adds `bytes` to the text at the end of `pieces`.
 fn push_text(pieces: &mut Vec<Piece>, bytes: &[u8]) {
     if let Some(Piece::Text(text)) = pieces.last_mut() {
@@ -318,10 +295,10 @@ impl ModeSplitter {
         let mut i = 0;
         while i < input.len() {
             let Some(esc) = input[i..].iter().position(|&b| b == 0x1b) else {
-                self.plain(&mut pieces, &input[i..]);
+                push_text(&mut pieces, &input[i..]);
                 break;
             };
-            self.plain(&mut pieces, &input[i..i + esc]);
+            push_text(&mut pieces, &input[i..i + esc]);
             i += esc;
             let len = match scan(&input[i..]) {
                 Scan::Incomplete => {
@@ -361,14 +338,6 @@ impl ModeSplitter {
                         (Some(b'?'), [], b'h' | b'l') if !params.contains(&b':') => {
                             split_modes(&mut pieces, &params, last);
                         }
-                        (None, [], b's') => push_text(&mut pieces, b"\x1b7"),
-                        (None, [], b'u') => push_text(&mut pieces, b"\x1b8"),
-                        (None, [], b'b') => {
-                            if let (Some(count), Some(ch)) = (count(&params), last_char(&self.tail))
-                            {
-                                pieces.push(Piece::Repeat { ch, count });
-                            }
-                        }
                         (None, b" ", b'q') => {
                             if let Some(ps) = value(&params) {
                                 pieces.push(Piece::CursorStyle(ps));
@@ -394,18 +363,9 @@ impl ModeSplitter {
                     len
                 }
             };
-            self.tail.clear();
             i += len;
         }
         pieces
-    }
-
-    /// Adds text to `pieces`, keeping its last bytes.
-    fn plain(&mut self, pieces: &mut Vec<Piece>, bytes: &[u8]) {
-        push_text(pieces, bytes);
-        self.tail.extend_from_slice(bytes);
-        let cut = self.tail.len().saturating_sub(MAX_CHAR);
-        self.tail.drain(..cut);
     }
 
     /// Whatever is held waiting for its end, given up.
@@ -426,7 +386,6 @@ mod tests {
                 Piece::Text(t) => Some(t),
                 Piece::Mode { .. }
                 | Piece::Reset
-                | Piece::Repeat { .. }
                 | Piece::CursorStyle(_)
                 | Piece::ScrollRegion(..)
                 | Piece::InsertLines(_)
@@ -596,12 +555,10 @@ mod tests {
     #[test]
     fn csis_the_emulator_makes_split_out() {
         let mut f = ModeSplitter::default();
-        assert_eq!(text(f.split(b"\x1b[s\x1b[u")), b"\x1b7\x1b8");
-        // With a marker or an intermediate they are other sequences, as
-        // are the ones vt1k makes as tmux does.
+        // The ones vt1k makes as tmux does are passed on.
         assert_eq!(
-            text(f.split(b"\x1b[?5s\x1b[>1u\x1b[1 u\x1b[3;5f")),
-            b"\x1b[?5s\x1b[>1u\x1b[1 u\x1b[3;5f"
+            text(f.split(b"\x1b[s\x1b[u\x1b[2b\x1b[3;5f")),
+            b"\x1b[s\x1b[u\x1b[2b\x1b[3;5f"
         );
         assert_eq!(
             f.split(b"\x1b[5 q\x1b[ q\x1b[1:2 q"),
@@ -625,35 +582,5 @@ mod tests {
                 Piece::Text(b"\x1b[?5r".to_vec()),
             ]
         );
-    }
-
-    #[test]
-    fn rep_repeats_only_a_character_just_printed() {
-        let mut f = ModeSplitter::default();
-        assert_eq!(
-            f.split(b"ab\x1b[3b"),
-            vec![
-                Piece::Text(b"ab".to_vec()),
-                Piece::Repeat { ch: 'b', count: 3 }
-            ]
-        );
-        // A character split across reads.
-        assert_eq!(text(f.split("x\u{e9}".as_bytes()[..2].as_ref())), b"x\xc3");
-        assert_eq!(
-            f.split(b"\xa9\x1b[b")[1],
-            Piece::Repeat {
-                ch: '\u{e9}',
-                count: 1
-            }
-        );
-        // Anything between the character and the REP cancels it: a control,
-        // another sequence, or the REP before.
-        assert_eq!(text(f.split(b"a\r\x1b[2b")), b"a\r");
-        assert_eq!(text(f.split(b"a\x1b[1m\x1b[2b")), b"a\x1b[1m");
-        assert_eq!(text(f.split(b"a\x1b7\x1b[2b")), b"a\x1b7");
-        assert_eq!(f.split(b"\x1b[2b"), vec![]);
-        // A REP split across reads is held.
-        assert_eq!(text(f.split(b"z\x1b[")), b"z");
-        assert_eq!(f.split(b"4b"), vec![Piece::Repeat { ch: 'z', count: 4 }]);
     }
 }

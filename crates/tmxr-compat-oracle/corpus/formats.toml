@@ -1240,6 +1240,15 @@ checks = [
 ]
 
 [[cases]]
+name = "rep_scp_and_rcp_as_tmux"
+# REP repeats only a character printed just before, to the row's end; SCP
+# and RCP save and restore the cursor.
+size = [10, 5]
+program = 'printf "ab\033[3b\nx\033[99b\na\033[2b\033[2b\nb\033[m\033[2b\nc\033[1:2b\033[2;3H\033[s\033[5;1H\033[uZ"; exec sleep 1000'
+steps = [{ sleep = 0.5 }]
+checks = [{ command = "capture-pane -p" }, { command = "display -p '#{cursor_x},#{cursor_y}'" }]
+
+[[cases]]
 name = "tab_stops_reset_as_tmux"
 size = [20, 5]
 steps = [

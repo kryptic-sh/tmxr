@@ -563,7 +563,6 @@ impl Emulator {
                     self.palette.clear();
                     self.parser.process(b"\x1bc");
                 }
-                Piece::Repeat { ch, count } => self.repeat(ch, count),
                 Piece::CursorStyle(ps) => self.parser.callbacks_mut().set_cursor_style(ps),
                 Piece::ScrollRegion(top, bottom) => self.set_region(top, bottom),
                 Piece::InsertLines(count) => self.lines(count, 'L'),
@@ -572,19 +571,6 @@ impl Emulator {
                 Piece::Palette { osc, body, bel } => self.palette_osc(osc, &body, bel),
             }
         }
-    }
-
-    /// REP as tmux's input_csi_dispatch: `ch` again `count` times, no more
-    /// than the columns left of the cursor's row.
-    fn repeat(&mut self, ch: char, count: u32) {
-        let screen = self.parser.screen();
-        let left = screen
-            .size()
-            .1
-            .get()
-            .saturating_sub(screen.cursor_position().1);
-        let times = count.min(u32::from(left)) as usize;
-        self.parser.process(ch.to_string().repeat(times).as_bytes());
     }
 
     /// The columns with a tab stop, counted from 0 (`#{pane_tabs}`).

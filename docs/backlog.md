@@ -85,13 +85,13 @@ table. What has been verified, and how:
   Hyprland 0.56's XWayland bridge loses chunks sent back to back
   (hyprwm/Hyprland discussion 16612).
 - **CSIs the emulator makes beside vt100** (`modes::ModeSplitter`, from tmux's
-  `input_csi_table`): SCP / RCP, REP (only right after a printed character, as
-  tmux's) and DECSCUSR (the shape and blinking tmxr keeps); HVP and HPA are
-  vt100's own since 0.18. btop's boxes, which broke for want of HVP (vt100
-  0.16), matched tmux 3.8 on every row by their box-drawing cells (2026-10-20,
-  120x40, Linux). Not compared: btop's colours (`capture-pane -e` differs run to
-  run with its live graphs). SCP / RCP go through vt100's `ESC 7` / `ESC 8`,
-  which save the attributes too, as tmux's `input_save_state` does. HT, CBT, HTS
+  `input_csi_table`): DECSCUSR (the shape and blinking tmxr keeps); SCP / RCP
+  and REP (only right after a printed character, as tmux's) are vt1k's
+  (`rep_scp_and_rcp_as_tmux`); HVP and HPA are vt100's own since 0.18. btop's
+  boxes, which broke for want of HVP (vt100 0.16), matched tmux 3.8 on every row
+  by their box-drawing cells (2026-10-20, 120x40, Linux). Not compared: btop's
+  colours (`capture-pane -e` differs run to run with its live graphs). SCP / RCP
+  save the attributes too, as tmux's `input_save_state` does. HT, CBT, HTS
   (`ESC H`) and TBC (`CSI g`) use the tab stops vt1k keeps as tmux does
   (compared by `tab_stops_as_tmux` and `tab_stops_reset_as_tmux`), where vt100's
   were fixed every 8 columns. CHT (`CSI n I`) is ignored, as tmux 3.8 ignores it
