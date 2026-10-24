@@ -75,6 +75,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Insert mode and autowrap turned off draw as tmux's**: a program's `CSI 4 h`
+  makes its text push the rest of the row right, and `CSI ? 7 l` keeps text at
+  the last column instead of wrapping. tmxr showed both in `#{insert_flag}` and
+  `#{wrap_flag}` but drew as with insert off and wrap on.
+
 - **A copy-mode cursor past the last column shows a `$` at the row's edge**, as
   tmux's does when a rectangle selection's end of line takes it there.
 

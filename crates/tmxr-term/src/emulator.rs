@@ -63,8 +63,6 @@ pub struct Hooks {
     kitty_flags: Vec<u8>,
     /// The program asked for focus reports (`CSI ? 1004 h`).
     focus_reports: bool,
-    /// Insert mode (`CSI 4 h`, IRM), which vt1k does not keep.
-    insert_mode: bool,
     /// Times the program asked for the color scheme (`CSI ? 996 n`) since
     /// they were last taken, for the server to answer.
     theme_queries: usize,
@@ -81,9 +79,6 @@ pub struct Hooks {
     /// palette's `fg` / `bg`.
     palette_fg: Option<u32>,
     palette_bg: Option<u32>,
-    /// Autowrap turned off (`CSI ? 7 l`, DECAWM), which vt1k does not
-    /// keep (it always wraps).
-    no_wrap: bool,
     /// The cursor shape the program asked for (`CSI Ps SP q`, DECSCUSR):
     /// 0 for the terminal's own.
     cursor_style: u8,
@@ -137,25 +132,20 @@ impl vt1k::Callbacks for Hooks {
         let p = |i: usize| params.get(i).and_then(|v| v.first()).copied();
         match (i1, c) {
             // DEC private modes vt1k does not keep: focus reports and
-            // autowrap.
+            // cursor blinking.
             (Some(b'?'), 'h' | 'l') => {
                 for mode in params.iter().filter_map(|v| v.first()) {
                     match mode {
                         1004 => self.focus_reports = c == 'h',
-                        7 => self.no_wrap = c == 'l',
                         12 => self.cursor_blinking = c == 'h',
                         _ => {}
                     }
                 }
             }
-            // Insert mode and a very visible cursor, as tmux keeps them.
+            // A very visible cursor, as tmux keeps it.
             (None, 'h' | 'l') => {
-                for mode in params.iter().filter_map(|v| v.first()) {
-                    match mode {
-                        4 => self.insert_mode = c == 'h',
-                        34 => self.cursor_very_visible = c == 'l',
-                        _ => {}
-                    }
+                if params.iter().any(|v| v.first() == Some(&34)) {
+                    self.cursor_very_visible = c == 'l';
                 }
             }
             // DA1: identify as a VT220 with ANSI colour, as tmux does.
@@ -927,10 +917,10 @@ impl Emulator {
     }
 
     /// Insert mode and autowrap as the program set them (`#{insert_flag}`,
-    /// `#{wrap_flag}`); vt1k draws as with insert off and wrap on.
+    /// `#{wrap_flag}`).
     pub fn insert_and_wrap(&self) -> (bool, bool) {
-        let hooks = self.parser.callbacks();
-        (hooks.insert_mode, !hooks.no_wrap)
+        let screen = self.parser.screen();
+        (screen.insert_mode(), screen.autowrap())
     }
 
     /// OSC 4 or 104 with `body`, as tmux's input_osc_4 / _104. An OSC 104

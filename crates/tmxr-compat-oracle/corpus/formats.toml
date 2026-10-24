@@ -921,6 +921,18 @@ checks = [
 ]
 
 [[cases]]
+name = "insert_mode_and_no_autowrap_draw_as_tmux"
+# Insert mode pushes the row right; without autowrap text sticks at the last
+# column and a wide character that does not fit is left out.
+size = [8, 4]
+program = 'printf "abcdef\r\033[4hXY\033[4l\n\033[?7lhello world\r\033[7C\346\274\242\033[?7h"; exec sleep 1000'
+steps = [{ sleep = 0.5 }]
+checks = [
+  { command = "capture-pane -p -E 1", expect = "XYabcdef\nhello wd" },
+  { command = "display -p '#{cursor_x},#{cursor_y}'" },
+]
+
+[[cases]]
 name = "cursor_shape_and_blinking_as_tmux"
 steps = [
   { run = "new-window -d -t o:1 'printf \"\\033[1 q\"; exec sleep 1000'" },

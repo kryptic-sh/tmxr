@@ -710,15 +710,15 @@ table. What has been verified, and how:
     precedence: in the active pane over `window-style` and under
     `window-active-style`, in another under `window-style`
     (`a_programs_default_colours_are_the_panes`); `cursor_shape` and
-    `cursor_blinking` are kept from DECSCUSR and `CSI ? 12`; `insert_flag` and
-    `wrap_flag` are kept from the sequences vt100 passes on unhandled, but vt100
-    itself still draws as with insert off and wrap on; `origin_flag` from
-    `CSI ? 6`, split out by `modes::ModeSplitter` and passed on to vt100); and
-    overline (vt100 keeps none). Underline styles and colours are kept (the
-    fork's `underline-styles`; the owner chose on 2026-10-23 to grow its cell
-    from 32 to 36 bytes for them, over a per-screen table or fewer content
-    bytes) and sent as tmux's `usstyle` would to a client whose `TERM` names a
-    terminal with `Smulx` in ncurses 6.5's terminfo, or kitty or Ghostty
+    `cursor_blinking` are kept from DECSCUSR and `CSI ? 12`; insert mode and
+    autowrap are kept, and drawn, by vt1k
+    (`insert_mode_and_no_autowrap_draw_as_tmux`); `origin_flag` from `CSI ? 6`,
+    split out by `modes::ModeSplitter` and passed on to vt100); and overline
+    (vt100 keeps none). Underline styles and colours are kept (the fork's
+    `underline-styles`; the owner chose on 2026-10-23 to grow its cell from 32
+    to 36 bytes for them, over a per-screen table or fewer content bytes) and
+    sent as tmux's `usstyle` would to a client whose `TERM` names a terminal
+    with `Smulx` in ncurses 6.5's terminfo, or kitty or Ghostty
     (`Server::client_underline_styles`); tmxr reads no terminfo, so a terminal
     outside that list gets a plain underline. Unlike tmux, the colour goes with
     the styles: those entries lack `Setulc`, so tmux 3.6 sends no underline
