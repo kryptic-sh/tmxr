@@ -84,29 +84,26 @@ table. What has been verified, and how:
   `PR_SET_PDEATHSIG`). hjkl-clipboard sends X11 INCR chunks 2 ms apart, as
   Hyprland 0.56's XWayland bridge loses chunks sent back to back
   (hyprwm/Hyprland discussion 16612).
-- **CSIs the emulator makes beside vt100** (`modes::ModeSplitter`, from tmux's
-  `input_csi_table`): DECSCUSR (the shape and blinking tmxr keeps); SCP / RCP
-  and REP (only right after a printed character, as tmux's) are vt1k's
-  (`rep_scp_and_rcp_as_tmux`); HVP and HPA are vt100's own since 0.18. btop's
-  boxes, which broke for want of HVP (vt100 0.16), matched tmux 3.8 on every row
-  by their box-drawing cells (2026-10-20, 120x40, Linux). Not compared: btop's
-  colours (`capture-pane -e` differs run to run with its live graphs). SCP / RCP
-  save the attributes too, as tmux's `input_save_state` does. HT, CBT, HTS
-  (`ESC H`) and TBC (`CSI g`) use the tab stops vt1k keeps as tmux does
-  (compared by `tab_stops_as_tmux` and `tab_stops_reset_as_tmux`), where vt100's
-  were fixed every 8 columns. CHT (`CSI n I`) is ignored, as tmux 3.8 ignores it
-  (probed the same day). The scroll region is kept by the emulator as tmux keeps
-  it (`Emulator::set_region`, compared by `scroll_region_as_tmux` and
-  `scroll_region_kept_across_screens_as_tmux`): one for the terminal, where
-  vt100 keeps one per screen, so it is written into vt100's again after each
-  switch; a region of fewer than two rows is ignored, where vt100 takes the
-  whole screen; and IL / DL outside it move the rows from the cursor to the
-  bottom, through a region set for the moment (`Emulator::lines`, compared by
+- **CSIs and modes vt1k makes as tmux, where vt100 did not** (moved from tmxr's
+  own pre-parser, `modes::ModeSplitter`, into vt1k on 2026-10-24/25, which now
+  splits out only `ESC c` and the colour OSCs): DECSCUSR (its shape kept over a
+  full reset), SCP / RCP and REP (only right after a printed character, as
+  tmux's; `rep_scp_and_rcp_as_tmux`); HVP and HPA were vt100's own since 0.18.
+  btop's boxes, which broke for want of HVP (vt100 0.16), matched tmux 3.8 on
+  every row by their box-drawing cells (2026-10-20, 120x40, Linux). Not
+  compared: btop's colours (`capture-pane -e` differs run to run with its live
+  graphs). SCP / RCP save the attributes too, as tmux's `input_save_state` does.
+  HT, CBT, HTS (`ESC H`) and TBC (`CSI g`) use the tab stops vt1k keeps as tmux
+  does (compared by `tab_stops_as_tmux` and `tab_stops_reset_as_tmux`), where
+  vt100's were fixed every 8 columns. CHT (`CSI n I`) is ignored, as tmux 3.8
+  ignores it (probed the same day). The scroll region is kept by vt1k as tmux
+  keeps it (compared by `scroll_region_as_tmux` and
+  `scroll_region_kept_across_screens_as_tmux`): one for both screens; a region
+  of fewer than two rows is ignored; and IL / DL outside it move the rows from
+  the cursor to the bottom (compared by
   `lines_inserted_and_deleted_outside_the_region_as_tmux`), including tmux's IL
-  there of as many rows as are left changing nothing. Not compared: the region
-  with origin mode on across a screen switch (vt100 keeps origin mode per screen
-  too, so the cursor put back after the switch is placed relative to the region
-  there).
+  there of as many rows as are left changing nothing. Origin mode goes across a
+  screen switch with the region; not compared with tmux.
 - **Mouse use as in the owner's tmux config** (asked for 2026-10-11). The tmux
   compatibility oracle (`crates/tmxr-compat-oracle`, `corpus/mouse.toml`) drives
   a tmux 3.6 client and a tmxr client with the same SGR mouse events in CI and
@@ -702,11 +699,11 @@ table. What has been verified, and how:
     (`a_programs_default_colours_are_the_panes`); `cursor_shape` and
     `cursor_blinking` are kept from DECSCUSR and `CSI ? 12`; insert mode and
     autowrap are kept, and drawn, by vt1k
-    (`insert_mode_and_no_autowrap_draw_as_tmux`); `origin_flag` from `CSI ? 6`,
-    split out by `modes::ModeSplitter` and passed on to vt1k); and overline is
-    kept and captured but not drawn, as tmux draws it only to a terminal it has
-    identified as having it (`tty_feature_overline`), which Alacritty is not.
-    Blink, hidden and strikethrough are drawn
+    (`insert_mode_and_no_autowrap_draw_as_tmux`); `origin_flag` from vt1k's
+    origin mode); and overline is kept and captured but not drawn, as tmux draws
+    it only to a terminal it has identified as having it
+    (`tty_feature_overline`), which Alacritty is not. Blink, hidden and
+    strikethrough are drawn
     (`struck_blinking_and_hidden_text_reach_the_client`); seen in Alacritty 0.17
     (2026-10-24, nested Hyprland): struck text struck through, hidden text
     blank, and blinking text plain, as Alacritty does not blink text. Underline
@@ -947,14 +944,10 @@ table. What has been verified, and how:
   their lines (`Emulator::follow_reflow`); the input mark is dropped, so
   `prefix y` falls back to the shell's line keys until the next prompt. Seen in
   Alacritty 0.17 under Hyprland's retiling (2026-10-23).
-- **Alternate screen switches are made over vt100's**
-  (`Emulator::switch_screen`, matching tmux 3.6 in the oracle for 47, 1047 and
-  1049, on and off): switching on goes through vt100's 1049, which saves the
-  cursor in the main screen's own slot, so a program's earlier `ESC 7` there is
-  lost (tmux keeps 1049's cursor apart from it); and the cursor moves written
-  after a switch are absolute, which origin mode (`ESC [ ? 6 h`) on the main
-  screen would turn relative to its scroll region when 47 / 1047 switch off.
-  Neither compared with tmux.
+- **Alternate screen switches** are vt1k's, as tmux's screen_alternate_on /
+  \_off (matching tmux 3.6 in the oracle for 47, 1047 and 1049, on and off;
+  1049's cursor and pen kept apart from `ESC 7`'s,
+  `the_cursor_1049_saves_is_apart_from_esc_7s`).
 - **Pane status lines skip tmux's finer border rules**: with
   `pane-border-status`, tmux's `screen_redraw_pane_border` and `check_cell`
   treat the status text's cells as inside the pane and change which pane owns

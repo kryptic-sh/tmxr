@@ -87,6 +87,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A program's full reset (`ESC c`) no longer stops its pane rewrapping** on a
+  width change; a full reset now also stops focus reports, as tmux's does.
+- **A program's `ESC 7` cursor survives its use of the alternate screen**:
+  switching with mode 1049 saved the cursor over it, where tmux keeps the two
+  apart.
+
 - **A terminal resized while its client attaches gets the session at its new
   size**: a resize between the client's start and its first read of input, as a
   tiling window manager such as Hyprland makes when it places a new window, was

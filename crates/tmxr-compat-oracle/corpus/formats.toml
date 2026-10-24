@@ -1085,6 +1085,17 @@ checks = [
 ]
 
 [[cases]]
+name = "the_cursor_1049_saves_is_apart_from_esc_7s"
+# 1049 keeps its cursor and pen apart from what ESC 7 saved.
+size = [10, 4]
+program = 'printf "\033[1;2H\0337\033[3;4H\033[1m\033[?1049h\033[m\033[4;1H\033[?1049lx\0338y"; exec sleep 1000'
+steps = [{ sleep = 0.5 }]
+checks = [
+  { command = "capture-pane -p -e" },
+  { command = "display -p '#{cursor_x},#{cursor_y}'" },
+]
+
+[[cases]]
 name = "alternate_saved_keeps_the_cursor_1049_saved"
 unix_only = true
 steps = [

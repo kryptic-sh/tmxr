@@ -22,10 +22,11 @@
 One `vt1k::Parser` per pane, sized to the pane, with scrollback `history-limit`
 (50 000 — tmux-sensible's value).
 
-What vt1k gives us directly: the cell grid with attributes and colours, wide
-characters, alternate screen, cursor position/visibility, application cursor and
-keypad modes, bracketed paste mode, mouse protocol mode and encoding,
-scrollback, title, bell.
+What vt1k gives us directly, with tmux's rules where vt100's differed: the cell
+grid with attributes and colours, wide characters, the alternate screen's
+switches, the scroll region, tab stops, cursor position, visibility, shape and
+blinking, application cursor and keypad modes, bracketed paste, focus reports,
+mouse protocol mode and encoding, scrollback, title, bell.
 
 What we hook through `vt1k::Callbacks`:
 
@@ -36,6 +37,11 @@ What we hook through `vt1k::Callbacks`:
 | `copy_to_clipboard` (OSC 52) | `set-clipboard on`: store a paste buffer **and** forward OSC 52 to attached clients (how tmux-yank-less apps copy) |
 | `unhandled_osc`              | OSC 7 (`file://host/path`) and OSC 9;9 (Windows Terminal) → `pane_current_path` hint                               |
 | `unhandled_csi`              | `CSI > 4 ; n m` (modifyOtherKeys) and `CSI > flags u` / `CSI < u` (kitty keys) → the pane's extended-keys state    |
+
+A full reset (`ESC c`) and the OSCs that set or ask for colours (4, 104, and 10
+/ 11 / 12 with `?`) are split out in front of vt1k (`tmxr_term::modes`): the
+palette is tmxr's, a query's answer ends as the query did, and vte keeps only 16
+of an OSC's parameters.
 
 DCS passthrough (`allow-passthrough on` in the config, used for image
 protocols), which vt1k has no hook for, goes through a pre-parser

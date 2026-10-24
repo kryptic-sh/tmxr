@@ -51,16 +51,9 @@ pub struct Hooks {
     extended_keys: ExtendedKeys,
     /// kitty keyboard flags stack (`CSI > f u` pushes, `CSI < n u` pops).
     kitty_flags: Vec<u8>,
-    /// The program asked for focus reports (`CSI ? 1004 h`).
-    focus_reports: bool,
     /// Times the program asked for the color scheme (`CSI ? 996 n`) since
     /// they were last taken, for the server to answer.
     theme_queries: usize,
-    /// The cursor blinks: an odd DECSCUSR, or `CSI ? 12 h`.
-    cursor_blinking: bool,
-    /// The cursor made very visible, as tmux's `MODE_CURSOR_VERY_VISIBLE`
-    /// (`CSI 34 l`; `CSI 34 h` ends it).
-    cursor_very_visible: bool,
     /// The cursor's colour as RGB (OSC 12; OSC 112 resets it), which a
     /// full reset keeps, as tmux's.
     cursor_colour: Option<u32>,
@@ -69,24 +62,9 @@ pub struct Hooks {
     /// palette's `fg` / `bg`.
     palette_fg: Option<u32>,
     palette_bg: Option<u32>,
-    /// The cursor shape the program asked for (`CSI Ps SP q`, DECSCUSR):
-    /// 0 for the terminal's own.
-    cursor_style: u8,
     /// Where the shell's input starts, from its OSC 133;B prompt mark:
     /// (lines of history then, screen row, column).
     input_mark: Option<(usize, u16, u16)>,
-}
-
-impl Hooks {
-    /// DECSCUSR, split out before vt1k (which keeps its own): a cursor
-    /// shape, 0 to 6; others leave it as it was, as tmux's.
-    fn set_cursor_style(&mut self, ps: u32) {
-        if let Ok(ps @ 0..=6) = u8::try_from(ps) {
-            self.cursor_style = ps;
-            // 1, 3 and 5 blink, as tmux's.
-            self.cursor_blinking = ps % 2 == 1;
-        }
-    }
 }
 
 impl vt1k::Callbacks for Hooks {
@@ -121,23 +99,6 @@ impl vt1k::Callbacks for Hooks {
     ) {
         let p = |i: usize| params.get(i).and_then(|v| v.first()).copied();
         match (i1, c) {
-            // DEC private modes vt1k does not keep: focus reports and
-            // cursor blinking.
-            (Some(b'?'), 'h' | 'l') => {
-                for mode in params.iter().filter_map(|v| v.first()) {
-                    match mode {
-                        1004 => self.focus_reports = c == 'h',
-                        12 => self.cursor_blinking = c == 'h',
-                        _ => {}
-                    }
-                }
-            }
-            // A very visible cursor, as tmux keeps it.
-            (None, 'h' | 'l') => {
-                if params.iter().any(|v| v.first() == Some(&34)) {
-                    self.cursor_very_visible = c == 'l';
-                }
-            }
             // DA1: identify as a VT220 with ANSI colour, as tmux does.
             (None, 'c') if p(0).unwrap_or(0) == 0 => self.replies.extend(b"\x1b[?62;22c"),
             // DA2: tmux reports terminal type 84.
@@ -291,9 +252,10 @@ fn bundled_conpty() -> bool {
 
 /// What [`Emulator::reset`] feeds the parser: CAN, then SGR reset, the
 /// full scroll region, application cursor keys, origin, insert, the mouse
-/// modes and bracketed paste off, the numeric keypad, the cursor shown,
-/// wrapping on, and the screen cleared with the cursor home.
-const RESET: &[u8] = b"\x18\x1b[0m\x1b[r\x1b[?1l\x1b[?6l\x1b[4l\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1005l\x1b[?1006l\x1b[?2004l\x1b>\x1b[?25h\x1b[?7h\x1b[H\x1b[2J";
+/// modes, focus reports, the cursor's blinking and bracketed paste off, the
+/// numeric keypad, the cursor shown and not very visible, wrapping on, and
+/// the screen cleared with the cursor home.
+const RESET: &[u8] = b"\x18\x1b[0m\x1b[r\x1b[?1l\x1b[?6l\x1b[4l\x1b[?1000l\x1b[?1005l\x1b[?1006l\x1b[?1004l\x1b[?12l\x1b[?2004l\x1b>\x1b[?25h\x1b[34h\x1b[?7h\x1b[H\x1b[2J";
 
 /// One pane's emulator.
 pub struct Emulator {
@@ -307,31 +269,14 @@ pub struct Emulator {
     rename: Option<Vec<u8>>,
     /// [`passthrough_supported`], read once.
     split: bool,
-    /// The program's switches to and from the alternate screen, split
-    /// from its output.
+    /// The full resets and colour OSCs, split from the program's output.
     modes: ModeSplitter,
-    /// Cleared with `alternate-screen off`: the switches are dropped.
-    alt_allowed: bool,
-    /// Origin mode (`CSI ? 6 h`, DECOM), which vt1k keeps to itself.
-    origin_mode: bool,
-    /// Where the cursor was (row, column) when `CSI ? 1049 h` last switched
-    /// to the alternate screen, as tmux's `saved_cx` / `saved_cy`: kept
-    /// after the switch back, and not set by 47 or 1047.
-    alternate_saved: Option<(u16, u16)>,
     /// The colours the program asked for (`OSC 10` / `11` / `12` `; ?`),
     /// in order, each with whether it ended in a BEL, for the server to
     /// answer: the answers depend on options and clients.
     colour_queries: Vec<(u8, bool)>,
     /// The 256 colours' entries the program set (OSC 4).
     palette: crate::palette::Palette,
-    /// The scroll region's top and bottom rows, `None` for the whole
-    /// screen. tmux keeps one for the terminal; vt1k keeps one per screen,
-    /// so it is written into vt1k's again after each switch.
-    region: Option<(u16, u16)>,
-    /// The mouse encodings the program set, apart as tmux keeps them (vt1k
-    /// keeps one).
-    mouse_utf8: bool,
-    mouse_sgr: bool,
     /// The history limit, for a fresh parser.
     scrollback: usize,
     /// Lines of history above the screen, counted whenever they can change
@@ -361,14 +306,8 @@ impl Emulator {
             rename: None,
             split: passthrough_supported(),
             modes: ModeSplitter::default(),
-            alt_allowed: true,
-            origin_mode: false,
-            alternate_saved: None,
             colour_queries: Vec::new(),
             palette: crate::palette::Palette::default(),
-            region: None,
-            mouse_utf8: false,
-            mouse_sgr: false,
             scrollback,
             history: 0,
             times: std::collections::VecDeque::new(),
@@ -480,9 +419,6 @@ impl Emulator {
     pub fn reset(&mut self) {
         self.dcs = DcsSplitter::default();
         self.modes.flush();
-        (self.mouse_utf8, self.mouse_sgr) = (false, false);
-        self.origin_mode = false;
-        self.region = None;
         self.parser.screen_mut().reset_tab_stops();
         // CAN ends whatever sequence is in progress, but vte acts on an OSC
         // it cuts off: what that could change is put back, as tmux's
@@ -500,10 +436,6 @@ impl Emulator {
         hooks.clipboard.truncate(clips);
         hooks.cwd = cwd;
         hooks.input_mark = mark;
-        hooks.focus_reports = false;
-        // tmux's reset clears the blinking but keeps the cursor's shape.
-        hooks.cursor_blinking = false;
-        hooks.cursor_very_visible = false;
         hooks.kitty_flags.clear();
         self.reset_keys();
         self.count_history();
@@ -525,48 +457,22 @@ impl Emulator {
     /// Whether the program may switch to the alternate screen (tmux's
     /// `alternate-screen`).
     pub fn set_alternate_screen(&mut self, allowed: bool) {
-        self.alt_allowed = allowed;
+        self.parser.screen_mut().set_alternate_allowed(allowed);
     }
 
-    /// Parse program text, its alternate screen switches made as tmux's, or
-    /// dropped when they are not allowed.
+    /// Parse program text, the colours it sets or asks for kept here.
     fn feed(&mut self, text: &[u8]) {
         for piece in self.modes.split(text) {
             match piece {
                 Piece::Text(text) => self.parser.process(&text),
-                Piece::Mode {
-                    mode: 47 | 1047 | 1049,
-                    ..
-                } if !self.alt_allowed => {}
-                Piece::Mode {
-                    mode: mode @ (47 | 1047 | 1049),
-                    on,
-                } => self.switch_screen(mode, on),
-                // Origin mode: kept, then given to vt1k, which keeps its
-                // own to move the cursor by.
-                Piece::Mode { mode: 6, on } => {
-                    self.origin_mode = on;
-                    self.parser
-                        .process(if on { b"\x1b[?6h" } else { b"\x1b[?6l" });
-                }
-                Piece::Mode { mode, on } => self.mouse_mode(mode, on),
                 Piece::Reset => {
-                    (self.mouse_utf8, self.mouse_sgr) = (false, false);
-                    self.origin_mode = false;
-                    self.region = None;
-                    // tmux's full reset stops the blinking, its shape and
-                    // colour kept.
+                    // tmux's full reset clears the program's colours; its
+                    // cursor colour is kept.
                     let hooks = self.parser.callbacks_mut();
-                    hooks.cursor_blinking = false;
-                    hooks.cursor_very_visible = false;
                     (hooks.palette_fg, hooks.palette_bg) = (None, None);
                     self.palette.clear();
                     self.parser.process(b"\x1bc");
                 }
-                Piece::CursorStyle(ps) => self.parser.callbacks_mut().set_cursor_style(ps),
-                Piece::ScrollRegion(top, bottom) => self.set_region(top, bottom),
-                Piece::InsertLines(count) => self.lines(count, 'L'),
-                Piece::DeleteLines(count) => self.lines(count, 'M'),
                 Piece::ColourQuery { which, bel } => self.colour_queries.push((which, bel)),
                 Piece::Palette { osc, body, bel } => self.palette_osc(osc, &body, bel),
             }
@@ -578,148 +484,16 @@ impl Emulator {
         self.parser.screen().tab_stops()
     }
 
-    /// DECSTBM as tmux's screen_write_scrollregion: rows past the screen
-    /// are its last, a region of fewer than two rows is ignored (vt1k would
-    /// take the whole screen), and the cursor goes home.
-    fn set_region(&mut self, top: Option<u32>, bottom: Option<u32>) {
-        let rows = self.parser.screen().size().0.get();
-        let row = |n: Option<u32>, missing: u32| {
-            u16::try_from(n.unwrap_or(missing).max(1) - 1).map_or(rows - 1, |r| r.min(rows - 1))
-        };
-        let (top, bottom) = (row(top, 1), row(bottom, rows.into()));
-        if top >= bottom {
-            return;
-        }
-        self.region = Some((top, bottom));
-        self.parser
-            .process(format!("\x1b[{};{}r\x1b[H", top + 1, bottom + 1).as_bytes());
-    }
-
-    /// The scroll region written into vt1k's screen, after a switch to a
-    /// screen whose own region vt1k kept apart, the cursor left where it
-    /// was.
-    fn sync_region(&mut self) {
-        let screen = self.parser.screen();
-        let (rows, (row, col)) = (screen.size().0.get(), screen.cursor_position());
-        let (top, bottom) = self.region.unwrap_or((0, rows - 1));
-        self.parser.process(
-            format!(
-                "\x1b[{};{}r\x1b[{};{}H",
-                top + 1,
-                bottom + 1,
-                row + 1,
-                col + 1
-            )
-            .as_bytes(),
-        );
-    }
-
-    /// IL or DL (`last`, `L` or `M`). With the cursor outside the scroll
-    /// region tmux's screen_write_insertline / _deleteline move the rows
-    /// from the cursor to the bottom of the screen, where vt1k does
-    /// nothing, so they go through a region from the cursor down, then
-    /// the region and the cursor are put back. An IL there of as many rows
-    /// as are left, or more, changes nothing in tmux (grid_view_insert_lines
-    /// moves no rows, and grid_move_lines clears only what it moves).
-    fn lines(&mut self, count: u32, last: char) {
-        let screen = self.parser.screen();
-        let (rows, (row, col)) = (screen.size().0.get(), screen.cursor_position());
-        match self.region {
-            Some((top, bottom)) if (row < top || row > bottom) && !self.origin_mode => {
-                if last == 'L' && count >= u32::from(rows - row) {
-                    return;
-                }
-                let (row, col) = (row + 1, col + 1);
-                self.parser.process(
-                    format!(
-                        "\x1b[{row};{rows}r\x1b[{row};{col}H\x1b[{count}{last}\x1b[{};{}r\x1b[{row};{col}H",
-                        top + 1,
-                        bottom + 1
-                    )
-                    .as_bytes(),
-                );
-            }
-            _ => self
-                .parser
-                .process(format!("\x1b[{count}{last}").as_bytes()),
-        }
-    }
-
     /// The scroll region's top and bottom rows, counted from 0
     /// (`#{scroll_region_upper}`, `#{scroll_region_lower}`).
     pub fn scroll_region(&self) -> (u16, u16) {
-        let rows = self.parser.screen().size().0.get();
-        self.region.unwrap_or((0, rows - 1))
-    }
-
-    /// A mouse mode set or reset as tmux's input_csi_dispatch_sm_private /
-    /// _rm_private, not as vt1k would: 9 (X10) is ignored, resetting any of
-    /// 1000 to 1003 clears whichever is set (vt1k clears only the one
-    /// named), and 1005 / 1006 are kept apart.
-    fn mouse_mode(&mut self, mode: u32, on: bool) {
-        match (mode, on) {
-            (1000 | 1002 | 1003, true) => {
-                self.parser.process(format!("\x1b[?{mode}h").as_bytes());
-            }
-            (1000..=1003, false) => self.parser.process(b"\x1b[?1000l\x1b[?1002l\x1b[?1003l"),
-            (1005, on) => {
-                self.mouse_utf8 = on;
-                self.mouse_encoding();
-            }
-            (1006, on) => {
-                self.mouse_sgr = on;
-                self.mouse_encoding();
-            }
-            // 9, and setting 1001, which tmux takes neither.
-            _ => {}
-        }
-    }
-
-    /// The one encoding vt1k keeps, from the two the program set: SGR
-    /// before UTF-8, as tmux's input_key_get_mouse picks.
-    fn mouse_encoding(&mut self) {
-        self.parser.process(b"\x1b[?1005l\x1b[?1006l");
-        if self.mouse_sgr {
-            self.parser.process(b"\x1b[?1006h");
-        } else if self.mouse_utf8 {
-            self.parser.process(b"\x1b[?1005h");
-        }
+        self.parser.screen().scroll_region()
     }
 
     /// Whether the program set the UTF-8 mouse encoding (1005), set or not
     /// beside SGR, as tmux's MODE_MOUSE_UTF8.
     pub fn mouse_utf8(&self) -> bool {
-        self.mouse_utf8
-    }
-
-    /// Switch to or from the alternate screen as tmux's screen_alternate_on
-    /// / _off, not as vt1k would: on (47, 1047 or 1049, unless already
-    /// there) clears it and keeps the cursor where it was, where vt1k homes
-    /// it on 1049, keeps the old screen on 47 and ignores 1047; off, 1049
-    /// puts back the cursor it saved, and 47 / 1047 keep it where it is.
-    fn switch_screen(&mut self, mode: u32, on: bool) {
-        let alternate = self.parser.screen().alternate_screen();
-        let (row, col) = self.parser.screen().cursor_position();
-        let cursor = format!("\x1b[{};{}H", row + 1, col + 1);
-        match (on, mode) {
-            (true, _) if alternate => {}
-            (true, mode) => {
-                if mode == 1049 {
-                    self.alternate_saved = Some((row, col));
-                }
-                self.parser.process(b"\x1b[?1049h");
-                self.parser.process(cursor.as_bytes());
-            }
-            (false, 1049) => self.parser.process(b"\x1b[?1049l"),
-            (false, _) if alternate => {
-                self.parser.process(b"\x1b[?47l");
-                self.parser.process(cursor.as_bytes());
-            }
-            (false, _) => {}
-        }
-        if alternate != self.parser.screen().alternate_screen() {
-            self.sync_region();
-        }
+        self.parser.screen().mouse_utf8()
     }
 
     /// Feed program output. Returns bytes that must be written back to the
@@ -766,12 +540,6 @@ impl Emulator {
     /// history first, then come in blank at the bottom. (tmux takes back only
     /// rows scrolled since the screen was last cleared, vt1k any it has.)
     pub fn resize(&mut self, rows: u16, cols: u16) {
-        // A resize takes the whole screen as the region, in tmux and in
-        // vt1k alike (which keeps it when the size is the same).
-        let (old_rows, old_cols) = screen_size(self.parser.screen());
-        if (old_rows, old_cols) != (rows.max(1), cols.max(1)) {
-            self.region = None;
-        }
         self.parser
             .screen_mut()
             .set_size(dimension(rows), dimension(cols));
@@ -827,7 +595,7 @@ impl Emulator {
     /// Whether the program asked to be told of focus changes (mode 1004),
     /// as `CSI I` and `CSI O`.
     pub fn focus_reports(&self) -> bool {
-        self.parser.callbacks().focus_reports
+        self.parser.screen().focus_reports()
     }
 
     /// Insert mode and autowrap as the program set them (`#{insert_flag}`,
@@ -876,7 +644,7 @@ impl Emulator {
     /// the alternate screen with `CSI ? 1049 h` (`#{alternate_saved_x}`,
     /// `#{alternate_saved_y}`), if it has.
     pub fn alternate_saved(&self) -> Option<(u16, u16)> {
-        self.alternate_saved
+        self.parser.screen().alternate_saved()
     }
 
     /// The cursor's colour the program set, as RGB (`#{cursor_colour}`).
@@ -894,24 +662,24 @@ impl Emulator {
     /// Whether the program made the cursor very visible
     /// (`#{cursor_very_visible}`).
     pub fn cursor_very_visible(&self) -> bool {
-        self.parser.callbacks().cursor_very_visible
+        self.parser.screen().cursor_very_visible()
     }
 
     /// Whether origin mode is on (`#{origin_flag}`).
     pub fn origin_mode(&self) -> bool {
-        self.origin_mode
+        self.parser.screen().origin_mode()
     }
 
     /// Whether the cursor blinks, as the program last set it
     /// (`#{cursor_blinking}`).
     pub fn cursor_blinking(&self) -> bool {
-        self.parser.callbacks().cursor_blinking
+        self.parser.screen().cursor_blinking()
     }
 
     /// The cursor shape the program asked for, as DECSCUSR's `Ps`: 0 (the
     /// terminal's own) until it asks.
     pub fn cursor_style(&self) -> u8 {
-        self.parser.callbacks().cursor_style
+        self.parser.screen().cursor_style().decscusr()
     }
 
     pub fn title(&self) -> Option<&str> {
