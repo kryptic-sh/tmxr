@@ -55,6 +55,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Copy mode takes far less memory over plain text**: a line of plain ASCII in
+  the default style is copied a byte a cell instead of 48 bytes, so entering
+  copy mode over a full 50000-line history of such lines adds 6 MB to the server
+  where it added 190 MB. Lines with colours or attributes are copied as before.
+
 - **Each pane's terminal emulator is
   [vt1k](https://github.com/kryptic-sh/vt1k)**, kryptic-sh's own, in place of
   vt100: it behaves as vt100 with tmxr's fork did (checked by a differential

@@ -490,13 +490,16 @@ table. What has been verified, and how:
   crossterm fork crate would sit beside crates.io's crossterm that hjkl's crates
   and ratatui use, which crosses at one call, (`hjkl_picker_tui::handle_key`'s
   `KeyEvent`), so it needs a conversion there or hjkl moved to the fork too.
-- **Copy mode's copy of the history takes three times tmux's memory** (measured
-  2026-10-24, release builds, 50000 full lines of 80 columns, server RSS): 212
-  MB in copy mode against 21 MB out of it, where tmux 3.8 takes 69 and 38 MB.
-  Copy mode copies every line into its own 48-byte cells (`copy::Cell`); the
-  history itself is packed since vt1k. Not started; the ways in: copy mode
-  keeping vt1k's packed rows and unpacking the lines it shows, or a smaller
-  `copy::Cell` (its `Cow<str>` is 24 bytes).
+- **Copy mode's copy of a coloured history takes three times tmux's memory**
+  (measured 2026-10-24, release builds, 50000 lines of 80 columns, server RSS).
+  Lines of plain ASCII in the default style are kept a byte a cell
+  (`copy::model::Cells::Plain`): 28 MB in copy mode against 22 MB out of it. But
+  a line with any style keeps full 48-byte cells (`copy::Cell`): with a green
+  word on each line, 212 MB in copy mode against 21 MB out of it (vt100: 297 and
+  137 MB). tmux 3.8 takes 69 MB in copy mode, 38 MB out of it (plain lines). The
+  way in: keep a styled line as its text and runs of styles, which means
+  `Line::cell` and `Line::cells` handing out cells by value instead of by
+  reference (each of copy mode's call sites).
 - **No frame-rate cap**: the server renders after each pass of its loop, and a
   pass stops handling events after `DRAIN_BUDGET` so a flood still repaints.
   Each pane's output waits in a bounded queue (`output::QUEUE_LIMIT`) that
