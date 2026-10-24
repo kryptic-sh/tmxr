@@ -747,14 +747,15 @@ fn draw_pane(
             for col in 0..w {
                 let x = usize::from(col);
                 let cell = line.and_then(|l| l.cell(x));
-                let link = cell.and_then(|c| crate::copy::link_of(&c.style));
+                let link = cell.as_ref().and_then(|c| crate::copy::link_of(&c.style));
                 let mut style = with_palette(
                     with_default_colours(
-                        cell.map(|c| Style {
-                            underline_color: None,
-                            ..c.style
-                        })
-                        .unwrap_or_default(),
+                        cell.as_ref()
+                            .map(|c| Style {
+                                underline_color: None,
+                                ..c.style
+                            })
+                            .unwrap_or_default(),
                         base,
                     ),
                     pane.emu.palette(),
@@ -781,7 +782,9 @@ fn draw_pane(
                 if y == cm.cy && usize::from(col) == cm.cx {
                     style = style.add_modifier(Modifier::REVERSED);
                 }
-                let sym = cell.map_or(" ", |c| if c.symbol.is_empty() { " " } else { &c.symbol });
+                let sym = cell
+                    .as_ref()
+                    .map_or(" ", |c| if c.symbol.is_empty() { " " } else { &c.symbol });
                 if let Some(out) = buf.cell_mut((r.x + col, r.y + row)) {
                     out.set_symbol(sym).set_style(style);
                     let screen = pane.emu.screen();

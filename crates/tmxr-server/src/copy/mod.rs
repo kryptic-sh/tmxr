@@ -268,7 +268,7 @@ impl CopyMode {
     /// The character at `(y, x)` if it is one byte, as tmux's bracket
     /// matching reads cells.
     fn byte_at(&self, (y, x): (usize, usize)) -> Option<char> {
-        let c = self.lines.get(y)?.cell(x)?.symbol.chars().next()?;
+        let c = self.lines.get(y)?.symbol(x)?.chars().next()?;
         c.is_ascii().then_some(c)
     }
 
@@ -670,7 +670,7 @@ impl CopyMode {
     pub fn cursor_link(&self) -> Option<std::num::NonZeroU16> {
         let line = self.lines.get(self.cy)?;
         let mut x = self.cx;
-        while x > 0 && line.cell(x).is_some_and(|c| c.symbol.is_empty()) {
+        while x > 0 && line.symbol(x).is_some_and(str::is_empty) {
             x -= 1;
         }
         link_of(&line.cell(x)?.style)
@@ -687,8 +687,8 @@ impl CopyMode {
 
     fn line_len(&self, y: usize) -> usize {
         self.lines.get(y).map_or(0, |l| {
-            l.cells()
-                .rposition(|c| !c.symbol.trim().is_empty())
+            l.symbols()
+                .rposition(|s| !s.trim().is_empty())
                 .map_or(0, |i| i + 1)
         })
     }
@@ -768,8 +768,8 @@ impl CopyMode {
     fn padding(&self, y: usize, x: usize) -> bool {
         self.lines
             .get(y)
-            .and_then(|l| l.cell(x))
-            .is_some_and(|c| c.symbol.is_empty())
+            .and_then(|l| l.symbol(x))
+            .is_some_and(str::is_empty)
     }
 
     /// Whether the column, taken back to after an up, down or page move,
@@ -919,8 +919,8 @@ impl CopyMode {
     fn char_at(&self, y: usize, x: usize) -> char {
         self.lines
             .get(y)
-            .and_then(|l| l.cell(x))
-            .and_then(|c| c.symbol.chars().next())
+            .and_then(|l| l.symbol(x))
+            .and_then(|s| s.chars().next())
             .unwrap_or(' ')
     }
 
@@ -1060,8 +1060,8 @@ impl CopyMode {
             self.line_len(y)
         };
         let (sx, ex) = (sx.min(len), ex.min(len));
-        for cell in line.cells().take(ex).skip(sx) {
-            out.push_str(&cell.symbol);
+        for symbol in line.symbols().take(ex).skip(sx) {
+            out.push_str(symbol);
         }
         if !line.wrapped || ex != len {
             out.push('\n');

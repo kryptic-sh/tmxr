@@ -2,7 +2,6 @@
 //! lines of styled cells when copy mode starts.
 
 use std::borrow::Cow;
-use std::sync::LazyLock;
 
 use ratatui::style::{Color, Modifier, Style};
 
@@ -80,49 +79,72 @@ const BLANK: Cell = Cell {
     underline: Underline::NONE,
 };
 
-/// Every ASCII character as a cell in [`BLANK`]'s style, for a
-/// [`Cells::Plain`] line to hand out.
-static PLAIN: LazyLock<[Cell; 128]> = LazyLock::new(|| {
-    std::array::from_fn(|b| Cell {
-        symbol: symbol(char::from(b as u8).encode_utf8(&mut [0; 1])),
-        ..BLANK
-    })
-});
-
-/// A line's cells, kept as small as they allow.
+/// A line's cells, kept small: their symbols one after another and their
+/// styles as runs, so a line of text in a few styles takes about a byte a
+/// cell.
 #[derive(Debug, Clone, PartialEq)]
-enum Cells {
-    /// Every cell one ASCII character in [`BLANK`]'s style, a byte each:
-    /// what most of a long history is.
-    Plain(Box<[u8]>),
-    Styled(Vec<Cell>),
+struct Cells {
+    /// Every cell's symbol, one after another.
+    text: Box<str>,
+    /// Where each cell's symbol begins in `text`, unless every one is a
+    /// single byte (a wide character's second column has none).
+    starts: Option<Box<[usize]>>,
+    /// Each change of style: the first cell it takes and the style. Cells
+    /// before the first are in [`BLANK`]'s.
+    runs: Box<[(usize, Style, Underline)]>,
 }
 
 impl Cells {
-    fn new(cells: Vec<Cell>) -> Self {
-        let plain = |c: &Cell| {
-            c.symbol.len() == 1 && c.style == BLANK.style && c.underline == Underline::NONE
-        };
-        if cells.iter().all(plain) {
-            Self::Plain(cells.iter().map(|c| c.symbol.as_bytes()[0]).collect())
-        } else {
-            Self::Styled(cells)
+    fn new(cells: &[Cell]) -> Self {
+        let mut text = String::new();
+        let mut starts = Vec::with_capacity(cells.len());
+        let mut runs = Vec::new();
+        let mut last = (BLANK.style, Underline::NONE);
+        for (x, cell) in cells.iter().enumerate() {
+            starts.push(text.len());
+            text.push_str(&cell.symbol);
+            if (cell.style, cell.underline) != last {
+                last = (cell.style, cell.underline);
+                runs.push((x, cell.style, cell.underline));
+            }
         }
-    }
-
-    fn get(&self, x: usize) -> Option<&Cell> {
-        match self {
-            Self::Plain(bytes) => bytes.get(x).map(|&b| &PLAIN[usize::from(b)]),
-            Self::Styled(cells) => cells.get(x),
+        let single = cells.iter().all(|c| c.symbol.len() == 1);
+        Self {
+            text: text.into_boxed_str(),
+            starts: (!single).then(|| starts.into_boxed_slice()),
+            runs: runs.into_boxed_slice(),
         }
     }
 
     #[cfg(test)]
     fn len(&self) -> usize {
-        match self {
-            Self::Plain(bytes) => bytes.len(),
-            Self::Styled(cells) => cells.len(),
+        self.starts.as_ref().map_or(self.text.len(), |s| s.len())
+    }
+
+    fn symbol(&self, x: usize) -> Option<&str> {
+        match &self.starts {
+            None => self.text.get(x..=x),
+            Some(starts) => {
+                let start = *starts.get(x)?;
+                let end = starts.get(x + 1).copied().unwrap_or(self.text.len());
+                self.text.get(start..end)
+            }
         }
+    }
+
+    fn get(&self, x: usize) -> Option<Cell> {
+        let symbol = symbol(self.symbol(x)?);
+        let run = self.runs.partition_point(|&(from, ..)| from <= x);
+        let (style, underline) = run
+            .checked_sub(1)
+            .map_or((BLANK.style, Underline::NONE), |r| {
+                (self.runs[r].1, self.runs[r].2)
+            });
+        Some(Cell {
+            symbol,
+            style,
+            underline,
+        })
     }
 }
 
@@ -149,28 +171,39 @@ impl Line {
     }
 
     /// The cell at column `x`, if the line is that wide.
-    pub fn cell(&self, x: usize) -> Option<&Cell> {
-        (x < self.width).then(|| self.cells.get(x).unwrap_or(&BLANK))
+    pub fn cell(&self, x: usize) -> Option<Cell> {
+        (x < self.width).then(|| self.cells.get(x).unwrap_or(BLANK))
     }
 
     /// Every cell, across the line's width.
-    pub fn cells(&self) -> impl ExactSizeIterator<Item = &Cell> + DoubleEndedIterator {
-        (0..self.width).map(|x| self.cells.get(x).unwrap_or(&BLANK))
+    pub fn cells(&self) -> impl ExactSizeIterator<Item = Cell> + DoubleEndedIterator {
+        (0..self.width).map(|x| self.cells.get(x).unwrap_or(BLANK))
+    }
+
+    /// The symbol of the cell at column `x`, if the line is that wide:
+    /// empty for a wide character's second column.
+    pub fn symbol(&self, x: usize) -> Option<&str> {
+        (x < self.width).then(|| self.cells.symbol(x).unwrap_or(" "))
+    }
+
+    /// Every cell's symbol, across the line's width.
+    pub fn symbols(&self) -> impl ExactSizeIterator<Item = &str> + DoubleEndedIterator {
+        (0..self.width).map(|x| self.cells.symbol(x).unwrap_or(" "))
     }
 
     pub(super) fn chars(&self) -> Vec<char> {
-        self.cells()
-            .map(|c| c.symbol.chars().next().unwrap_or(' '))
+        self.symbols()
+            .map(|s| s.chars().next().unwrap_or(' '))
             .collect()
     }
 
     /// Text of columns `from..to`, trailing blanks removed.
     pub(super) fn text(&self, from: usize, to: usize) -> String {
         let s: String = self
-            .cells()
+            .symbols()
             .enumerate()
             .filter(|(i, _)| *i >= from && *i < to)
-            .map(|(_, c)| if c.symbol.is_empty() { "" } else { &c.symbol })
+            .map(|(_, s)| s)
             .collect();
         s.trim_end().to_owned()
     }
@@ -206,7 +239,7 @@ pub fn reflow(
         if y == cy {
             cursor = (n, (cx < line.used).then(|| cells.len() + cx));
         }
-        cells.extend(line.cells().take(line.used).cloned());
+        cells.extend(line.cells().take(line.used));
         joining = line.wrapped;
     }
     let mut out: Vec<Line> = Vec::new();
@@ -260,12 +293,11 @@ type Written = (Vec<Cell>, Vec<(usize, usize)>);
 
 /// A line of `cols` columns holding `cells` from the left, all of them
 /// used.
-fn line_of_cells(mut cells: Vec<Cell>, cols: usize, wrapped: bool) -> Line {
+fn line_of_cells(cells: Vec<Cell>, cols: usize, wrapped: bool) -> Line {
     let used = cells.len().min(cols);
     let kept = cells.iter().rposition(|c| *c != BLANK).map_or(0, |i| i + 1);
-    cells.truncate(kept.min(cols));
     Line {
-        cells: Cells::new(cells),
+        cells: Cells::new(&cells[..kept.min(cols)]),
         width: cols,
         wrapped,
         used,
@@ -347,7 +379,7 @@ fn lines_from<'s>(
             // than the pane; it shows as wide as the pane.
             Some((cells, wrapped)) => line_of(&cells[..cells.len().min(width)], width, wrapped),
             None => Line {
-                cells: Cells::Plain(Box::default()),
+                cells: Cells::new(&[]),
                 width: 0,
                 wrapped: false,
                 used: 0,
@@ -395,7 +427,12 @@ fn line_of(cells: &[vt1k::Cell], width: usize, wrapped: bool) -> Line {
         .map_or(0, |c| c + 1)
         .max(used);
     Line {
-        cells: Cells::new(cells[..kept].iter().map(|c| cell_of(Some(c))).collect()),
+        cells: Cells::new(
+            &cells[..kept]
+                .iter()
+                .map(|c| cell_of(Some(c)))
+                .collect::<Vec<_>>(),
+        ),
         width,
         wrapped,
         used,
@@ -467,7 +504,7 @@ mod tests {
         assert_eq!(line.width(), 6);
         assert_eq!(line.cells.len(), 3, "the reversed blank is kept");
         assert_eq!(line.cells().count(), 6);
-        assert_eq!(line.cell(5), Some(&BLANK));
+        assert_eq!(line.cell(5), Some(BLANK));
         assert_eq!(line.cell(6), None);
         assert_eq!(line.chars(), vec!['a', 'b', ' ', ' ', ' ', ' ']);
         assert_eq!(lines[1].cells.len(), 0);
@@ -503,25 +540,26 @@ mod tests {
         assert_eq!(line.text(0, 6), "$");
     }
 
-    /// A line of plain ASCII text is kept a byte a cell, and reads as the
-    /// cells it was made of; one with any style, underline or other
-    /// character keeps its cells.
+    /// A line is kept as its text, with where each symbol starts only when
+    /// one is not a single byte, and a run for each change of style; it
+    /// reads as the cells it was made of.
     #[test]
-    fn a_plain_line_is_kept_small_and_reads_the_same() {
+    fn a_line_is_kept_small_and_reads_the_same() {
         let mut parser = vt1k::Parser::new(4.try_into().unwrap(), 8.try_into().unwrap(), 0);
-        parser.process(b"a b~\r\n\x1b[1mbold\x1b[m\r\nx\x1b[4:3my\r\n\xc3\xa9");
+        parser.process(b"a b~\r\n\x1b[1mbold\x1b[m\r\nx\x1b[4:3my\x1b[m\r\n\xc3\xa9");
         let screen = parser.screen();
         let lines = snapshot(screen);
-        let plain: Vec<_> = lines
+        let kept: Vec<_> = lines
             .iter()
-            .map(|l| matches!(l.cells, Cells::Plain(_)))
+            .map(|l| (l.cells.starts.is_some(), l.cells.runs.len()))
             .collect();
-        assert_eq!(plain, [true, false, false, false]);
+        assert_eq!(kept, [(false, 0), (false, 1), (false, 1), (true, 0)]);
         for (y, line) in lines.iter().enumerate() {
             let row = screen.line_cells(y).unwrap();
             let kept = line.cells.len();
             for (x, cell) in row[..kept].iter().enumerate() {
-                assert_eq!(line.cell(x), Some(&cell_of(Some(cell))), "{y},{x}");
+                assert_eq!(line.cell(x), Some(cell_of(Some(cell))), "{y},{x}");
+                assert_eq!(line.symbol(x), line.cell(x).map(|c| c.symbol).as_deref());
             }
         }
     }

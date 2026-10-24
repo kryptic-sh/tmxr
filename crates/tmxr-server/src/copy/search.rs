@@ -225,12 +225,6 @@ impl CopyMode {
             .match_spans(self.cy)
             .into_iter()
             .find(|&(start, end)| (start..=end).contains(&self.cx))?;
-        Some(
-            line.cells()
-                .skip(start)
-                .take(end - start)
-                .map(|c| c.symbol.as_ref())
-                .collect(),
-        )
+        Some(line.symbols().skip(start).take(end - start).collect())
     }
 }
