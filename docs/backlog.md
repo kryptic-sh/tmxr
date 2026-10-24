@@ -711,14 +711,18 @@ table. What has been verified, and how:
     split out by `modes::ModeSplitter` and passed on to vt1k); and overline is
     kept and captured but not drawn, as tmux draws it only to a terminal it has
     identified as having it (`tty_feature_overline`), which Alacritty is not.
-    Underline styles and colours are kept (the fork's `underline-styles`; the
-    owner chose on 2026-10-23 to grow its cell from 32 to 36 bytes for them,
-    over a per-screen table or fewer content bytes) and sent as tmux's `usstyle`
-    would to a client whose `TERM` names a terminal with `Smulx` in ncurses
-    6.5's terminfo, or kitty or Ghostty (`Server::client_underline_styles`);
-    tmxr reads no terminfo, so a terminal outside that list gets a plain
-    underline. Unlike tmux, the colour goes with the styles: those entries lack
-    `Setulc`, so tmux 3.6 sends no underline colour to Alacritty or foot unless
+    Blink, hidden and strikethrough are drawn
+    (`struck_blinking_and_hidden_text_reach_the_client`); seen in Alacritty 0.17
+    (2026-10-24, nested Hyprland): struck text struck through, hidden text
+    blank, and blinking text plain, as Alacritty does not blink text. Underline
+    styles and colours are kept (the fork's `underline-styles`; the owner chose
+    on 2026-10-23 to grow its cell from 32 to 36 bytes for them, over a
+    per-screen table or fewer content bytes) and sent as tmux's `usstyle` would
+    to a client whose `TERM` names a terminal with `Smulx` in ncurses 6.5's
+    terminfo, or kitty or Ghostty (`Server::client_underline_styles`); tmxr
+    reads no terminfo, so a terminal outside that list gets a plain underline.
+    Unlike tmux, the colour goes with the styles: those entries lack `Setulc`,
+    so tmux 3.6 sends no underline colour to Alacritty or foot unless
     `terminal-features` adds `usstyle`, though both draw it. Seen in Alacritty
     0.17 (2026-10-24, nested Hyprland): single, double, curly, coloured curly,
     dotted and dashed as written. Measured the same day (release builds, 50000
@@ -788,13 +792,11 @@ table. What has been verified, and how:
     client sends standard input ahead of the command); an empty pane is restored
     by resurrect empty, without what was shown in it; `display-message -v`;
     `display-message -a` lists tmxr's variables (`vars::NAMES`), fewer than
-    tmux's; the `choose-*` pickers' tagging and sort keys (tmux's `t`, `T`,
-    `O`), which tmxr's picker has no counterpart for; `choose-tree -F` replaces
-    the text after a row's mark, where tmux's is the whole tree line;
-    `command-prompt` Tab completes and offers menus as tmux's (names, sessions,
-    a session's windows, the `target` and `window-target` types;
-    `prompt_tab*\*`in`corpus/keys.toml`), though which ten names a long menu
-    keeps was matched by result (the last ten), not read from tmux's code.
+    tmux's; the
+    `choose-*`pickers' tagging and sort keys (tmux's`t`, `T`, `O`), which tmxr's picker has no counterpart for; `choose-tree
+    -F`replaces the text after a row's mark, where tmux's is the whole tree line;`command-prompt`Tab completes and offers menus as tmux's (names, sessions, a session's windows, the`target`and`window-target`types;`prompt_tab\*\*`in`corpus/keys.toml`),
+    though which ten names a long menu keeps was matched by result (the last
+    ten), not read from tmux's code.
   - Hooks and modes: the client's theme follows its terminal as tmux's: the
     client sends `CSI ? 2031 h` and `CSI ? 996 n` as its terminal starts and
     `CSI ? 2031 l` as it stops, and the terminal's `CSI ? 997 ; 1 / 2 n`
