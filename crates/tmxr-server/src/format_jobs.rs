@@ -58,12 +58,28 @@ struct Job {
 }
 
 impl Job {
-    /// The run going, if any, killed and reaped, as tmux's job_free.
+    /// The run going, if any, stopped as tmux's job_free stops it: sent
+    /// SIGTERM on Unix (TerminateProcess on Windows), and reaped by a
+    /// thread of its own, so one that ignores the signal does not hold up
+    /// the server (it runs on, as under tmux).
     fn stop(&mut self) {
-        if let Some(mut child) = self.child.take() {
-            // It may have ended already; either way it is waited for.
-            let _ = child.kill();
-            let _ = child.wait();
+        let Some(mut child) = self.child.take() else {
+            return;
+        };
+        #[cfg(unix)]
+        // SAFETY: `kill` takes any pid and signal; this pid is our own
+        // child's, not yet reaped (the thread below reaps it), so it names
+        // no other process.
+        if let Ok(pid) = libc::pid_t::try_from(child.id()) {
+            unsafe { libc::kill(pid, libc::SIGTERM) };
+        }
+        #[cfg(windows)]
+        let _ = child.kill();
+        let reaped = std::thread::Builder::new()
+            .name("tmxr-format-job-reap".into())
+            .spawn(move || child.wait());
+        if let Err(e) = reaped {
+            tracing::warn!("format job not reaped: {e}");
         }
     }
 }
@@ -258,6 +274,42 @@ impl Server {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A run stopped is sent SIGTERM, as tmux's job_free does, and one
+    /// that ignores it does not keep `stop` waiting.
+    #[cfg(unix)]
+    #[test]
+    fn a_stopped_run_is_sent_sigterm_and_not_waited_for() {
+        let dir = tempfile::tempdir().unwrap();
+        let mark = dir.path().join("term");
+        let run = |script: &str| Job {
+            child: Some(
+                tmxr_term::child::command("/bin/sh")
+                    .arg("-c")
+                    .arg(script)
+                    .spawn()
+                    .unwrap(),
+            ),
+            ..Job::default()
+        };
+        let mut job = run(&format!(
+            "trap 'echo term > {}; exit' TERM; while :; do sleep 0.05; done",
+            mark.display()
+        ));
+        // Give the shell time to set its trap.
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        job.stop();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !mark.exists() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(mark.exists(), "the run never saw SIGTERM");
+        let mut stubborn = run("trap '' TERM; sleep 3");
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        let started = std::time::Instant::now();
+        stubborn.stop();
+        assert!(started.elapsed() < std::time::Duration::from_secs(1));
+    }
 
     #[test]
     fn tidy_drops_the_jobs_unused_for_an_hour() {

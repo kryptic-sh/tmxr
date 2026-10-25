@@ -61,6 +61,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **A `#()` job in a format is stopped with SIGTERM**, as tmux stops it, where
+  tmxr killed it outright (SIGKILL) and waited for it; a job that traps SIGTERM
+  can now tidy up, and one that ignores it no longer holds up the server.
+
 - **Copy mode takes far less memory**: its copy of a pane's lines keeps each
   line as its text and runs of styles instead of 48 bytes a cell, so entering
   copy mode over a full 50000-line history of 80-column lines adds 8–15 MB to

@@ -433,19 +433,18 @@ table. What has been verified, and how:
   `#{pane_index}`), the cached copy nothing measurable, so the copy stays; a
   status line naming each window's command would take a snapshot a window a
   redraw.
-- **OSC 8 hyperlinks** (decided by the owner 2026-10-22: kept by the vt100 fork,
-  doy/vt100-rust#51 (with `Screen::clear_hyperlinks` for `clear-history -H`),
-  which costs a cell 2 bytes of text): render puts the number of a link and
-  underline style and colour together in the frame cell's `underline_color`
-  (`backend::Links`, a table of decorations; nothing else uses that field), so
-  ratatui's diff redraws a cell whose link or underline alone changed, and
-  `AnsiBackend::draw` writes it as OSC 8 and SGR
-  (`a_programs_hyperlink_reaches_the_client`). The owner chose this over an
-  overdraw pass or tmxr's own diff. Still unlike tmux: links go to every client,
-  where tmux sends them only to terminals whose `terminal-features` have
-  `hyperlinks`. Copy mode's snapshot keeps a cell's link the same way, in its
-  style's `underline_color` (`copy::link_of`, a cell stays 40 bytes), resolved
-  through the pane's vt100 table when drawn
+- **OSC 8 hyperlinks** (decided by the owner 2026-10-22: kept by the emulator,
+  vt1k since 2026-10-24, with `Screen::clear_hyperlinks` for `clear-history -H`,
+  a cell's link a `u16`): render puts the number of a link and underline style
+  and colour together in the frame cell's `underline_color` (`backend::Links`, a
+  table of decorations; nothing else uses that field), so ratatui's diff redraws
+  a cell whose link or underline alone changed, and `AnsiBackend::draw` writes
+  it as OSC 8 and SGR (`a_programs_hyperlink_reaches_the_client`). The owner
+  chose this over an overdraw pass or tmxr's own diff. Still unlike tmux: links
+  go to every client, where tmux sends them only to terminals whose
+  `terminal-features` have `hyperlinks`. Copy mode's snapshot keeps a cell's
+  link the same way, in its style's `underline_color` (`copy::link_of`),
+  resolved through the pane's vt1k table when drawn
   (`copy_mode_keeps_a_lines_hyperlink`). A client's and a pane's link tables
   only grow (`u16` of them in a pane, then text is unlinked). Seen drawing
   cleanly in Alacritty 0.17 (2026-10-22, nested Hyprland), and a click on a link
@@ -650,7 +649,8 @@ table. What has been verified, and how:
   - Formats: `#()` jobs run as tmux's (`format_jobs.rs`), and a job no format
     has started for an hour is dropped (`FormatJobs::tidy`, unit tested; the
     server's tick calling it is not observed by any test); a job's run is
-    stopped by killing its own process (SIGKILL), where tmux sends SIGTERM, and
+    stopped with SIGTERM to its own process, as tmux's job_free, and reaped on a
+    thread of its own (one that ignores the signal runs on, as under tmux), and
     in both a command's own children outlive it unless the shell `exec`s them; a
     syntax error ends the expansion as tmux's for a comparison, `m:` or `R:`
     without its comma (`format::expand_item`), and a loop or `N:` whose lookup
