@@ -334,6 +334,7 @@ impl Tmxr {
             raw,
             child,
             paused,
+            #[cfg(unix)]
             light,
         }
     }
@@ -370,6 +371,7 @@ struct Screen {
     /// While set, the terminal reads nothing, as a stalled one would.
     paused: Arc<std::sync::atomic::AtomicBool>,
     /// [`Tmxr::attach_sync`]'s terminal answers with its light colours.
+    #[cfg(unix)]
     light: Arc<std::sync::atomic::AtomicBool>,
 }
 
@@ -394,6 +396,7 @@ impl Screen {
     /// Turn [`Tmxr::attach_sync`]'s terminal light, as foot on `SIGUSR2`:
     /// it answers OSC 10 and 11 with [`LIGHT_FG`] and [`LIGHT_BG`] from
     /// now on, and reports the change, as mode 2031 asks.
+    #[cfg(unix)]
     fn turn_light(&self) {
         self.light.store(true, std::sync::atomic::Ordering::Relaxed);
         self.send(b"\x1b[?997;2n");
@@ -531,6 +534,7 @@ impl Screen {
     }
 
     /// Wait until what the terminal was sent satisfies `pred`.
+    #[cfg(unix)]
     fn wait_for_raw(&self, what: &str, pred: impl Fn(&str) -> bool) {
         let deadline = Instant::now() + TIMEOUT;
         while !pred(&self.raw_text()) {
