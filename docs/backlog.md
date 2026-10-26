@@ -164,7 +164,13 @@ table. What has been verified, and how:
   `try_read`: a read error other than `WouldBlock` or `Interrupted` (EIO once
   the terminal hangs up) loops on the read without end; tmxr's client does not
   get there, as the hangup's SIGHUP ends it first (a pty closed under an
-  attached client, 2026-10-20: the client exited).
+  attached client, 2026-10-20: the client exited). Found adding #1155's timeout
+  test (2026-10-26): a read of 0 bytes (end of file) loops the same way, and the
+  tty is read blocking, so input that stops partway through an event (an
+  unfinished bracketed paste) blocks `read` past any timeout. Also: upstream's
+  CI runs the tests only with `--all-features`, which takes `use-dev-tty` and so
+  compiles out the mio source and #1155's tests with it; they were run with
+  default features here.
 - **tmux default binds**: all of tmux 3.6's 267 are bound (compared with its
   `list-keys`, 2026-10-11) except the 18 digit binds (`1`-`9` in vi, `M-1`-`M-9`
   in emacs) that open a "(repeat)" prompt, declined: tmxr's copy mode takes
