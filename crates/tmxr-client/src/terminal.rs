@@ -14,7 +14,7 @@ use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use interprocess::local_socket::SendHalf;
+use interprocess::local_socket::Stream;
 use tmxr_proto::{ClientMsg, write_msg};
 
 /// Restores the terminal when dropped — on detach, on error, and (through
@@ -315,12 +315,16 @@ fn wake_reader() -> io::Result<()> {
     Ok(())
 }
 
+/// The connection to the server, shared by the threads that write to it,
+/// each frame written whole under the lock.
+pub type Sender = Arc<Mutex<Arc<Stream>>>;
+
 /// Forward terminal events to the server until either side goes away.
 /// `size` is the terminal's size as the hello gave it: crossterm watches
 /// for SIGWINCH only once its reader exists, and a resize before then (a
 /// tiling window manager placing the new window) is lost, so the reader is
 /// made first and the size sent again if it has changed since.
-pub fn spawn_input(send: Arc<Mutex<SendHalf>>, size: Option<(u16, u16)>) -> Input {
+pub fn spawn_input(send: Sender, size: Option<(u16, u16)>) -> Input {
     let input = Input {
         paused: Arc::new(AtomicBool::new(false)),
         gate: Arc::new(Mutex::new(())),
@@ -335,8 +339,8 @@ pub fn spawn_input(send: Arc<Mutex<SendHalf>>, size: Option<(u16, u16)>) -> Inpu
                 && size != Some((cols, rows))
             {
                 let resized = vec![crossterm::event::Event::Resize(cols, rows)];
-                let Ok(mut send) = send.lock() else { return };
-                if write_msg(&mut *send, &ClientMsg::Input(resized)).is_err() {
+                let Ok(send) = send.lock() else { return };
+                if write_msg(&mut &**send, &ClientMsg::Input(resized)).is_err() {
                     return;
                 }
             }
@@ -370,8 +374,8 @@ pub fn spawn_input(send: Arc<Mutex<SendHalf>>, size: Option<(u16, u16)>) -> Inpu
                 if console_bytes {
                     events = events.into_iter().map(console_key).collect();
                 }
-                let Ok(mut send) = send.lock() else { break };
-                if write_msg(&mut *send, &ClientMsg::Input(events)).is_err() {
+                let Ok(send) = send.lock() else { break };
+                if write_msg(&mut &**send, &ClientMsg::Input(events)).is_err() {
                     break;
                 }
             }

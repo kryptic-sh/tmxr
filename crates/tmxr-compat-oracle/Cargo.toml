@@ -15,7 +15,7 @@ portable-pty = "0.9.0"
 serde = { version = "1.0.229", features = ["derive"] }
 tempfile = "3.27.0"
 tmxr-term.workspace = true
-toml = "1.1.7"
+toml = "1.1.8"
 vt1k.workspace = true
 
 [lints]

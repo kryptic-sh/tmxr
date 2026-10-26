@@ -27,6 +27,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   rather than those from attach. Seen in foot 1.28, switched by `SIGUSR2` and
   `SIGUSR1`.
 
+### Changed
+
+- **Dependencies updated to their latest releases**, among them the hjkl crates
+  (0.43: the session and window pickers, layouts, config and XDG paths) and
+  interprocess 2.4.7, whose split socket halves tmxr no longer uses (deprecated
+  there) in favour of sharing one stream between its reading and writing
+  threads.
+
 ### Fixed
 
 - **A program's answers come in the order it asked**: answers to OSC 10, 11 and

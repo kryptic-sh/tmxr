@@ -14,8 +14,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use interprocess::local_socket::traits::Stream as _;
-use interprocess::local_socket::{SendHalf, Stream};
+use interprocess::local_socket::Stream;
 use tmxr_proto::socket::{ENV_TMXR, Endpoint};
 use tmxr_proto::{
     ClientMsg, Hello, PROTOCOL_VERSION, ServerMsg, TerminalInfo, read_msg, write_msg,
@@ -135,7 +134,10 @@ fn hello() -> Hello {
 }
 
 fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
-    let (mut recv, mut send) = stream.split();
+    // Read here and written by this thread and the input thread, as `&Stream`
+    // reads and writes.
+    let conn = Arc::new(stream);
+    let (mut recv, mut send) = (&*conn, &*conn);
     let to_io = |e: tmxr_proto::ProtoError| io::Error::other(e.to_string());
     let hello = hello();
     let size = hello.terminal.as_ref().map(|t| (t.cols, t.rows));
@@ -155,9 +157,9 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
     }
     write_msg(&mut send, &ClientMsg::Command(args)).map_err(to_io)?;
 
-    let mut send = Some(send);
+    let mut send = Some(Arc::clone(&conn));
     // Shared with the input thread once attached, to report a resume.
-    let mut writer: Option<Arc<Mutex<SendHalf>>> = None;
+    let mut writer: Option<terminal::Sender> = None;
     let mut input: Option<terminal::Input> = None;
     let mut term: Option<terminal::Guard> = None;
     let mut stdout = io::stdout().lock();
@@ -186,8 +188,8 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                 let guard = terminal::Guard::enter()?;
                 let (fg, bg) = guard.colours();
                 term = Some(guard);
-                if let Some(mut s) = send.take() {
-                    write_msg(&mut s, &ClientMsg::TerminalColours { fg, bg }).map_err(to_io)?;
+                if let Some(s) = send.take() {
+                    write_msg(&mut &*s, &ClientMsg::TerminalColours { fg, bg }).map_err(to_io)?;
                     let shared = Arc::new(Mutex::new(s));
                     input = Some(terminal::spawn_input(Arc::clone(&shared), size));
                     writer = Some(shared);
@@ -234,10 +236,10 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                 terminal::suspend()?;
                 term = Some(terminal::Guard::enter()?);
                 if let Some(w) = &writer {
-                    let mut w = w
+                    let w = w
                         .lock()
                         .map_err(|_| io::Error::other("input thread panicked"))?;
-                    write_msg(&mut *w, &ClientMsg::Resumed).map_err(to_io)?;
+                    write_msg(&mut &**w, &ClientMsg::Resumed).map_err(to_io)?;
                 }
             }
             ServerMsg::Lock { command } => {
@@ -249,14 +251,14 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                 term = Some(terminal::Guard::enter()?);
                 drop(paused);
                 if let Some(w) = &writer {
-                    let mut w = w
+                    let w = w
                         .lock()
                         .map_err(|_| io::Error::other("input thread panicked"))?;
                     let msg = match locked {
                         Ok(()) => ClientMsg::Resumed,
                         Err(why) => ClientMsg::LockFailed(why),
                     };
-                    write_msg(&mut *w, &msg).map_err(to_io)?;
+                    write_msg(&mut &**w, &msg).map_err(to_io)?;
                 }
             }
             ServerMsg::Mouse(on) => {

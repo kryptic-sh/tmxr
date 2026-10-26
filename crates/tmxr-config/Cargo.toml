@@ -11,10 +11,10 @@ authors.workspace = true
 readme.workspace = true
 
 [dependencies]
-hjkl-config = "0.42.1"
+hjkl-config = "0.43.4"
 serde = { version = "1.0.229", features = ["derive"] }
 tmxr-command.workspace = true
-toml = "1.1.7"
+toml = "1.1.8"
 
 [lints]
 workspace = true

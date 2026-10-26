@@ -885,6 +885,10 @@ table. What has been verified, and how:
   runs alone and the next full run passed. The failure output was not kept, so
   the cause is unknown: a guess is ConPTY redrawing the pane after
   `cmd /c echo`, moving the line `history-top` lands on.
+- **Two dependencies held below their latest** (2026-10-26, after
+  `cargo upgrade --incompatible allow` and `cargo update`): `psm` and
+  `generic-array` stay at what termwiz 0.23 (through ratatui-termwiz, through
+  ratatui 0.30) pins exactly; they move when termwiz does.
 - **Two one-off failures in a full Linux run** (2026-10-26, Arch, oracle on):
   `tmuxs_pane_menu_works_from_the_prefix_and_the_right_button` (e2e) and
   `keys_match_tmux` (oracle) failed once each in a full

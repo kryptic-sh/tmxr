@@ -13,7 +13,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use interprocess::local_socket::Listener;
-use interprocess::local_socket::traits::{ListenerExt as _, Stream as _};
+use interprocess::local_socket::traits::ListenerExt as _;
 use tmxr_proto::{ClientMsg, ProtoError, ServerMsg, read_msg, write_msg};
 use tracing::{debug, warn};
 
@@ -82,7 +82,9 @@ pub fn accept_loop(
         };
         next_id += 1;
         let id = next_id;
-        let (mut recv, mut send) = stream.split();
+        // Read and written by a thread each, as `&Stream` reads and writes.
+        let recv = Arc::new(stream);
+        let send = Arc::clone(&recv);
         let (tx, rx): (SyncSender<ServerMsg>, Receiver<ServerMsg>) = sync_channel(CLIENT_QUEUE);
         let connected = Event::Connected {
             id,
@@ -99,7 +101,7 @@ pub fn accept_loop(
             .spawn(move || {
                 loop {
                     wait_readable(&recv);
-                    match read_msg::<_, ClientMsg>(&mut recv) {
+                    match read_msg::<_, ClientMsg>(&mut &*recv) {
                         Ok(Some(msg)) => {
                             if ev.send(Event::Msg(id, msg)).is_err() {
                                 break;
@@ -119,7 +121,7 @@ pub fn accept_loop(
                     .name(format!("tmxr-client-{id}-write"))
                     .spawn(move || {
                         for msg in rx {
-                            match write_msg(&mut send, &msg) {
+                            match write_msg(&mut &*send, &msg) {
                                 Ok(()) => {}
                                 // Nothing of a message too large was sent,
                                 // so the connection still works: a reply's
@@ -131,7 +133,7 @@ pub fn accept_loop(
                                         stdout,
                                         stderr,
                                     } = msg
-                                        && write_in_pieces(&mut send, status, &stdout, stderr, n)
+                                        && write_in_pieces(&mut &*send, status, &stdout, stderr, n)
                                             .is_err()
                                     {
                                         break;
@@ -164,11 +166,11 @@ pub fn accept_loop(
 /// so reading straight away woke the reader with every frame; `poll` for
 /// input wakes only for input. Verified on Linux only.
 #[cfg(unix)]
-fn wait_readable(recv: &interprocess::local_socket::RecvHalf) {
+fn wait_readable(recv: &interprocess::local_socket::Stream) {
     use std::os::fd::{AsFd as _, AsRawFd as _};
-    let interprocess::local_socket::RecvHalf::UdSocket(half) = recv;
+    let interprocess::local_socket::Stream::UdSocket(socket) = recv;
     let mut pfd = libc::pollfd {
-        fd: half.as_fd().as_raw_fd(),
+        fd: socket.as_fd().as_raw_fd(),
         events: libc::POLLIN,
         revents: 0,
     };
@@ -185,7 +187,7 @@ fn wait_readable(recv: &interprocess::local_socket::RecvHalf) {
 /// On Windows the named pipe's read waits by itself; whether it wakes
 /// for frames sent the other way was not measured.
 #[cfg(windows)]
-fn wait_readable(_: &interprocess::local_socket::RecvHalf) {}
+fn wait_readable(_: &interprocess::local_socket::Stream) {}
 
 /// A reply too large for one frame (`size` bytes): its output in pieces
 /// the client writes as they come, then the reply without it; if that is
