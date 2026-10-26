@@ -84,9 +84,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with the defaults instead. A file that is not TOML still gives the defaults.
   `source-file` of a `.toml` likewise applies its good settings and names the
   bad ones.
-- **tmxr is no longer published to crates.io**: it builds against forks of
-  crossterm and vt100 that a published crate cannot take, so `tmxr-cli` on
-  crates.io stays at 0.9.0. Install from a release or package, or with
+- **tmxr is no longer published to crates.io**: it builds against a fork of
+  crossterm that a published crate cannot take, so `tmxr-cli` on crates.io stays
+  at 0.9.0. Install from a release or package, or with
   `cargo install --locked --git https://github.com/kryptic-sh/tmxr tmxr-cli`.
 
 ### Fixed
