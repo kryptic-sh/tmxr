@@ -138,12 +138,14 @@ table. What has been verified, and how:
   tty event of a poll's batch, so a SIGWINCH ready in the same wakeup as a key
   was never seen, and it stopped reading once a read that filled its 1024-byte
   buffer gave an event, so the rest of a burst waited for the next key (now read
-  on while `FIONREAD` says bytes wait). Also on that branch: upstream's fix for
-  an unknown finished `CSI ?` report read as incomplete, which swallowed every
-  later key (crossterm-rs/crossterm#1106, cherry-picked), and the terminal's
-  color-scheme report read as `Event::ColorScheme`, which upstream drops (not
-  offered upstream yet; it adds a variant to `Event`). tmxr builds against all
-  of them on 0.29.0 (branch `alt-escape-0.29`, pinned by `rev` in the root
+  on while `FIONREAD` says bytes wait, a read at a time, so `try_read` hands
+  back what it parsed and keeps its timeout under sustained input, as #1155's
+  review asked; 2026-10-26). Also on that branch: upstream's fix for an unknown
+  finished `CSI ?` report read as incomplete, which swallowed every later key
+  (crossterm-rs/crossterm#1106, cherry-picked), and the terminal's color-scheme
+  report read as `Event::ColorScheme`, which upstream drops (not offered
+  upstream yet; it adds a variant to `Event`). tmxr builds against all of them
+  on 0.29.0 (branch `alt-escape-0.29`, pinned by `rev` in the root
   `Cargo.toml`'s `[patch.crates-io]`, and allowed in `deny.toml`); each
   event-source fix has an e2e test that fails without it (run on Linux)
   (`a_resize_and_a_key_arriving_together_both_reach_the_server`,

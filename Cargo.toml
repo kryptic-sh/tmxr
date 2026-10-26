@@ -40,7 +40,9 @@ strip = true
 
 # crossterm 0.29.0 with Alt+Esc parsed on Unix (crossterm-rs/crossterm#1143),
 # a SIGWINCH that comes with input kept, an unknown CSI ? report no longer
-# swallowing later input (crossterm-rs/crossterm#1106) and the terminal's
-# color-scheme reports read; drop once a crossterm release carries them all.
+# swallowing later input (crossterm-rs/crossterm#1106), a burst longer than
+# one read delivered whole and a read at a time (crossterm-rs/crossterm#1155)
+# and the terminal's color-scheme reports read; drop once a crossterm release
+# carries them all.
 [patch.crates-io]
-crossterm = { git = "https://github.com/kryptic-sh/crossterm", rev = "ef87b584d18ea0190ee2fc2f821c71c0324f4947" }
+crossterm = { git = "https://github.com/kryptic-sh/crossterm", rev = "03b39a0b9e3e3215e8d66e136ecbe9103cc3bdef" }

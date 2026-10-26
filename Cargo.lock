@@ -467,7 +467,7 @@ checksum = "a31eee39dddec8330830986fcd7625edb5a24ec90ea038215273bbc3adb08ac6"
 [[package]]
 name = "crossterm"
 version = "0.29.0"
-source = "git+https://github.com/kryptic-sh/crossterm?rev=ef87b584d18ea0190ee2fc2f821c71c0324f4947#ef87b584d18ea0190ee2fc2f821c71c0324f4947"
+source = "git+https://github.com/kryptic-sh/crossterm?rev=03b39a0b9e3e3215e8d66e136ecbe9103cc3bdef#03b39a0b9e3e3215e8d66e136ecbe9103cc3bdef"
 dependencies = [
  "bitflags 2.13.2",
  "crossterm_winapi",
