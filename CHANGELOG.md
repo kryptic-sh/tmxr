@@ -91,6 +91,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The client keeps up with input that does not stop** (on Linux and macOS): a
+  burst longer than one read is read a buffer at a time, its keys handed on as
+  they are parsed, where the client's reader parsed all of it first, waiting
+  past its timeout and holding the keys back.
+
 - **A program's full reset (`ESC c`) no longer stops its pane rewrapping** on a
   width change; a full reset now also stops focus reports, as tmux's does.
 - **A program's `ESC 7` cursor survives its use of the alternate screen**:
