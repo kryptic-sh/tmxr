@@ -118,6 +118,9 @@ fn hello() -> Hello {
             term: std::env::var("TERM").unwrap_or_default(),
             job_control: cfg!(unix),
             tty: terminal::tty_name(),
+            // Read through crossterm's Unix parser; the Windows console hands
+            // over key records instead.
+            colour_answers: cfg!(unix),
         });
     Hello {
         protocol: PROTOCOL_VERSION,

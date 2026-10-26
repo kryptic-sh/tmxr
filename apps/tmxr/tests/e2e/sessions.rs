@@ -1649,7 +1649,8 @@ fn the_terminals_color_scheme_is_the_clients_theme() {
 
 /// A program asking for the default colours, where the window's style leaves
 /// the terminal's own, gets those of the client's terminal, which the client
-/// asked at attach, and its color scheme from that background, as tmux's.
+/// asked at attach, and its color scheme from that background, as tmux's;
+/// with its other answers, in the order it asked.
 #[cfg(unix)]
 #[test]
 fn colour_queries_get_the_client_terminals_colours() {
@@ -1659,7 +1660,7 @@ fn colour_queries_get_the_client_terminals_colours() {
         "-d",
         "-s",
         "tc",
-        r"stty raw -echo; head -c 1 >/dev/null; printf '\033]11;?\007\033]10;?\033\\\033[?996n'; exec cat -v",
+        r"stty raw -echo; head -c 1 >/dev/null; printf '\033]11;?\007\033[c\033]10;?\033\\\033[?996n'; exec cat -v",
     ]);
     let s = t.attach_sync(&["attach", "-t", "tc"]);
     s.wait_for("the status line", |text| text.contains("tc"));
@@ -1667,8 +1668,84 @@ fn colour_queries_get_the_client_terminals_colours() {
     s.wait_for("the answers", |text| {
         // The answers wrap past the screen's width.
         text.replace('\n', "")
-            .contains("^[]11;rgb:1a1a/1b1b/2626^G^[]10;rgb:c0c0/caca/f5f5^[\\^[[?997;1n")
+            .contains("^[]11;rgb:1a1a/1b1b/2626^G^[[?62;22c^[]10;rgb:c0c0/caca/f5f5^[\\^[[?997;1n")
     });
+}
+
+/// When its terminal changes theme, a client's terminal is asked for its
+/// colours again, as tmux's server_client_report_theme asks, and a program
+/// asking then gets the new ones.
+#[cfg(unix)]
+#[test]
+fn a_theme_change_asks_the_terminals_colours_again() {
+    let t = Tmxr::new("rethemed");
+    t.run(&[
+        "new-session",
+        "-d",
+        "-s",
+        "rt",
+        r"stty raw -echo; head -c 1 >/dev/null; printf '\033]11;?\007'; exec cat -v",
+    ]);
+    let s = t.attach_sync(&["attach", "-t", "rt"]);
+    s.wait_for("the status line", |text| text.contains("rt"));
+    // The client's own question at attach.
+    let asked = |raw: &str| raw.matches("\x1b]11;?").count();
+    let before = asked(&s.raw_text());
+    s.turn_light();
+    s.wait_for_raw("the colours asked again", |raw| asked(raw) > before);
+    // Typed after the terminal's answer, so read after it.
+    s.send(b"x");
+    s.wait_for("the light background", |text| {
+        text.contains("^[]11;rgb:e1e1/e2e2/e7e7^G")
+    });
+}
+
+/// A program asking for a palette entry it has not set gets the client's
+/// terminal's, which tmxr asks it for, as tmux's input_add_request; its
+/// other answers wait behind that one, so it reads them in the order it
+/// asked.
+#[cfg(unix)]
+#[test]
+fn an_unset_palette_entry_is_asked_of_the_clients_terminal() {
+    let t = Tmxr::new("palette-ask");
+    t.run(&[
+        "new-session",
+        "-d",
+        "-s",
+        "pa",
+        r"stty raw -echo; head -c 1 >/dev/null; printf '\033]4;1;?\007\033[c'; exec cat -v",
+    ]);
+    let s = t.attach_sync(&["attach", "-t", "pa"]);
+    s.wait_for("the status line", |text| text.contains("pa"));
+    t.run(&["send-keys", "-t", "pa", "x"]);
+    s.wait_for_raw("the terminal asked", |raw| raw.contains("\x1b]4;1;?\x1b\\"));
+    assert!(!s.text().contains("^[[?62;22c"), "DA1 went ahead of it");
+    s.send(b"\x1b]4;1;rgb:cdcd/0000/0000\x1b\\");
+    s.wait_for("the answers in order", |text| {
+        text.contains("^[]4;1;rgb:cdcd/0000/0000^G^[[?62;22c")
+    });
+}
+
+/// A palette entry the client's terminal does not answer for goes
+/// unanswered, and the program's other answers follow once tmxr stops
+/// waiting, as tmux's.
+#[cfg(unix)]
+#[test]
+fn an_unanswered_palette_request_lets_the_other_answers_go() {
+    let t = Tmxr::new("palette-silent");
+    t.run(&[
+        "new-session",
+        "-d",
+        "-s",
+        "ps",
+        r"stty raw -echo; head -c 1 >/dev/null; printf '\033]4;1;?\007\033[c'; exec cat -v",
+    ]);
+    let s = t.attach_sync(&["attach", "-t", "ps"]);
+    s.wait_for("the status line", |text| text.contains("ps"));
+    t.run(&["send-keys", "-t", "ps", "x"]);
+    s.wait_for_raw("the terminal asked", |raw| raw.contains("\x1b]4;1;?\x1b\\"));
+    s.wait_for("DA1's answer alone", |text| text.contains("^[[?62;22c"));
+    assert!(!s.text().contains("^[]4;"), "{}", s.text());
 }
 
 #[cfg(unix)]

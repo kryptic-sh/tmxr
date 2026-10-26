@@ -51,9 +51,9 @@ pub struct Hooks {
     extended_keys: ExtendedKeys,
     /// kitty keyboard flags stack (`CSI > f u` pushes, `CSI < n u` pops).
     kitty_flags: Vec<u8>,
-    /// Times the program asked for the color scheme (`CSI ? 996 n`) since
-    /// they were last taken, for the server to answer.
-    theme_queries: usize,
+    /// The queries the server answers, from the last [`Emulator::process`],
+    /// each with where in `replies` its answer goes.
+    queries: Vec<(usize, Query)>,
     /// The cursor's colour as RGB (OSC 12; OSC 112 resets it), which a
     /// full reset keeps, as tmux's.
     cursor_colour: Option<u32>,
@@ -104,7 +104,9 @@ impl vt1k::Callbacks for Hooks {
             // DA2: tmux reports terminal type 84.
             (Some(b'>'), 'c') => self.replies.extend(b"\x1b[>84;0;0c"),
             // DSR: status and cursor position (1-based).
-            (Some(b'?'), 'n') if p(0) == Some(996) => self.theme_queries += 1,
+            (Some(b'?'), 'n') if p(0) == Some(996) => {
+                self.queries.push((self.replies.len(), Query::Theme));
+            }
             (None, 'n') => match p(0) {
                 Some(5) => self.replies.extend(b"\x1b[0n"),
                 Some(6) => {
@@ -257,6 +259,20 @@ fn bundled_conpty() -> bool {
 /// the screen cleared with the cursor home.
 const RESET: &[u8] = b"\x18\x1b[0m\x1b[r\x1b[?1l\x1b[?6l\x1b[4l\x1b[?1000l\x1b[?1005l\x1b[?1006l\x1b[?1004l\x1b[?12l\x1b[?2004l\x1b>\x1b[?25h\x1b[34h\x1b[?7h\x1b[H\x1b[2J";
 
+/// A query a program made that the server answers ([`Emulator::take_queries`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Query {
+    /// `OSC 10`, `11` or `12` `; ?` (`which`): the default foreground,
+    /// background or the cursor's colour; `bel` where it ended in a BEL, as
+    /// its answer must.
+    Colour { which: u8, bel: bool },
+    /// `CSI ? 996 n`: the color scheme.
+    Theme,
+    /// `OSC 4 ; index ; ?` for an entry the program has not set: the outer
+    /// terminal has it.
+    Palette { index: u8, bel: bool },
+}
+
 /// One pane's emulator.
 pub struct Emulator {
     parser: vt1k::Parser<Hooks>,
@@ -271,10 +287,6 @@ pub struct Emulator {
     split: bool,
     /// The full resets and colour OSCs, split from the program's output.
     modes: ModeSplitter,
-    /// The colours the program asked for (`OSC 10` / `11` / `12` `; ?`),
-    /// in order, each with whether it ended in a BEL, for the server to
-    /// answer: the answers depend on options and clients.
-    colour_queries: Vec<(u8, bool)>,
     /// The 256 colours' entries the program set (OSC 4).
     palette: crate::palette::Palette,
     /// The history limit, for a fresh parser.
@@ -306,7 +318,6 @@ impl Emulator {
             rename: None,
             split: passthrough_supported(),
             modes: ModeSplitter::default(),
-            colour_queries: Vec::new(),
             palette: crate::palette::Palette::default(),
             scrollback,
             history: 0,
@@ -473,7 +484,12 @@ impl Emulator {
                     self.palette.clear();
                     self.parser.process(b"\x1bc");
                 }
-                Piece::ColourQuery { which, bel } => self.colour_queries.push((which, bel)),
+                Piece::ColourQuery { which, bel } => {
+                    let hooks = self.parser.callbacks_mut();
+                    hooks
+                        .queries
+                        .push((hooks.replies.len(), Query::Colour { which, bel }));
+                }
                 Piece::Palette { osc, body, bel } => self.palette_osc(osc, &body, bel),
             }
         }
@@ -499,6 +515,8 @@ impl Emulator {
     /// Feed program output. Returns bytes that must be written back to the
     /// program (answers to queries such as cursor-position reports).
     pub fn process(&mut self, bytes: &[u8]) -> Vec<u8> {
+        // Their places are in the replies the last call returned.
+        self.parser.callbacks_mut().queries.clear();
         if self.split {
             let split = self.dcs.split(bytes);
             // Each payload with the cursor where it was printed: the text
@@ -615,8 +633,15 @@ impl Emulator {
         match osc {
             4 => {
                 let end = if bel { "\x07" } else { "\x1b\\" };
-                let replies = &mut self.parser.callbacks_mut().replies;
-                self.palette.osc_4(&body, end, replies);
+                let hooks = self.parser.callbacks_mut();
+                let mut unset = Vec::new();
+                self.palette
+                    .osc_4(&body, end, &mut hooks.replies, &mut unset);
+                hooks.queries.extend(
+                    unset
+                        .into_iter()
+                        .map(|(index, at)| (at, Query::Palette { index, bel })),
+                );
             }
             _ if body.is_empty() => self.palette.clear(),
             _ => self.palette.osc_104(&body),
@@ -628,16 +653,12 @@ impl Emulator {
         &self.palette
     }
 
-    /// How many times the program asked for the color scheme
-    /// (`CSI ? 996 n`) since the last call.
-    pub fn take_theme_queries(&mut self) -> usize {
-        std::mem::take(&mut self.parser.callbacks_mut().theme_queries)
-    }
-
-    /// The colour queries since the last call (`which` of 10, 11 or 12, and
-    /// whether each ended in a BEL), in order.
-    pub fn take_colour_queries(&mut self) -> Vec<(u8, bool)> {
-        std::mem::take(&mut self.colour_queries)
+    /// The queries the program made in the last [`Emulator::process`] that
+    /// the server answers, as their answers depend on options and clients,
+    /// in order, each with where in the replies that call returned its
+    /// answer goes: before the bytes from there on.
+    pub fn take_queries(&mut self) -> Vec<(usize, Query)> {
+        std::mem::take(&mut self.parser.callbacks_mut().queries)
     }
 
     /// Where the cursor was (row, column) when the program last switched to
@@ -1189,5 +1210,69 @@ mod tests {
         assert!(e.focus_reports());
         e.process(b"\x1b[?1004l");
         assert!(!e.focus_reports());
+    }
+
+    /// The queries the server answers are named in order, each with where
+    /// its answer falls among the replies the emulator gives itself.
+    #[test]
+    fn queries_for_the_server_keep_their_place_among_the_replies() {
+        let mut e = Emulator::new(4, 20, 0);
+        let replies = e.process(b"\x1b]11;?\x07\x1b[c\x1b[?996n\x1b]12;?\x1b\\");
+        let da1 = b"\x1b[?62;22c".len();
+        assert_eq!(replies.len(), da1);
+        assert_eq!(
+            e.take_queries(),
+            [
+                (
+                    0,
+                    Query::Colour {
+                        which: 11,
+                        bel: true
+                    }
+                ),
+                (da1, Query::Theme),
+                (
+                    da1,
+                    Query::Colour {
+                        which: 12,
+                        bel: false
+                    }
+                ),
+            ]
+        );
+        assert_eq!(e.take_queries(), []);
+    }
+
+    /// A palette entry asked for and not set is named with where its
+    /// answer falls among the other replies, for the outer terminal.
+    #[test]
+    fn an_unset_palette_entry_asked_for_is_named_in_place() {
+        let mut e = Emulator::new(4, 20, 0);
+        let replies = e.process(b"\x1b]4;1;#102030\x07\x1b[5n\x1b]4;1;?;3;?\x07\x1b[c");
+        let status = b"\x1b[0n".len();
+        let answer = b"\x1b]4;1;rgb:1010/2020/3030\x07".len();
+        assert_eq!(&replies[status + answer..], b"\x1b[?62;22c");
+        assert_eq!(
+            e.take_queries(),
+            [(
+                status + answer,
+                Query::Palette {
+                    index: 3,
+                    bel: true
+                }
+            )]
+        );
+        // The next output's places are in its own replies.
+        e.process(b"\x1b[c\x1b]4;3;?\x1b\\");
+        assert_eq!(
+            e.take_queries(),
+            [(
+                b"\x1b[?62;22c".len(),
+                Query::Palette {
+                    index: 3,
+                    bel: false
+                }
+            )]
+        );
     }
 }

@@ -45,4 +45,4 @@ strip = true
 # and the terminal's color-scheme reports read; drop once a crossterm release
 # carries them all.
 [patch.crates-io]
-crossterm = { git = "https://github.com/kryptic-sh/crossterm", rev = "03b39a0b9e3e3215e8d66e136ecbe9103cc3bdef" }
+crossterm = { git = "https://github.com/kryptic-sh/crossterm", rev = "6957a389bc07802bb2345fccf29714740e58bbe9" }

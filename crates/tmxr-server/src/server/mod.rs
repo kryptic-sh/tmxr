@@ -86,6 +86,9 @@ pub struct Client {
     pub terminal_colours: (Option<u32>, Option<u32>),
     /// Its terminal's color scheme, as last reported (`#{client_theme}`).
     pub theme: Option<crossterm::event::ColorScheme>,
+    /// When its terminal was last asked for its colours, as tmux's
+    /// `last_requests`.
+    pub colours_asked: Option<Instant>,
 }
 
 impl Client {
@@ -287,6 +290,8 @@ pub struct Server {
     pub format_jobs: std::sync::Mutex<crate::format_jobs::FormatJobs>,
     /// `copy-command-line` under way, waiting for its pane to settle.
     pub copy_line: Option<crate::copyline::CopyLine>,
+    /// Palette entries asked of clients' terminals for panes.
+    pub colour_requests: crate::requests::Requests,
     /// Copies to the local desktop's clipboard.
     pub clipboard: crate::clipboard::Local,
     /// The user running the server, always admitted.
@@ -426,6 +431,7 @@ impl Server {
             groups: Vec::new(),
             format_jobs: std::sync::Mutex::default(),
             copy_line: None,
+            colour_requests: crate::requests::Requests::default(),
             clipboard: crate::clipboard::Local::default(),
             owner: String::new(),
             writers: crate::conn::Writers::default(),
@@ -465,6 +471,7 @@ impl Server {
         let mut due: Vec<Instant> = crate::mouse::next_double_click(self)
             .into_iter()
             .chain(self.copy_line.map(|c| c.due()))
+            .chain(self.colour_requests.next_due())
             .chain(self.next_dead_line())
             .chain(self.next_escape())
             .collect();
@@ -651,6 +658,7 @@ impl Server {
                         created: std::time::SystemTime::now(),
                         terminal_colours: (None, None),
                         theme: None,
+                        colours_asked: None,
                     },
                 );
             }
@@ -789,6 +797,7 @@ impl Server {
             ClientMsg::TerminalColours { fg, bg } => {
                 if let Some(c) = self.clients.get_mut(&id) {
                     c.terminal_colours = (fg, bg);
+                    c.colours_asked = Some(Instant::now());
                 }
             }
             ClientMsg::Detach => self.detach(id, "detached"),
@@ -1038,15 +1047,7 @@ impl Server {
             return;
         };
         let seq = format!("\x1b]52;c;{}\x07", crate::util::base64(text.as_bytes()));
-        if let Some(t) = self
-            .clients
-            .get_mut(&id)
-            .and_then(|c| c.att.as_mut())
-            .and_then(|a| a.term.as_mut())
-        {
-            t.backend_mut().push_raw(&seq);
-        }
-        self.mark_client_dirty(id);
+        self.push_to_terminal(id, &seq);
     }
 
     fn forward_osc52(&mut self, b64: &str) {
@@ -1061,15 +1062,7 @@ impl Server {
             .map(|c| c.id)
             .collect();
         for id in ids {
-            if let Some(t) = self
-                .clients
-                .get_mut(&id)
-                .and_then(|c| c.att.as_mut())
-                .and_then(|a| a.term.as_mut())
-            {
-                t.backend_mut().push_raw(&seq);
-            }
-            self.mark_client_dirty(id);
+            self.push_to_terminal(id, &seq);
         }
     }
 
@@ -1176,6 +1169,7 @@ impl Server {
         crate::mouse::fire_double_clicks(self);
         self.flush_escapes();
         self.advance_copy_line();
+        self.expire_colour_requests();
         self.write_due_dead_lines();
         self.mark_away_clients();
         self.lock_idle_clients();

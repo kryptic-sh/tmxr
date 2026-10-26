@@ -6,6 +6,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Breaking
+
+- **The client-server protocol is now 13** (the client sends its terminal's
+  answers to colour queries): after upgrading, a running server must be
+  restarted (`tmxr kill-server`); the client says so if it meets one.
+
+### Added
+
+- **A palette colour a program asks for and has not set is asked of the
+  terminal**, as tmux asks it: a pane's `OSC 4 ; n ; ?` for an entry it never
+  set goes to the terminal of the client on its window that was used last, and
+  the answer is passed on; the program's other answers wait behind it, for up to
+  2 seconds if the terminal never answers. Where no such client can be asked (a
+  Windows client, or none attached), the query goes unanswered as before.
+- **The terminal's colours are asked again when it changes theme**: when a
+  client's terminal reports a switch between light and dark, and on a resize at
+  most every 30 seconds, it is asked for its foreground and background again, as
+  tmux asks, so a program's OSC 10 / 11 query gets the colours it shows now
+  rather than those from attach. Seen in foot 1.28, switched by `SIGUSR2` and
+  `SIGUSR1`.
+
+### Fixed
+
+- **A program's answers come in the order it asked**: answers to OSC 10, 11 and
+  12 colour queries and to `CSI ? 996 n` went after every other answer to the
+  same output, so a program that asks for DA1 last, to know when the terminal
+  has answered, took them as missing.
+
 ## [0.11.0] - 2026-10-26
 
 ### Breaking

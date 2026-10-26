@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use hjkl_layout::{LayoutTree, SplitDir};
-use tmxr_term::{Pty, PtyEvent, SpawnSpec};
+use tmxr_term::{Pty, PtyEvent, Query, SpawnSpec};
 use tracing::debug;
 
 use super::{ChildEnv, Event, Server, SplitSize};
@@ -549,28 +549,51 @@ impl Server {
     /// (window_get_bg_client), and its cursor's colour (the program's, else
     /// `cursor-colour`), each as `rgb:rrrr/gggg/bbbb` ended as its query
     /// was. A colour nothing gives gets no answer.
-    fn colour_answers(&self, pid: PaneId, queries: &[(u8, bool)]) -> Vec<u8> {
-        let mut out = Vec::new();
-        for &(which, bel) in queries {
-            let colour = match which {
-                10 => self.pane_colour(pid, true),
-                11 => self.pane_colour(pid, false),
-                _ => self
-                    .panes
-                    .get(&pid)
-                    .and_then(|p| p.emu.cursor_colour())
-                    .or_else(|| tmxr_command::colour::rgb(&self.pane_options(pid).cursor_colour)),
-            };
-            if let Some(c) = colour {
-                let [_, r, g, b] = c.to_be_bytes();
-                let end = if bel { "\x07" } else { "\x1b\\" };
-                out.extend(
-                    format!("\x1b]{which};rgb:{r:02x}{r:02x}/{g:02x}{g:02x}/{b:02x}{b:02x}{end}")
-                        .into_bytes(),
-                );
+    /// Pane `pid`'s `replies` from its emulator, with the answers to its
+    /// `queries` (from [`tmxr_term::Emulator::take_queries`]) where they
+    /// fall among them, so the program reads them in the order it asked.
+    fn answer_queries(&mut self, pid: PaneId, replies: &[u8], queries: &[(usize, Query)]) {
+        let mut from = 0;
+        for &(at, query) in queries {
+            self.reply_to_pane(pid, replies[from..at].to_vec());
+            from = at;
+            match query {
+                Query::Colour { which, bel } => {
+                    let answer = self.colour_answer(pid, which, bel);
+                    self.reply_to_pane(pid, answer);
+                }
+                Query::Theme => {
+                    let report: &[u8] = match self.pane_theme(pid) {
+                        Some(crossterm::event::ColorScheme::Dark) => b"\x1b[?997;1n",
+                        Some(crossterm::event::ColorScheme::Light) => b"\x1b[?997;2n",
+                        None => b"",
+                    };
+                    self.reply_to_pane(pid, report.to_vec());
+                }
+                Query::Palette { index, bel } => self.ask_palette(pid, index, bel),
             }
         }
-        out
+        self.reply_to_pane(pid, replies[from..].to_vec());
+    }
+
+    /// The answer to pane `pid`'s query for colour `which` (OSC 10, 11 or
+    /// 12), ended by a BEL where `bel`; nothing where it has none.
+    fn colour_answer(&self, pid: PaneId, which: u8, bel: bool) -> Vec<u8> {
+        let colour = match which {
+            10 => self.pane_colour(pid, true),
+            11 => self.pane_colour(pid, false),
+            _ => self
+                .panes
+                .get(&pid)
+                .and_then(|p| p.emu.cursor_colour())
+                .or_else(|| tmxr_command::colour::rgb(&self.pane_options(pid).cursor_colour)),
+        };
+        let Some(c) = colour else {
+            return Vec::new();
+        };
+        let [_, r, g, b] = c.to_be_bytes();
+        let end = if bel { "\x07" } else { "\x1b\\" };
+        format!("\x1b]{which};rgb:{r:02x}{r:02x}/{g:02x}{g:02x}/{b:02x}{b:02x}{end}").into_bytes()
     }
 
     /// Pane `pid`'s foreground (`fg`) or background as RGB, as tmux's
@@ -597,7 +620,7 @@ impl Server {
     }
 
     /// The attached clients whose session holds pane `pid`'s window.
-    fn clients_on(&self, pid: PaneId) -> impl Iterator<Item = &super::Client> {
+    pub(crate) fn clients_on(&self, pid: PaneId) -> impl Iterator<Item = &super::Client> {
         let window = self.panes.get(&pid).map(|p| p.window);
         self.clients.values().filter(move |c| {
             c.att
@@ -651,8 +674,7 @@ impl Server {
                 let alternate = p.emu.screen().alternate_screen();
                 let title = p.emu.title().map(str::to_owned);
                 let replies = p.emu.process(&bytes);
-                let queries = p.emu.take_colour_queries();
-                let theme_queries = p.emu.take_theme_queries();
+                let queries = p.emu.take_queries();
                 // Output copy mode does not show, as tmux's
                 // PANE_UNSEENCHANGES.
                 if let Some(cm) = p.copy.as_mut() {
@@ -667,32 +689,15 @@ impl Server {
                         None => p.emu.clear_title(),
                     }
                 }
-                if !replies.is_empty() {
-                    let _ = p.pty.write(&replies);
-                }
                 // A scrollbar hides on the alternate screen, as tmux's.
                 if p.emu.screen().alternate_screen() != alternate {
                     self.refit_scrollbar(pid);
                 }
                 self.copy_line_output(pid);
-                let mut answers = self.colour_answers(pid, &queries);
-                if theme_queries > 0
-                    && let Some(scheme) = self.pane_theme(pid)
-                {
-                    let report = match scheme {
-                        crossterm::event::ColorScheme::Dark => b"\x1b[?997;1n",
-                        crossterm::event::ColorScheme::Light => b"\x1b[?997;2n",
-                    };
-                    for _ in 0..theme_queries {
-                        answers.extend_from_slice(report);
-                    }
-                }
+                self.answer_queries(pid, &replies, &queries);
                 let Some(p) = self.panes.get_mut(&pid) else {
                     return;
                 };
-                if !answers.is_empty() {
-                    let _ = p.pty.write(&answers);
-                }
                 if let Some(pipe) = &p.pipe {
                     pipe.send(&bytes);
                 }

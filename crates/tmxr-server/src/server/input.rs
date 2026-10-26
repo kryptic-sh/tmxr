@@ -63,6 +63,11 @@ impl Server {
     }
 
     fn input(&mut self, id: ClientId, ev: TermEvent) {
+        // The terminal answering a query is not the client's activity.
+        if let TermEvent::TerminalColor(colour) = ev {
+            self.terminal_colour(id, colour);
+            return;
+        }
         let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
             return;
         };
@@ -99,6 +104,8 @@ impl Server {
                     crossterm::event::ColorScheme::Dark => "client-dark-theme",
                     crossterm::event::ColorScheme::Light => "client-light-theme",
                 };
+                // Its colours have likely changed with it.
+                self.ask_terminal_colours(id, true);
                 let ctx = crate::cmds::Ctx {
                     client: Some(id),
                     ..crate::cmds::Ctx::default()
@@ -132,8 +139,10 @@ impl Server {
                     }
                 }
                 self.size_session(session);
+                self.ask_terminal_colours(id, false);
             }
             TermEvent::Mouse(m) => crate::mouse::handle(self, id, m),
+            TermEvent::TerminalColor(_) => unreachable!("handled above"),
             TermEvent::FocusGained | TermEvent::FocusLost => {
                 let gained = matches!(ev, TermEvent::FocusGained);
                 if let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {

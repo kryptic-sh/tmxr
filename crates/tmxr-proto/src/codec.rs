@@ -78,6 +78,7 @@ mod tests {
                     term: "xterm-256color".into(),
                     job_control: true,
                     tty: "/dev/pts/3".into(),
+                    colour_answers: true,
                 }),
             }),
             ClientMsg::Command(vec!["split-window".into(), "-h".into()]),
@@ -85,6 +86,10 @@ mod tests {
                 Event::Key(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::CONTROL)),
                 Event::Resize(120, 40),
                 Event::ColorScheme(crossterm::event::ColorScheme::Light),
+                Event::TerminalColor(crossterm::event::TerminalColor {
+                    slot: crossterm::event::ColorSlot::Palette(1),
+                    rgb: (0xcdcd, 0, 0),
+                }),
             ]),
             ClientMsg::TerminalColours {
                 fg: Some(0xc0caf5),
@@ -164,7 +169,7 @@ mod tests {
         for m in sample_server() {
             write_msg(&mut buf, &m).unwrap();
         }
-        assert_eq!(PROTOCOL_VERSION, 12, "update the golden digest below too");
+        assert_eq!(PROTOCOL_VERSION, 13, "update the golden digest below too");
         assert_eq!(
             fnv1a(&buf),
             GOLDEN,
@@ -172,7 +177,7 @@ mod tests {
         );
     }
 
-    const GOLDEN: u64 = 1_407_282_350_292_952_652;
+    const GOLDEN: u64 = 13_649_262_094_318_095_819;
 
     /// FNV-1a 64-bit (http://www.isthe.com/chongo/tech/comp/fnv/), used only to
     /// pin the golden bytes in a readable constant.

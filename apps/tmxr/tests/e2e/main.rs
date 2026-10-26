@@ -278,11 +278,13 @@ impl Tmxr {
         let emu = Arc::new(Mutex::new(Emulator::new(ROWS, COLS, 0)));
         let raw = Arc::new(Mutex::new(Vec::new()));
         let paused = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let light = Arc::new(std::sync::atomic::AtomicBool::new(false));
         {
             let emu = Arc::clone(&emu);
             let writer = Arc::clone(&writer);
             let raw = Arc::clone(&raw);
             let paused = Arc::clone(&paused);
+            let light = Arc::clone(&light);
             std::thread::spawn(move || {
                 let mut buf = [0u8; 8192];
                 loop {
@@ -295,14 +297,18 @@ impl Tmxr {
                     if n == 0 {
                         break;
                     }
-                    raw.lock().unwrap().extend_from_slice(&buf[..n]);
                     let asked = |query: &[u8]| buf[..n].windows(query.len()).any(|w| w == query);
                     if sync && asked(SYNC_QUERY) {
                         let _ = writer.lock().unwrap().write_all(b"\x1b[?2026;2$y");
                     }
+                    let (fg, bg) = if light.load(std::sync::atomic::Ordering::Relaxed) {
+                        (LIGHT_FG, LIGHT_BG)
+                    } else {
+                        (TERMINAL_FG, TERMINAL_BG)
+                    };
                     for (query, colour) in [
-                        (&b"\x1b]10;?"[..], TERMINAL_FG),
-                        (&b"\x1b]11;?"[..], TERMINAL_BG),
+                        (&b"\x1b]10;?"[..], fg),
+                        (&b"\x1b]11;?"[..], bg),
                         (&b"\x1b[?996n"[..], TERMINAL_THEME),
                     ] {
                         if sync && asked(query) {
@@ -315,6 +321,9 @@ impl Tmxr {
                     if !replies.is_empty() {
                         let _ = writer.lock().unwrap().write_all(&replies);
                     }
+                    // Logged once answered: a query seen in the log has
+                    // its answer written, ahead of anything sent after.
+                    raw.lock().unwrap().extend_from_slice(&buf[..n]);
                 }
             });
         }
@@ -325,6 +334,7 @@ impl Tmxr {
             raw,
             child,
             paused,
+            light,
         }
     }
 }
@@ -359,6 +369,8 @@ struct Screen {
     child: Box<dyn portable_pty::Child + Send + Sync>,
     /// While set, the terminal reads nothing, as a stalled one would.
     paused: Arc<std::sync::atomic::AtomicBool>,
+    /// [`Tmxr::attach_sync`]'s terminal answers with its light colours.
+    light: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Screen {
@@ -377,6 +389,14 @@ impl Screen {
 
     fn text(&self) -> String {
         self.emu.lock().unwrap().screen().contents()
+    }
+
+    /// Turn [`Tmxr::attach_sync`]'s terminal light, as foot on `SIGUSR2`:
+    /// it answers OSC 10 and 11 with [`LIGHT_FG`] and [`LIGHT_BG`] from
+    /// now on, and reports the change, as mode 2031 asks.
+    fn turn_light(&self) {
+        self.light.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.send(b"\x1b[?997;2n");
     }
 
     /// Stop reading the terminal's output (`true`), or start again.
@@ -509,6 +529,15 @@ impl Screen {
     fn raw_text(&self) -> String {
         String::from_utf8_lossy(&self.raw.lock().unwrap()).into_owned()
     }
+
+    /// Wait until what the terminal was sent satisfies `pred`.
+    fn wait_for_raw(&self, what: &str, pred: impl Fn(&str) -> bool) {
+        let deadline = Instant::now() + TIMEOUT;
+        while !pred(&self.raw_text()) {
+            assert!(Instant::now() < deadline, "timed out waiting for {what}");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
 }
 
 const PREFIX: &[u8] = b"\x02";
@@ -539,6 +568,10 @@ const SYNC_QUERY: &[u8] = b"\x1b[?2026$p";
 /// 11 with, as Alacritty does (its colours, ended as asked).
 const TERMINAL_FG: &[u8] = b"\x1b]10;rgb:c0c0/caca/f5f5\x1b\\";
 const TERMINAL_BG: &[u8] = b"\x1b]11;rgb:1a1a/1b1b/2626\x1b\\";
+
+/// Its colours once [`Screen::turn_light`] has made it light.
+const LIGHT_FG: &[u8] = b"\x1b]10;rgb:3434/3b3b/5858\x1b\\";
+const LIGHT_BG: &[u8] = b"\x1b]11;rgb:e1e1/e2e2/e7e7\x1b\\";
 
 /// What [`Tmxr::attach_sync`]'s terminal answers `CSI ? 996 n` with: a dark
 /// color scheme, as foot does.

@@ -143,12 +143,15 @@ table. What has been verified, and how:
   review asked; 2026-10-26). Also on that branch: upstream's fix for an unknown
   finished `CSI ?` report read as incomplete, which swallowed every later key
   (crossterm-rs/crossterm#1106, cherry-picked), and the terminal's color-scheme
-  report read as `Event::ColorScheme`, which upstream drops (not offered
-  upstream yet; it adds a variant to `Event`). tmxr builds against all of them
-  on 0.29.0 (branch `alt-escape-0.29`, pinned by `rev` in the root
-  `Cargo.toml`'s `[patch.crates-io]`, and allowed in `deny.toml`); each
-  event-source fix has an e2e test that fails without it (run on Linux)
-  (`a_resize_and_a_key_arriving_together_both_reach_the_server`,
+  report read as `Event::ColorScheme`, which upstream drops, and the terminal's
+  answers to OSC 10 / 11 / 12 / 4 colour queries read as `Event::TerminalColor`
+  (`rgb:` answers only), where upstream types them as Alt+] and keys (neither
+  offered upstream yet; each adds a variant to `Event`; keys after an Alt+] in
+  the same read are dropped, as the parser cannot hand back bytes it read on).
+  tmxr builds against all of them on 0.29.0 (branch `alt-escape-0.29`, pinned by
+  `rev` in the root `Cargo.toml`'s `[patch.crates-io]`, and allowed in
+  `deny.toml`); each event-source fix has an e2e test that fails without it (run
+  on Linux) (`a_resize_and_a_key_arriving_together_both_reach_the_server`,
   `keys_typed_faster_than_the_client_reads_all_arrive`). The owner's report of
   the first in use (2026-10-20, Hyprland with Alacritty: closing the window
   beside the client's grew it, and tmxr kept the old size) was reproduced
@@ -683,8 +686,10 @@ table. What has been verified, and how:
     (`cursor_colour_falls_back_to_the_option`); a program's OSC 10, 11 and 12
     queries are answered as tmux's, ended as each query was
     (`modes::Piece::ColourQuery`, split from the output as vt100 does not say
-    how an OSC ended; `Server::colour_answers`), from `window-style` /
-    `window-active-style` and the cursor's colour
+    how an OSC ended; `Server::colour_answer`), in their place among the pane's
+    other answers (`Emulator::take_queries`, `Server::answer_queries`, since
+    2026-10-26: they went after all of them, so DA1 asked last came first), from
+    `window-style` / `window-active-style` and the cursor's colour
     (`colour_queries_are_answered_from_the_window_style`), and where those leave
     the terminal's own colour, the client terminal's, which the client asks with
     OSC 10 / 11 beside its DECRQM probe at attach (`ClientMsg::TerminalColours`;
@@ -692,14 +697,27 @@ table. What has been verified, and how:
     2026-10-22 a pane read back Alacritty's own colours, and Neovim (`-u NONE`)
     in tmxr in an Alacritty with a light background set `background=light`,
     where under tmxr 0.9.0 it guessed `dark`; Alacritty answers OSC 10 and 11,
-    in the query's terminator, but not OSC 12). Unlike tmux, the client asks
-    once, at its first attach, where tmux asks again on a theme change (mode
-    2031, which Alacritty lacks), and the Windows client does not ask; A
-    program's OSC 4 palette entries (`tmxr_term::palette`) are drawn as it set
-    them and its queries for them answered
-    (`palette_entries_a_program_sets_are_answered`,
-    `a_programs_palette_colour_is_drawn`), but a query for an entry not set gets
-    no answer, where tmux asks the client's terminal and passes its answer on.
+    in the query's terminator, but not OSC 12). The server asks the terminal
+    again (`Server::ask_terminal_colours`) when it reports a theme change and,
+    at most every `ASK_COLOURS_EVERY`, on a resize, as tmux's
+    tty_repeat_requests; the answers come back through the patched crossterm's
+    `Event::TerminalColor` (`a_theme_change_asks_the_terminals_colours_again`;
+    in foot 1.28 on 2026-10-26, given distinct `colors-dark` / `colors-light`, a
+    pane's OSC 11 read the light background after `SIGUSR2` and the dark one
+    after `SIGUSR1`). The resize path has no test, as one would wait out
+    `ASK_COLOURS_EVERY`. The Windows client is never asked
+    (`TerminalInfo::colour_answers` is false: its console hands over key
+    records, so an answer would be typed into a pane). A program's OSC 4 palette
+    entries (`tmxr_term::palette`) are drawn as it set them and its queries for
+    them answered (`palette_entries_a_program_sets_are_answered`,
+    `a_programs_palette_colour_is_drawn`); a query for an entry not set is asked
+    of the terminal of the client on its window with the latest input and its
+    answer passed on, the pane's later answers held behind it until then or
+    `requests::TIMEOUT`, as tmux's input_add_request (`crate::requests`;
+    `an_unset_palette_entry_is_asked_of_the_clients_terminal`,
+    `an_unanswered_palette_request_lets_the_other_answers_go`; in foot 1.28 a
+    pane read foot's entry 1 for each theme, ahead of DA1's answer). Unlike
+    tmux, a client that goes away does not cancel its requests: they time out.
     tmux's `pane-colours` (a default palette under the program's) is missing:
     adding it needs `tmxr_config::Array` read by index, a config-file form for a
     sparse array, `with_palette` falling back to it, and the emulator told it,
@@ -811,24 +829,22 @@ table. What has been verified, and how:
     (`the_terminals_color_scheme_is_the_clients_theme`; in foot 1.28 on
     2026-10-23 a client read `dark` at attach and followed foot's `SIGUSR2` /
     `SIGUSR1` to `light` and back, each running its hook; Alacritty 0.17 does
-    not report, answering DECRQM for 2031 with `0`). Unlike tmux, the client
-    does not ask for its terminal's colours again on a change, so an answer to a
-    pane's OSC 10 / 11 query keeps the colours from attach, A pane's
-    `CSI ? 996 n` is answered as tmux's window*pane_get_theme
-    (`Server::pane_theme`; `a_panes_color_scheme_query_is_answered`). A pane's
-    mode 2031 is not kept and gets no reports: tmux 3.6 sends them only when
-    something marks the pane's theme changed (a new pane, a style option,
-    `select-pane`, OSC 10 / 11, a pane moved), not when a client's theme
-    changes, which is little use; not done. Copy mode's `next-prompt` /
-    `previous-prompt` (compared with tmux 3.6 in `corpus/keys.toml`) read OSC
-    133 marks the emulator keeps by line number (`Emulator::prompt_lines`, rows
-    lost off the history counted by vt100's `on_scroll`); a mark stays on its
-    number where a scroll region or a line insert or delete moves lines within
-    the screen, where tmux's line flags move with the line (shells do neither).
-    Word and line selection moving away and back to where `select-word` /
-    `select-line` left the cursor (by characters, words and lines) is compared
-    with tmux (`\*\_selection_back*\*`in`corpus/keys.toml`); other paths back
-    were not.
+    not report, answering DECRQM for 2031 with `0`). A change has the terminal's
+    colours asked again (see the colour queries above). A pane's `CSI ? 996 n`
+    is answered as tmux's window*pane_get_theme (`Server::pane_theme`;
+    `a_panes_color_scheme_query_is_answered`). A pane's mode 2031 is not kept
+    and gets no reports: tmux 3.6 sends them only when something marks the
+    pane's theme changed (a new pane, a style option, `select-pane`, OSC 10 /
+    11, a pane moved), not when a client's theme changes, which is little use;
+    not done. Copy mode's `next-prompt` / `previous-prompt` (compared with tmux
+    3.6 in `corpus/keys.toml`) read OSC 133 marks the emulator keeps by line
+    number (`Emulator::prompt_lines`, rows lost off the history counted by
+    vt100's `on_scroll`); a mark stays on its number where a scroll region or a
+    line insert or delete moves lines within the screen, where tmux's line flags
+    move with the line (shells do neither). Word and line selection moving away
+    and back to where `select-word` / `select-line` left the cursor (by
+    characters, words and lines) is compared with tmux
+    (`\*\_selection_back*\*`in`corpus/keys.toml`); other paths back were not.
 
 - **`server did not start` under a full `cargo test`** (Windows, three times on
   2026-10-20: `lock_hands_the_keys_to_the_lock_command`, then
@@ -869,6 +885,11 @@ table. What has been verified, and how:
   runs alone and the next full run passed. The failure output was not kept, so
   the cause is unknown: a guess is ConPTY redrawing the pane after
   `cmd /c echo`, moving the line `history-top` lands on.
+- **Two one-off failures in a full Linux run** (2026-10-26, Arch, oracle on):
+  `tmuxs_pane_menu_works_from_the_prefix_and_the_right_button` (e2e) and
+  `keys_match_tmux` (oracle) failed once each in a full
+  `cargo test --workspace`; each passed alone (the first three times running)
+  and in the next full run. Not looked into.
 - **Flags the command table accepts that change nothing** (from an audit of
   every `cmd!` entry against its arm and helpers, 2026-10-18; the ones that did
   matter are implemented or refused since). Harmless, as what happens anyway:
