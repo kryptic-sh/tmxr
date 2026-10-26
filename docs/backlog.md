@@ -473,17 +473,18 @@ table. What has been verified, and how:
   finding it took 40% of the server's time (pprof). The vt100 fork's
   packed-history branch (`packed-history`, never pushed) is superseded.
 - **crates.io cannot take tmxr-server, tmxr-client or tmxr** while they depend
-  on git: vt1k (kryptic-sh's emulator, not on crates.io yet) and the crossterm
-  fork (tmxr-server and tmxr-client match its `Event::ColorScheme`, which
-  crates.io's crossterm 0.29.0 lacks). v0.10.0 (2026-10-23) published on
-  crates.io only tmxr-proto, tmxr-command, tmxr-config and tmxr-term, so
-  crates.io's tmxr stays at 0.9.0. Decided by the owner (2026-10-23): no
-  crates.io publishing for now; the `publish-crates` job is off (`if: false`,
-  out of `tag-release-status`'s needs) and the README installs with
-  `cargo install --git`. Publishing vt1k would remove one of the two blockers; a
-  crossterm fork crate would sit beside crates.io's crossterm that hjkl's crates
-  and ratatui use, which crosses at one call, (`hjkl_picker_tui::handle_key`'s
-  `KeyEvent`), so it needs a conversion there or hjkl moved to the fork too.
+  on the crossterm fork through git (tmxr-server and tmxr-client match its
+  `Event::ColorScheme`, which crates.io's crossterm 0.29.0 lacks). vt1k, the
+  other git dependency, is on crates.io since 0.1.0 (2026-10-26). v0.10.0
+  (2026-10-23) published on crates.io only tmxr-proto, tmxr-command, tmxr-config
+  and tmxr-term, so crates.io's tmxr stays at 0.9.0. Decided by the owner
+  (2026-10-23): no crates.io publishing for now; the `publish-crates` job is off
+  (`if: false`, out of `tag-release-status`'s needs) and the README installs
+  with `cargo install --git`. A crossterm fork crate would sit beside
+  crates.io's crossterm that hjkl's crates and ratatui use, which crosses at one
+  call, (`hjkl_picker_tui::handle_key`'s `KeyEvent`), so it needs a conversion
+  there or hjkl moved to the fork too; the other way out is the fork's fixes
+  landing upstream (crossterm-rs/crossterm#1155 is one of them).
 - **No frame-rate cap**: the server renders after each pass of its loop, and a
   pass stops handling events after `DRAIN_BUDGET` so a flood still repaints.
   Each pane's output waits in a bounded queue (`output::QUEUE_LIMIT`) that

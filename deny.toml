@@ -35,8 +35,5 @@ unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 # crossterm with the Alt+Esc and SIGWINCH fixes, through [patch.crates-io] in
-# Cargo.toml, and vt1k, kryptic-sh's terminal emulator.
-allow-git = [
-  "https://github.com/kryptic-sh/crossterm",
-  "https://github.com/kryptic-sh/vt1k",
-]
+# Cargo.toml.
+allow-git = ["https://github.com/kryptic-sh/crossterm"]
