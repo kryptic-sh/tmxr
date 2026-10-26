@@ -513,7 +513,12 @@ table. What has been verified, and how:
   than `copyline::STEP_LIMIT` to redraw is read early. A mark is dropped once
   the history is full (`Emulator::input_start`), since lines then scroll away
   uncounted. Tested end to end with cmd (Windows; ConPTY passes OSC 133 through)
-  and bash (CI), with and without marks; not PowerShell, zsh or fish.
+  and bash (CI), with and without marks. fish 4.9.3 (Arch, 2026-10-26, by hand)
+  sends prompt marks of its own, with or without a config (`--no-config`), so it
+  takes the marked path: `echo one two three` with the cursor moved back five
+  columns was copied whole and the cursor left where it was, where the keys
+  would have moved it to the end; its fallback keys were not exercised. Not
+  PowerShell or zsh.
 - **Windows `kill()` on a pane child** returned "There are no more files" (os
   error 18) in a test; not a bug in practice. `Server::kill_pane` calls `kill()`
   and then drops the pane, closing the ConPTY, and that does end the programs
