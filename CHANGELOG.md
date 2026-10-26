@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-26
+
 ### Breaking
 
 - **The client-server protocol is now 12** (the client sends its terminal's
@@ -1836,7 +1838,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   published to GitHub Releases with `.sha256` files, and shell completions and a
   man page from the hidden `tmxr --completions <shell>` and `tmxr --man`.
 
-[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/kryptic-sh/tmxr/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/kryptic-sh/tmxr/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/kryptic-sh/tmxr/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/kryptic-sh/tmxr/compare/v0.7.0...v0.8.0
