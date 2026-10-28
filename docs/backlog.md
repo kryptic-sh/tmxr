@@ -900,7 +900,8 @@ table. What has been verified, and how:
   `tmuxs_pane_menu_works_from_the_prefix_and_the_right_button` (e2e) and
   `keys_match_tmux` (oracle) failed once each in a full
   `cargo test --workspace`; each passed alone (the first three times running)
-  and in the next full run. Not looked into.
+  and in the next full run. Not looked into. `keys_match_tmux` failed so again
+  on 2026-10-29 (its failing case not kept), passing on the rerun.
 - **Flags the command table accepts that change nothing** (from an audit of
   every `cmd!` entry against its arm and helpers, 2026-10-18; the ones that did
   matter are implemented or refused since). Harmless, as what happens anyway:
@@ -930,12 +931,13 @@ table. What has been verified, and how:
   copy-mode command was run from one start in tmux 3.6 and tmxr, and the cursor,
   view, selection and search formats compared (a scratch script, not kept; the
   fixes have oracle cases in `corpus/keys.toml`). Still differing:
-  - Under vi keys a search down from a marked match starts after the whole match
-    (`window_copy_move_after_search_mark`); tmxr's starts one cell on, so a
-    match overlapping the one at the cursor is found where tmux's skips it.
-    Searches, word moves, word selection and bracket matching otherwise follow
-    `mode-keys` as tmux's (compared from many starts, both modes, `wrap-search`
-    on and off).
+  - Searches, word moves, word selection and bracket matching follow `mode-keys`
+    as tmux's (compared from many starts, both modes, `wrap-search` on and off;
+    a vi search down from a marked match by
+    `a_vi_search_down_starts_after_the_marked_match_as_tmux`). Where the cursor
+    is on no mark while marks show, tmux's search down starts at the cursor
+    itself; a text search's marks never leave such a cell starting a match, so
+    no case compares it.
   - A search matches within a line, where tmux's also match across a wrap, so
     `#{search_count}` can count fewer.
 

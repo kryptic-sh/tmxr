@@ -607,6 +607,33 @@ checks = [
 ]
 
 [[cases]]
+name = "a_vi_search_down_starts_after_the_marked_match_as_tmux"
+# tmux marks a search's matches without overlap, counts them so, and under
+# vi keys starts a search down after the marked match the cursor is on
+# (window_copy_move_after_search_mark), even from the middle of it.
+unix_only = true
+size = [30, 8]
+program = "echo 'aaaaaa xaaaaa'; echo 'b aaa'; printf end; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g mode-keys vi" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X start-of-line" },
+  { run = "send-keys -t o -X search-forward aa" },
+  { run = "set -gF @first '#{copy_cursor_x},#{copy_cursor_y} #{search_count}'" },
+  { run = "send-keys -t o -X search-again" },
+  { run = "set -gF @again '#{copy_cursor_x},#{copy_cursor_y}'" },
+  { run = "send-keys -t o -X cursor-left" },
+  { run = "send-keys -t o -X search-again" },
+  { run = "set -gF @inside '#{copy_cursor_x},#{copy_cursor_y}'" },
+  { run = "send-keys -t o -N 2 -X search-again" },
+]
+checks = [
+  { format = "#{@first} | #{@again} | #{@inside} | #{copy_cursor_x},#{copy_cursor_y} #{search_count}" },
+]
+
+[[cases]]
 name = "the_same_search_again_keeps_its_marks_and_count_as_tmux"
 # Without wrap-search a search that finds nothing keeps the marks of the
 # same search before it, and only a copy mode's first search, or new

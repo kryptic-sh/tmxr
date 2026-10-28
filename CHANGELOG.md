@@ -21,6 +21,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **An option index that is not a number is refused as tmux refuses it**:
   `set -g update-environment[x] …` and `show -g status-left[]` say
   `ambiguous option`, where tmxr said `invalid option`, and `-q` silences it.
+- **Copy-mode searches match and count as tmux's**: a text search's matches no
+  longer overlap (`aa` in `aaaa` is two, not three), in the highlighting and in
+  `#{search_count}`, and under vi keys a search down starts after the match the
+  cursor is on, even from inside it, rather than one cell on.
 
 ## [0.12.0] - 2026-10-26
 
