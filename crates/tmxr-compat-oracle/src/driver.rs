@@ -201,6 +201,19 @@ impl Server {
                 }
                 Ok(())
             }
+            Step::WaitOutput { command, contains } => {
+                let deadline = Instant::now() + WAIT;
+                loop {
+                    let out = self.run(command)?;
+                    if out.contains(contains.as_str()) {
+                        return Ok(());
+                    }
+                    if Instant::now() > deadline {
+                        return Err(format!("{contains:?} never showed in {command}:\n{out}"));
+                    }
+                    std::thread::sleep(Duration::from_millis(50));
+                }
+            }
         }
     }
 

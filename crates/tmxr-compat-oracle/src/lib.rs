@@ -69,6 +69,9 @@ pub enum Step {
     Sleep(f64),
     /// Wait until the client's screen shows this text.
     WaitText(String),
+    /// Run `command` again until its output shows `contains`: to wait for
+    /// something a pane's program does where no client is attached.
+    WaitOutput { command: String, contains: String },
 }
 
 /// A mouse event: `click` (the press and release written apart), `tap`

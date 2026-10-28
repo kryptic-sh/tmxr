@@ -45,6 +45,7 @@ steps = [
   { spawn = "display-menu -T t aaa a ''" }, # for commands that wait
   { keys = "\u0002%" },
   { sleep = 0.5 },
+  { wait_output = { command = "capture-pane -p -t o", contains = "beta" } }, # no client needed
 ]
 checks = [
   { command = "show-buffer" },              # must match tmux

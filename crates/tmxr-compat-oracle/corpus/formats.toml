@@ -1058,6 +1058,10 @@ steps = [
   { run = "set -g cursor-colour red" },
   { run = "new-window -d -t o:1 'stty raw -echo; printf \"\\033]11;?\\007\\033]10;?\\033\\\\\\\\\\033]12;?\\007\"; exec cat -v'" },
   { run = "new-window -d -t o:2 'stty raw -echo; printf \"\\033]12;#abcdef\\007\\033]12;?\\033\\\\\\\\\"; exec cat -v'" },
+  # Both programs asked before the style goes: a shell slow to start under
+  # load would otherwise ask once it has.
+  { wait_output = { command = "capture-pane -p -t o:1", contains = "^[]12;" } },
+  { wait_output = { command = "capture-pane -p -t o:2", contains = "^[]12;" } },
   { run = "set -u -g window-style" },
   { run = "new-window -d -t o:3 'stty raw -echo; printf \"\\033]11;?\\007x\"; exec cat -v'" },
   { sleep = 0.8 },
