@@ -9,8 +9,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - **Dependencies updated to their latest patch releases**, among them
-  unicode-width 0.2.3 (the widths copy mode and the status line measure text
-  by), rustix 1.1.6 and pest 2.9.5.
+  unicode-width 0.2.3 (the widths the `w:` format modifier counts), rustix 1.1.6
+  and pest 2.9.5.
 
 ## [0.12.0] - 2026-10-26
 
