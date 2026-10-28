@@ -135,6 +135,7 @@ impl Server {
             },
         );
         self.clients.remove(&id);
+        self.cancel_colour_requests(id);
         let ctx = Ctx {
             pane: self.active_pane_of_session(att.session),
             ..Ctx::default()

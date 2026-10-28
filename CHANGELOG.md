@@ -12,6 +12,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   unicode-width 0.2.3 (the widths the `w:` format modifier counts), rustix 1.1.6
   and pest 2.9.5.
 
+### Fixed
+
+- **A client that detaches or goes away no longer holds up a pane's answers**: a
+  palette colour asked of its terminal is dropped with it, as tmux drops it, so
+  the program's other answers (DA1, say) reach it at once rather than after the
+  2-second wait for an answer that cannot come.
+
 ## [0.12.0] - 2026-10-26
 
 ### Breaking

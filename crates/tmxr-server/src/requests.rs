@@ -123,6 +123,15 @@ impl Requests {
         self.release()
     }
 
+    /// Drop the requests asked of `client`, which has gone, as tmux's
+    /// input_cancel_requests; the bytes each pane can now be given.
+    pub fn cancel(&mut self, client: ClientId) -> Vec<(PaneId, Vec<u8>)> {
+        for queue in self.panes.values_mut() {
+            queue.retain(|p| !matches!(p, Pending::Palette { client: c, .. } if *c == client));
+        }
+        self.release()
+    }
+
     /// When the oldest request times out.
     pub fn next_due(&self) -> Option<Instant> {
         self.panes
@@ -228,6 +237,12 @@ impl Server {
         self.write_released(released);
     }
 
+    /// Client `id` went: its terminal will answer nothing more.
+    pub fn cancel_colour_requests(&mut self, id: ClientId) {
+        let released = self.colour_requests.cancel(id);
+        self.write_released(released);
+    }
+
     fn write_released(&mut self, released: Vec<(PaneId, Vec<u8>)>) {
         for (pid, bytes) in released {
             self.write_to_pane(pid, &bytes);
@@ -316,5 +331,19 @@ mod tests {
         assert!(r.expire(now + TIMEOUT / 2).is_empty());
         assert_eq!(r.expire(now + TIMEOUT), [(pane, b"DA1".to_vec())]);
         assert!(r.answered(client, 1, RED).is_empty(), "too late");
+    }
+
+    #[test]
+    fn a_client_gone_lets_the_replies_behind_its_requests_go() {
+        let (pane, client, other) = (1, 7, 8);
+        let mut r = Requests::default();
+        let now = Instant::now();
+        r.ask(pane, client, 1, true, now);
+        assert_eq!(r.reply(pane, b"DA1".to_vec()), None);
+        r.ask(pane, other, 2, true, now);
+        assert_eq!(r.reply(pane, b"DA2".to_vec()), None);
+        assert!(r.cancel(other).is_empty(), "still behind the first");
+        assert_eq!(r.cancel(client), [(pane, b"DA1DA2".to_vec())]);
+        assert_eq!(r.next_due(), None);
     }
 }

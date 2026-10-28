@@ -1748,6 +1748,35 @@ fn an_unanswered_palette_request_lets_the_other_answers_go() {
     assert!(!s.text().contains("^[]4;"), "{}", s.text());
 }
 
+/// A client that detaches before its terminal answers is not waited for:
+/// the program's other answers go at once, as tmux cancels a lost client's
+/// requests, not once the request times out.
+#[cfg(unix)]
+#[test]
+fn a_detached_clients_palette_request_lets_the_other_answers_go() {
+    // Well inside the server's `requests::TIMEOUT`, so an answer let go only
+    // by the timeout is told apart.
+    const PROMPTLY: Duration = Duration::from_secs(1);
+    let t = Tmxr::new("palette-gone");
+    t.run(&[
+        "new-session",
+        "-d",
+        "-s",
+        "pg",
+        r"stty raw -echo; head -c 1 >/dev/null; printf '\033]4;1;?\007\033[c'; exec cat -v",
+    ]);
+    let s = t.attach_sync(&["attach", "-t", "pg"]);
+    s.wait_for("the status line", |text| text.contains("pg"));
+    t.run(&["send-keys", "-t", "pg", "x"]);
+    s.wait_for_raw("the terminal asked", |raw| raw.contains("\x1b]4;1;?\x1b\\"));
+    let asked = Instant::now();
+    t.run(&["detach-client", "-s", "pg"]);
+    t.wait_run(&["capture-pane", "-p", "-t", "pg"], "DA1's answer", |o| {
+        o.contains("^[[?62;22c")
+    });
+    assert!(asked.elapsed() < PROMPTLY, "took {:?}", asked.elapsed());
+}
+
 #[cfg(unix)]
 #[test]
 fn frames_are_synchronized_updates_where_the_terminal_takes_them() {
