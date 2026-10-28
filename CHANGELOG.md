@@ -23,8 +23,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `ambiguous option`, where tmxr said `invalid option`, and `-q` silences it.
 - **Copy-mode searches match and count as tmux's**: a text search's matches no
   longer overlap (`aa` in `aaaa` is two, not three), in the highlighting and in
-  `#{search_count}`, and under vi keys a search down starts after the match the
-  cursor is on, even from inside it, rather than one cell on.
+  `#{search_count}`; a match can run past a wrapped line's end onto the next
+  row, where tmxr found only matches within a row; and under vi keys a search
+  down starts after the match the cursor is on, even from inside it, rather than
+  one cell on.
 
 ## [0.12.0] - 2026-10-26
 

@@ -901,7 +901,10 @@ table. What has been verified, and how:
   `keys_match_tmux` (oracle) failed once each in a full
   `cargo test --workspace`; each passed alone (the first three times running)
   and in the next full run. Not looked into. `keys_match_tmux` failed so again
-  on 2026-10-29 (its failing case not kept), passing on the rerun.
+  on 2026-10-29 (its failing case not kept), passing on the rerun, and once more
+  that day on `the_top_lines_time_as_tmux`, where tmux's side gave a time for
+  the view's top line at the bottom of the history (`@bottom`, which should be
+  0, a screen line) and tmxr 0; it passed in the four runs around it.
 - **Flags the command table accepts that change nothing** (from an audit of
   every `cmd!` entry against its arm and helpers, 2026-10-18; the ones that did
   matter are implemented or refused since). Harmless, as what happens anyway:
@@ -938,8 +941,13 @@ table. What has been verified, and how:
     is on no mark while marks show, tmux's search down starts at the cursor
     itself; a text search's marks never leave such a cell starting a match, so
     no case compares it.
-  - A search matches within a line, where tmux's also match across a wrap, so
-    `#{search_count}` can count fewer.
+  - A search's match can run past a wrapped line's end, as tmux's
+    (`Needle::row_matches`, compared by
+    `a_search_matches_across_a_wrapped_line_as_tmux`): each line's matches are
+    those starting on it, read on through the lines it wraps into, for a text
+    needle as far as it is long and for a regular expression up to
+    `SEARCH_MAX_LINE` columns, as tmux's `WINDOW_COPY_SEARCH_MAX_LINE`. Lines of
+    one wrapped line are taken to share a width, as a copy mode's lines do.
 
 - **`C-r` in an incremental search does nothing in tmux 3.6**, and tmxr does the
   same on purpose (seen 2026-10-20): `command-prompt -i` passes the text after

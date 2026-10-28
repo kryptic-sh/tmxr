@@ -2,10 +2,16 @@
 //! line, and finding the next match from the cursor.
 
 use super::CopyMode;
+use super::model::Line;
 
 /// The characters that make a search a regular expression; one without
 /// them is searched for as text, as tmux's window_copy_search decides.
 const REGEX_CHARS: &[char] = &['^', '$', '*', '+', '(', ')', '?', '[', ']', '.', '\\'];
+
+/// The most columns a regular expression's match is looked for in, from
+/// the row it starts on through the rows that row wraps into, as tmux's
+/// WINDOW_COPY_SEARCH_MAX_LINE.
+const SEARCH_MAX_LINE: usize = 2000;
 
 /// The last search, for `search-again` and highlighting.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,6 +86,52 @@ impl<'a> Needle<'a> {
     }
 }
 
+impl Needle<'_> {
+    /// The columns a match starting in a row of `width` can run to, through
+    /// the rows it wraps into.
+    fn reach(&self, width: usize) -> usize {
+        match self {
+            Self::Text(needle) => width + needle.chars().count().saturating_sub(1),
+            Self::Regex(_) => SEARCH_MAX_LINE.max(width),
+            Self::Invalid => 0,
+        }
+    }
+
+    /// The `(start, end)` of the matches starting on line `y` of `lines`,
+    /// as columns from its start: a match runs on into the lines it wraps
+    /// into, so `end` can pass its width, as tmux's window_copy_search_lr
+    /// reads on past a wrapped line's end.
+    pub(super) fn row_matches(&self, lines: &[Line], y: usize) -> Vec<(usize, usize)> {
+        let Some(line) = lines.get(y) else {
+            return Vec::new();
+        };
+        let width = line.width();
+        let reach = self.reach(width);
+        let mut text = line.chars();
+        let mut row = y;
+        while text.len() < reach && lines[row].wrapped {
+            row += 1;
+            let Some(next) = lines.get(row) else {
+                break;
+            };
+            text.extend(next.chars());
+        }
+        let mut found = self.find_in(&text);
+        found.retain(|&(x, _)| x < width);
+        found
+    }
+}
+
+/// A marked match's cells on one line: `from..to` there, of the match that
+/// starts at `start` (line and column) and is `len` columns long.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Span {
+    pub start: (usize, usize),
+    pub len: usize,
+    pub from: usize,
+    pub to: usize,
+}
+
 /// Columns where `needle` starts in `line`: literal, and case-insensitive
 /// unless the needle has an uppercase letter (smart case).
 pub(super) fn match_starts(line: &[char], needle: &str) -> Vec<usize> {
@@ -123,16 +175,20 @@ impl CopyMode {
         let skip_current = skip_current && !past_match;
         let n = self.lines.len();
         let matcher = Needle::new(needle, regex);
-        // The first column of the cursor's line a search down takes.
+        // Where a search down starts, as lines on from the cursor's and
+        // the column there.
         let from = if !forward || !skip_current {
-            self.cx
+            (0, self.cx)
         } else if self.marked(needle, regex) {
             self.match_spans(self.cy)
                 .into_iter()
-                .find(|&(start, end)| (start..end).contains(&self.cx))
-                .map_or(self.cx, |(_, end)| end)
+                .find(|m| (m.from..m.to).contains(&self.cx))
+                .map_or((0, self.cx), |m| {
+                    let (y, x) = self.at_offset((m.start.0, m.start.1 + m.len));
+                    (y - self.cy, x)
+                })
         } else {
-            self.cx + 1
+            (0, self.cx + 1)
         };
         for step in 0..=n {
             // Without `wrap-search` the search stops at the end it heads for.
@@ -150,14 +206,13 @@ impl CopyMode {
             } else {
                 (self.cy + n - step % n) % n
             };
-            let hits = matcher.find_in(&self.lines[y].chars());
+            let hits = matcher.row_matches(&self.lines, y);
             let counts = |x: usize| {
-                step > 0
-                    || if forward {
-                        x >= from
-                    } else {
-                        x < self.cx || (!skip_current && x == self.cx)
-                    }
+                if forward {
+                    (step, x) >= from
+                } else {
+                    step > 0 || x < self.cx || (!skip_current && x == self.cx)
+                }
             };
             let pick = if forward {
                 hits.into_iter().find(|&(x, _)| counts(x))
@@ -168,12 +223,21 @@ impl CopyMode {
                 self.search_forward = forward;
                 self.scroll_to((y, x));
                 if past_match {
-                    (self.cy, self.cx) = self.after_cell((y, end - 1));
+                    (self.cy, self.cx) = self.after_cell(self.at_offset((y, end - 1)));
                 }
                 return true;
             }
         }
         false
+    }
+
+    /// Column `x` of line `y`, which can run past its width into the
+    /// lines it wraps into, as a line and a column on it.
+    fn at_offset(&self, (y, x): (usize, usize)) -> (usize, usize) {
+        match self.lines.get(y).map(Line::width) {
+            Some(width) if width > 0 => (y + x / width, x % width),
+            _ => (y, x),
+        }
     }
 
     /// The cell after `(y, x)`, on to the next line's start from the last
@@ -191,13 +255,39 @@ impl CopyMode {
         }
     }
 
-    /// Columns `(start, end)` of the last search's matches on line `y`, for
-    /// highlighting while they are marked.
-    pub fn match_spans(&self, y: usize) -> Vec<(usize, usize)> {
+    /// The last search's matches with cells on line `y`, for highlighting
+    /// while they are marked: those starting on it, and those run on to it
+    /// from the lines before that wrap into it.
+    pub fn match_spans(&self, y: usize) -> Vec<Span> {
         let (Some(search), Some(line), true) = (&self.search, self.lines.get(y), self.marks) else {
             return Vec::new();
         };
-        Needle::new(&search.needle, search.regex).find_in(&line.chars())
+        let needle = Needle::new(&search.needle, search.regex);
+        let width = line.width();
+        let mut first = y;
+        while first > 0
+            && self.lines[first - 1].wrapped
+            && (y - first + 1) * width < needle.reach(width)
+        {
+            first -= 1;
+        }
+        let mut spans = Vec::new();
+        for row in first..=y {
+            // Line `y`'s columns, counted from line `row`'s start.
+            let here = (y - row) * width..(y - row + 1) * width;
+            for (start, end) in needle.row_matches(&self.lines, row) {
+                let (from, to) = (start.max(here.start), end.min(here.end));
+                if from < to {
+                    spans.push(Span {
+                        start: (row, start),
+                        len: end - start,
+                        from: from - here.start,
+                        to: to - here.start,
+                    });
+                }
+            }
+        }
+        spans
     }
 
     /// Mark the last search's matches after it ran, as tmux's
@@ -219,9 +309,8 @@ impl CopyMode {
         if !same {
             self.search_count = self.search.as_ref().map_or(0, |search| {
                 let needle = Needle::new(&search.needle, search.regex);
-                self.lines
-                    .iter()
-                    .map(|l| needle.find_in(&l.chars()).len())
+                (0..self.lines.len())
+                    .map(|y| needle.row_matches(&self.lines, y).len())
                     .sum()
             });
         }
@@ -250,22 +339,27 @@ impl CopyMode {
         } else {
             (self.cy, self.cx)
         };
-        let (start, _) = self
-            .match_spans(y)
+        self.match_spans(y)
             .into_iter()
-            .find(|&(start, end)| (start..end).contains(&x))?;
-        Some((y, start))
+            .find(|m| (m.from..m.to).contains(&x))
+            .map(|m| m.start)
     }
 
     /// `#{search_match}`: the marked match the cursor is on, or just past,
     /// as tmux's window_copy_match_at_cursor.
     pub fn match_at_cursor(&self) -> Option<String> {
-        let line = self.lines.get(self.cy)?;
-        let (start, end) = self
+        let m = self
             .match_spans(self.cy)
             .into_iter()
-            .find(|&(start, end)| (start..=end).contains(&self.cx))?;
-        Some(line.symbols().skip(start).take(end - start).collect())
+            .find(|m| (m.from..=m.to).contains(&self.cx))?;
+        Some(
+            self.lines[m.start.0..]
+                .iter()
+                .flat_map(Line::symbols)
+                .skip(m.start.1)
+                .take(m.len)
+                .collect(),
+        )
     }
 }
 

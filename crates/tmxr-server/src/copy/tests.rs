@@ -272,6 +272,27 @@ fn search_finds_forward_backward_and_wraps() {
     assert_eq!((cm.cy, cm.cx), (2, 4));
 }
 
+/// A match the wrap splits is highlighted on both its lines, as one match:
+/// the current one on each.
+#[test]
+fn a_match_split_by_a_wrap_is_marked_on_both_lines() {
+    // 17 columns of x, then `foo` ends the first 20-column line and `bar`
+    // starts the next.
+    let mut cm = at_start("xxxxxxxxxxxxxxxxxfoobar");
+    cm.apply("search-forward", Some("foobar"));
+    assert_eq!((cm.cy, cm.cx), (0, 17));
+    let span = |from, to| search::Span {
+        start: (0, 17),
+        len: 6,
+        from,
+        to,
+    };
+    assert_eq!(cm.match_spans(0), [span(17, 20)]);
+    assert_eq!(cm.match_spans(1), [span(0, 3)]);
+    assert_eq!(cm.current_match(), Some((0, 17)));
+    assert_eq!(cm.match_at_cursor().as_deref(), Some("foobar"));
+}
+
 #[test]
 fn other_end_swaps_cursor_and_anchor_and_a_count_by_parity() {
     let mut cm = at_start("hello world");

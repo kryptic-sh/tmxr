@@ -634,6 +634,45 @@ checks = [
 ]
 
 [[cases]]
+name = "a_search_matches_across_a_wrapped_line_as_tmux"
+# tmux's search reads on past a wrapped line's end (window_copy_search_lr),
+# so a match split by the wrap is found, counted and is #{search_match}.
+unix_only = true
+size = [20, 8]
+program = "printf 'xxxxxxxxxxxxxxxxxfoobar\\nfoobar\\n'; printf end; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g mode-keys vi" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X search-forward foobar" },
+  { run = "set -gF @text '#{copy_cursor_x},#{copy_cursor_y} #{search_count} [#{search_match}]'" },
+  { run = "send-keys -t o -X search-again" },
+  { run = "set -gF @next '#{copy_cursor_x},#{copy_cursor_y}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X search-forward 'o+b[a]r'" },
+]
+checks = [
+  { format = "#{@text} | #{@next} | #{copy_cursor_x},#{copy_cursor_y} #{search_count} [#{search_match}]" },
+]
+
+[[cases]]
+name = "an_emacs_search_down_past_a_wrap_leaves_the_cursor_after_it_as_tmux"
+unix_only = true
+size = [20, 8]
+program = "printf 'xxxxxxxxxxxxxxxxxfoobar\\n'; printf end; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g mode-keys emacs" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X search-forward foobar" },
+]
+checks = [
+  { format = "#{copy_cursor_x},#{copy_cursor_y} #{search_count} [#{search_match}]" },
+]
+
+[[cases]]
 name = "the_same_search_again_keeps_its_marks_and_count_as_tmux"
 # Without wrap-search a search that finds nothing keeps the marks of the
 # same search before it, and only a copy mode's first search, or new

@@ -17,7 +17,7 @@ pub use model::{
     Cell, Line, Underline, cell_style, colour, link_of, snapshot, snapshot_lines,
     snapshot_normal_rows,
 };
-pub use search::Search;
+pub use search::{Search, Span};
 pub use words::word_at;
 
 /// How the selection's moving end goes as the cursor moves, as tmux's

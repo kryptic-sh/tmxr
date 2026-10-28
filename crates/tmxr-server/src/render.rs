@@ -768,8 +768,8 @@ fn draw_pane(
                         copy.mark
                     });
                 }
-                if let Some(&(start, _)) = matches.iter().find(|(s, e)| (*s..*e).contains(&x)) {
-                    let found = if current == Some((y, start)) {
+                if let Some(m) = matches.iter().find(|m| (m.from..m.to).contains(&x)) {
+                    let found = if current == Some(m.start) {
                         copy.current
                     } else {
                         copy.matched
