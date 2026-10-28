@@ -378,6 +378,23 @@ fn a_sessions_own_update_environment_decides_what_attaching_takes() {
     };
     assert!(err(&["set", "-g", "status-left[1]", "x"]).contains("not an array: status-left[1]"));
     assert!(err(&["set", "-g", "@u[1]", "x"]).contains("not an array: @u[1]"));
+    for bad in [
+        "update-environment[x]",
+        "update-environment[-1]",
+        "status-left[]",
+        "no-such-option[x]",
+    ] {
+        assert!(
+            err(&["set", "-g", bad, "x"]).contains(&format!("ambiguous option: {bad}")),
+            "{bad}"
+        );
+        assert!(
+            err(&["show", "-g", bad]).contains("ambiguous option"),
+            "{bad}"
+        );
+        let quiet = t.output(&["set", "-gq", bad, "x"]);
+        assert!(quiet.status.success() && quiet.stderr.is_empty(), "{bad}");
+    }
     assert!(
         err(&["set", "-o", "-t", "own", "update-environment[1]", "x"])
             .contains("already set: update-environment[1]")

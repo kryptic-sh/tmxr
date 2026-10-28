@@ -18,6 +18,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   palette colour asked of its terminal is dropped with it, as tmux drops it, so
   the program's other answers (DA1, say) reach it at once rather than after the
   2-second wait for an answer that cannot come.
+- **An option index that is not a number is refused as tmux refuses it**:
+  `set -g update-environment[x] …` and `show -g status-left[]` say
+  `ambiguous option`, where tmxr said `invalid option`, and `-q` silences it.
 
 ## [0.12.0] - 2026-10-26
 

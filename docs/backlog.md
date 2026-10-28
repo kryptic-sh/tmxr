@@ -198,8 +198,10 @@ table. What has been verified, and how:
     `set -g update-environment[3] X` line (an unknown key there), and
     `customize-mode` shows it as one value, all items joined, whose Enter sets
     the whole array. `set -g x[i] value` on an option that is not an array
-    errors as tmux's (`not an array`), but a bad index errors as
-    `invalid option`, where tmux says `ambiguous option`.
+    errors as tmux's (`not an array`), and an index that is not a number as
+    tmux's `ambiguous option`, whatever the name (`-q` silences it); tmux also
+    takes `[ 1]` as item 1 and wraps an index past `u_int` (its `%u` parse),
+    where tmxr refuses both.
   - **Pane commands refresh on one timer**: each client's status line redraws at
     its session's `status-interval`, as tmux's, but the foreground commands
     behind `#{pane_current_command}` and automatic window names refresh at the

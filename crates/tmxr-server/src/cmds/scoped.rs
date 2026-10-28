@@ -30,19 +30,36 @@ enum Scope {
 /// Whether `name` is kept by scope here: a session, window or user option,
 /// or an item of an array one (`name[index]`).
 pub(super) fn handles(name: &str) -> bool {
-    let name = split_index(name).map_or(name, |(n, _)| n);
+    // A malformed index is refused here whatever the name, as tmux's.
+    let Ok((name, _)) = split_index(name) else {
+        return true;
+    };
     name.starts_with('@') || is_session_option(name) || WindowOptions::NAMES.contains(&name)
 }
 
 /// An option argument as tmux's `options_parse` reads it: `name`, or
-/// `name[index]` for an item of an array option.
+/// `name[index]` for an item of an array option; an index that is not a
+/// number is tmux's `ambiguous option`.
 fn split_index(arg: &str) -> Result<(&str, Option<u32>), String> {
     match arg.strip_suffix(']').and_then(|s| s.split_once('[')) {
         Some((name, i)) => i
             .parse()
             .map(|i| (name, Some(i)))
-            .map_err(|_| format!("invalid option: {arg}")),
+            .map_err(|_| format!("ambiguous option: {arg}")),
         None => Ok((arg, None)),
+    }
+}
+
+/// [`split_index`] for `set-option` and `show-options`, whose `-q` makes a
+/// malformed index no error, as tmux's: `None` then.
+fn split_index_unless_quiet<'a>(
+    a: &Args,
+    arg: &'a str,
+) -> Result<Option<(&'a str, Option<u32>)>, String> {
+    match split_index(arg) {
+        Ok(parsed) => Ok(Some(parsed)),
+        Err(_) if a.has('q') => Ok(None),
+        Err(e) => Err(e),
     }
 }
 
@@ -178,7 +195,9 @@ pub(super) fn set(
     value: Option<&str>,
 ) -> Res {
     let arg = name;
-    let (name, index) = split_index(arg)?;
+    let Some((name, index)) = split_index_unless_quiet(a, arg)? else {
+        return Ok(());
+    };
     let scope = scope(srv, ctx, a, window_cmd, Some(name))?;
     let unset = a.has('u') || a.has('U');
     if let Some(index) = index {
@@ -375,7 +394,9 @@ pub(super) fn show(
 ) -> Res {
     let (name, index) = match name {
         Some(arg) => {
-            let (name, index) = split_index(arg)?;
+            let Some((name, index)) = split_index_unless_quiet(a, arg)? else {
+                return Ok(());
+            };
             (Some(name), index)
         }
         None => (None, None),
