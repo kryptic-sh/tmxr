@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*", "apps/*"]
 
 [workspace.package]
-version = "0.12.0"
+version = "0.12.1"
 edition = "2024"
 rust-version = "1.95"
 license = "MIT"
@@ -26,12 +26,12 @@ redundant_pub_crate = "warn"
 # The panes' terminal emulator, kryptic-sh's own (it replaced vt100).
 vt1k = "0.1.0"
 # internal
-tmxr-proto = { path = "crates/tmxr-proto", version = "0.12.0" }
-tmxr-command = { path = "crates/tmxr-command", version = "0.12.0" }
-tmxr-config = { path = "crates/tmxr-config", version = "0.12.0" }
-tmxr-term = { path = "crates/tmxr-term", version = "0.12.0" }
-tmxr-server = { path = "crates/tmxr-server", version = "0.12.0" }
-tmxr-client = { path = "crates/tmxr-client", version = "0.12.0" }
+tmxr-proto = { path = "crates/tmxr-proto", version = "0.12.1" }
+tmxr-command = { path = "crates/tmxr-command", version = "0.12.1" }
+tmxr-config = { path = "crates/tmxr-config", version = "0.12.1" }
+tmxr-term = { path = "crates/tmxr-term", version = "0.12.1" }
+tmxr-server = { path = "crates/tmxr-server", version = "0.12.1" }
+tmxr-client = { path = "crates/tmxr-client", version = "0.12.1" }
 
 [profile.release]
 lto = "thin"
