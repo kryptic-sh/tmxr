@@ -533,20 +533,24 @@ fn short_alias(c: char) -> Option<&'static str> {
     })
 }
 
-/// Index of the `}` closing a `#{` whose body starts at `s[0]`.
-fn matching_brace(s: &str) -> Option<usize> {
+/// Where `s` first reaches one of `end` outside a `#{…}`, as tmux's
+/// format_skip: a `#` before any of `,#{}:` escapes it (though `#{` still
+/// opens a format, which its `}` closes).
+fn format_skip(s: &str, end: &[u8]) -> Option<usize> {
     let bytes = s.as_bytes();
     let mut depth = 0usize;
     let mut i = 0;
     while i < bytes.len() {
         match bytes[i] {
-            b'#' if bytes.get(i + 1) == Some(&b'{') => {
-                depth += 1;
+            b'#' if bytes.get(i + 1).is_some_and(|b| b",#{}:".contains(b)) => {
+                if bytes[i + 1] == b'{' {
+                    depth += 1;
+                }
                 i += 2;
                 continue;
             }
-            b'}' if depth == 0 => return Some(i),
-            b'}' => depth -= 1,
+            b'}' if depth > 0 => depth -= 1,
+            b if depth == 0 && end.contains(&b) => return Some(i),
             _ => {}
         }
         i += 1;
@@ -554,30 +558,20 @@ fn matching_brace(s: &str) -> Option<usize> {
     None
 }
 
-/// Split on top-level commas (not inside a nested `#{…}`).
+/// Index of the `}` closing a `#{` whose body starts at `s[0]`.
+fn matching_brace(s: &str) -> Option<usize> {
+    format_skip(s, b"}")
+}
+
+/// Split on top-level commas (not inside a nested `#{…}`, nor escaped).
 fn split_top(s: &str) -> Vec<&str> {
-    let bytes = s.as_bytes();
     let mut parts = Vec::new();
-    let mut depth = 0usize;
-    let mut start = 0;
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
-            b'#' if bytes.get(i + 1) == Some(&b'{') => {
-                depth += 1;
-                i += 2;
-                continue;
-            }
-            b'}' if depth > 0 => depth -= 1,
-            b',' if depth == 0 => {
-                parts.push(&s[start..i]);
-                start = i + 1;
-            }
-            _ => {}
-        }
-        i += 1;
+    let mut rest = s;
+    while let Some(at) = format_skip(rest, b",") {
+        parts.push(&rest[..at]);
+        rest = &rest[at + 1..];
     }
-    parts.push(&s[start..]);
+    parts.push(rest);
     parts
 }
 
@@ -903,23 +897,7 @@ enum Mod<'a> {
 /// Where a modifier's argument ends: at the first `;` or `:` outside a
 /// `#{…}` in it.
 fn arg_end(s: &str) -> Option<usize> {
-    let bytes = s.as_bytes();
-    let mut depth = 0usize;
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
-            b'#' if bytes.get(i + 1) == Some(&b'{') => {
-                depth += 1;
-                i += 2;
-                continue;
-            }
-            b'}' if depth > 0 => depth -= 1,
-            b';' | b':' if depth == 0 => return Some(i),
-            _ => {}
-        }
-        i += 1;
-    }
-    None
+    format_skip(s, b";:")
 }
 
 /// `body` as a list of value modifiers and what follows their `:`; `None`
@@ -964,17 +942,25 @@ fn value_modifiers(body: &str) -> Option<(Vec<Mod<'_>>, &str)> {
             }
             's' => {
                 let sep = after.chars().next().filter(|c| !c.is_alphanumeric())?;
-                let mut parts = after[sep.len_utf8()..].splitn(3, sep);
-                let pattern = parts.next()?;
-                let replacement = parts.next()?;
-                let tail = parts.next()?;
-                let end = tail.find([';', ':'])?;
+                let (pattern, rest) = after[sep.len_utf8()..].split_once(sep)?;
+                // The replacement ends at the next separator, or at a `;`
+                // or `:` with no closing one, as tmux's
+                // format_build_modifiers reads `s/a/b`.
+                let end = rest.find([sep, ';', ':'])?;
+                let replacement = &rest[..end];
+                let (flags, tail) = match rest[end..].strip_prefix(sep) {
+                    Some(tail) => {
+                        let end = tail.find([';', ':'])?;
+                        (&tail[..end], &tail[end..])
+                    }
+                    None => ("", &rest[end..]),
+                };
                 let m = Mod::Sub {
                     pattern,
                     replacement,
-                    flags: &tail[..end],
+                    flags,
                 };
-                (m, &tail[end..])
+                (m, tail)
             }
             'p' | '=' => {
                 let (args, tail) = match after.chars().next() {
@@ -1150,10 +1136,14 @@ fn substitute(text: &str, pattern: &str, replacement: &str, flags: &str) -> Stri
     re.replace_all(text, rep.as_str()).into_owned()
 }
 
-/// `=N`: the first N characters of `text` (the last with N negative), with
+/// `=N`: the first N columns of `text` (the last with N negative), with
 /// `marker` where text was cut off. A `#[…]` style takes no room, as
-/// tmux's format_trim_left / format_trim_right count it.
+/// tmux's format_trim_left / format_trim_right count it, and 0 keeps it
+/// all, as tmux's.
 fn limit(text: &str, n: i64, marker: &str) -> String {
+    if n == 0 {
+        return text.to_owned();
+    }
     let keep = usize::try_from(n.unsigned_abs()).unwrap_or(usize::MAX);
     let cut = if n >= 0 {
         trim_left(text, keep)
@@ -1187,38 +1177,45 @@ fn style_pieces(text: &str) -> Vec<(&str, bool)> {
     pieces
 }
 
-/// The first `keep` characters of `text` and the styles among them, as
-/// tmux's format_trim_left (it stops once they are taken).
+/// The columns a piece of [`style_pieces`] takes: none for a style.
+fn piece_width((piece, style): (&str, bool)) -> usize {
+    use unicode_width::UnicodeWidthStr as _;
+    if style { 0 } else { piece.width() }
+}
+
+/// The first `keep` columns of `text` and the styles among them, as tmux's
+/// format_trim_left: a wide character that would run past them is left
+/// out, and it stops once they are taken.
 fn trim_left(text: &str, keep: usize) -> String {
     let mut out = String::new();
     let mut taken = 0;
-    for (piece, style) in style_pieces(text) {
+    for piece in style_pieces(text) {
         if taken >= keep {
             break;
         }
-        out.push_str(piece);
-        taken += usize::from(!style);
+        let width = piece_width(piece);
+        if taken + width <= keep {
+            out.push_str(piece.0);
+        }
+        taken += width;
     }
     out
 }
 
-/// The last `keep` characters of `text` and every style, as tmux's
-/// format_trim_right.
+/// The last `keep` columns of `text` and every style, as tmux's
+/// format_trim_right: a wide character that starts before them is left
+/// out.
 fn trim_right(text: &str, keep: usize) -> String {
     let pieces = style_pieces(text);
-    let total = pieces.iter().filter(|(_, style)| !style).count();
+    let total: usize = pieces.iter().copied().map(piece_width).sum();
     let skip = total.saturating_sub(keep);
     let mut seen = 0;
     let mut out = String::new();
-    for (piece, style) in pieces {
-        if style {
-            out.push_str(piece);
-        } else {
-            if seen >= skip {
-                out.push_str(piece);
-            }
-            seen += 1;
+    for piece in pieces {
+        if piece.1 || seen >= skip {
+            out.push_str(piece.0);
         }
+        seen += piece_width(piece);
     }
     out
 }
@@ -1671,6 +1668,7 @@ mod tests {
                 "@p" => "/home/me/src/proj",
                 "@u" => "héllo wörld",
                 "@e" => "",
+                "@wide" => "日本語",
                 _ => return None,
             }
             .to_owned(),
@@ -1679,6 +1677,19 @@ mod tests {
 
     fn x(f: &str) -> String {
         expand(f, &ctx)
+    }
+
+    /// Each as tmux 3.6's display-message -p printed it (2026-10-29).
+    #[test]
+    fn escapes_open_substitutions_and_cuts_by_width_are_tmuxs() {
+        assert_eq!(x("#{==:a#,b,a#,b}"), "1", "#, is no comma");
+        assert_eq!(x("#{s/a/o:session_name}"), "moin", "no closing /");
+        assert_eq!(x("#{s/h/H;s/k/K:@w}"), "HjKl");
+        assert_eq!(x("#{s/h/H/:@w}"), "Hjkl", "with it");
+        assert_eq!(x("#{=3:@wide}"), "日", "columns, not characters");
+        assert_eq!(x("#{=-3:@wide}"), "語");
+        assert_eq!(x("#{=4:@wide}"), "日本");
+        assert_eq!(x("#{=0:@w}"), "hjkl", "0 cuts nothing");
     }
 
     #[test]

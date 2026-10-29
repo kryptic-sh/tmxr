@@ -40,6 +40,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `-b` it makes a new buffer of the data rather than joining it to the newest.
   `delete-buffer` of a buffer that is not there says `unknown buffer: NAME` (or
   `no buffer`), where it succeeded silently.
+- **Formats read four more things as tmux's do**: `#,` (and `##`, `#}`, `#:`) is
+  an escape, not a place to split a comparison's arguments, so `#{==:a#,b,a#,b}`
+  is 1; `#{s/a/b:…}` needs no closing `/`; `#{=N:…}` cuts to N columns, leaving
+  out a wide character past them (`#{=3:日本語}` is `日`); and `#{=0:…}` keeps
+  the whole value, where it gave nothing.
 
 ## [0.12.2] - 2026-10-29
 

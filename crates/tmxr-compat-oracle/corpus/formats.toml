@@ -29,6 +29,21 @@ checks = [
 ]
 
 [[cases]]
+# `#,` is no comma between arguments; `s/a/b` needs no closing `/`; `=N`
+# counts columns, leaving out a wide character past them; `=0` cuts nothing.
+name = "escapes_open_substitutions_and_cuts_by_width"
+steps = [{ run = "set -g @wide 日本語" }, { run = "set -g @w hjkl" }]
+checks = [
+  { format = "#{==:a#,b,a#,b}", expect = "1" },
+  { format = "#{s/o/0:session_name}", expect = "0" },
+  { format = "#{s/h/H;s/k/K:@w}", expect = "HjKl" },
+  { format = "#{=3:@wide}", expect = "日" },
+  { format = "#{=-3:@wide}", expect = "語" },
+  { format = "#{=4:@wide}", expect = "日本" },
+  { format = "#{=0:@w}", expect = "hjkl" },
+]
+
+[[cases]]
 name = "set_option_f_expands_the_value"
 steps = [{ run = "set -gF @x '#{session_name}-#{window_index}'" }]
 checks = [{ format = "#{@x}", expect = "o-0" }]
