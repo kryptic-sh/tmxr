@@ -553,6 +553,30 @@ fn splits_size_panes_as_tmux_does() {
     }
 }
 
+/// `resize-pane -x` takes a percentage of the window up to 100, as tmux's;
+/// one past it is an error, not an overflow that took the server down.
+#[test]
+fn resize_pane_takes_a_percentage_up_to_100() {
+    let t = Tmxr::new("rspc");
+    t.run(&["new-session", "-d", "-s", "s", "-x", "100", "-y", "30"]);
+    t.run(&["split-window", "-h", "-t", "s"]);
+    t.run(&["resize-pane", "-t", "s:0.0", "-x", "30%"]);
+    let widths = || t.run(&["list-panes", "-t", "s", "-F", "#{pane_width}"]);
+    // As tmux 3.6 (2026-10-29).
+    assert_eq!(
+        widths().split_whitespace().collect::<Vec<_>>(),
+        ["30", "69"]
+    );
+    for big in ["101%", "4294967295%"] {
+        let out = t.output(&["resize-pane", "-t", "s:0.0", "-x", big]);
+        assert!(!out.status.success(), "{big}");
+    }
+    assert_eq!(
+        widths().split_whitespace().collect::<Vec<_>>(),
+        ["30", "69"]
+    );
+}
+
 #[test]
 fn scrollbars_size_panes_as_tmux_does() {
     let t = Tmxr::new("sbsize");

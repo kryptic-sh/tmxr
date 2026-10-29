@@ -658,7 +658,7 @@ impl Default for MainPane {
 
 /// tmux's `args_string_percentage`: `N` from 0 to `max`, or `N%` (0 to 100)
 /// of `of` if that is at most `max`. `None` for anything else.
-fn size_spec(spec: &str, max: u16, of: u16) -> Option<u16> {
+pub(crate) fn size_spec(spec: &str, max: u16, of: u16) -> Option<u16> {
     let n = match spec.strip_suffix('%') {
         Some(pct) => {
             let pct: u32 = pct.parse().ok().filter(|p| *p <= 100)?;

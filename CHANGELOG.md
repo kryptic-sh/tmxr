@@ -21,6 +21,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **A huge scrollbar no longer crashes the server**: a `pane-scrollbars-style`
   of `width=40000,pad=40000` overflowed adding the two; each pane now keeps a
   column beside the bar, as in tmux.
+- **`resize-pane -x` / `-y` take a percentage only up to 100**, as tmux's:
+  `-x 4294967295%` overflowed and took the server down, and one past 100 resized
+  past the window.
 
 ## [0.12.2] - 2026-10-29
 

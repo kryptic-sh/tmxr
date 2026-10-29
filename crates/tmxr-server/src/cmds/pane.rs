@@ -143,15 +143,8 @@ pub(super) fn run(
                 let w = srv.windows.get_mut(&wid).ok_or("no window")?;
                 let whole = if horizontal { w.cols } else { w.rows };
                 let what = if horizontal { "width" } else { "height" };
-                let size = match v.strip_suffix('%') {
-                    Some(pc) => pc
-                        .parse::<u32>()
-                        .ok()
-                        .map(|pc| u32::from(whole) * pc / 100)
-                        .and_then(|n| u16::try_from(n).ok()),
-                    None => v.parse::<u16>().ok(),
-                }
-                .ok_or_else(|| format!("{what} {v}"))?;
+                let size = crate::layout::size_spec(v, u16::MAX, whole)
+                    .ok_or_else(|| format!("{what} {v}"))?;
                 w.zoomed = false;
                 let (cols, rows) = (w.cols, w.rows);
                 crate::layout::resize_to(&mut w.layout, pid, horizontal, size, cols, rows);
