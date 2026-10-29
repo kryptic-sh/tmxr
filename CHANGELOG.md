@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-29
+
+### Breaking
+
+- **`tmxr-config`'s `pane_base_index` is a `u16`** (in `WindowOptions` and
+  `OwnOptions`), as tmux bounds `pane-base-index` at 65535; a library caller
+  reading it as a `u32` converts with `u32::from`.
+
 ### Fixed
 
 - **A format no longer takes the server down with a huge precision or padding**:
@@ -2004,7 +2012,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   published to GitHub Releases with `.sha256` files, and shell completions and a
   man page from the hidden `tmxr --completions <shell>` and `tmxr --man`.
 
-[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.12.2...HEAD
+[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/kryptic-sh/tmxr/compare/v0.12.2...v0.13.0
 [0.12.2]: https://github.com/kryptic-sh/tmxr/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/kryptic-sh/tmxr/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/kryptic-sh/tmxr/compare/v0.11.0...v0.12.0
