@@ -126,6 +126,18 @@ pub fn tokenize_lines(
             }
             '"' => {
                 in_word = true;
+                // A `~` opening the quoted text is the home directory, as
+                // tmux's lexer has it wherever the quoting changes.
+                if chars.next_if_eq(&'~').is_some() {
+                    let ends = chars
+                        .peek()
+                        .is_none_or(|n| matches!(n, '/' | ' ' | '\t' | '\n' | '"' | '\''));
+                    if ends {
+                        word.push_str(&env("HOME").unwrap_or_else(|| "~".into()));
+                    } else {
+                        word.push('~');
+                    }
+                }
                 loop {
                     match chars.next() {
                         Some('"') => break,
@@ -518,6 +530,11 @@ mod tests {
         assert_eq!(t("a 'b c' d"), vec![w(&["a", "b c", "d"])]);
         assert_eq!(t(r##"a "\"q\" \$X $X""##), vec![w(&["a", "\"q\" $X ex"])]);
         assert_eq!(t(r"a b\ c"), vec![w(&["a", "b c"])]);
+        // As tmux 3.6: a `~` opening double quotes too, not single ones.
+        assert_eq!(
+            t(r#"cd "~/a b" "~" "a~" '~/c'"#),
+            vec![w(&["cd", "/home/u/a b", "/home/u", "a~", "~/c"])]
+        );
         assert_eq!(
             t("cd ~/x ~ a~"),
             vec![w(&["cd", "/home/u/x", "/home/u", "a~"])]

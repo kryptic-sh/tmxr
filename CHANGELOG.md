@@ -53,6 +53,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   cannot overflow.
 - **`^a` names `C-a`** in `bind-key`, `prefix` and every other key name, as in
   tmux; `^` alone is still the key.
+- **A `~` opening double quotes is the home directory** in a tmux command file
+  or command line, as tmux's lexer has it: `"~/notes"` expands, `'~/notes'` does
+  not.
 
 ## [0.12.2] - 2026-10-29
 
