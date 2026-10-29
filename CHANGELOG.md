@@ -28,6 +28,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `select-layout` refuses it as an invalid layout rather than reading it by
   recursion until the stack ran out. No window a terminal can show nests near
   that deep; tmux 3.6 reads such a string.
+- **A full reset (`ESC c`) turns a pane's extended keys off**: a program that
+  set the kitty keyboard flags or `modifyOtherKeys` and then reset the terminal
+  (or crashed, with the shell resetting it) left the shell getting `^[[120;5u`
+  for `C-x`; it now gets `^X`, as under tmux.
 
 ## [0.12.2] - 2026-10-29
 

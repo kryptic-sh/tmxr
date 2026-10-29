@@ -508,6 +508,10 @@ impl Emulator {
                     let history = self.history_end.saturating_sub(self.times_from);
                     self.times.truncate(history);
                     self.parser.process(b"\x1bc");
+                    // Keys go plain again, as tmux's screen_write_reset
+                    // and the kitty protocol's full reset have them.
+                    self.parser.callbacks_mut().kitty_flags.clear();
+                    self.reset_keys();
                 }
                 Piece::ColourQuery { which, bel } => {
                     let hooks = self.parser.callbacks_mut();
@@ -1283,6 +1287,10 @@ mod tests {
         );
         e.process(b"\x1b[<u");
         assert_eq!(e.input_modes().kitty_flags, 0, "the stack holds the limit");
+        // A full reset turns both kinds of extended keys off.
+        e.process(b"\x1b[>1u\x1b[>4;2m\x1bc");
+        assert_eq!(e.input_modes().kitty_flags, 0, "ESC c");
+        assert_eq!(e.input_modes().modify_other_keys, 0, "ESC c");
         e.process(b"\x1b[?1h");
         assert!(e.input_modes().app_cursor);
         // Focus reports, in a sequence with a mode vt1k keeps.
