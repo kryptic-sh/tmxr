@@ -1751,4 +1751,27 @@ fn choose_buffer_e_edits_the_buffer_in_the_editor() {
     s.wait_for("the picker after a failed edit", |text| {
         text.contains("mybuf")
     });
+    // The file the editor gets is its owner's alone, as tmux's mkstemp
+    // makes it.
+    #[cfg(unix)]
+    {
+        let mode = t.dir.path().join("mode");
+        let script = t.dir.path().join("mode.sh");
+        std::fs::write(
+            &script,
+            format!("ls -l \"$1\" | cut -c1-10 > '{}'\nexit 1\n", mode.display()),
+        )
+        .unwrap();
+        t.run(&["set", "-s", "editor", &format!("sh {}", script.display())]);
+        s.send(b"e");
+        let deadline = Instant::now() + TIMEOUT;
+        let shown = loop {
+            let shown = std::fs::read_to_string(&mode).unwrap_or_default();
+            if shown.ends_with('\n') || Instant::now() > deadline {
+                break shown;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        };
+        assert_eq!(shown.trim(), "-rw-------");
+    }
 }

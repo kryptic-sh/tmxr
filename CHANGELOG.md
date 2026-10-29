@@ -95,6 +95,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Enter on a disabled menu item runs nothing**: an item the mouse left
   selected ran on Enter though its name starts with `-`; the menu now closes (or
   with `-O` stays), as tmux's.
+- **A buffer edited from `choose-buffer` is written readable by its owner
+  alone** (`0600`), as tmux's `mkstemp` makes it, where it was `0644` in the
+  shared temp directory.
 
 ## [0.12.2] - 2026-10-29
 

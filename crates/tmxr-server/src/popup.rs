@@ -286,10 +286,14 @@ impl Server {
         let (cols, rows, session) = (att.cols, att.rows, att.session);
         let n = EDITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!("tmxr.{}.{n}", std::process::id()));
-        std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)
+        // Readable by its owner alone, as tmux's mkstemp makes it: a
+        // buffer can hold anything copied. Windows' temp directory is the
+        // user's own.
+        let mut file = std::fs::OpenOptions::new();
+        file.write(true).create_new(true);
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut file, 0o600);
+        file.open(&path)
             .and_then(|mut f| std::io::Write::write_all(&mut f, data.as_bytes()))
             .map_err(|e| format!("{}: {e}", path.display()))?;
         let edit = BufferEdit {
