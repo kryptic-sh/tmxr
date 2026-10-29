@@ -630,6 +630,26 @@ fn source_file_v_shows_what_the_file_set() {
     );
 }
 
+/// A command file that sources itself stops 50 files deep with tmux's
+/// error, rather than taking the server down, and an error as a file runs
+/// is the command's own, without the file's place (both as tmux 3.6,
+/// checked by hand 2026-10-29).
+#[test]
+fn a_command_file_that_sources_itself_stops() {
+    let t = Tmxr::new("sourceself");
+    t.run(&["new-session", "-d", "-s", "ss"]);
+    let file = t.dir.path().join("self.conf");
+    let path = file.to_str().unwrap();
+    std::fs::write(&file, format!("set -ga @n x\nsource-file '{path}'\n")).unwrap();
+    let sourced = t.output(&["source-file", path]);
+    assert!(!sourced.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&sourced.stderr).trim(),
+        "too many nested files"
+    );
+    assert_eq!(t.run(&["show-options", "-gv", "@n"]).trim(), "x".repeat(50));
+}
+
 /// The tmux command file both tests below read; what tmux 3.6 made of it
 /// is in their expectations (checked by hand, 2026-10-22).
 #[cfg(unix)]

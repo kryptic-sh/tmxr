@@ -13,6 +13,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   formatter panicked past 65535, and a padding past a C `int`
   (`#{p99999999999:x}`) pads nothing, as tmux's, rather than aborting on the
   allocation. A negative precision gives C's default of 6.
+- **A command file that sources itself no longer crashes the server**:
+  `source-file` stops 50 files deep with `too many nested files`, as tmux's,
+  rather than recursing until the stack ran out. An error from a command as a
+  file runs is now shown as the command's own, without the file's `path:line:`,
+  as tmux shows it; one in reading the file keeps its place.
 
 ## [0.12.2] - 2026-10-29
 
