@@ -197,9 +197,11 @@ impl Line {
         (0..self.width).map(|x| self.cells.symbol(x).unwrap_or(" "))
     }
 
+    /// A character a column: the first of its cell's symbol, and
+    /// [`PADDING`] for a wide character's second column.
     pub(super) fn chars(&self) -> Vec<char> {
         self.symbols()
-            .map(|s| s.chars().next().unwrap_or(' '))
+            .map(|s| s.chars().next().unwrap_or(PADDING))
             .collect()
     }
 
@@ -214,6 +216,11 @@ impl Line {
         s.trim_end().to_owned()
     }
 }
+
+/// What [`Line::chars`] gives a wide character's second column, so text
+/// searched for lines up with the columns it takes, as tmux's
+/// `window_copy_search_compare` compares cells padding and all.
+pub(super) const PADDING: char = '\0';
 
 /// Copy mode's lines rewrapped to `cols` columns, as tmux's
 /// window_copy_resize rewraps its copy of the pane, and by the same rules

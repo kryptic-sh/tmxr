@@ -2,7 +2,7 @@
 //! line, and finding the next match from the cursor.
 
 use super::CopyMode;
-use super::model::Line;
+use super::model::{Line, PADDING};
 
 /// The characters that make a search a regular expression; one without
 /// them is searched for as text, as tmux's window_copy_search decides.
@@ -55,10 +55,18 @@ impl<'a> Needle<'a> {
     /// The `(start, end)` columns of the needle's matches in `line`.
     pub(super) fn find_in(&self, line: &[char]) -> Vec<(usize, usize)> {
         match self {
+            // The text without wide characters' padding, as tmux's
+            // window_copy_stringify, its matches mapped back to columns.
             Self::Regex(re) => {
-                let text: String = line.iter().collect();
-                // Byte offsets in the text to columns of the line.
-                let column = |byte: usize| text[..byte].chars().count();
+                let mut text = String::new();
+                // The column of each byte of the text, and of its end.
+                let mut columns = Vec::new();
+                for (x, &c) in line.iter().enumerate().filter(|(_, c)| **c != PADDING) {
+                    text.push(c);
+                    columns.extend(std::iter::repeat_n(x, c.len_utf8()));
+                }
+                columns.push(line.len());
+                let column = |byte: usize| columns[byte];
                 re.find_iter(&text)
                     .filter(|m| !m.is_empty())
                     .map(|m| (column(m.start()), column(m.end())))
@@ -67,9 +75,10 @@ impl<'a> Needle<'a> {
             // Each match after the last one's end, as tmux's
             // window_copy_search_marks steps over a match it marks.
             Self::Text(needle) => {
-                let len = needle.chars().count();
+                let needle = in_columns(needle);
+                let len = needle.len();
                 let mut next = 0;
-                match_starts(line, needle)
+                match_starts(line, &needle)
                     .into_iter()
                     .filter(|&x| {
                         let free = x >= next;
@@ -91,7 +100,7 @@ impl Needle<'_> {
     /// the rows it wraps into.
     fn reach(&self, width: usize) -> usize {
         match self {
-            Self::Text(needle) => width + needle.chars().count().saturating_sub(1),
+            Self::Text(needle) => width + in_columns(needle).len().saturating_sub(1),
             Self::Regex(_) => SEARCH_MAX_LINE.max(width),
             Self::Invalid => 0,
         }
@@ -132,10 +141,23 @@ pub struct Span {
     pub to: usize,
 }
 
-/// Columns where `needle` starts in `line`: literal, and case-insensitive
-/// unless the needle has an uppercase letter (smart case).
-pub(super) fn match_starts(line: &[char], needle: &str) -> Vec<usize> {
-    let needle: Vec<char> = needle.chars().collect();
+/// `text` a character a column, as a line's [`Line::chars`]: each wide
+/// character followed by [`PADDING`].
+fn in_columns(text: &str) -> Vec<char> {
+    let mut columns = Vec::new();
+    for c in text.chars() {
+        columns.push(c);
+        if ratatui::text::Span::raw(c.to_string()).width() > 1 {
+            columns.push(PADDING);
+        }
+    }
+    columns
+}
+
+/// Columns where `needle`, a character a column, starts in `line`:
+/// literal, and case-insensitive unless the needle has an uppercase letter
+/// (smart case).
+pub(super) fn match_starts(line: &[char], needle: &[char]) -> Vec<usize> {
     if needle.is_empty() || needle.len() > line.len() {
         return Vec::new();
     }

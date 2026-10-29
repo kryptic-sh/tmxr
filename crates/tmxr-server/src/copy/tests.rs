@@ -293,6 +293,28 @@ fn a_match_split_by_a_wrap_is_marked_on_both_lines() {
     assert_eq!(cm.match_at_cursor().as_deref(), Some("foobar"));
 }
 
+/// Wide characters are searched for by the columns they take, as tmux's
+/// compares cells: two in a row match, and a match covers both columns of
+/// each, as text or as a regular expression.
+#[test]
+fn a_search_matches_wide_characters_by_their_columns() {
+    let mut cm = at_start("abc 日本語 xyz");
+    let span = |start, len| search::Span {
+        start: (0, start),
+        len,
+        from: start,
+        to: start + len,
+    };
+    cm.apply("search-forward", Some("日本"));
+    assert_eq!((cm.cy, cm.cx), (0, 4));
+    assert_eq!(cm.match_spans(0), [span(4, 4)]);
+    assert_eq!(cm.match_at_cursor().as_deref(), Some("日本"));
+    cm.apply("search-forward", Some("語 x"));
+    assert_eq!(cm.match_spans(0), [span(8, 4)]);
+    cm.apply("search-forward", Some("本.*x"));
+    assert_eq!(cm.match_spans(0), [span(6, 6)]);
+}
+
 #[test]
 fn other_end_swaps_cursor_and_anchor_and_a_count_by_parity() {
     let mut cm = at_start("hello world");

@@ -32,6 +32,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   set the kitty keyboard flags or `modifyOtherKeys` and then reset the terminal
   (or crashed, with the shell resetting it) left the shell getting `^[[120;5u`
   for `C-x`; it now gets `^X`, as under tmux.
+- **Copy mode finds wide characters next to each other**: searching for `日本`
+  in `日本語` found nothing, as each wide character's second column read as a
+  space. A search now compares columns as tmux's does, and its highlight covers
+  both columns of each wide character it matched.
 
 ## [0.12.2] - 2026-10-29
 
