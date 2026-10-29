@@ -348,9 +348,9 @@ fn run_command(
             if !cm.apply_counted(other, args.first().map(String::as_str)) {
                 return Err(format!("unknown copy-mode command: {other}"));
             }
-            let scrolled_out = matches!(other, "scroll-down" | "page-down")
+            // As tmux 3.6's, with a selection or without.
+            let scrolled_out = matches!(other, "scroll-down" | "page-down" | "halfpage-down")
                 && cm.scroll_exit
-                && cm.anchor.is_none()
                 && cm.position().0 == 0;
             if scrolled_out {
                 leave(srv, pane);

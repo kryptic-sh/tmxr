@@ -62,6 +62,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   in application mode), which ncurses programs read as three loose bytes. With a
   modifier they stay `CSI 1;m H` / `F`, and under the kitty keyboard protocol
   kitty's own `CSI H` / `F`.
+- **`copy-mode -e` leaves at the bottom after `halfpage-down` too**, and with a
+  selection made, as tmux's: it left only after `scroll-down` or `page-down`
+  with nothing selected.
 
 ## [0.12.2] - 2026-10-29
 

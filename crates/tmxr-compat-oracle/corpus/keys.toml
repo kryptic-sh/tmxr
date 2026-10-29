@@ -1736,3 +1736,23 @@ steps = [
 checks = [
   { format = "#{@before} #{@during} #{@refreshed} #{pane_unseen_changes}", expect = "0 1 1 0" },
 ]
+
+[[cases]]
+# copy-mode -e leaves once halfpage-down or page-down reaches the bottom,
+# a selection or not.
+name = "copy_mode_e_leaves_at_the_bottom_as_tmux"
+unix_only = true
+program = "seq 100; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "copy-mode -e -t o" },
+  { run = "send -t o -X halfpage-up" },
+  { run = "send -t o -X halfpage-down" },
+  { run = "set -gF @half '#{pane_in_mode}'" },
+  { run = "copy-mode -e -t o" },
+  { run = "send -t o -X halfpage-up" },
+  { run = "send -t o -X begin-selection" },
+  { run = "send -t o -X page-down" },
+  { run = "set -gF @selected '#{pane_in_mode}'" },
+]
+checks = [{ format = "#{@half} #{@selected}", expect = "0 0" }]
