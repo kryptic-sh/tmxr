@@ -62,7 +62,8 @@ pub struct CopyMode {
     pub prompts: Vec<usize>,
     pub outputs: Vec<usize>,
     /// When each line went into the pane's history, as
-    /// [`tmxr_term::Emulator::line_time`]; lines past its end have none.
+    /// [`tmxr_term::Emulator::line_time`]; lines the history never had have
+    /// none.
     pub times: Vec<u64>,
     /// First line shown.
     pub top: usize,
@@ -646,7 +647,7 @@ impl CopyMode {
     }
 
     /// `#{top_line_time}`: when the view's top line went into the
-    /// history, 0 for a line of the screen.
+    /// history, 0 for a line of the screen the history never had.
     pub fn top_line_time(&self) -> u64 {
         self.times.get(self.top).copied().unwrap_or(0)
     }

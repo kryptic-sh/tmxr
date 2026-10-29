@@ -32,7 +32,7 @@ fn snapshot_for(srv: &mut Server, pane: PaneId, source: PaneId) -> Option<CopyMo
     let mut cm = CopyMode::new(emu.screen_mut());
     cm.prompts = emu.prompt_lines(false);
     cm.outputs = emu.prompt_lines(true);
-    cm.times = (0..emu.history_size()).map(|l| emu.line_time(l)).collect();
+    cm.times = (0..cm.lines.len()).map(|l| emu.line_time(l)).collect();
     if source != pane {
         cm.source = Some(source);
         cm.resize(cols, rows);

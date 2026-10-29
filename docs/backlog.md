@@ -256,7 +256,12 @@ table. What has been verified, and how:
   (`hscrolled`, which `CSI 2 J` and `clear-history` reset), vt100 any row its
   history has; and once the history has dropped rows at its limit, vt100 brings
   blank rows back in their place, where tmux brings none. Neither is compared
-  with tmux.
+  with tmux. A row taken back keeps its history time
+  (`a_line_the_screen_takes_back_keeps_its_time_as_tmux`), until it scrolls back
+  in or a full reset, and a row a shrink pushes in takes none
+  (`a_line_a_shrink_pushes_into_the_history_has_no_time_as_tmux`); tmxr keeps it
+  through anything else done to the row (an erase, a line inserted above it),
+  which tmux's grid may not (not compared).
 - **Windows: an Enter sent before the shell's first read can stall**
   (2026-10-10). Probing with the real binary, `new-window -d` then at once
   `send-keys 'echo markN' Enter`, about 1 in 100 cmd panes showed the text but
@@ -901,10 +906,7 @@ table. What has been verified, and how:
   `keys_match_tmux` (oracle) failed once each in a full
   `cargo test --workspace`; each passed alone (the first three times running)
   and in the next full run. Not looked into. `keys_match_tmux` failed so again
-  on 2026-10-29 (its failing case not kept), passing on the rerun, and once more
-  that day on `the_top_lines_time_as_tmux`, where tmux's side gave a time for
-  the view's top line at the bottom of the history (`@bottom`, which should be
-  0, a screen line) and tmxr 0; it passed in the four runs around it.
+  on 2026-10-29 (its failing case not kept), passing on the rerun.
 - **Flags the command table accepts that change nothing** (from an audit of
   every `cmd!` entry against its arm and helpers, 2026-10-18; the ones that did
   matter are implemented or refused since). Harmless, as what happens anyway:

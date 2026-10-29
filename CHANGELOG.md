@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Copy mode's `#{top_line_time}` follows tmux's line times through a resize**:
+  a line a taller pane takes back from the history keeps its time, where it gave
+  0, and a line a shorter pane pushes into the history takes none, where it took
+  the time of the resize. Only output scrolling a line in stamps it, as tmux's.
+
 ## [0.12.1] - 2026-10-29
 
 ### Changed

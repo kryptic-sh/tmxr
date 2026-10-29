@@ -869,6 +869,42 @@ checks = [
 ]
 
 [[cases]]
+name = "a_line_the_screen_takes_back_keeps_its_time_as_tmux"
+# tmux's grid lines carry their time: a line a taller pane takes back from
+# the history onto the screen keeps it. Printed a line at a time, as a
+# burst before the client's size lands leaves nothing to take back.
+unix_only = true
+attach = true
+size = [40, 8]
+program = "for i in $(seq 1 20); do echo \"line $i\"; sleep 0.03; done; exec sleep 1000"
+steps = [
+  { wait_text = "line 20" },
+  { run = "set -g status off" },
+  { run = "copy-mode -t o" },
+]
+checks = [
+  { format = "#{e|>:#{top_line_time},1000}", expect = "1" },
+]
+
+[[cases]]
+name = "a_line_a_shrink_pushes_into_the_history_has_no_time_as_tmux"
+# tmux's screen_resize_y stamps no line a shrink pushes into the history,
+# so the screen takes it back with none.
+unix_only = true
+attach = true
+size = [40, 8]
+program = "for i in $(seq 1 20); do echo \"line $i\"; sleep 0.03; done; exec sleep 1000"
+steps = [
+  { wait_text = "line 20" },
+  { run = "split-window -v -t o" },
+  { run = "kill-pane -t o.1" },
+  { run = "copy-mode -t o" },
+]
+checks = [
+  { format = "#{top_line_time}", expect = "0" },
+]
+
+[[cases]]
 name = "copy_mode_rewraps_on_a_width_change_as_tmux"
 # tmux's window_copy_resize rewraps copy mode's copy of the pane, the
 # cursor keeping its place in its line.

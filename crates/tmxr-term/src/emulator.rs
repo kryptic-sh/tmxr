@@ -296,9 +296,14 @@ pub struct Emulator {
     history: usize,
     /// When each line of history went into it, in seconds since the epoch,
     /// as tmux's grid line time; `times_from` is the first one's number (as
-    /// [`Hooks::dropped`] counts lines). 0 for a line a rewrap made.
+    /// [`Hooks::dropped`] counts lines). 0 for a line a rewrap made. Lines
+    /// the screen took back from the history keep theirs past its end, as
+    /// tmux's grid lines carry their time.
     times: std::collections::VecDeque<u64>,
     times_from: usize,
+    /// The number of the line after the history's last when it was last
+    /// counted: lines from there are new to it.
+    history_end: usize,
 }
 
 impl Emulator {
@@ -323,6 +328,7 @@ impl Emulator {
             history: 0,
             times: std::collections::VecDeque::new(),
             times_from: 0,
+            history_end: 0,
         }
     }
 
@@ -351,14 +357,18 @@ impl Emulator {
         self.scrollback
     }
 
-    fn count_history(&mut self) {
+    /// `resized` says a resize moved the lines, as tmux's screen_resize_y:
+    /// it stamps none it pushes into the history, and the lines it takes
+    /// back onto the screen keep their times. Otherwise lines the history
+    /// lost are gone for good.
+    fn count_history(&mut self, resized: bool) {
         self.history = self.parser.screen().scrollback_len();
-        self.stamp_history();
+        self.stamp_history(resized);
     }
 
-    /// Lines new to the history take the time now, as tmux's
+    /// Lines output scrolled into the history take the time now, as tmux's
     /// grid_scroll_history stamps them; lines it lost take theirs away.
-    fn stamp_history(&mut self) {
+    fn stamp_history(&mut self, resized: bool) {
         let dropped = self.parser.callbacks().dropped;
         while self.times_from < dropped && self.times.pop_front().is_some() {
             self.times_from += 1;
@@ -367,20 +377,32 @@ impl Emulator {
             self.times_from = dropped;
         }
         let end = dropped + self.history;
-        let known = self.times_from + self.times.len();
-        if known > end {
+        if end < self.history_end && !resized {
             self.times.truncate(end.saturating_sub(self.times_from));
-        } else {
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |d| d.as_secs());
-            self.times.extend(std::iter::repeat_n(now, end - known));
+        }
+        let fresh = self.history_end.max(self.times_from)..end;
+        self.history_end = end;
+        if fresh.is_empty() {
+            return;
+        }
+        if self.times.len() < end - self.times_from {
+            self.times.resize(end - self.times_from, 0);
+        }
+        if resized {
+            return;
+        }
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        for line in fresh {
+            self.times[line - self.times_from] = now;
         }
     }
 
     /// When line `line` of the history (the oldest 0) went into it, in
     /// seconds since the epoch (tmux's `#{top_line_time}` for a view
-    /// starting there); 0 for a line of the screen or one a rewrap made.
+    /// starting there); 0 for one a rewrap made, and for a line of the
+    /// screen unless the screen took it back from the history.
     pub fn line_time(&self, line: usize) -> u64 {
         let number = self.parser.callbacks().dropped + line;
         number
@@ -395,7 +417,7 @@ impl Emulator {
         let lost = self.parser.screen().scrollback_len();
         self.parser.callbacks_mut().dropped += lost;
         self.parser.screen_mut().clear_scrollback();
-        self.count_history();
+        self.count_history(false);
     }
 
     /// The lines of the history and screen, the oldest 0, that the shell
@@ -449,7 +471,7 @@ impl Emulator {
         hooks.input_mark = mark;
         hooks.kitty_flags.clear();
         self.reset_keys();
-        self.count_history();
+        self.count_history(false);
     }
 
     /// The `extended-keys` option, for the output that follows: `off`
@@ -482,6 +504,9 @@ impl Emulator {
                     let hooks = self.parser.callbacks_mut();
                     (hooks.palette_fg, hooks.palette_bg) = (None, None);
                     self.palette.clear();
+                    // The new screen's lines are none the history had.
+                    let history = self.history_end.saturating_sub(self.times_from);
+                    self.times.truncate(history);
                     self.parser.process(b"\x1bc");
                 }
                 Piece::ColourQuery { which, bel } => {
@@ -538,7 +563,7 @@ impl Emulator {
         // Leaving the alternate screen reflows a normal screen resized
         // under it.
         self.follow_reflow();
-        self.count_history();
+        self.count_history(false);
         std::mem::take(&mut self.parser.callbacks_mut().replies)
     }
 
@@ -562,7 +587,7 @@ impl Emulator {
             .screen_mut()
             .set_size(dimension(rows), dimension(cols));
         self.follow_reflow();
-        self.count_history();
+        self.count_history(true);
     }
 
     /// After a reflow, the line numbers the emulator keeps follow their
@@ -600,14 +625,18 @@ impl Emulator {
                 .checked_sub(before)
                 .and_then(|old| reflow.lines.get(old).copied().flatten());
             if line != last
-                && let Some(slot) = line.and_then(|l| times.get_mut(l))
+                && let Some(line) = line
             {
-                *slot = time;
+                if times.len() <= line {
+                    times.resize(line + 1, 0);
+                }
+                times[line] = time;
             }
             last = line;
         }
         self.times = times;
         self.times_from = after;
+        self.history_end = after + history;
     }
 
     /// Whether the program asked to be told of focus changes (mode 1004),
@@ -895,6 +924,58 @@ mod tests {
         assert_eq!(e.history_size(), 3);
         assert!((0..3).all(|l| e.line_time(l) > 0));
         assert_eq!(e.line_time(3), 0);
+    }
+
+    #[test]
+    fn a_shrink_stamps_no_line_it_pushes_into_the_history() {
+        let mut e = Emulator::new(3, 10, 100);
+        e.process(b"a\r\nb\r\nc");
+        e.resize(2, 10);
+        assert_eq!(e.history_size(), 1);
+        assert_eq!(e.line_time(0), 0, "as tmux's screen_resize_y");
+        // Taken back and pushed again, a stamped line keeps its time.
+        e.process(b"\r\nd");
+        let went_in = e.line_time(1);
+        assert!(went_in > 0);
+        e.resize(3, 10);
+        e.resize(2, 10);
+        assert_eq!((e.line_time(0), e.line_time(1)), (0, went_in));
+    }
+
+    #[test]
+    fn a_line_the_screen_takes_back_keeps_its_time() {
+        let mut e = Emulator::new(2, 10, 100);
+        e.process(b"a\r\nb\r\nc\r\nd");
+        assert_eq!(e.history_size(), 2);
+        let went_in = e.line_time(1);
+        assert!(went_in > 0);
+        // Taller, the screen takes `b` back from the history; it keeps its
+        // time, as tmux's grid line does.
+        e.resize(3, 10);
+        assert_eq!(e.history_size(), 1);
+        assert_eq!((e.line_time(1), e.line_time(2)), (went_in, 0));
+        // Through a rewrap too.
+        e.resize(3, 5);
+        assert_eq!(e.line_time(1), went_in);
+        // Back in the history it is stamped again, and it was not stamped
+        // twice before: the history's newest line is still `b`.
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        e.process(b"\r\ne");
+        assert_eq!(e.history_size(), 2);
+        assert!(e.line_time(1) > went_in);
+        assert_eq!(e.line_time(2), 0);
+        // A full reset's new screen has none of the lines it took back.
+        let mut e = Emulator::new(2, 10, 100);
+        e.process(b"a\r\nb\r\nc");
+        e.resize(3, 10);
+        assert!(e.line_time(0) > 0);
+        e.process(b"\x1bc");
+        assert_eq!((0..3).map(|l| e.line_time(l)).max(), Some(0));
+        // Nor of the history it drops.
+        e.process(b"a\r\nb\r\nc\r\nd\r\ne");
+        assert_eq!(e.history_size(), 2);
+        e.process(b"\x1bc");
+        assert_eq!((0..3).map(|l| e.line_time(l)).max(), Some(0));
     }
 
     #[test]
