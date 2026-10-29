@@ -92,6 +92,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Nesting is refused only into the same server**: the client refused to attach
   whenever `$TMXR` was set, so `tmxr -L other` inside a tmxr pane failed; it now
   refuses only when `$TMXR` names the server it is attaching to.
+- **Enter on a disabled menu item runs nothing**: an item the mouse left
+  selected ran on Enter though its name starts with `-`; the menu now closes (or
+  with `-O` stays), as tmux's.
 
 ## [0.12.2] - 2026-10-29
 

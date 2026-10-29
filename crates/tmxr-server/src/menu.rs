@@ -159,8 +159,14 @@ impl Menu {
         match ev.code {
             KeyCode::Esc | KeyCode::Char('q') => return OverlayAction::Close,
             KeyCode::Char('c') if ctrl => return OverlayAction::Close,
+            // As tmux's: a disabled item the mouse left selected runs
+            // nothing, and closes the menu unless it stays open.
             KeyCode::Enter => {
-                return self.selected.map_or(OverlayAction::Close, |i| self.run(i));
+                return match self.selected {
+                    Some(i) if self.selectable(i) => self.run(i),
+                    Some(_) if self.stay_open => OverlayAction::Keep,
+                    _ => OverlayAction::Close,
+                };
             }
             KeyCode::Up | KeyCode::Char('k') => self.step(false),
             KeyCode::Char('p') if ctrl => self.step(false),
@@ -361,6 +367,26 @@ mod tests {
         assert!(!m.selectable(2), "a - name is disabled");
         assert!(Menu::parse("t".into(), &args(&["Only", "o"]), 0, &|w| w.to_owned()).is_err());
         assert!(Menu::parse("t".into(), &args(&["-Off", "", "ls"]), 0, &|w| w.to_owned()).is_err());
+    }
+
+    /// Enter on a disabled item the mouse left selected runs nothing, as
+    /// tmux's menu_key_cb: the menu closes, or with -O stays.
+    #[test]
+    fn enter_on_a_disabled_item_runs_nothing() {
+        let mut m = Menu::parse(
+            "t".into(),
+            &args(&["Split", "s", "split-window", "-Off", "", "ls"]),
+            0,
+            &|w| w.to_owned(),
+        )
+        .unwrap();
+        let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        m.selected = Some(1);
+        assert!(matches!(m.key(&enter), OverlayAction::Close));
+        m.stay_open = true;
+        assert!(matches!(m.key(&enter), OverlayAction::Keep));
+        m.selected = Some(0);
+        assert!(matches!(m.key(&enter), OverlayAction::Run(c) if c == "split-window"));
     }
 
     #[test]
