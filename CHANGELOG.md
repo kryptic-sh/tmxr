@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-10-29
+
 ### Fixed
 
 - **Copy mode's `#{top_line_time}` follows tmux's line times through a resize**:
@@ -1907,7 +1909,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   published to GitHub Releases with `.sha256` files, and shell completions and a
   man page from the hidden `tmxr --completions <shell>` and `tmxr --man`.
 
-[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.12.1...HEAD
+[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.12.2...HEAD
+[0.12.2]: https://github.com/kryptic-sh/tmxr/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/kryptic-sh/tmxr/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/kryptic-sh/tmxr/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/kryptic-sh/tmxr/compare/v0.10.0...v0.11.0
