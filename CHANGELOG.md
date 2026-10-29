@@ -36,6 +36,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   in `日本語` found nothing, as each wide character's second column read as a
   space. A search now compares columns as tmux's does, and its highlight covers
   both columns of each wide character it matched.
+- **`set-buffer -a` appends only to the buffer `-b` names**, as tmux's: without
+  `-b` it makes a new buffer of the data rather than joining it to the newest.
+  `delete-buffer` of a buffer that is not there says `unknown buffer: NAME` (or
+  `no buffer`), where it succeeded silently.
 
 ## [0.12.2] - 2026-10-29
 

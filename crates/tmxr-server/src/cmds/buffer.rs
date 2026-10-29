@@ -100,9 +100,11 @@ pub(super) fn run(
             // Unlike tmux, the data is format-expanded, so a bind can copy
             // `#{pane_current_path}` (tmux-yank's prefix-Y) without a script.
             let data = expand_for(srv, ctx, None, data);
+            // -a appends only to a buffer -b names, as tmux's: without one
+            // it makes a new buffer of the data.
             let data = match (a.has('a'), a.value('b')) {
-                (true, name) => {
-                    let base = find_buffer(srv, name);
+                (true, Some(name)) => {
+                    let base = find_buffer(srv, Some(name));
                     format!(
                         "{}{data}",
                         base.map(|b| b.data.as_str()).unwrap_or_default()
@@ -165,9 +167,13 @@ pub(super) fn run(
             }
         }
         "delete-buffer" => match a.value('b') {
-            Some(n) => srv.buffers.retain(|b| b.name != n),
+            Some(n) => {
+                let at = srv.buffers.iter().position(|b| b.name == n);
+                srv.buffers
+                    .remove(at.ok_or_else(|| format!("unknown buffer: {n}"))?);
+            }
             None => {
-                srv.buffers.pop_front();
+                srv.buffers.pop_front().ok_or("no buffer")?;
             }
         },
         _ => return Ok(false),

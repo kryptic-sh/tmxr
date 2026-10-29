@@ -156,6 +156,26 @@ fn the_buffer_limit_drops_only_automatic_buffers() {
     assert!(listed.contains(&"buffer10".to_owned()), "{listed:?}");
 }
 
+/// Deleting a buffer that is not there is an error, as tmux 3.6's says
+/// (checked by hand, 2026-10-29).
+#[test]
+fn delete_buffer_without_the_buffer_is_an_error() {
+    let t = Tmxr::new("delbuf");
+    t.run(&["new-session", "-d", "-s", "db"]);
+    let err = |args: &[&str]| {
+        let out = t.output(args);
+        assert!(!out.status.success(), "{args:?}");
+        String::from_utf8_lossy(&out.stderr).trim().to_owned()
+    };
+    t.run(&["set-buffer", "-b", "one", "1"]);
+    assert_eq!(
+        err(&["delete-buffer", "-b", "nosuch"]),
+        "unknown buffer: nosuch"
+    );
+    t.run(&["delete-buffer", "-b", "one"]);
+    assert_eq!(err(&["delete-buffer"]), "no buffer");
+}
+
 #[test]
 fn buffers_save_to_and_load_from_files() {
     let t = Tmxr::new("buffers");

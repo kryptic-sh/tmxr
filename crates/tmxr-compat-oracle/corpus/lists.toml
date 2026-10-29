@@ -111,6 +111,19 @@ steps = [{ run = "set-buffer -w -t nosuch zqbuf" }]
 checks = [{ command = "show-buffer", expect = "zqbuf" }, { command = "set-buffer -w -t nosuch again" }]
 
 [[cases]]
+# -a appends only to the buffer -b names; without -b it is a new buffer.
+# (Deleting one that is not there is an error, which the e2e tests check.)
+name = "set_buffer_a_appends_only_to_a_named_buffer"
+steps = [
+  { run = "set-buffer -b one one" },
+  { run = "set-buffer -a two" },
+  { run = "set-buffer -a -b one more" },
+]
+checks = [
+  { command = "list-buffers -F '#{buffer_sample}'", expect = "onemore\ntwo" },
+]
+
+[[cases]]
 name = "session_groups_share_their_windows_as_tmux"
 steps = [
   { run = "new-window -d -t o:1" },
