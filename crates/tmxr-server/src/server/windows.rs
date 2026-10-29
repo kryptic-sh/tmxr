@@ -231,13 +231,18 @@ impl Server {
         let Some(win) = self.windows.remove(&wid) else {
             return;
         };
+        self.kill_panes(&win);
+        self.unlink_window(wid);
+    }
+
+    /// End the programs of a window that is going, and forget its panes.
+    fn kill_panes(&mut self, win: &Window) {
         for p in win.panes() {
             if let Some(mut pane) = self.panes.remove(&p) {
                 let _ = pane.pty.kill();
             }
             self.commands.remove(&p);
         }
-        self.unlink_window(wid);
     }
 
     /// Take `wid` out of every session holding it. The window itself and
@@ -337,11 +342,7 @@ impl Server {
                 continue;
             }
             if let Some(win) = self.windows.remove(&w) {
-                for p in win.panes() {
-                    if let Some(mut pane) = self.panes.remove(&p) {
-                        let _ = pane.pty.kill();
-                    }
-                }
+                self.kill_panes(&win);
             }
         }
         // Where its clients go, as tmux's server_destroy_session.
