@@ -277,20 +277,25 @@ impl Server {
         };
         let cwd = cwd.unwrap_or_else(|| p.start_cwd.clone());
         let session = self.session_of_window(wid).ok_or("window has no session")?;
-        // The pane's hooks belong to the pane, not its program.
-        let mut hooks = crate::hooks::HookTable::new();
-        if let Some(mut old) = self.panes.remove(&pid) {
+        // What belongs to the pane, not its program, stays with it, as tmux
+        // keeps the same pane for the new program: its hooks and options,
+        // its input turned off, its pipe and its last search.
+        let old = self.panes.remove(&pid).map(|mut old| {
             let _ = old.pty.kill();
-            hooks = std::mem::take(&mut old.hooks);
-        }
+            old
+        });
         self.commands.remove(&pid);
         if let Err(e) = self.spawn_pane(pid, wid, session, Some(&argv), cwd, env, rect.w, rect.h) {
             // The old program is gone: take its cell out of the layout too.
             self.remove_pane_from_window(wid, pid);
             return Err(e);
         }
-        if let Some(p) = self.panes.get_mut(&pid) {
-            p.hooks = hooks;
+        if let (Some(old), Some(p)) = (old, self.panes.get_mut(&pid)) {
+            p.hooks = old.hooks;
+            p.options = old.options;
+            p.input_off = old.input_off;
+            p.pipe = old.pipe;
+            p.last_search = old.last_search;
         }
         self.relayout(wid);
         Ok(())
@@ -488,7 +493,9 @@ impl Server {
                         .filter(|l| *l != pane && win.layout.contains(*l as usize))
                         .unwrap_or(focus as PaneId);
                 }
-                if win.last_pane == Some(pane) {
+                // The pane gone is no last pane, nor is the one that took
+                // its place, as tmux's window_lost_pane.
+                if win.last_pane == Some(pane) || win.last_pane == Some(win.active) {
                     win.last_pane = None;
                 }
                 win.zoomed = false;

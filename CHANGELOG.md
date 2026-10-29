@@ -70,6 +70,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   destination's `+N` / `-N` counts from the current window (`new-window -t +1`),
   where `+1` was index 1; and a window or pane id in a session group names the
   member active last, where it was the first by number.
+- **Panes and windows move and select as tmux's do**: `swap-window` selects as
+  tmux 3.6 does (with `-d` the index swapped into, without it the index it had),
+  where it did the reverse; `join-pane` without `-d` makes the target's window
+  current; `last-pane` in a window of two with no last pane takes the other one,
+  where it said `no last pane`; and the window `break-pane` (or a pane closing)
+  leaves takes its last pane as active and keeps no last pane, so
+  `kill-pane -t '{last}'` can no longer reach the pane that moved away.
+- **`respawn-pane` keeps what is the pane's**: its own options, hooks, input
+  turned off (`select-pane -d`), `pipe-pane` and last search. A pane with
+  `set -p remain-on-exit on` closed when the respawned program ended, which
+  could take the server down with its last pane.
 
 ## [0.12.2] - 2026-10-29
 

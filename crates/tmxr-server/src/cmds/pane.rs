@@ -111,7 +111,14 @@ pub(super) fn run(
         }
         "last-pane" => {
             let (_, wid, _) = target::window(srv, ctx, a.value('t'))?;
-            let last = srv.windows[&wid].last_pane.ok_or("no last pane")?;
+            // With none, a window of two panes takes the other one, as
+            // tmux's.
+            let win = &srv.windows[&wid];
+            let other = || {
+                let panes = win.panes();
+                (panes.len() == 2).then(|| panes.into_iter().find(|p| *p != win.active))?
+            };
+            let last = win.last_pane.or_else(other).ok_or("no last pane")?;
             // -d / -e: the last pane's input off or on, and it stays last.
             if a.has('d') || a.has('e') {
                 set_input_off(srv, last, a.has('d'));
@@ -269,7 +276,7 @@ pub(super) fn run(
                 // The marked pane, else the current one, as tmux's.
                 (None, None) => target::pane(srv, ctx, None)?.2,
             };
-            let dst = target::pane(srv, ctx, a.value('t'))?.2;
+            let (sid, wid, dst) = target::pane(srv, ctx, a.value('t'))?;
             let size = split_size(a)?;
             srv.join_pane(
                 src,
@@ -280,6 +287,12 @@ pub(super) fn run(
                 size,
                 !a.has('d'),
             )?;
+            // Without -d the target's window becomes current too, as tmux's.
+            if !a.has('d')
+                && let Some(idx) = srv.sessions.get(&sid).and_then(|s| s.index_of(wid))
+            {
+                srv.select_window(sid, idx)?;
+            }
         }
         "rotate-window" => {
             let (_, wid, _) = target::window(srv, ctx, a.value('t'))?;
@@ -343,16 +356,9 @@ pub(super) fn run(
                 return Err(format!("index in use: {i}"));
             }
             let (cols, rows) = (srv.windows[&wid].cols, srv.windows[&wid].rows);
-            {
-                let w = srv.windows.get_mut(&wid).ok_or("no window")?;
-                if let Ok(focus) = w.layout.remove_leaf(pid as usize) {
-                    if w.active == pid {
-                        w.active = focus as PaneId;
-                    }
-                    w.zoomed = false;
-                }
-            }
-            srv.relayout(wid);
+            // The window it leaves takes its last pane as active, and has
+            // none after, as tmux's window_lost_pane.
+            srv.remove_pane_from_window(wid, pid);
             let title = name.map_or_else(
                 || srv.commands.get(&pid).cloned().unwrap_or_default(),
                 str::to_owned,

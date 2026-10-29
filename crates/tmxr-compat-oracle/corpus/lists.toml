@@ -154,6 +154,29 @@ checks = [
 ]
 
 [[cases]]
+# swap-window -d selects the index swapped into, and without -d the session
+# stays on its index (tmux 3.6, the reverse of its manual); join-pane without
+# -d makes the target's window current.
+name = "swap_window_and_join_pane_select_as_tmux"
+steps = [
+  { run = "rename-window -t o:0 a" },
+  { run = "new-window -d -t o:1 -n b" },
+  { run = "new-window -d -t o:2 -n c" },
+  { run = "swap-window -d -s o:0 -t o:2" },
+  { run = "set -gF @swapped_d '#{window_index} #{window_name}'" },
+  { run = "select-window -t o:0" },
+  { run = "swap-window -s o:0 -t o:1" },
+  { run = "set -gF @swapped '#{window_index} #{window_name}'" },
+  { run = "new-window -d -t o:3 -n d" },
+  { run = "split-window -d -t o:3" },
+  { run = "join-pane -s o:3.1 -t o:1" },
+]
+checks = [
+  { format = "#{@swapped_d}|#{@swapped}", expect = "2 a|0 b" },
+  { format = "#{window_index} #{window_name} #{window_panes}", expect = "1 c 2" },
+]
+
+[[cases]]
 # A bare number is a pane of the current window when it has one, else a
 # window (its active pane).
 name = "a_bare_number_target_falls_back_to_a_window"

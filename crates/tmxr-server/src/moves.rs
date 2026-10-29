@@ -176,13 +176,15 @@ impl Server {
     }
 
     /// Exchange the windows at two places (session, index), which may be in
-    /// different sessions. Unless `keep`, the window moved into `b`'s place
-    /// becomes current there.
+    /// different sessions. With `select` (tmux 3.6's `-d`, the reverse of
+    /// what its manual says) each session's current window becomes the one
+    /// at the index swapped into it; without, each stays on the index it
+    /// had.
     pub fn swap_windows(
         &mut self,
         (sa, ia): (SessionId, u32),
         (sb, ib): (SessionId, u32),
-        keep: bool,
+        select: bool,
     ) -> Result<(), String> {
         let at = |srv: &Self, s: SessionId, i: u32| {
             srv.sessions
@@ -204,8 +206,11 @@ impl Server {
             self.fit_window(a, sb);
             self.fit_window(b, sa);
         }
-        if !keep {
+        if select {
             self.select_window(sb, ib)?;
+            if sa != sb {
+                self.select_window(sa, ia)?;
+            }
         }
         self.mark_session_dirty(sa);
         self.mark_session_dirty(sb);

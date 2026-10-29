@@ -549,3 +549,42 @@ checks = [
   { command = "list-panes -t o -F '#{pane_index} #{?#{==:#{pane_pid},0},none,pid} #{pane_dead} #{cursor_flag}'" },
   { command = "capture-pane -p -t o.1" },
 ]
+
+[[cases]]
+# With no last pane, last-pane in a window of two takes the other one.
+name = "last_pane_without_one_takes_the_other_of_two"
+steps = [{ run = "split-window -d -t o" }, { run = "last-pane -t o" }]
+checks = [{ format = "#{pane_index}", expect = "1" }]
+
+[[cases]]
+# The window break-pane leaves takes its last pane as active and keeps
+# none, so last-pane then falls back to the other of two.
+name = "break_pane_leaves_the_last_pane_active"
+steps = [
+  { run = "split-window -t o" },
+  { run = "split-window -t o" },
+  { run = "select-pane -t o:0.0" },
+  { run = "break-pane -d -s o:0.0" },
+  { run = "set -gF @after '#{pane_id}'" },
+  { run = "last-pane -t o:0" },
+]
+checks = [{ format = "#{@after} #{pane_id}", expect = "%2 %1" }]
+
+[[cases]]
+# respawn-pane keeps what is the pane's, not its program's: its own options
+# (remain-on-exit keeps it when the new program ends) and its input off.
+name = "respawn_pane_keeps_the_panes_own_options"
+unix_only = true
+steps = [
+  { run = "new-window -d -t o:1 'sleep 100'" },
+  { run = "set -p -t o:1 remain-on-exit on" },
+  { run = "set -p -t o:1 @own x" },
+  { run = "select-pane -d -t o:1" },
+  { run = "respawn-pane -k -t o:1 true" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "show -pv -t o:1 @own", expect = "x" },
+  { format = "#{window_panes}", expect = "1" },
+  { command = "display -p -t o:1 '#{pane_dead} #{pane_input_off}'", expect = "1 1" },
+]
