@@ -44,134 +44,50 @@ table. What has been verified, and how:
 
 ## Bugs found by review (2026-10-29)
 
-A read-only review of the whole tree by sub-agents, after v0.12.2. Each entry
-below marked _reproduced_ was run on 2026-10-29 against a debug build of v0.12.2
-and, where it says so, tmux 3.6 with `-f /dev/null` (tmxr with its own defaults,
-so only the behaviour named was compared). _Read_ means confirmed by reading the
-code, not run. _Reported_ means as the reviewer said, not checked.
+A read-only review of the whole tree by sub-agents, after v0.12.2. What it found
+and was fixed is in the changelog; what is left is below. _Reproduced_ means run
+on 2026-10-29 against a debug build and, where it says so, tmux 3.6 with
+`-f /dev/null`. _Read_ means confirmed by reading the code, not run. _Reported_
+means as the reviewer said, not checked.
 
-### The server crashes
+### Wrong against tmux 3.6
 
-The server has no panic guard (no `catch_unwind`), so each of these takes every
-session down. All _reproduced_: the command printed
-`server closed the connection` and the server was gone.
-
-- **A format's float precision past 65535**: `display -p '#{e|+|f|70000:1,2}'`
-  panics in `format.rs` `expression` (Rust's formatter refuses the precision).
-  tmux prints the digits.
-- **A huge padding width**: `display -p '#{p99999999999:x}'` makes
-  `apply_modifiers` allocate the padding and abort. tmux treats it as 0.
-- **`source-file` that sources itself**: a file holding `source-file` of itself
-  recurses through `run_command_file` → `run_detached` → `run_list` without a
-  limit until the stack overflows. tmux stops at `CMD_SOURCE_FILE_DEPTH_LIMIT`
-  (50) with "too many nested files". _Reported, not run_:
-  `bind -n F1 send-keys -K F1` recurses the same way through `client_key` in
-  `cmds/pane.rs`.
-- **`pane-scrollbars-style 'width=40000,pad=40000'`** with `pane-scrollbars on`:
-  `scrollbar.rs` adds the two as `u16`. tmux accepts it and lives.
-- **`resize-pane -x 4294967295%`**: `u32::from(whole) * pc` overflows (a panic
-  in a debug build; the reviewer says a release build wraps instead, not run).
-  tmux says `width too large`.
-- **A deeply nested `select-layout`** (100000 levels, valid checksum, through
-  `source-file`): `layout.rs` `parse_cell` recurses once a level. tmux 3.6
-  survived the same file.
-
-### Wrong against tmux 3.6 (all _reproduced_ side by side)
-
-- **Window size is not recalculated when a client goes**: a 200x50 and an 80x24
-  client on one session, the small one detached, and the window stays 80x23
-  where tmux's becomes 200x49. `size_session` runs on attach, resize, focus and
-  option changes, not from `detach_as`, `switch_client`, the `Disconnected` arm
-  or `update_latest` (tmux: `recalculate_sizes` from `server_client_lost`,
-  `server_client_set_session`, `server_client_update_latest`). _Read, not run_:
-  the same after `switch-client` and, under `window-size latest`, after typing
-  in another client.
-- **A bare number as a pane target is not tried as a window**: `send-keys -t 1`
-  with window 1 and a one-pane window 0 gives `can't find pane: 1` (`target.rs`
-  `pane`); tmux's `cmd_find_get_pane` falls back to the window.
-- **`detach-client` with no flags from a command client detaches nothing** (it
-  uses `attached_client`); tmux detaches the best client. _Reported_: `-a`
-  spares the caller where tmux spares the target, and `suspend-client` has the
-  same lack of a current client.
-- **`respawn-pane` loses the pane's own options and its history**: with
-  `set -p remain-on-exit on`, the respawned program's exit closed the pane and
-  the server; a pane with 78 lines of history had 0 after the respawn, where
-  tmux keeps both (`respawn_pane` in `server/panes.rs` builds a new `Pane`,
-  keeping only `hooks`). _Reported_: `select-pane -d` and `pipe-pane` are lost
-  too.
-- **`swap-window` selects the opposite way to tmux 3.6**: with `-d` tmux shows
-  the moved window's new index (2 in the probe) and tmxr stays on 0; without
-  `-d` the reverse (`moves.rs` `swap_windows`).
-- **Destination offsets**: `new-window -d -t +1` from window 2 says
-  `index 1 in use` (`target.rs` `destination` parses `+1` as the number 1); tmux
-  makes window 3. _Reported_: `-N`, `sess:@id` and `move-window -t @3` also
-  differ.
-- **A window id picks the lowest-numbered session holding it**: in a group,
-  `display -p -t @0 '#S'` gave `a` where tmux gives the most recently active
-  member `b` (`session_of_window`; tmux's `cmd_find_best_session_with_window`).
-- **`join-pane` without `-d` stays on the source window**; tmux selects the
-  destination (`moves.rs` `join_pane`).
-- **`break-pane` leaves the moved pane as the old window's last pane**: after
-  `break-pane -d`, `kill-pane -t '{last}'` killed the pane in its new window;
-  tmux has no last pane there. _Reported_: the new active pane is the layout
-  sibling, not the last pane, and the mark is not cleared (`window_lost_pane`).
-- **`last-pane` lacks tmux's two-pane fallback**: after `split-window -d` it
-  says `no last pane`; tmux selects the other pane.
-- **`set-buffer -a` without `-b`** made a new buffer `onetwo` beside `one`;
-  tmux's makes a new buffer `two` (it appends only to a named buffer).
-  `delete-buffer -b nosuch` succeeds silently; tmux says `unknown buffer`.
-- **Server options**: `set -su escape-time` says `needs a value` (tmux resets
-  it); `set -sa copy-command x` replaced `a` with `x` where tmux made `ax`.
-- **Formats**: `#{==:a#,b,a#,b}` gives 0 (tmux 1: `#,` is not taken as an escape
-  when splitting arguments); `#{s/a/o:#{session_name}}` without its closing `/`
-  prints `s/a/o:a` (tmux `o`); `#{=3:…}` of `日本語` keeps all three (tmux one:
-  it counts width, not characters); `#{=0:session_name}` is empty (tmux shows
-  the whole value).
-- **Keys**: `^a` notation is refused (`set -g prefix ^a`, `bind ^b`:
-  `unknown key`); `set -g mouse On` is refused (tmux takes flag values in any
-  case).
-- **`~` inside double quotes is not expanded** in a config file: `"~/a"` stays
-  `~/a`; tmux gives the home directory (`tokenize.rs`).
-- **`pane-base-index` has no upper bound**: tmux refuses past 65535
-  (`value is too large`); tmxr took 4294967295, where `pane_index + base` would
-  overflow (`vars.rs`, `render.rs`; not run past one pane).
-- **Home and End are sent as `ESC [ H` / `ESC [ F`** (`ESC O H` / `ESC O F`
-  under cursor-key mode) by `encode.rs` `encode_key`; tmux sends `ESC [ 1 ~` and
-  `ESC [ 4 ~` whatever the mode, which the panes' `tmux-256color` terminfo
-  names. _Reported_: ncurses programs see tmxr's forms as three loose bytes.
-- **A full reset (`ESC c`) keeps the kitty keyboard flags**: after a program's
-  `CSI > 1 u` then `ESC c`, `C-x` reached `cat -v` as `^[[120;5u` where tmux's
-  gives `^X`. A program that crashes with the flags on leaves the shell getting
-  kitty keys (`emulator.rs` `feed`'s reset arm and `reset`). _Reported_: one
-  stack for both screens, so leaving the alternate screen keeps them too.
-- **Copy-mode search cannot match two wide characters in a row**: `日本` in
-  `abc 日本語 xyz` found nothing, where tmux's matched (`Line::chars` turns each
-  wide character's second cell into a space, `copy/search.rs`).
-- **`copy-mode -e` does not leave at the bottom** after `halfpage-down`, nor
-  with a selection made (`copy/commands.rs` `run_command`); tmux leaves in both.
-
-### Wrong, from the code (_read_)
-
-- **A disabled menu item runs**: `Menu::mouse` sets `selected` to whatever row
-  the mouse is over, and `Menu::key`'s Enter runs it through `run`, which does
-  not check `selectable`.
-- **A buffer edited from `choose-buffer` is written world-readable**:
-  `Server::edit_buffer` creates `tmxr.<pid>.<n>` in the temp directory with
-  `create_new` and default permissions (0644 under the usual umask); tmux uses
-  `mkstemp` (0600).
-- **Nesting is refused even into another server**: the client refuses to attach
-  whenever `$TMXR` is set; tmux's `server_client_check_nested` refuses only when
-  the client's terminal is one of that server's panes, so `tmux -L other` inside
-  tmux works.
-- **`suspend-client` then `fg`**: the `ServerMsg::Suspend` arm in `tmxr-client`
-  does not pause the input thread as the `Lock` arm does. The reviewer measured
-  `Guard::enter`'s kitty query waiting out 2 s beside a blocked reader, so the
-  redraw comes 2 s late and kitty keys stay off; the stall was not reproduced
-  here.
-- **`kill-session` leaves its panes in `Server::commands`** (`kill_window` and
-  `kill_pane` remove them); one entry a pane, never reused.
-- **`#{pane_current_command}` on Linux reads `/proc/<pid>/comm`**, cut to 15
-  characters; tmux's `osdep_get_name` reads `/proc/<pid>/cmdline`.
+- **`respawn-pane` empties the pane's history** (_reproduced_: 78 lines of
+  history were 0 after the respawn; tmux keeps them). `respawn_pane` in
+  `server/panes.rs` now carries the pane's hooks, options, input-off, pipe and
+  last search to the new `Pane`, but builds a new `Emulator`. tmux keeps the
+  pane's screen and runs `screen_reinit` on it: cursor home, modes and tabs
+  reset, the visible lines cleared, the history kept. Doing that here means
+  reusing the old emulator with a reset that leaves the history (vt1k's RIS
+  empties it) and resizing it to the new pty.
+- **`display -p` in a sourced file prints nothing** (_reproduced_ 2026-10-29: a
+  file of `display -p ok` printed `ok` from tmux 3.6, nothing from tmxr).
+  `run_command_file` in `cmds/source.rs` keeps only each statement's errors,
+  dropping its stdout.
+- **`#{pane_current_command}` on Linux reads `/proc/<pid>/comm`** (_read_),
+  which Linux cuts to 15 characters; tmux's `osdep_get_name` reads argv[0] from
+  `/proc/<pid>/cmdline` and the format runs it through `parse_window_name`
+  (strip a leading `-` or `exec `, cut at a space, take the basename). Not
+  changed because it also renames every automatically named window on Linux (a
+  `#!` script shows its interpreter, a login shell `-bash`), which wants its own
+  oracle cases first.
+- **`suspend-client` then `fg`** (_read_): the `ServerMsg::Suspend` arm in
+  `tmxr-client` does not pause the input thread as the `Lock` arm does. The
+  reviewer measured `Guard::enter`'s kitty query waiting out 2 s beside a
+  blocked reader; the stall was not reproduced here.
+- _Reported_: `bind -n F1 send-keys -K F1` recurses through `client_key` in
+  `cmds/pane.rs` the way a self-sourcing file did; check it, and tmux's
+  behaviour, before bounding it.
+- _Reported_: destination targets `-N` (with no session), `sess:@id` and
+  `move-window -t @3` differ from tmux (`target.rs` `destination`; `+N` / `-N`
+  after a session are fixed).
+- _Reported_: `break-pane` does not clear the mark from the moved pane
+  (`window_lost_pane` does).
+- _Reported_: the kitty keyboard flags are one stack for both screens, so
+  leaving the alternate screen keeps a program's flags; the protocol keeps one
+  per screen.
+- _Reported_: `select-pane -d` and `pipe-pane` were said to be lost on
+  `respawn-pane`; both are now carried over, with the options.
 
 ### Reported, not checked
 
@@ -203,6 +119,15 @@ session down. All _reproduced_: the command printed
   sides of `%if` / `%else`.
 - X11 `cmyk:` colour parsing is quadratic in its input (160K characters took 5.9
   s for the reviewer; whether vt1k caps an OSC's length was not checked).
+
+### Behaviour that is tmux's, though it surprises
+
+- **`swap-window` selects the opposite way to tmux's manual**: tmux 3.6 moves to
+  the swapped index with `-d` and stays put without it. tmxr follows what tmux
+  does, not what its manual says.
+- **A layout nested past 1000 splits is refused** (`layout.rs` `MOST_NESTED`),
+  where tmux 3.6 reads it. No window a terminal can show nests near that deep;
+  the bound keeps the recursive parse and layout off the stack's end.
 
 Not reproduced and dropped: a DCS cancelled by CAN swallowing the text after it
 (tmux 3.6 shows nothing either).
