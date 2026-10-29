@@ -1794,8 +1794,6 @@ fn a_detached_clients_palette_request_lets_the_other_answers_go() {
     assert!(asked.elapsed() < PROMPTLY, "took {:?}", asked.elapsed());
 }
 
-/// As above, for a client whose connection is lost without a detach.
-#[cfg(unix)]
 /// Attaching inside one of a server's own panes is refused, as tmux's
 /// server_client_check_nested; inside another server's pane it is not.
 #[test]
@@ -1892,6 +1890,8 @@ fn detach_client_from_a_shell_detaches_the_best_client() {
     t.wait_run(&["list-clients"], "no clients", str::is_empty);
 }
 
+/// As above, for a client whose connection is lost without a detach.
+#[cfg(unix)]
 #[test]
 fn a_lost_clients_palette_request_lets_the_other_answers_go() {
     const PROMPTLY: Duration = Duration::from_secs(1);
