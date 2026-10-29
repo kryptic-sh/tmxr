@@ -65,6 +65,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`copy-mode -e` leaves at the bottom after `halfpage-down` too**, and with a
   selection made, as tmux's: it left only after `scroll-down` or `page-down`
   with nothing selected.
+- **Targets read as tmux's do**: a bare number that is no pane of the current
+  window names a window (`send-keys -t 1`), where it was `can't find pane`; a
+  destination's `+N` / `-N` counts from the current window (`new-window -t +1`),
+  where `+1` was index 1; and a window or pane id in a session group names the
+  member active last, where it was the first by number.
 
 ## [0.12.2] - 2026-10-29
 

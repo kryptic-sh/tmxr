@@ -30,7 +30,7 @@ pub fn current_session(srv: &Server, ctx: &Ctx) -> Option<SessionId> {
     if let Some(s) = ctx
         .pane
         .and_then(|p| srv.panes.get(&p))
-        .and_then(|p| srv.session_of_window(p.window))
+        .and_then(|p| best_session_with_window(srv, p.window))
     {
         return Some(s);
     }
@@ -38,6 +38,32 @@ pub fn current_session(srv: &Server, ctx: &Ctx) -> Option<SessionId> {
         .values()
         .max_by_key(|s| s.last_used)
         .map(|s| s.id)
+}
+
+/// The session a window id (or a pane in it) names, of those holding the
+/// window: the one active last, the first by name of equals, as tmux's
+/// cmd_find_best_session_with_window.
+fn best_session_with_window(srv: &Server, window: WindowId) -> Option<SessionId> {
+    let mut best: Option<&crate::model::Session> = None;
+    for sid in srv.sessions_by_name() {
+        let s = &srv.sessions[&sid];
+        if s.windows.values().any(|w| *w == window) && best.is_none_or(|b| s.activity > b.activity)
+        {
+            best = Some(s);
+        }
+    }
+    best.map(|s| s.id)
+}
+
+/// Where `window` is in session `sid`: its current index if that holds the
+/// window, else the first, as tmux's cmd_find_best_winlink_with_window.
+fn best_index(srv: &Server, sid: SessionId, window: WindowId) -> u32 {
+    let s = &srv.sessions[&sid];
+    if s.current_window() == Some(window) {
+        s.current
+    } else {
+        s.index_of(window).unwrap_or_default()
+    }
 }
 
 /// `=` / `{mouse}`: the mouse target of a mouse bind.
@@ -159,10 +185,30 @@ fn split_target(spec: &str) -> (Option<&str>, &str) {
 /// is an index when it is a number, else a session. A missing session means
 /// the current one; a missing index means "the first free one".
 pub fn destination(srv: &Server, ctx: &Ctx, spec: &str) -> Res<(SessionId, Option<u32>)> {
-    let index = |s: &str| s.trim_start_matches('=').parse::<u32>().ok();
+    let index = |s: &str| {
+        let s = s.trim_start_matches('=');
+        s.bytes()
+            .all(|b| b.is_ascii_digit())
+            .then(|| s.parse::<u32>().ok())?
+    };
+    // `+N` / `-N`: N on from the session's current window, 1 without N, as
+    // tmux's cmd_find_get_window_with_session reads an index.
+    let offset = |s: &str| {
+        let (forward, n) = match s.split_at_checked(1)? {
+            ("+", n) => (true, n),
+            ("-", n) => (false, n),
+            _ => return None,
+        };
+        let n = if n.is_empty() {
+            1
+        } else {
+            index(n).filter(|n| *n > 0)?
+        };
+        Some((forward, n))
+    };
     let (sess, rest) = match spec.split_once(':') {
         Some((sess, rest)) => (sess, rest),
-        None if index(spec).is_some() => ("", spec),
+        None if index(spec).is_some() || offset(spec).is_some() => ("", spec),
         None => (spec, ""),
     };
     let sid = if sess.is_empty() {
@@ -175,9 +221,18 @@ pub fn destination(srv: &Server, ctx: &Ctx, spec: &str) -> Res<(SessionId, Optio
     // `CMD_FIND_WINDOW_INDEX`.
     let idx = match rest {
         "" => None,
-        r => match index(r) {
-            Some(i) => Some(i),
-            None => Some(window_index(srv, sid, r)?),
+        r => match (index(r), offset(r)) {
+            (Some(i), _) => Some(i),
+            (None, Some((forward, n))) => {
+                let current = srv.sessions[&sid].current;
+                let i = if forward {
+                    current.checked_add(n)
+                } else {
+                    current.checked_sub(n)
+                };
+                Some(i.ok_or_else(|| format!("can't find window: {r}"))?)
+            }
+            (None, None) => Some(window_index(srv, sid, r)?),
         },
     };
     Ok((sid, idx))
@@ -213,11 +268,9 @@ pub fn window(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, u3
         .map(|r| r.split('.').next().unwrap_or(r))
         .and_then(|n| n.parse::<WindowId>().ok())
     {
-        let sid = srv
-            .session_of_window(id)
-            .ok_or_else(|| format!("can't find window: @{id}"))?;
-        let idx = srv.sessions[&sid].index_of(id).unwrap_or_default();
-        return Ok((sid, idx, id));
+        let sid =
+            best_session_with_window(srv, id).ok_or_else(|| format!("can't find window: @{id}"))?;
+        return Ok((sid, best_index(srv, sid, id), id));
     }
     // A pane id names the window it is in, as tmux's `cmd_find_target`.
     if let Some(pid) = spec
@@ -229,11 +282,9 @@ pub fn window(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, u3
             .get(&pid)
             .map(|p| p.window)
             .ok_or_else(|| format!("can't find pane: %{pid}"))?;
-        let sid = srv
-            .session_of_window(wid)
+        let sid = best_session_with_window(srv, wid)
             .ok_or_else(|| format!("can't find window: @{wid}"))?;
-        let idx = srv.sessions[&sid].index_of(wid).unwrap_or_default();
-        return Ok((sid, idx, wid));
+        return Ok((sid, best_index(srv, sid, wid), wid));
     }
     let (sess, rest) = split_target(spec);
     let win_spec = rest.split('.').next().unwrap_or("");
@@ -445,9 +496,7 @@ pub fn pane(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, Wind
             .panes
             .get(&id)
             .ok_or_else(|| format!("can't find pane: %{id}"))?;
-        let sid = srv
-            .session_of_window(p.window)
-            .ok_or("pane has no session")?;
+        let sid = best_session_with_window(srv, p.window).ok_or("pane has no session")?;
         return Ok((sid, p.window, id));
     }
     if spec.is_empty() {
@@ -513,29 +562,41 @@ pub fn pane(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, Wind
             (pos + n - k) % n
         }])
     };
-    let pid = match pane_part {
-        "" => current,
-        "!" | "{last}" => win.last_pane.ok_or("no last pane")?,
-        "{next}" => step(true, "")?,
-        "{previous}" => step(false, "")?,
-        "{left-of}" => dir(Dir::Left)?,
-        "{right-of}" => dir(Dir::Right)?,
-        "{up-of}" => dir(Dir::Up)?,
-        "{down-of}" => dir(Dir::Down)?,
-        p if p.starts_with('+') => step(true, &p[1..])?,
-        p if p.starts_with('-') => step(false, &p[1..])?,
-        p if p.parse::<u32>().is_err() => {
-            pane_at_edge(&rects, win.cols, win.rows, p).ok_or_else(not_found)?
-        }
-        idx => {
-            let i: u32 = idx.parse().map_err(|_| format!("can't find pane: {idx}"))?;
-            let i = i
-                .checked_sub(u32::from(srv.window_options(win.id).pane_base_index))
-                .ok_or_else(|| format!("can't find pane: {idx}"))?;
-            *panes
-                .get(i as usize)
-                .ok_or_else(|| format!("can't find pane: {idx}"))?
-        }
+    let find = || -> Res<PaneId> {
+        Ok(match pane_part {
+            "" => current,
+            "!" | "{last}" => win.last_pane.ok_or("no last pane")?,
+            "{next}" => step(true, "")?,
+            "{previous}" => step(false, "")?,
+            "{left-of}" => dir(Dir::Left)?,
+            "{right-of}" => dir(Dir::Right)?,
+            "{up-of}" => dir(Dir::Up)?,
+            "{down-of}" => dir(Dir::Down)?,
+            p if p.starts_with('+') => step(true, &p[1..])?,
+            p if p.starts_with('-') => step(false, &p[1..])?,
+            p if p.parse::<u32>().is_err() => {
+                pane_at_edge(&rects, win.cols, win.rows, p).ok_or_else(not_found)?
+            }
+            idx => {
+                let i: u32 = idx.parse().map_err(|_| format!("can't find pane: {idx}"))?;
+                let i = i
+                    .checked_sub(u32::from(srv.window_options(win.id).pane_base_index))
+                    .ok_or_else(|| format!("can't find pane: {idx}"))?;
+                *panes
+                    .get(i as usize)
+                    .ok_or_else(|| format!("can't find pane: {idx}"))?
+            }
+        })
     };
-    Ok((sid, wid, pid))
+    match find() {
+        Ok(pid) => Ok((sid, wid, pid)),
+        // A pane alone that the current window lacks may name a window (or
+        // a session), whose active pane it is, as tmux's
+        // cmd_find_get_pane.
+        Err(e) if win_part.is_none() => {
+            let (sid, _, wid) = window(srv, ctx, Some(spec)).map_err(|_| e)?;
+            Ok((sid, wid, srv.windows[&wid].active))
+        }
+        Err(e) => Err(e),
+    }
 }

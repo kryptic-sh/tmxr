@@ -152,3 +152,38 @@ checks = [
   { command = "list-sessions -F '#{session_name}: #{session_windows} [#{session_group}] #{session_grouped} #{session_group_size} [#{session_group_list}] #{window_index}'" },
   { command = "list-windows -a -F '#{session_name}:#{window_index}'" },
 ]
+
+[[cases]]
+# A bare number is a pane of the current window when it has one, else a
+# window (its active pane).
+name = "a_bare_number_target_falls_back_to_a_window"
+steps = [{ run = "new-window -d -t o:1" }, { run = "new-window -d -t o:3" }]
+checks = [
+  { command = "display -p -t 1 '#{window_index}.#{pane_index}'", expect = "1.0" },
+  { command = "display -p -t 3 '#{window_index}.#{pane_index}'", expect = "3.0" },
+  { command = "split-window -d -t o:0" },
+  { command = "display -p -t 1 '#{window_index}.#{pane_index}'", expect = "0.1" },
+]
+
+[[cases]]
+# A destination's +N / -N counts from the current window.
+name = "a_destination_offset_counts_from_the_current_window"
+steps = [
+  { run = "rename-window -t o:0 zero" },
+  { run = "new-window -t o:2 -n two" },
+  { run = "new-window -d -t +1 -n p1" },
+  { run = "new-window -d -t o:+3 -n p3" },
+  { run = "new-window -d -t o:-1 -n m1" },
+]
+checks = [
+  { command = "list-windows -t o -F '#I #W'", expect = "0 zero\n1 m1\n2 two\n3 p1\n5 p3" },
+]
+
+[[cases]]
+# A window or pane id in a session group names the member active last.
+name = "an_id_in_a_group_names_the_session_active_last"
+steps = [{ run = "new-session -d -t o -s member" }]
+checks = [
+  { command = "display -p -t @0 '#S'", expect = "member" },
+  { command = "display -p -t %0 '#S'", expect = "member" },
+]
