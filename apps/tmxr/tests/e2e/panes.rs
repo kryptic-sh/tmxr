@@ -582,6 +582,18 @@ fn scrollbars_size_panes_as_tmux_does() {
     assert_eq!(panes(&t), "3+47 51+49", "modal, the left pane in copy mode");
     t.run(&["send-keys", "-t", "s:0.0", "-X", "cancel"]);
     assert_eq!(panes(&t), "0+50 51+49", "modal, copy mode left");
+    // A bar wider than the window leaves each pane a column, and the
+    // server up.
+    t.run(&["set-option", "-g", "pane-scrollbars", "on"]);
+    t.run(&[
+        "set-option",
+        "-g",
+        "pane-scrollbars-style",
+        "width=40000,pad=40000",
+    ]);
+    assert_eq!(panes(&t), "49+1 99+1", "huge, left");
+    t.run(&["set-option", "-g", "pane-scrollbars-position", "right"]);
+    assert_eq!(panes(&t), "0+1 51+1", "huge, right");
 }
 
 #[test]

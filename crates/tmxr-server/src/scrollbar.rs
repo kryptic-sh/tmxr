@@ -21,6 +21,11 @@ pub struct Bar {
     pub pad: u16,
 }
 
+/// The most a bar's `width=` or `pad=` counts: wider than any terminal, so
+/// a wider one draws the same, and small enough that the two with a pane's
+/// place on screen add up within a `u16`.
+const MOST: u16 = u16::MAX / 4;
+
 /// `width=` and `pad=` from `pane-scrollbars-style`: 1 and 0 when not
 /// given, and never a width under 1, as tmux's.
 pub fn size(style: &str) -> (u16, u16) {
@@ -30,9 +35,12 @@ pub fn size(style: &str) -> (u16, u16) {
             .strip_prefix("width=")
             .and_then(|n| n.parse::<u16>().ok())
         {
-            width = n.max(1);
-        } else if let Some(n) = item.strip_prefix("pad=").and_then(|n| n.parse().ok()) {
-            pad = n;
+            width = n.clamp(1, MOST);
+        } else if let Some(n) = item
+            .strip_prefix("pad=")
+            .and_then(|n| n.parse::<u16>().ok())
+        {
+            pad = n.min(MOST);
         }
     }
     (width, pad)
@@ -184,6 +192,7 @@ mod tests {
         // Unset: 1 and 0; a width under 1 is 1.
         assert_eq!(size("bg=red"), (1, 0));
         assert_eq!(size("width=0"), (1, 0));
+        assert_eq!(size("width=40000,pad=40000"), (MOST, MOST), "bounded");
     }
 
     #[test]

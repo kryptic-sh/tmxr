@@ -18,6 +18,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   rather than recursing until the stack ran out. An error from a command as a
   file runs is now shown as the command's own, without the file's `path:line:`,
   as tmux shows it; one in reading the file keeps its place.
+- **A huge scrollbar no longer crashes the server**: a `pane-scrollbars-style`
+  of `width=40000,pad=40000` overflowed adding the two; each pane now keeps a
+  column beside the bar, as in tmux.
 
 ## [0.12.2] - 2026-10-29
 
