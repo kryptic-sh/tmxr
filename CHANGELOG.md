@@ -17,7 +17,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `source-file` stops 50 files deep with `too many nested files`, as tmux's,
   rather than recursing until the stack ran out. An error from a command as a
   file runs is now shown as the command's own, without the file's `path:line:`,
-  as tmux shows it; one in reading the file keeps its place.
+  as tmux shows it; one in reading the file keeps its place. The server now runs
+  on a thread with an 8 MiB stack on every platform, so that limit (and a deep
+  layout's) holds on Windows, whose main thread has 1 MiB.
 - **A huge scrollbar no longer crashes the server**: a `pane-scrollbars-style`
   of `width=40000,pad=40000` overflowed adding the two; each pane now keeps a
   column beside the bar, as in tmux.

@@ -106,6 +106,39 @@ pub fn run(endpoint: Endpoint, config: Option<PathBuf>) -> std::io::Result<()> {
     };
     let listener = endpoint.listen(socket_access)?;
     let owner = access::current_user()?;
+    // The server is made and runs on a thread of its own so its stack is
+    // SERVER_STACK on every platform: the main thread's is 1 MiB on
+    // Windows, which a config nested to source-file's limit, or a deep
+    // layout, runs past.
+    std::thread::Builder::new()
+        .name("server".into())
+        .stack_size(SERVER_STACK)
+        .spawn(move || {
+            serve(
+                endpoint,
+                (cfg, config, cfg_file, errors),
+                socket_access,
+                listener,
+                owner,
+            )
+        })?
+        .join()
+        .map_err(|_| std::io::Error::other("the server thread panicked"))?
+}
+
+/// Make the server and run it until it exits.
+fn serve(
+    endpoint: Endpoint,
+    (cfg, config, cfg_file, errors): (
+        tmxr_config::Config,
+        Option<PathBuf>,
+        Option<PathBuf>,
+        Option<String>,
+    ),
+    socket_access: tmxr_proto::socket::Access,
+    listener: interprocess::local_socket::Listener,
+    owner: access::UserId,
+) -> std::io::Result<()> {
     let (tx, rx) = mpsc::channel();
     let mut srv = Server::new(endpoint, cfg, config, tx);
     srv.owner.clone_from(&owner);
@@ -132,3 +165,6 @@ pub fn run(endpoint: Endpoint, config: Option<PathBuf>) -> std::io::Result<()> {
     conn::flush(&writers);
     Ok(())
 }
+
+/// The server thread's stack: what Linux gives a main thread.
+const SERVER_STACK: usize = 8 * 1024 * 1024;
