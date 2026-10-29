@@ -630,6 +630,47 @@ fn source_file_v_shows_what_the_file_set() {
     );
 }
 
+/// As tmux 3.6 (checked by hand, 2026-10-29): a flag's word in any case,
+/// `-u` putting a server option back to its default and `-a` adding to a
+/// string one.
+#[test]
+fn flags_in_any_case_and_server_options_reset_and_append() {
+    let t = Tmxr::new("optcase");
+    t.run(&["new-session", "-d", "-s", "oc"]);
+    t.run(&["set", "-g", "mouse", "On"]);
+    assert_eq!(t.run(&["show", "-gv", "mouse"]).trim(), "on");
+    t.run(&["set", "-g", "mouse", "OFF"]);
+    assert_eq!(t.run(&["show", "-gv", "mouse"]).trim(), "off");
+    t.run(&["set", "-s", "escape-time", "300"]);
+    t.run(&["set", "-su", "escape-time"]);
+    assert_eq!(t.run(&["show", "-sv", "escape-time"]).trim(), "0");
+    t.run(&["set", "-s", "copy-command", "a"]);
+    t.run(&["set", "-sa", "copy-command", "x"]);
+    assert_eq!(t.run(&["show", "-sv", "copy-command"]).trim(), "ax");
+    // Only a string option appends: a number takes the value alone.
+    t.run(&["set", "-sa", "escape-time", "5"]);
+    assert_eq!(t.run(&["show", "-sv", "escape-time"]).trim(), "5");
+}
+
+/// `pane-base-index` stops at 65535, as tmux 3.6's, so a pane's number
+/// cannot overflow.
+#[test]
+fn pane_base_index_is_at_most_65535() {
+    let t = Tmxr::new("pbi");
+    t.run(&["new-session", "-d", "-s", "pb"]);
+    assert!(
+        !t.output(&["set", "-g", "pane-base-index", "4294967295"])
+            .status
+            .success()
+    );
+    t.run(&["set", "-g", "pane-base-index", "65535"]);
+    assert_eq!(
+        t.run(&["display", "-p", "-t", "pb", "#{pane_index}"])
+            .trim(),
+        "65535"
+    );
+}
+
 /// A command file that sources itself stops 50 files deep with tmux's
 /// error, rather than taking the server down, and an error as a file runs
 /// is the command's own, without the file's place (both as tmux 3.6,

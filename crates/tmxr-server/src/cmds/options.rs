@@ -160,6 +160,16 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed) -> Res {
     if a.has('o') {
         return Err(format!("already set: {name}"));
     }
+    // -u: back to the built-in value; -a: after what a string option
+    // holds (any other takes the value alone), as tmux's.
+    let changed = if a.has('u') {
+        config_option(&tmxr_config::defaults(), name)
+    } else if a.has('a') && STRING_SERVER_OPTIONS.contains(&name) {
+        value.map(|v| server_option(srv, name).unwrap_or_default() + v)
+    } else {
+        value.map(str::to_owned)
+    };
+    let value = changed.as_deref();
     let need = || value.ok_or_else(|| format!("{name}: needs a value"));
     let num = |v: &str| {
         v.parse::<u64>()
@@ -287,7 +297,16 @@ fn applied(srv: &Server, path: &std::path::Path) -> Vec<String> {
 
 /// A server option's value, as a format reads it: unquoted.
 pub fn server_option(srv: &Server, name: &str) -> Option<String> {
-    let c = &srv.cfg;
+    config_option(&srv.cfg, name)
+}
+
+/// The server options tmux types as strings: `-a` appends to them, and
+/// `show-options` quotes them.
+const STRING_SERVER_OPTIONS: &[&str] =
+    &["copy-command", "default-terminal", "editor", "history-file"];
+
+/// Server option `name`'s value in `c`, unquoted.
+fn config_option(c: &tmxr_config::Config, name: &str) -> Option<String> {
     Some(match name {
         "buffer-limit" => c.buffer_limit.to_string(),
         "client-away-time" => c.client_away_time.to_string(),
@@ -317,11 +336,10 @@ fn server_option_lines(srv: &Server) -> Vec<String> {
         .iter()
         .map(|&name| {
             let value = server_option(srv, name).unwrap_or_default();
-            let value = match name {
-                "copy-command" | "default-terminal" | "editor" | "history-file" => {
-                    tmxr_command::escape_arg(&value)
-                }
-                _ => value,
+            let value = if STRING_SERVER_OPTIONS.contains(&name) {
+                tmxr_command::escape_arg(&value)
+            } else {
+                value
             };
             format!("{name} {value}")
         })

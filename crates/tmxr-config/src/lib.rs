@@ -97,7 +97,7 @@ struct File {
     key_table: String,
     mouse: bool,
     base_index: u32,
-    pane_base_index: u32,
+    pane_base_index: u16,
     pane_border_lines: PaneLines,
     pane_border_indicators: PaneIndicators,
     pane_border_status: PaneStatus,

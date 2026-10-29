@@ -45,6 +45,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   is 1; `#{s/a/b:…}` needs no closing `/`; `#{=N:…}` cuts to N columns, leaving
   out a wide character past them (`#{=3:日本語}` is `日`); and `#{=0:…}` keeps
   the whole value, where it gave nothing.
+- **Options take tmux's forms**: a flag's word in any case (`set -g mouse On`)
+  and an empty value toggles it; `set -su` puts a server option back to its
+  default where it said `needs a value`, and `set -sa` adds to a string server
+  option (`copy-command`, `default-terminal`, `editor`, `history-file`) where it
+  replaced it. `pane-base-index` stops at 65535, as tmux's, so a pane's number
+  cannot overflow.
+- **`^a` names `C-a`** in `bind-key`, `prefix` and every other key name, as in
+  tmux; `^` alone is still the key.
 
 ## [0.12.2] - 2026-10-29
 

@@ -409,7 +409,7 @@ pub(super) fn run(
                         };
                         format!(
                             "{prefix}{}: [{}x{}] %{}{}",
-                            i as u32 + srv.window_options(wid).pane_base_index,
+                            i as u32 + u32::from(srv.window_options(wid).pane_base_index),
                             pane.rect.w,
                             pane.rect.h,
                             p,
@@ -424,7 +424,7 @@ pub(super) fn run(
         }
         "display-panes" => {
             let (_, _, wid) = target::window(srv, ctx, None)?;
-            let base = srv.window_options(wid).pane_base_index;
+            let base = u32::from(srv.window_options(wid).pane_base_index);
             let labels: Vec<(u32, PaneId)> = srv.windows[&wid]
                 .panes()
                 .into_iter()

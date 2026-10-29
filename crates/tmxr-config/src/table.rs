@@ -53,13 +53,21 @@ pub trait OptionValue: Clone {
 }
 
 impl OptionValue for bool {
-    /// tmux's flags: no value toggles.
+    /// tmux's flags: no value (or an empty one) toggles, and the words are
+    /// read in any case, as tmux's options_from_string_flag.
     fn parse(value: Option<&str>, current: &Self) -> Result<Self, String> {
-        match value {
-            None | Some("toggle") => Ok(!current),
-            Some("on" | "1" | "yes" | "true") => Ok(true),
-            Some("off" | "0" | "no" | "false") => Ok(false),
-            Some(v) => Err(format!("bad value: {v}")),
+        let Some(v) = value.filter(|v| !v.is_empty()) else {
+            return Ok(!current);
+        };
+        let is = |words: &[&str]| words.iter().any(|w| v.eq_ignore_ascii_case(w));
+        if is(&["toggle"]) {
+            Ok(!current)
+        } else if is(&["on", "1", "yes", "true"]) {
+            Ok(true)
+        } else if is(&["off", "0", "no", "false"]) {
+            Ok(false)
+        } else {
+            Err(format!("bad value: {v}"))
         }
     }
 

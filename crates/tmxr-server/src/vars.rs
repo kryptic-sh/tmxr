@@ -858,7 +858,7 @@ impl<'a> Context for Vars<'a> {
             "pane_index" => {
                 let w = window?;
                 let i = w.panes().iter().position(|p| Some(*p) == self.pane)?;
-                (i as u32 + srv.window_options(w.id).pane_base_index).to_string()
+                (i as u32 + u32::from(srv.window_options(w.id).pane_base_index)).to_string()
             }
             "pane_active" => flag(window?.active == pane?.id),
             "pane_last" => flag(window?.last_pane == Some(pane?.id)),

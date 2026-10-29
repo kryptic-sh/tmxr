@@ -496,7 +496,8 @@ options_table! {
     "other-pane-height" => other_pane_height: String,
     "other-pane-width" => other_pane_width: String,
     "pane-active-border-style" => pane_active_border_style: String,
-    "pane-base-index" => pane_base_index: u32,
+    /// At most 65535, as tmux's.
+    "pane-base-index" => pane_base_index: u16,
     /// What each pane's status line shows (`pane-border-status`).
     "pane-border-format" => pane_border_format: String,
     /// How the active pane's border shows it.

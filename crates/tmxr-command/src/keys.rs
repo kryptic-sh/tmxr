@@ -104,7 +104,14 @@ impl FromStr for Key {
         {
             return parse_bracketed(inner).ok_or_else(err);
         }
-        let (mods, rest) = split_mods(s);
+        // `^a` is `C-a`, as tmux's key_string_lookup_string; `^` alone is
+        // the key itself.
+        let (caret, named) = match s.strip_prefix('^') {
+            Some(rest) if !rest.is_empty() => (KeyModifiers::CONTROL, rest),
+            _ => (KeyModifiers::NONE, s),
+        };
+        let (mods, rest) = split_mods(named);
+        let mods = mods | caret;
         if let Some(n) = rest.strip_prefix('F').and_then(|n| n.parse::<u8>().ok())
             && (1..=24).contains(&n)
         {
@@ -241,6 +248,10 @@ mod tests {
         }
         assert_eq!(k("PageUp"), k("PPage"));
         assert_eq!(k("c-b"), k("C-b"));
+        // tmux's caret: ^a is C-a, and ^ alone the key.
+        assert_eq!(k("^a"), k("C-a"));
+        assert_eq!(k("^M-b"), k("C-M-b"));
+        assert_eq!(k("^").code, KeyCode::Char('^'));
         assert!("Nope".parse::<Key>().is_err());
         // hjkl's notation names the same keys.
         for (hjkl, tmux) in [

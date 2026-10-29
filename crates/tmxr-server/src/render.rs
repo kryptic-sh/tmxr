@@ -530,7 +530,7 @@ fn draw_window(
                     let index = owned.and_then(|(p, _)| panes.iter().position(|q| *q == p));
                     number = index.map_or_else(
                         || "*".to_owned(),
-                        |i| ((i as u32 + options.pane_base_index) % 10).to_string(),
+                        |i| ((i as u32 + u32::from(options.pane_base_index)) % 10).to_string(),
                     );
                     number.as_str()
                 }
