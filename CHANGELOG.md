@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A format no longer takes the server down with a huge precision or padding**:
+  `#{e|+|f|70000:1,2}` prints its 70000 decimals, as tmux's, where Rust's
+  formatter panicked past 65535, and a padding past a C `int`
+  (`#{p99999999999:x}`) pads nothing, as tmux's, rather than aborting on the
+  allocation. A negative precision gives C's default of 6.
+
 ## [0.12.2] - 2026-10-29
 
 ### Fixed

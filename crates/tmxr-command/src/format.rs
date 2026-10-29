@@ -815,8 +815,10 @@ fn expression(args: &[&str], left: &str, right: &str) -> Option<String> {
         return None;
     }
     let float = rest.first().is_some_and(|f| f.contains('f'));
+    // tmux's is a C int given to `%.*f`, where a negative one means the
+    // default, 6.
     let precision = match rest.get(1) {
-        Some(p) => p.parse::<usize>().ok()?,
+        Some(p) => usize::try_from(p.parse::<i32>().ok()?).unwrap_or(6),
         None if float => 2,
         None => 0,
     };
@@ -841,7 +843,23 @@ fn expression(args: &[&str], left: &str, right: &str) -> Option<String> {
         _ => return None,
     };
     let result = if float { result } else { result.trunc() };
-    Some(format!("{result:.precision$}"))
+    Some(fixed(result, precision))
+}
+
+/// The most decimals a double's exact expansion needs: past them every
+/// digit is 0.
+const EXACT_DECIMALS: usize = 1100;
+
+/// `n` with `precision` decimals, as C's `%.*f`. Rust's formatter refuses a
+/// precision past `u16::MAX`, so the exact digits are written and the rest
+/// are the zeros they would have been.
+fn fixed(n: f64, precision: usize) -> String {
+    let exact = precision.min(EXACT_DECIMALS);
+    let mut s = format!("{n:.exact$}");
+    if n.is_finite() {
+        s.extend(std::iter::repeat_n('0', precision - exact));
+    }
+    s
 }
 
 /// One of tmux's modifiers that change a value, as `format_replace` reads
@@ -1058,8 +1076,9 @@ fn apply_modifiers(mods: &[Mod<'_>], inner: &str, ctx: &dyn Context, pass: Pass)
             value = substitute(&value, &ex(pattern), &ex(replacement), flags);
         }
     }
-    // A count that is no number does nothing.
-    let count = |n: &str| ex(n).trim().parse::<i64>().ok();
+    // A count that is no number, or past a C int as tmux's `strtonum`
+    // reads it, does nothing.
+    let count = |n: &str| ex(n).trim().parse::<i32>().ok().map(i64::from);
     for m in mods {
         if let Mod::Limit(n, marker) = m
             && let Some(n) = count(n)
@@ -1785,6 +1804,20 @@ mod tests {
         );
         assert_eq!(x("#{c:nonsense}"), "");
         assert_eq!(x("#{a:10}"), "", "not printable");
+        assert_eq!(x("#{e|+|f|-1:1,2}"), "3.000000", "C's default");
+        let long = x("#{e|+|f|70000:1,2}");
+        assert_eq!(long.len(), 70002, "past what Rust's formatter takes");
+        assert!(long.starts_with("3.000") && long.ends_with("000"));
+    }
+
+    /// Past what Rust formats itself, the digits are still exact.
+    #[test]
+    fn a_long_precision_keeps_the_exact_digits() {
+        let third = fixed(1.0 / 3.0, 1200);
+        assert_eq!(&third[..20], "0.333333333333333314");
+        assert_eq!(third.len(), 1202);
+        assert_eq!(third, format!("{:.1200}", 1.0 / 3.0));
+        assert_eq!(fixed(f64::INFINITY, 70000), "inf");
     }
 
     #[test]
@@ -1801,6 +1834,7 @@ mod tests {
         assert_eq!(x("#{p5:session_name}|"), "main |");
         assert_eq!(x("#{p-5:session_name}|"), " main|");
         assert_eq!(x("#{p2:@p}|"), "/home/me/src/proj|", "padding never cuts");
+        assert_eq!(x("#{p99999999999:@e}|"), "|", "past a C int: none");
         assert_eq!(x("#{b;s/r/R/:@p}"), "pRoj");
         assert_eq!(x("#{=3;b:@p}"), "pro", "written first, cut last");
         assert_eq!(x("#{b:@nosuch}|"), "|");
