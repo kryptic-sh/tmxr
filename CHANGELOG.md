@@ -24,6 +24,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`resize-pane -x` / `-y` take a percentage only up to 100**, as tmux's:
   `-x 4294967295%` overflowed and took the server down, and one past 100 resized
   past the window.
+- **A layout nested past 1000 splits no longer crashes the server**:
+  `select-layout` refuses it as an invalid layout rather than reading it by
+  recursion until the stack ran out. No window a terminal can show nests near
+  that deep; tmux 3.6 reads such a string.
 
 ## [0.12.2] - 2026-10-29
 

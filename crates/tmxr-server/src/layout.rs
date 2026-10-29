@@ -332,7 +332,7 @@ pub fn parse(layout: &str) -> Result<(LayoutTree, (u16, u16)), String> {
         return Err(invalid());
     }
     let mut rest = body;
-    let cell = parse_cell(&mut rest).ok_or_else(invalid)?;
+    let cell = parse_cell(&mut rest, 0).ok_or_else(invalid)?;
     if !rest.is_empty() {
         return Err(invalid());
     }
@@ -347,7 +347,16 @@ fn number(s: &mut &str) -> Option<u16> {
     Some(n)
 }
 
-fn parse_cell(s: &mut &str) -> Option<Cell> {
+/// How deep a layout's splits may nest. Each level that splits takes a
+/// pane and its border off a side, so no layout of a window a terminal can
+/// show comes near it; a deeper string is refused rather than read and
+/// laid out by recursion that would run out of stack. tmux has no limit.
+const MOST_NESTED: usize = 1000;
+
+fn parse_cell(s: &mut &str, depth: usize) -> Option<Cell> {
+    if depth > MOST_NESTED {
+        return None;
+    }
     let w = number(s)?;
     *s = s.strip_prefix('x')?;
     let h = number(s)?;
@@ -383,7 +392,7 @@ fn parse_cell(s: &mut &str) -> Option<Cell> {
     let mut children = Vec::new();
     loop {
         *s = &s[1..];
-        children.push(parse_cell(s)?);
+        children.push(parse_cell(s, depth + 1)?);
         if !s.starts_with(',') {
             break;
         }
@@ -969,6 +978,26 @@ mod tests {
         }
         assert_eq!(parse("0000,80x24,0,0,1").unwrap_err(), "invalid layout");
         assert!(parse("d67e,80x24,0,0{40x24,0,0,0").is_err());
+    }
+
+    /// Splits nested past [`MOST_NESTED`] are refused, not read until the
+    /// stack runs out; up to it they are read.
+    #[test]
+    fn a_layout_nests_only_so_deep() {
+        let nested = |depth: usize| {
+            let body = format!(
+                "{}80x23,0,0,0{}",
+                "80x23,0,0[".repeat(depth),
+                "]".repeat(depth)
+            );
+            format!("{:04x},{body}", layout_checksum(&body))
+        };
+        assert!(parse(&nested(MOST_NESTED)).is_ok());
+        assert_eq!(
+            parse(&nested(MOST_NESTED + 1)).unwrap_err(),
+            "invalid layout"
+        );
+        assert!(parse(&nested(100_000)).is_err());
     }
 
     #[test]
