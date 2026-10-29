@@ -170,6 +170,11 @@ pub fn encode_key(key: &KeyEvent, modes: InputModes, option: ExtendedKeys) -> Ve
         KeyCode::Down => cursor('B'),
         KeyCode::Right => cursor('C'),
         KeyCode::Left => cursor('D'),
+        // As tmux's table, the `tmux-256color` terminfo's khome and kend
+        // whatever the cursor key mode; only a modified one is `CSI 1;m H`.
+        // The kitty protocol, which tmux lacks, keeps kitty's `CSI H`.
+        KeyCode::Home if modifier_param(m) == 1 && !kitty => tilde(1),
+        KeyCode::End if modifier_param(m) == 1 && !kitty => tilde(4),
         KeyCode::Home => cursor('H'),
         KeyCode::End => cursor('F'),
         KeyCode::Insert => tilde(2),
@@ -382,8 +387,10 @@ mod tests {
             (KeyCode::Up, NONE, b"\x1b[A"),
             (KeyCode::Left, C, b"\x1b[1;5D"),
             (KeyCode::Right, S | A, b"\x1b[1;4C"),
-            (KeyCode::Home, NONE, b"\x1b[H"),
-            (KeyCode::End, NONE, b"\x1b[F"),
+            (KeyCode::Home, NONE, b"\x1b[1~"),
+            (KeyCode::End, NONE, b"\x1b[4~"),
+            (KeyCode::Home, C, b"\x1b[1;5H"),
+            (KeyCode::End, S, b"\x1b[1;2F"),
             (KeyCode::Delete, NONE, b"\x1b[3~"),
             (KeyCode::PageUp, C, b"\x1b[5;5~"),
             (KeyCode::F(1), NONE, b"\x1bOP"),
@@ -406,6 +413,12 @@ mod tests {
         assert_eq!(encode_key(&up, modes, ExtendedKeys::On), b"\x1bOA");
         let c_up = KeyEvent::new(KeyCode::Up, C);
         assert_eq!(encode_key(&c_up, modes, ExtendedKeys::On), b"\x1b[1;5A");
+        let home = KeyEvent::new(KeyCode::Home, NONE);
+        assert_eq!(
+            encode_key(&home, modes, ExtendedKeys::On),
+            b"\x1b[1~",
+            "not SS3"
+        );
     }
 
     #[test]
@@ -446,6 +459,7 @@ mod tests {
         assert_eq!(k(KeyCode::Char('h'), A), b"\x1b[104;3u");
         assert_eq!(k(KeyCode::Esc, NONE), b"\x1b[27u");
         assert_eq!(k(KeyCode::Char('h'), NONE), b"h");
+        assert_eq!(k(KeyCode::Home, NONE), b"\x1b[H", "kitty's, not tmux's");
     }
 
     #[test]

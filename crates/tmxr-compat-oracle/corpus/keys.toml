@@ -25,6 +25,21 @@ checks = [
 ]
 
 [[cases]]
+# Home and End are the terminfo's khome and kend, ESC [ 1 ~ and ESC [ 4 ~,
+# whatever the cursor key mode (Up shows the mode is on); modified, CSI 1;m H.
+name = "home_and_end_send_tmuxs_bytes_in_either_cursor_mode"
+unix_only = true
+program = "printf '\\033[?1h'; stty raw -echo; exec cat -v"
+steps = [
+  { sleep = 0.5 },
+  { run = "send-keys -t o Home End C-Home Up" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "capture-pane -p -t o", expect = "^[[1~^[[4~^[[1;5H^[OA" },
+]
+
+[[cases]]
 name = "select_pane_d_turns_a_panes_input_off_and_e_on"
 unix_only = true
 program = "stty raw -echo; exec cat -v"

@@ -56,6 +56,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **A `~` opening double quotes is the home directory** in a tmux command file
   or command line, as tmux's lexer has it: `"~/notes"` expands, `'~/notes'` does
   not.
+- **Home and End reach programs as tmux sends them**, `ESC [ 1 ~` and
+  `ESC [ 4 ~` (the `tmux-256color` terminfo's `khome` and `kend`) whatever the
+  cursor key mode, where they were `ESC [ H` / `ESC [ F` (`ESC O H` / `ESC O F`
+  in application mode), which ncurses programs read as three loose bytes. With a
+  modifier they stay `CSI 1;m H` / `F`, and under the kitty keyboard protocol
+  kitty's own `CSI H` / `F`.
 
 ## [0.12.2] - 2026-10-29
 
