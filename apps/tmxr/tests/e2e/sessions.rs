@@ -1794,6 +1794,38 @@ fn a_detached_clients_palette_request_lets_the_other_answers_go() {
     assert!(asked.elapsed() < PROMPTLY, "took {:?}", asked.elapsed());
 }
 
+/// As above, for a client whose connection is lost without a detach.
+#[cfg(unix)]
+#[test]
+fn a_lost_clients_palette_request_lets_the_other_answers_go() {
+    const PROMPTLY: Duration = Duration::from_secs(1);
+    let t = Tmxr::new("palette-lost");
+    t.run(&[
+        "new-session",
+        "-d",
+        "-s",
+        "pl",
+        r"stty raw -echo; head -c 1 >/dev/null; printf '\033]4;1;?\007\033[c'; exec cat -v",
+    ]);
+    let mut s = t.attach_sync(&["attach", "-t", "pl"]);
+    s.wait_for("the status line", |text| text.contains("pl"));
+    t.run(&["send-keys", "-t", "pl", "x"]);
+    s.wait_for_raw("the terminal asked", |raw| raw.contains("\x1b]4;1;?\x1b\\"));
+    let asked = Instant::now();
+    // SIGKILL, so the client sends nothing as it goes.
+    let pid = s.child.process_id().expect("the client's pid").to_string();
+    let killed = tmxr_term::child::command("kill")
+        .args(["-KILL", &pid])
+        .status()
+        .unwrap();
+    assert!(killed.success());
+    s.wait_exit();
+    t.wait_run(&["capture-pane", "-p", "-t", "pl"], "DA1's answer", |o| {
+        o.contains("^[[?62;22c")
+    });
+    assert!(asked.elapsed() < PROMPTLY, "took {:?}", asked.elapsed());
+}
+
 #[cfg(unix)]
 #[test]
 fn frames_are_synchronized_updates_where_the_terminal_takes_them() {

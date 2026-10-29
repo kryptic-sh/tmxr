@@ -726,19 +726,19 @@ table. What has been verified, and how:
     pane read foot's entry 1 for each theme, ahead of DA1's answer). A client
     that goes drops its requests, as tmux's input_cancel_requests, and the
     answers behind them go at once (`Server::cancel_colour_requests`;
-    `a_detached_clients_palette_request_lets_the_other_answers_go` covers a
-    detach, nothing a client's connection lost). tmux 3.6's walks the pane's
-    list from the client's first request (`entry`, not `centry`), freeing the
-    answers queued after it unsent; not copied. tmux's `pane-colours` (a default
-    palette under the program's) is missing: adding it needs
-    `tmxr_config::Array` read by index, a config-file form for a sparse array,
-    `with_palette` falling back to it, and the emulator told it, as it answers
-    OSC 4 queries itself (considered 2026-10-22, not started: little used); an
-    empty OSC 104 leaves the OSC 10 / 11 colours, as tmux 3.6 shows it (its
-    colour_palette_clear resets them, but nothing marks the pane's style
-    changed, so they stay until something else does). A program's OSC 10 / 11
-    colours are its pane's, as tmux's palette `fg` / `bg`, with tmux's
-    precedence: in the active pane over `window-style` and under
+    `a_detached_clients_palette_request_lets_the_other_answers_go` and
+    `a_lost_clients_palette_request_lets_the_other_answers_go`, a client
+    killed). tmux 3.6's walks the pane's list from the client's first request
+    (`entry`, not `centry`), freeing the answers queued after it unsent; not
+    copied. tmux's `pane-colours` (a default palette under the program's) is
+    missing: adding it needs `tmxr_config::Array` read by index, a config-file
+    form for a sparse array, `with_palette` falling back to it, and the emulator
+    told it, as it answers OSC 4 queries itself (considered 2026-10-22, not
+    started: little used); an empty OSC 104 leaves the OSC 10 / 11 colours, as
+    tmux 3.6 shows it (its colour_palette_clear resets them, but nothing marks
+    the pane's style changed, so they stay until something else does). A
+    program's OSC 10 / 11 colours are its pane's, as tmux's palette `fg` / `bg`,
+    with tmux's precedence: in the active pane over `window-style` and under
     `window-active-style`, in another under `window-style`
     (`a_programs_default_colours_are_the_panes`); `cursor_shape` and
     `cursor_blinking` are kept from DECSCUSR and `CSI ? 12`; insert mode and
