@@ -1796,6 +1796,102 @@ fn a_detached_clients_palette_request_lets_the_other_answers_go() {
 
 /// As above, for a client whose connection is lost without a detach.
 #[cfg(unix)]
+/// Attaching inside one of a server's own panes is refused, as tmux's
+/// server_client_check_nested; inside another server's pane it is not.
+#[test]
+fn nesting_is_refused_only_into_the_same_server() {
+    let t = Tmxr::new("nest");
+    t.run(&["new-session", "-d", "-s", "ns"]);
+    let path = t.run(&["display", "-p", "#{socket_path}"]);
+    let attach = |tmxr: &str| {
+        let out = tmxr_term::child::command(env!("CARGO_BIN_EXE_tmxr"))
+            .args(t.args(&["attach", "-t", "ns"]))
+            .envs(t.env())
+            .env("TMXR", tmxr)
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&out.stderr).into_owned()
+    };
+    let same = attach(&format!("{},1,0", path.trim()));
+    assert!(same.contains("nested with care"), "{same}");
+    let other = attach("/no/such/server,1,0");
+    assert!(!other.contains("nested with care"), "{other}");
+}
+
+/// A window is sized again when a client leaves, as tmux's
+/// server_client_lost: the smaller client gone, it takes the larger's
+/// size, whether that client detached or its connection was lost.
+#[test]
+fn a_window_grows_back_when_the_smaller_client_goes() {
+    let t = Tmxr::new("regrow");
+    t.run(&["new-session", "-d", "-s", "rg"]);
+    t.run(&["set", "-g", "window-size", "smallest"]);
+    let big = t.attach(&["attach", "-t", "rg"]);
+    big.wait_for("the big client", |text| text.contains("rg"));
+    let width = || t.run(&["display", "-p", "-t", "rg", "#{window_width}"]);
+    let full = COLS.to_string();
+    t.wait_run(
+        &["display", "-p", "-t", "rg", "#{window_width}"],
+        "full width",
+        |o| o.trim() == full,
+    );
+    // A lost client is killed (SIGKILL, so it sends nothing), which takes
+    // `kill`.
+    let ways: &[bool] = if cfg!(unix) { &[false, true] } else { &[false] };
+    for &lost in ways {
+        let mut small = t.attach(&["attach", "-t", "rg"]);
+        small.resize(20, 70);
+        t.wait_run(
+            &["display", "-p", "-t", "rg", "#{window_width}"],
+            "70",
+            |o| o.trim() == "70",
+        );
+        if lost {
+            let pid = small
+                .child
+                .process_id()
+                .expect("the client's pid")
+                .to_string();
+            let killed = tmxr_term::child::command("kill")
+                .args(["-KILL", &pid])
+                .status()
+                .unwrap();
+            assert!(killed.success());
+            small.wait_exit();
+        } else {
+            let mine = t.run(&["list-clients", "-F", "#{client_name} #{client_width}"]);
+            let name = mine
+                .lines()
+                .find_map(|l| l.strip_suffix(" 70"))
+                .expect("the small client")
+                .to_owned();
+            t.run(&["detach-client", "-t", &name]);
+            small.wait_exit();
+        }
+        t.wait_run(
+            &["display", "-p", "-t", "rg", "#{window_width}"],
+            "full width again",
+            |o| o.trim() == full,
+        );
+    }
+    assert_eq!(width().trim(), full);
+    drop(big);
+}
+
+/// From a shell, detach-client with no flags detaches the best client, as
+/// tmux's target client (it detached nothing); -a then spares that one.
+#[test]
+fn detach_client_from_a_shell_detaches_the_best_client() {
+    let t = Tmxr::new("detbest");
+    t.run(&["new-session", "-d", "-s", "db"]);
+    let mut s = t.attach(&["attach", "-t", "db"]);
+    s.wait_for("attached", |text| text.contains("db"));
+    t.wait_run(&["list-clients"], "the client", |o| o.lines().count() == 1);
+    t.run(&["detach-client"]);
+    s.wait_exit();
+    t.wait_run(&["list-clients"], "no clients", str::is_empty);
+}
+
 #[test]
 fn a_lost_clients_palette_request_lets_the_other_answers_go() {
     const PROMPTLY: Duration = Duration::from_secs(1);

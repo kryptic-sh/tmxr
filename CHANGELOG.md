@@ -81,6 +81,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   turned off (`select-pane -d`), `pipe-pane` and last search. A pane with
   `set -p remain-on-exit on` closed when the respawned program ended, which
   could take the server down with its last pane.
+- **A window is sized again when a client leaves**: detaching, losing the
+  connection or `switch-client` away now re-sizes the windows it was sizing, as
+  tmux's `server_client_lost` does, so a window shrunk for a small client grows
+  back once it goes, where it stayed small until the next resize. A change of a
+  window's latest client re-sizes it too, for `window-size latest`.
+- **`detach-client` and `suspend-client` from a shell act on the best client**,
+  as tmux's target client, where they did nothing; `detach-client -a` spares
+  that target, not the caller.
+- **Nesting is refused only into the same server**: the client refused to attach
+  whenever `$TMXR` was set, so `tmxr -L other` inside a tmxr pane failed; it now
+  refuses only when `$TMXR` names the server it is attaching to.
 
 ## [0.12.2] - 2026-10-29
 

@@ -117,23 +117,28 @@ pub(super) fn run(
             attach_to(srv, ctx, a, sid, Others::from_flags(a, 'd', 'x'), out)?;
         }
         "detach-client" => {
-            let targets: Vec<ClientId> = if a.has('a') {
-                srv.clients
-                    .values()
-                    .filter(|c| c.att.is_some() && Some(c.id) != ctx.client)
-                    .map(|c| c.id)
-                    .collect()
-            } else if let Some(t) = a.value('t') {
-                vec![target_client(srv, t)?]
-            } else if let Some(s) = a.value('s') {
+            // The target client, as tmux's: -t, else the caller attached,
+            // else (from a shell) the best one.
+            let target = match a.value('t') {
+                Some(t) => Some(target_client(srv, t)?),
+                None => super::display_client(srv, ctx),
+            };
+            let targets: Vec<ClientId> = if let Some(s) = a.value('s') {
                 let sid = target::session(srv, ctx, Some(s))?;
                 srv.clients
                     .values()
                     .filter(|c| c.att.as_ref().is_some_and(|x| x.session == sid))
                     .map(|c| c.id)
                     .collect()
+            } else if a.has('a') {
+                // Every client but the target.
+                srv.clients
+                    .values()
+                    .filter(|c| c.att.is_some() && Some(c.id) != target)
+                    .map(|c| c.id)
+                    .collect()
             } else {
-                attached_client(srv, ctx).into_iter().collect()
+                target.into_iter().collect()
             };
             // -E: each runs a shell command in its place, before -P, as
             // tmux's. -P: their parent shells get SIGHUP too.
@@ -194,9 +199,10 @@ pub(super) fn run(
             srv.lock_clients(&clients)?;
         }
         "suspend-client" => {
+            // From a shell, the best client, as tmux's target client.
             let c = match a.value('t') {
                 Some(t) => target_client(srv, t)?,
-                None => attached_client(srv, ctx).ok_or("no current client")?,
+                None => super::display_client(srv, ctx).ok_or("no current client")?,
             };
             if !job_control(srv, c) {
                 return Err("suspend-client: the client has no job control (Windows)".into());

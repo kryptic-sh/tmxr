@@ -135,13 +135,21 @@ impl Server {
             },
         );
         self.clients.remove(&id);
-        self.cancel_colour_requests(id);
         let ctx = Ctx {
             pane: self.active_pane_of_session(att.session),
             ..Ctx::default()
         };
         self.queue_hook("client-detached", ctx, crate::hooks::HookScope::default());
+        self.client_gone(id);
+    }
+
+    /// What an attached client leaving changes, however it went, as tmux's
+    /// server_client_lost: its palette requests go, its windows find
+    /// another latest client, and every window is sized again without it.
+    pub(crate) fn client_gone(&mut self, id: ClientId) {
+        self.cancel_colour_requests(id);
         self.latest_gone(id);
+        self.size_all_sessions();
         self.check_unattached();
     }
 
@@ -160,7 +168,8 @@ impl Server {
         att.full_redraw = true;
         self.make_latest(id);
         self.touch_session(session);
-        self.size_session(session);
+        // The session it left loses a client too.
+        self.size_all_sessions();
         self.check_unattached();
     }
 

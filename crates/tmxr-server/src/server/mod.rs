@@ -676,9 +676,7 @@ impl Server {
                     && c.att.is_some()
                 {
                     debug!(client = id, "attached client went away");
-                    self.cancel_colour_requests(id);
-                    self.latest_gone(id);
-                    self.check_unattached();
+                    self.client_gone(id);
                 }
             }
             Event::Msg(id, msg) => self.client_msg(id, msg),

@@ -178,6 +178,9 @@ impl Server {
     /// server_client_update_latest.
     pub(crate) fn update_latest(&mut self, id: ClientId) {
         if self.make_latest(id) {
+            // Under `window-size latest` the window takes this client's
+            // size, as tmux's server_client_update_latest.
+            self.size_all_sessions();
             let ctx = crate::cmds::Ctx {
                 client: Some(id),
                 ..crate::cmds::Ctx::default()

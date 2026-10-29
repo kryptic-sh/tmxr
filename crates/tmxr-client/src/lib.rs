@@ -61,7 +61,13 @@ fn would_attach(args: &[String]) -> bool {
 
 /// Run the client; returns the process exit status.
 pub fn run(opts: Options) -> io::Result<i32> {
-    if std::env::var_os(ENV_TMXR).is_some_and(|v| !v.is_empty()) && would_attach(&opts.args) {
+    // Only inside one of this server's own panes, as tmux's
+    // server_client_check_nested: a client may attach to another server.
+    let nested = std::env::var(ENV_TMXR)
+        .ok()
+        .and_then(|v| tmxr_proto::socket::parse_tmxr_env(&v))
+        .is_some_and(|(path, _, _)| path == opts.endpoint.path());
+    if nested && would_attach(&opts.args) {
         eprintln!("sessions should be nested with care, unset ${ENV_TMXR} to force");
         return Ok(1);
     }
