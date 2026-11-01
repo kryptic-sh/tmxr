@@ -149,6 +149,7 @@ pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
         }
         MouseEventKind::ScrollUp => (MouseAction::WheelUp, here),
         MouseEventKind::ScrollDown => (MouseAction::WheelDown, here),
+        MouseEventKind::Moved => (MouseAction::Move, here),
         _ => return,
     };
     let Some(target) = locate(srv, id, m, at) else {

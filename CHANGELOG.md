@@ -6,8 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Breaking
+
+- **`tmxr-command`'s `MouseAction` has a `Move` variant**, for the mouse moving
+  with no button held; a library caller matching it exhaustively adds an arm. It
+  has no key name, as tmux has none, so no table binds it.
+
 ### Fixed
 
+- **A program that asked for all motion sees the mouse move**: in any-motion
+  mode (1003, as crossterm programs such as gpur ask for) motion with no button
+  held was dropped, so hover never reached the program. It now goes to the
+  pane's program, as tmux's does.
 - **A program that asked for the mouse sees a drag where it is**: with mouse
   reporting on (Claude Code, for one), each drag motion and the release were
   sent at the cell the button went down in, so a program's own drag selection

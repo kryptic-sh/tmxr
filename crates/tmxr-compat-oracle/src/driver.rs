@@ -244,6 +244,9 @@ impl Server {
             "up" => c.sgr(b, at, false),
             "wheel-up" => c.sgr(64, at, true),
             "wheel-down" => c.sgr(65, at, true),
+            // Motion with no button held, as a terminal reports it in mode
+            // 1003: button 3 plus the motion bit.
+            "move" => c.sgr(35, at, true),
             "drag" => {
                 let to = c.locate(m.to.as_ref().ok_or("drag needs `to`")?)?;
                 c.sgr(b, at, true)?;

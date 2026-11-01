@@ -376,3 +376,42 @@ checks = [
   { command = "capture-pane -p -t o" },
   { screen_contains = "^[[<0;1;6M^[[<32;3;6M^[[<32;5;6M^[[<32;7;6M^[[<32;9;6M^[[<0;9;6m", expect = true },
 ]
+
+# One that asked for all motion (any-motion mode, as crossterm programs such
+# as gpur do) is told of the mouse moving with no button held.
+[[cases]]
+name = "motion_reaches_a_program_that_asked_for_all_of_it"
+attach = true
+unix_only = true
+program = "stty raw -echo; printf '\\033[?1003h\\033[?1006hready\\r\\n'; exec cat -v"
+steps = [
+  { wait_text = "ready" },
+  { mouse = { action = "move", at = [3, 5] } },
+  { mouse = { action = "move", at = [6, 5] } },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "capture-pane -p -t o" },
+  { screen_contains = "^[[<35;4;6M^[[<35;7;6M", expect = true },
+]
+
+# nvim selects by dragging when it has the mouse: the selection yanked and
+# put back is the text dragged over, as in tmux.
+[[cases]]
+name = "nvim_selects_what_is_dragged_over"
+attach = true
+unix_only = true
+program = '''exec nvim --clean -n -c 'set mouse=a' -c 'call setline(1, "alpha beta gamma")' '''
+steps = [
+  { wait_text = "alpha beta gamma" },
+  { sleep = 0.5 },
+  { mouse = { action = "drag", at = [0, 0], to = [8, 0] } },
+  { sleep = 0.3 },
+  { keys = "y$p" },
+  { wait_text = "alpha bet" },
+  { sleep = 0.3 },
+]
+checks = [
+  { command = "capture-pane -p -t o -S 0 -E 1" },
+  { screen_contains = "alpha beta gammaalpha bet", expect = true },
+]

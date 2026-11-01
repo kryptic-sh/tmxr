@@ -29,6 +29,9 @@ pub enum MouseAction {
     TripleClick(u8),
     WheelUp,
     WheelDown,
+    /// Motion with no button held. tmux has no name for it, so nothing
+    /// binds it: it always goes to the pane's program.
+    Move,
 }
 
 /// Where it happened.
@@ -136,6 +139,7 @@ impl fmt::Display for MouseKey {
             MouseAction::TripleClick(b) => write!(f, "TripleClick{b}")?,
             MouseAction::WheelUp => f.write_str("WheelUp")?,
             MouseAction::WheelDown => f.write_str("WheelDown")?,
+            MouseAction::Move => f.write_str("MouseMove")?,
         }
         let place = LOCATIONS
             .iter()
@@ -236,6 +240,7 @@ impl MouseKey {
     fn tmux_code(&self) -> u64 {
         let slot = |b: u8| u64::from(b.saturating_sub(1)).min(BUTTON_SLOTS - 1);
         let event = match self.action {
+            MouseAction::Move => 0,
             MouseAction::Down(b) => 1 + slot(b),
             MouseAction::Up(b) => 1 + BUTTON_SLOTS + slot(b),
             MouseAction::Drag(b) => 1 + 2 * BUTTON_SLOTS + slot(b),
@@ -391,6 +396,8 @@ mod tests {
             "MouseDownPane",
             "MouseDown1",
             "MouseDown1Window",
+            // tmux 3.8 refuses it too: motion is not a key a table binds.
+            "MouseMovePane",
             "WheelLeftPane",
             "Mouse",
         ] {
