@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A program that asked for the mouse sees a drag where it is**: with mouse
+  reporting on (Claude Code, for one), each drag motion and the release were
+  sent at the cell the button went down in, so a program's own drag selection
+  never grew. `send-keys -M` now reports every event at its own cell, as tmux's,
+  while the drag's key still belongs to the pane it started in.
+
 ## [0.13.0] - 2026-10-29
 
 ### Breaking

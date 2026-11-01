@@ -52,18 +52,6 @@ means as the reviewer said, not checked.
 
 ### Wrong against tmux 3.6
 
-- **A drag forwarded to a program that asked for the mouse is reported at the
-  press** (_reproduced_ 2026-11-01 against tmux 3.8; found as click-and-drag
-  selection not working in Claude Code inside tmxr). With `?1002h` / `?1006h`
-  on, a drag from column 0 to 8 reached the program as
-  `^[[<0;1;6M^[[<32;1;6M`…`^[[<0;1;6m` from tmxr, `^[[<32;3;6M`, `5`, `7`, `9`
-  and a release at `9` from tmux. `handle` in `mouse.rs` locates a `Drag` and a
-  drag's `DragEnd` at the press (`Press::col` / `row`), right for which pane and
-  bind the key belongs to, but `forward` (`send-keys -M`) encodes the event at
-  `MouseTarget::col` / `row`, that same press cell, instead of where the event
-  itself is (tmux's `input_key_mouse` takes `m->x` / `m->y`). Oracle case
-  `a_drag_reaches_a_program_that_asked_for_the_mouse` in `corpus/mouse.toml`.
-
 - **`respawn-pane` empties the pane's history** (_reproduced_: 78 lines of
   history were 0 after the respawn; tmux keeps them). `respawn_pane` in
   `server/panes.rs` now carries the pane's hooks, options, input-off, pipe and

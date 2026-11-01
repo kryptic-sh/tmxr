@@ -380,17 +380,8 @@ fn follow_drag(srv: &mut Server, id: ClientId, m: MouseEvent) -> bool {
     else {
         return false;
     };
-    // In window cells, as the drag's start was found: the view may be
-    // panned across a larger window.
-    let (ox, oy, top) = srv
-        .clients
-        .get(&id)
-        .and_then(|c| c.att.as_ref())
-        .map_or((0, 0, 0), |a| {
-            let (ox, oy) = crate::render::window_offset(srv, a);
-            (ox, oy, srv.window_top(a.session))
-        });
-    let (col, row) = (m.column + ox, m.row.saturating_sub(top) + oy);
+    // In window cells, as the drag's start was found.
+    let (col, row) = window_cell(srv, id, m);
     match (drag, m.kind) {
         (Drag::Border { pane, vertical, at }, MouseEventKind::Drag(MouseButton::Left)) => {
             let now = if vertical { col } else { row };
@@ -455,6 +446,20 @@ fn follow_drag(srv: &mut Server, id: ClientId, m: MouseEvent) -> bool {
     true
 }
 
+/// Where client `id`'s mouse event `m` is in its window's cells: the view
+/// may be panned across a larger window, below a status line at the top.
+fn window_cell(srv: &Server, id: ClientId, m: MouseEvent) -> (u16, u16) {
+    let (ox, oy, top) = srv
+        .clients
+        .get(&id)
+        .and_then(|c| c.att.as_ref())
+        .map_or((0, 0, 0), |a| {
+            let (ox, oy) = crate::render::window_offset(srv, a);
+            (ox, oy, srv.window_top(a.session))
+        });
+    (m.column + ox, m.row.saturating_sub(top) + oy)
+}
+
 /// A mouse key's target on `pane` at window cell `at`, as `location`.
 fn target_on(
     srv: &Server,
@@ -485,14 +490,20 @@ fn target_on(
 pub fn forward(srv: &mut Server, ctx: &Ctx) -> Result<(), String> {
     let t = ctx.mouse.ok_or("send-keys -M needs a mouse event")?;
     let pane = t.pane.ok_or("no pane under the mouse")?;
+    // Where the event itself is, as tmux's input_key_mouse reports it: a
+    // drag's key is located at its press, but its motion and release are
+    // told where they happen. In window cells, as the pane's rect.
+    let (col, row) = match ctx.client {
+        Some(id) => window_cell(srv, id, t.event),
+        None => (t.col, t.row),
+    };
     let p = srv.panes.get_mut(&pane).ok_or("no pane under the mouse")?;
     if p.input_off {
         return Ok(());
     }
-    // In window cells, as the pane's rect.
     let r = p.rect;
-    let col = t.col.saturating_sub(r.x).min(r.w.saturating_sub(1));
-    let row = t.row.saturating_sub(r.y).min(r.h.saturating_sub(1));
+    let col = col.saturating_sub(r.x).min(r.w.saturating_sub(1));
+    let row = row.saturating_sub(r.y).min(r.h.saturating_sub(1));
     let s = p.emu.screen();
     let bytes = tmxr_term::encode::encode_mouse(
         &t.event,

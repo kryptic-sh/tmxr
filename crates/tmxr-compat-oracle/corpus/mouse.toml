@@ -359,3 +359,20 @@ steps = [
   { sleep = 0.6 },
 ]
 checks = [{ format = "[#{@hits}]" }]
+
+# A program that asked for the mouse (as Claude Code does) is told where a
+# drag is as it moves, and where it ended, not where it started.
+[[cases]]
+name = "a_drag_reaches_a_program_that_asked_for_the_mouse"
+attach = true
+unix_only = true
+program = "stty raw -echo; printf '\\033[?1002h\\033[?1006hready\\r\\n'; exec cat -v"
+steps = [
+  { wait_text = "ready" },
+  { mouse = { action = "drag", at = [0, 5], to = [8, 5] } },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "capture-pane -p -t o" },
+  { screen_contains = "^[[<0;1;6M^[[<32;3;6M^[[<32;5;6M^[[<32;7;6M^[[<32;9;6M^[[<0;9;6m", expect = true },
+]
