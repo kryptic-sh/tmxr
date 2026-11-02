@@ -151,13 +151,33 @@ named were checked by reading; the runs were not repeated.
   A pane writing `?2026h` PARTONE, then 0.6 s later PARTTWO `?2026l`, reached
   the terminal in two frames 0.6 s apart from tmxr, one from tmux. Programs that
   frame redraws in 2026 (Claude Code, Ink and ratatui apps) tear and flicker.
-- **With `mouse off`, the pane's program gets no mouse.** `mouse::handle`
-  returns when `mouse` is off and the client releases the terminal's mouse. tmux
-  then gives the active pane's mouse modes to the outer terminal
-  (`tty_update_mode`) and forwards its events to the pane as they come
-  (`server_client_check_mouse`, "Forward mouse keys if disabled"). With
-  `set -g mouse off` and a pane asking for 1002+1006, tmux's pane got the click;
-  tmxr's got nothing.
+- **With `mouse off` the terminal reports every motion** (_read_, slice-2
+  review): `mouse::capture` is one bool, so crossterm's capture turns on
+  1000/1002/1003/1006 whatever the program asked; tmux copies the program's own
+  mode (`tty_update_mode`). Programs get the same bytes (`encode_mouse` filters
+  by their mode), but each motion goes through `mouse::handle`, which sets
+  `key_at`, so a key typed within `assume-paste-time` of a mouse move counts
+  toward a paste. Fixing it means the protocol's `ServerMsg::Mouse` carrying the
+  mode.
+- **A drag into another pane with `mouse off`** (_read_): tmux places a drag at
+  the previous event's cell (`lx` / `ly`) and drops it outside that pane, so the
+  first motion into a new pane is lost; tmxr sends it.
+- **A popup's program gets no mouse**: tmxr's popups take none, with the mouse
+  on or off; tmux gives a popup's program its mouse.
+- **A dropped frame loses its cursor style, colour and title**: `render_all`
+  appends them to the frame only when they change and records them before the
+  send, so when `Server::send` drops the frame on a full queue they are not sent
+  again (_read_ by the slice-2 reviewer; the mouse and focus modes, which had
+  the same fault, are fixed).
+- **`#{pane_in_mode}` is 0 in clock mode** (_reproduced_ by the slice-2
+  reviewer); tmux 3.8 gives 1 (`clock-mode`).
+- **Not covered by a test**: with `mouse off`, the copy-mode check in
+  `pass_through` for a pane other than the active one, read-only clients, a menu
+  or another overlay, the `fire_double_clicks` guard, and a capture change on a
+  second client or after a session switch. The full-queue resend was shown only
+  by a manual SIGSTOP run (client stopped while the pane printed 4000 screens,
+  then asked for the mouse: `?1003h` reached the terminal with the fix, never
+  without), not by a test.
 - **Mouse buttons 8 and up (back and forward) never reach a program.** tmux
   passes SGR 128+ through (`input_key_get_mouse` uses `m->sgr_b`); crossterm
   (the kryptic-sh fork in `Cargo.lock`) fails to parse any button past 7

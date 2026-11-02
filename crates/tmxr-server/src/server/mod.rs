@@ -728,10 +728,17 @@ impl Server {
             // A client too slow for its frames: this one is dropped, and it
             // is repainted whole on a later pass (the loop makes one each
             // tick), until one fits.
-            Err(TrySendError::Full(_)) => {
+            Err(TrySendError::Full(msg)) => {
                 if let Some(a) = c.att.as_mut() {
                     a.full_redraw = true;
                     a.dirty = true;
+                    // A mode the client was not told stays to be told: the
+                    // next frame sees it differ and sends it again.
+                    match msg {
+                        ServerMsg::Mouse(on) => a.mouse = !on,
+                        ServerMsg::FocusEvents(on) => a.focus_events = !on,
+                        _ => {}
+                    }
                 }
             }
             Err(TrySendError::Disconnected(_)) => {}
@@ -1302,9 +1309,10 @@ impl Server {
             .map(|c| c.id)
             .collect();
         for id in ids {
-            // The `mouse` option reaches the client's terminal with its next
-            // frame, after attaching or after the option changes.
-            let mouse = self.client_session_options(id).mouse;
+            // Whether the terminal reports the mouse reaches the client with
+            // its next frame: after attaching, the `mouse` option changing,
+            // or with it off, the active pane or its program's mouse modes.
+            let mouse = crate::mouse::capture(self, id);
             let focus = self.cfg.focus_events;
             let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
                 continue;

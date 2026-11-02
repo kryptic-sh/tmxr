@@ -49,6 +49,10 @@ Not in the corpus, found by review (2026-11-02, _reproduced_): 3.8's
 drag in `less` or `man` copies text in tmux 3.8; tmxr's `defaults.toml` keeps
 3.6's test and the drag does nothing.
 
+Also seen by the slice-2 reviewer (2026-11-02): a click on an open menu's item
+closes the menu in tmux 3.8 where tmxr's menu code (from 3.6) does not, with the
+mouse on or off.
+
 Each was only seen to diverge; none was read against tmux 3.7/3.8's source or
 changelog yet, so which are tmux changes and which are tmxr bugs the 3.6 run hid
 is not known.

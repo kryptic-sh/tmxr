@@ -1,5 +1,6 @@
 # The mouse, as the owner's tmux config uses it (mouse on, tmux's default
-# mouse binds): the same events in tmux and tmxr, and the same results.
+# mouse binds): the same events in tmux and tmxr, and the same results. The
+# cases named for the mouse off set it off first.
 
 [[cases]]
 name = "a_click_focuses_the_pane"
@@ -393,6 +394,122 @@ steps = [
 checks = [
   { command = "capture-pane -p -t o" },
   { screen_contains = "^[[<35;4;6M^[[<35;7;6M", expect = true },
+]
+
+# With `mouse off`, tmux binds nothing to the mouse and passes each event
+# to the program under it, when that program asked for the mouse.
+[[cases]]
+name = "a_click_reaches_a_mouse_program_with_the_mouse_off"
+attach = true
+unix_only = true
+program = "stty raw -echo; printf '\\033[?1002h\\033[?1006hready\\r\\n'; exec cat -v"
+steps = [
+  { run = "set -g mouse off" },
+  { wait_text = "ready" },
+  { mouse = { action = "click", at = [4, 2] } },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "capture-pane -p -t o" },
+  { screen_contains = "^[[<0;5;3M^[[<0;5;3m", expect = true },
+]
+
+[[cases]]
+name = "a_drag_reaches_a_mouse_program_with_the_mouse_off"
+attach = true
+unix_only = true
+program = "stty raw -echo; printf '\\033[?1002h\\033[?1006hready\\r\\n'; exec cat -v"
+steps = [
+  { run = "set -g mouse off" },
+  { wait_text = "ready" },
+  { mouse = { action = "drag", at = [0, 5], to = [8, 5] } },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "capture-pane -p -t o" },
+  { format = "#{pane_in_mode}", expect = "0" },
+]
+
+# A program that did not ask gets nothing.
+[[cases]]
+name = "a_program_not_asking_gets_no_mouse_with_the_mouse_off"
+attach = true
+unix_only = true
+program = "stty raw -echo; printf 'ready\\r\\n'; exec cat -v"
+steps = [
+  { run = "set -g mouse off" },
+  { wait_text = "ready" },
+  { mouse = { action = "click", at = [4, 2] } },
+  { mouse = { action = "wheel-up", at = [4, 2] } },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "capture-pane -p -t o" },
+  { screen_contains = "^[", expect = false },
+  { format = "#{pane_in_mode}", expect = "0" },
+]
+
+# The pane under the mouse gets it, not the active one, and is not focused.
+[[cases]]
+name = "the_pane_under_the_mouse_gets_it_with_the_mouse_off"
+attach = true
+unix_only = true
+program = "stty raw -echo; printf '\\033[?1002h\\033[?1006hready\\r\\n'; exec cat -v"
+steps = [
+  { run = "set -g mouse off" },
+  { wait_text = "ready" },
+  { run = "split-window -h -t o \"stty raw -echo; printf 'right\\r\\n'; exec cat -v\"" },
+  { wait_text = "right" },
+  { mouse = { action = "click", at = [5, 5] } },
+  { sleep = 0.5 },
+]
+checks = [
+  { format = "#{pane_index}", expect = "1" },
+  { command = "capture-pane -p -t o.0" },
+  { command = "capture-pane -p -t o.1" },
+  { screen_contains = "^[[<0;6;6M^[[<0;6;6m", expect = true },
+]
+
+# On the status line or a border, the mouse reaches no program.
+[[cases]]
+name = "the_status_line_and_borders_take_no_mouse_with_the_mouse_off"
+attach = true
+unix_only = true
+program = "stty raw -echo; printf '\\033[?1002h\\033[?1006hready\\r\\n'; exec cat -v"
+steps = [
+  { run = "set -g mouse off" },
+  { wait_text = "ready" },
+  { run = "split-window -h -t o \"stty raw -echo; printf '\\033[?1002h\\033[?1006hright\\r\\n'; exec cat -v\"" },
+  { wait_text = "right" },
+  { mouse = { action = "click", at = [5, 29] } },
+  { mouse = { action = "click", at = [50, 5] } },
+  { sleep = 0.5 },
+]
+checks = [
+  { format = "#{pane_index}", expect = "1" },
+  { screen_contains = "^[", expect = false },
+]
+
+# A press on a pane showing the clock ends the clock, as any key does, and
+# its program gets only the release.
+[[cases]]
+name = "a_click_ends_the_clock_with_the_mouse_off"
+attach = true
+unix_only = true
+program = "stty raw -echo; printf '\\033[?1002h\\033[?1006hready\\r\\n'; exec cat -v"
+steps = [
+  { run = "set -g mouse off" },
+  { wait_text = "ready" },
+  { run = "split-window -h -t o \"stty raw -echo; printf '\\033[?1002h\\033[?1006hright\\r\\n'; exec cat -v\"" },
+  { wait_text = "right" },
+  { run = "clock-mode -t o.0" },
+  { sleep = 0.5 },
+  { mouse = { action = "click", at = [10, 5] } },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "capture-pane -p -t o.0" },
+  { format = "#{pane_index}", expect = "1" },
 ]
 
 # A double click on a program that asked for the mouse reaches it as two

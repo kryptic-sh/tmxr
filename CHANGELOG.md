@@ -21,6 +21,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **A click past column or row 223 reaches a program using the one-byte mouse
   form**: it was dropped, having no byte for the position. It is now clamped to
   the last one, as tmux does.
+- **With `mouse off`, a program that asked for the mouse gets it**: nvim, htop
+  or Claude Code in a pane saw no clicks, drags or wheel at all, as the client
+  released the terminal's mouse and the server dropped every event. As in tmux,
+  the terminal now reports the mouse while the active pane's program asks for it
+  (not in copy mode, and not with a prompt or popup open; a menu takes it as
+  with `mouse on`), and each event goes to the program in the pane under it,
+  unbound and without focusing that pane. A pane whose program did not ask, the
+  status line and the borders still get nothing, and with no program asking the
+  terminal's own selection works as before. A press on a pane showing the clock
+  ends the clock, as a key does.
+- **A slow client no longer keeps a stale mouse or focus mode**: when its queue
+  was full, the server dropped the message telling it to capture the mouse or
+  ask for focus reports, and never sent it again; it now sends it with the next
+  frame.
 
 ## [0.14.0] - 2026-11-01
 

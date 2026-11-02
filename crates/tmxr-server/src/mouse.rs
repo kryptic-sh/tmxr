@@ -1,4 +1,4 @@
-//! Mouse handling for an attached client (`mouse on`), as tmux does it.
+//! Mouse handling for an attached client, as tmux does it.
 //!
 //! Each event becomes a mouse key (`MouseDown1Pane`, `WheelUpPane`,
 //! `MouseDragEnd1Pane`, …), looked up in the root table, or in the copy-mode
@@ -10,6 +10,10 @@
 //!
 //! A drag those commands start then follows the mouse until the button is
 //! released.
+//!
+//! With `mouse off` no key is bound: each event goes straight to the
+//! program under it, and the client's terminal reports the mouse only
+//! while the active pane's program asks for it ([`capture`]).
 
 use std::time::{Duration, Instant};
 
@@ -92,13 +96,11 @@ const MODS: KeyModifiers = KeyModifiers::CONTROL
 use crate::format_draw::Range;
 
 pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
-    if !srv.client_session_options(id).mouse {
-        return;
-    }
     let Some(att) = srv.clients.get(&id).and_then(|c| c.att.as_ref()) else {
         return;
     };
-    // An open menu takes every mouse event, as tmux's.
+    // An open menu takes every mouse event, as tmux's, whose overlay has
+    // the keys before the `mouse` option is looked at.
     if matches!(att.overlay, Some(crate::overlay::Overlay::Menu(_))) {
         srv.menu_mouse(id, m);
         return;
@@ -109,6 +111,10 @@ pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
     let session = att.session;
     if let Some(s) = srv.sessions.get_mut(&session) {
         s.key_at = Some(std::time::Instant::now());
+    }
+    if !srv.client_session_options(id).mouse {
+        pass_through(srv, id, m);
+        return;
     }
     if follow_drag(srv, id, m) {
         return;
@@ -171,6 +177,81 @@ pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
     }
 }
 
+/// With `mouse` off nothing is bound to the mouse: each event goes to the
+/// program in the pane under it, as tmux's server_client_key_callback
+/// forwards mouse keys when the option is off. As its input_key_mouse, one
+/// off every pane (on the status line, a border or a scrollbar), on a pane
+/// in copy mode, or for a program that did not ask for the mouse goes
+/// nowhere. On a pane showing the clock it ends the clock, as any key does
+/// (tmux's window_clock_key), and goes no further.
+fn pass_through(srv: &mut Server, id: ClientId, m: MouseEvent) {
+    if srv.client_read_only(id) {
+        return;
+    }
+    let Some(target) = locate(srv, id, m, (m.column, m.row)) else {
+        return;
+    };
+    if target.location != MouseLocation::Pane {
+        return;
+    }
+    if let Some(p) = target.pane.and_then(|p| srv.panes.get_mut(&p))
+        && std::mem::take(&mut p.clock)
+    {
+        let window = p.window;
+        srv.mark_window_dirty(window);
+        return;
+    }
+    if target.pane.is_none_or(|p| in_mode(srv, p)) {
+        return;
+    }
+    let ctx = Ctx {
+        client: Some(id),
+        pane: target.pane,
+        mouse: Some(target),
+        ..Ctx::default()
+    };
+    let _ = forward(srv, &ctx);
+}
+
+/// Whether `pane` shows a mode (copy mode or the clock) over its program,
+/// which then gets no mouse: tmux's window_pane_key gives the mode the key.
+fn in_mode(srv: &Server, pane: PaneId) -> bool {
+    srv.panes
+        .get(&pane)
+        .is_some_and(|p| p.copy.is_some() || p.clock)
+}
+
+/// Whether client `id`'s terminal should report the mouse, as tmux's
+/// server_client_reset_state sets its mouse modes on every loop: always
+/// with `mouse` on; with it off, the modes of what the client shows on
+/// top, an open menu (tmux's menu screen asks for every motion) or else
+/// its active pane, when the program there asked for the mouse and no mode
+/// covers it. Any other overlay asks for none: tmux's prompts, its modes in
+/// a pane and `display-panes` have screens with no mouse modes, and tmxr's
+/// popups take no mouse.
+///
+/// One bool, not the program's own modes: the terminal reports every
+/// motion and [`forward`] encodes each event in the mode and encoding the
+/// program asked for, which gives it the bytes tmux's narrower terminal
+/// modes would.
+pub fn capture(srv: &Server, id: ClientId) -> bool {
+    if srv.client_session_options(id).mouse {
+        return true;
+    }
+    let Some(att) = srv.clients.get(&id).and_then(|c| c.att.as_ref()) else {
+        return false;
+    };
+    match att.overlay {
+        Some(crate::overlay::Overlay::Menu(_)) => true,
+        Some(_) => false,
+        None => srv
+            .active_pane_of_session(att.session)
+            .filter(|&p| !in_mode(srv, p))
+            .and_then(|p| srv.panes.get(&p))
+            .is_some_and(|p| p.emu.screen().mouse_protocol_mode() != vt1k::MouseProtocolMode::None),
+    }
+}
+
 /// Record a press of `button` and return its key: `Down`, or the second
 /// or third press in a row; a fourth starts over.
 fn count_click(srv: &mut Server, id: ClientId, m: MouseEvent, button: u8) -> MouseAction {
@@ -230,6 +311,11 @@ pub fn fire_double_clicks(srv: &mut Server) {
         })
         .collect();
     for (id, b, target) in due {
+        // With `mouse` turned off since the second click, tmux forwards
+        // the DoubleClick to the pane, which ignores it.
+        if !srv.client_session_options(id).mouse {
+            continue;
+        }
         // The pane's program had the second press already: `send-keys -M`
         // passes this one nowhere, as tmux's ignored DoubleClick event.
         let target = MouseTarget {
