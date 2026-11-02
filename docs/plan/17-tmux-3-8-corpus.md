@@ -44,6 +44,11 @@ with `TMUX_BIN=/usr/sbin/tmux`, `--test-threads=1`. These cases diverged
 - `mouse.toml`: `a_slider_drag_ends_on_the_slider`,
   `a_key_after_a_click_counts_toward_a_paste_as_tmux`.
 
+Not in the corpus, found by review (2026-11-02, _reproduced_): 3.8's
+`key-bindings.c` dropped `#{alternate_on}` from `MouseDrag1Pane`'s test, so a
+drag in `less` or `man` copies text in tmux 3.8; tmxr's `defaults.toml` keeps
+3.6's test and the drag does nothing.
+
 Each was only seen to diverge; none was read against tmux 3.7/3.8's source or
 changelog yet, so which are tmux changes and which are tmxr bugs the 3.6 run hid
 is not known.

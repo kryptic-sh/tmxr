@@ -136,8 +136,84 @@ Not reviewed: `binds.rs`'s `list-keys` formatting, `prompt.rs`'s placement
 arithmetic, the Windows half of `access.rs`, `copy/tests.rs`, the layout
 presets, most of `vars.rs`, and the Windows parts of `process.rs` (skimmed).
 
+## Gaps found by review (2026-11-02)
+
+A read-only review after v0.14.0, looking for input or terminal state that tmxr
+hands a pane's program differently from tmux, as the drag bug did. Each was
+_reproduced_ by the reviewer against tmux 3.8 (`/usr/sbin/tmux`, the oracle's
+`corpus/tmux.conf`), with a fake outer terminal driving the client and
+`stty raw -echo; exec cat -v` in the pane to show the bytes it gets. The symbols
+named were checked by reading; the runs were not repeated.
+
+- **A pane's synchronized output (`?2026`) is not held.** vt1k ignores mode 2026
+  and the server redraws as bytes arrive; tmux's `screen_write_start_sync` /
+  `screen_write_stop_sync` hold the pane's redraw until `?2026l` or at most 1 s.
+  A pane writing `?2026h` PARTONE, then 0.6 s later PARTTWO `?2026l`, reached
+  the terminal in two frames 0.6 s apart from tmxr, one from tmux. Programs that
+  frame redraws in 2026 (Claude Code, Ink and ratatui apps) tear and flicker.
+- **With `mouse off`, the pane's program gets no mouse.** `mouse::handle`
+  returns when `mouse` is off and the client releases the terminal's mouse. tmux
+  then gives the active pane's mouse modes to the outer terminal
+  (`tty_update_mode`) and forwards its events to the pane as they come
+  (`server_client_check_mouse`, "Forward mouse keys if disabled"). With
+  `set -g mouse off` and a pane asking for 1002+1006, tmux's pane got the click;
+  tmxr's got nothing.
+- **The horizontal wheel and buttons 8 and up are dropped.** `mouse::handle`
+  ends `_ => return`, which drops `ScrollLeft` / `ScrollRight`, though
+  `encode_mouse` encodes them; `button` knows three buttons. tmux passes SGR
+  66/67 and 128+ (`input_key_get_mouse` uses `m->sgr_b`). Sideways scrolling in
+  nvim with `nowrap`, and back/forward buttons, do nothing.
+- **Programs cannot learn the pixel size.** `pty.rs` opens and resizes ptys with
+  `pixel_width` / `pixel_height` 0, and `Hooks::unhandled_csi` does not answer
+  `CSI 14 t` / `16 t` / `18 t`; tmux sets the pane's pixel size and answers them
+  (`input_csi_dispatch_winops`). Image previewers (yazi, chafa, timg) mis-size
+  or refuse images. Needs the client to send its terminal's pixel size, which
+  touches the protocol.
+- **Extended keys are CSI u where tmux sends xterm's form, and level 2 acts as
+  level 1.** `encode.rs` `csi_u` and `InputModes::extended`: tmux's
+  `extended-keys-format` defaults to `xterm` (`CSI 27;5;59~` for C-;, where tmxr
+  sends `CSI 59;5u`), and `CSI >4;2m` (`MODE_KEYS_EXTENDED_2`) reports every
+  modified key extended (C-a as `CSI 27;5;97~`, where tmxr sends `^A`). tmxr has
+  no `extended-keys-format` option.
+- **Terminal queries tmux answers go unanswered.** `Hooks::unhandled_csi` in
+  `emulator.rs` answers no XTVERSION (tmux: `DCS >|tmux 3.8 ST`), no DECRQM for
+  ANSI modes or DEC modes 1, 25, 1004, 1005, 1006, 1049, 2004, 2026, 2031
+  (`INPUT_CSI_QUERY_PRIVATE`), and no DECRQSS for the cursor style. Programs
+  probing `?2026$p` or XTVERSION decide the feature is missing. Its DA1 answer
+  is `?62;22c` under a comment saying "as tmux does"; tmux answers `?1;2c`
+  (`?1;2;4c` with sixel).
+- **A click past column 222 is lost in the one-byte mouse encoding.**
+  `encode_mouse` returns nothing for a coordinate past a byte; tmux clamps it
+  to 255. Only programs using mode 1000 without 1005/1006 on a terminal that
+  wide.
+
+Checked by the reviewer and matching tmux: the one-byte, 1005 and 1006 mouse
+encodings (1015 ignored by both), mouse into a pane off the window's origin and
+under a status line at the top, the wheel in an alternate-screen program without
+the mouse (neither sends arrows), bracketed paste, legacy keys (F1–F12 with
+modifiers, DECCKM cursor keys, Home/End/Ins/Del/PgUp/PgDn, BackTab, C-Space,
+M-Enter, M-BSpace), DA2, DSR 5/6, DCS `tmux;` passthrough and DECSCUSR. Differs
+harmlessly: a drag past a pane's edge is clamped to it where tmux drops it, and
+the one-byte form keeps Shift on a release. Lower impact, not filed separately:
+`CSI E` (keypad 5) and F13 and up are dropped where tmux passes them. Not
+compared: OSC 52, titles, zoomed or panned windows, copy-mode clicks on a
+mouse-enabled pane.
+
 ## Decisions waiting on the owner
 
+- **Alt+Shift keys lose their Shift under a kitty-protocol terminal.**
+  `Guard::enter` in `tmxr-client/src/terminal.rs` pushes kitty's
+  `DISAMBIGUATE_ESCAPE_CODES`, which tmux never asks for; the terminal then
+  sends Alt+Shift+a as `CSI 97;4u`, crossterm reads `'a'` with Shift and Alt,
+  and `encode_key` and `Key::normalise` (`keys.rs`) drop the Shift. In
+  Alacritty, kitty, foot, Ghostty and WezTerm, M-A reaches a program as M-a, and
+  `bind -n M-H` never fires (`M-h` runs instead). _Reproduced_ by the 2026-11-02
+  reviewer. Options: also push `REPORT_ALTERNATE_KEYS`, so crossterm swaps in
+  the shifted character (the reviewer's suggestion; costs tmxr's own C-S-h as a
+  key apart from C-h); fold Shift into the character in `encode_key` /
+  `normalise` for Alt chords only (keeps C-S-h, but must know the layout's
+  shifted character, which only the terminal does); or stop asking for the kitty
+  protocol, as tmux (loses every key it disambiguates).
 - **Synchronized updates are asked for, not configured**
   (`terminal::probe_sync`): at its first attach a client sends DECRQM for mode
   2026 and DA1 and reads the answers straight from the terminal (up to
