@@ -652,6 +652,36 @@ fn flags_in_any_case_and_server_options_reset_and_append() {
     assert_eq!(t.run(&["show", "-sv", "escape-time"]).trim(), "5");
 }
 
+/// `extended-keys-format` is tmux's choice of `csi-u` or `xterm`, xterm by
+/// default; another value is refused.
+#[test]
+fn extended_keys_format_takes_tmuxs_two_values() {
+    let t = Tmxr::new("ekf");
+    t.run(&["new-session", "-d", "-s", "ek"]);
+    assert_eq!(
+        t.run(&["show", "-sv", "extended-keys-format"]).trim(),
+        "xterm"
+    );
+    t.run(&["set", "-s", "extended-keys-format", "csi-u"]);
+    assert_eq!(
+        t.run(&["show", "-sv", "extended-keys-format"]).trim(),
+        "csi-u"
+    );
+    let bad = t.output(&["set", "-s", "extended-keys-format", "kitty"]);
+    assert!(!bad.status.success());
+    let err = String::from_utf8_lossy(&bad.stderr);
+    assert!(err.contains("unknown value: kitty"), "{err}");
+    assert_eq!(
+        t.run(&["show", "-sv", "extended-keys-format"]).trim(),
+        "csi-u"
+    );
+    t.run(&["set", "-su", "extended-keys-format"]);
+    assert_eq!(
+        t.run(&["show", "-sv", "extended-keys-format"]).trim(),
+        "xterm"
+    );
+}
+
 /// `pane-base-index` stops at 65535, as tmux 3.6's, so a pane's number
 /// cannot overflow.
 #[test]

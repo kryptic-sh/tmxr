@@ -30,5 +30,7 @@ pub mod pty;
 pub mod sync;
 
 pub use emulator::{Emulator, Query, screen_size};
-pub use encode::{ExtendedKeys, InputModes, conpty_key, encode_key, encode_paste};
+pub use encode::{
+    ExtendedKeys, ExtendedKeysFormat, InputModes, conpty_key, encode_key, encode_paste,
+};
 pub use pty::{Pty, PtyEvent, SpawnSpec};

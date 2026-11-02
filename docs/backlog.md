@@ -122,6 +122,16 @@ means as the reviewer said, not checked.
 
 ### Behaviour that is tmux's, though it surprises
 
+- **`formats.toml`'s date cases differ against a tmux built on this machine**
+  (seen 2026-11-02 with a scratch tmux 3.6 and Arch's 3.8, `LANG=en_US.UTF-8`):
+  tmux formats `%c` and `%x` by the locale (`Wed 15 Nov 2023 06:13:20 AM PST`,
+  `11/02/2026`), tmxr as C (`Wed Nov 15 06:13:20 2023`, `11/02/26`). CI's oracle
+  passes; its locale was not checked. Whether tmxr should follow the locale was
+  not decided.
+- **`keys_match_tmux` failed once against a scratch tmux 3.6 and passed on
+  rerun** (2026-11-02, case not captured): tmux 3.6's client sometimes splits
+  keys that arrive in one write, which is why the extended-keys cases send one
+  key at a time. Watch CI for the same.
 - **`swap-window` selects the opposite way to tmux's manual**: tmux 3.6 moves to
   the swapped index with `-d` and stays put without it. tmxr follows what tmux
   does, not what its manual says.
@@ -210,12 +220,24 @@ named were checked by reading; the runs were not repeated.
   (`input_csi_dispatch_winops`). Image previewers (yazi, chafa, timg) mis-size
   or refuse images. Needs the client to send its terminal's pixel size, which
   touches the protocol.
-- **Extended keys are CSI u where tmux sends xterm's form, and level 2 acts as
-  level 1.** `encode.rs` `csi_u` and `InputModes::extended`: tmux's
-  `extended-keys-format` defaults to `xterm` (`CSI 27;5;59~` for C-;, where tmxr
-  sends `CSI 59;5u`), and `CSI >4;2m` (`MODE_KEYS_EXTENDED_2`) reports every
-  modified key extended (C-a as `CSI 27;5;97~`, where tmxr sends `^A`). tmxr has
-  no `extended-keys-format` option.
+- **Extended keys: what the 2026-11-02 change left** (slice-5 review):
+  - Windows is not verified: a ConPTY pane under `extended-keys always` gets
+    extended keys only when its program asks (`InputModes::key_level`, so
+    conhost keeps reading C-BSpace as 0x08, per commit 9faac49); whether ConPTY
+    passes `CSI 27;…~` to a program that asked (WSL, nvim) was not checked. A
+    ConPTY shell that did not ask now gets C-Enter, S-Enter and C-Tab as legacy
+    bytes, where it got CSI u before.
+  - Popups and `send-keys` (`copyline.rs` `key_to_one_pane`) never call
+    `conpty_key`, so C-h / C-j there reach a Windows program as raw 0x08 / 0x0a,
+    not win32 input events (older than this change).
+  - A popup keeps the `extended-keys` / `extended-keys-format` it opened with;
+    tmux's `input_key_extended` reads the option on every key.
+  - `tmux_key` sends a kitty-reported real Ctrl+4 … Ctrl+7 at level 2 as the
+    legacy control's key (`27;5;92` for C-4) where tmux sends the digit
+    (`27;5;52`): crossterm reports the legacy byte 0x1c and a real Ctrl+4 the
+    same way. Level 1 is unaffected.
+  - `send-keys C-A` is folded to `C-a` before encoding, so at level 2 it sends
+    97 where tmux sends 65.
 - **Query replies that still differ from tmux 3.8** (_reproduced_ by the slice-3
   reviewer, 2026-11-02, `Hooks::private_mode` / `cursor_blinks` in
   `emulator.rs`):

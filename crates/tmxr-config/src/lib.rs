@@ -56,6 +56,9 @@ pub struct Config {
     pub focus_events: bool,
     pub default_terminal: String,
     pub extended_keys: String,
+    /// `extended-keys-format`: `xterm` or `csi-u`, the form a pane's
+    /// extended keys go out in, as tmux's.
+    pub extended_keys_format: String,
     pub set_clipboard: String,
     /// `on`, `off`, `16` or `auto`: whether clients get 24-bit colour, or
     /// colours mapped to the 256 (`off`) or the 16 ANSI ones.
@@ -129,6 +132,7 @@ struct File {
     #[serde(default)]
     default_shell: Option<String>,
     extended_keys: String,
+    extended_keys_format: String,
     set_clipboard: String,
     rgb_colour: String,
     allow_passthrough: bool,
@@ -322,6 +326,7 @@ impl From<File> for Config {
             focus_events: f.focus_events,
             default_terminal: f.default_terminal,
             extended_keys: f.extended_keys,
+            extended_keys_format: f.extended_keys_format,
             set_clipboard: f.set_clipboard,
             rgb_colour: f.rgb_colour,
             copy_command: f.copy_command,
@@ -864,6 +869,9 @@ impl Config {
             "focus-events" => self.focus_events = from.focus_events,
             "default-terminal" => self.default_terminal.clone_from(&from.default_terminal),
             "extended-keys" => self.extended_keys.clone_from(&from.extended_keys),
+            "extended-keys-format" => self
+                .extended_keys_format
+                .clone_from(&from.extended_keys_format),
             "set-clipboard" => self.set_clipboard.clone_from(&from.set_clipboard),
             "rgb-colour" => self.rgb_colour.clone_from(&from.rgb_colour),
             "copy-command" => self.copy_command.clone_from(&from.copy_command),

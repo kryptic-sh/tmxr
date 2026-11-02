@@ -45,8 +45,11 @@ pub struct Hooks {
     cwd: Option<PathBuf>,
     /// Bytes to write back to the program: answers to terminal queries.
     replies: Vec<u8>,
-    /// xterm `modifyOtherKeys` level set with `CSI > 4 ; n m`.
+    /// xterm `modifyOtherKeys` level set with `CSI > 4 ; n m`, or given by
+    /// `extended-keys always`.
     modify_other_keys: u8,
+    /// The level the program itself asked for with `CSI > 4 ; n m`.
+    asked_keys: u8,
     /// The `extended-keys` option as output arrives: `off` ignores a
     /// `CSI > 4 ; n m`, as tmux's input_csi_dispatch_sgr_other.
     extended_keys: ExtendedKeys,
@@ -152,8 +155,22 @@ impl vt1k::Callbacks for Hooks {
                 }
                 _ => {}
             },
+            // As tmux's INPUT_CSI_MODSET: a level but 1 or 2 is none, or 1
+            // under `extended-keys always`.
             (Some(b'>'), 'm') if p(0) == Some(4) && self.extended_keys != ExtendedKeys::Off => {
-                self.modify_other_keys = p(1).unwrap_or(0).min(2) as u8;
+                self.asked_keys = match p(1) {
+                    Some(n @ (1 | 2)) => n as u8,
+                    _ => 0,
+                };
+                self.modify_other_keys = self
+                    .asked_keys
+                    .max(u8::from(self.extended_keys == ExtendedKeys::Always));
+            }
+            // INPUT_CSI_MODOFF: `CSI > 4 n` is likewise none, whatever else
+            // the option is.
+            (Some(b'>'), 'n') if p(0) == Some(4) => {
+                self.asked_keys = 0;
+                self.modify_other_keys = u8::from(self.extended_keys == ExtendedKeys::Always);
             }
             (Some(b'>'), 'u') => {
                 if self.kitty_flags.len() >= KITTY_STACK_LIMIT {
@@ -625,6 +642,7 @@ impl Emulator {
     pub fn reset_keys(&mut self) {
         let hooks = self.parser.callbacks_mut();
         hooks.modify_other_keys = u8::from(hooks.extended_keys == ExtendedKeys::Always);
+        hooks.asked_keys = 0;
     }
 
     /// Whether the program may switch to the alternate screen (tmux's
@@ -982,6 +1000,8 @@ impl Emulator {
             bracketed_paste: s.bracketed_paste(),
             kitty_flags: h.kitty_flags.last().copied().unwrap_or(0),
             modify_other_keys: h.modify_other_keys,
+            asked_keys: h.asked_keys,
+            conpty: crate::pty::CONPTY,
         }
     }
 }
@@ -1548,7 +1568,26 @@ mod tests {
         e.set_extended_keys(ExtendedKeys::Always);
         e.reset_keys();
         assert_eq!(e.input_modes().modify_other_keys, 1);
+        // A level past 2 is none, and `CSI > 4 n` turns keys back off: to
+        // level 1 under `always`.
+        e.process(b"\x1b[>4;3m");
+        assert_eq!(e.input_modes().modify_other_keys, 1);
+        e.process(b"\x1b[>4;2m");
+        assert_eq!(e.input_modes().asked_keys, 2);
+        e.process(b"\x1b[>4n");
+        assert_eq!(e.input_modes().modify_other_keys, 1);
+        // What the program asked for is kept apart from what `always`
+        // gives, for a ConPTY pane.
+        assert_eq!(e.input_modes().asked_keys, 0);
+        e.process(b"\x1b[>4;1m");
+        assert_eq!(e.input_modes().asked_keys, 1);
+        e.reset_keys();
+        assert_eq!(e.input_modes().asked_keys, 0);
         e.set_extended_keys(ExtendedKeys::On);
+        e.process(b"\x1b[>4;3m");
+        assert_eq!(e.input_modes().modify_other_keys, 0);
+        e.process(b"\x1b[>4;2m\x1b[>4n");
+        assert_eq!(e.input_modes().modify_other_keys, 0);
         e.process(b"\x1b[>4;2m");
         e.process(b"\x1b[>1u");
         assert_eq!(e.input_modes().kitty_flags, 1);

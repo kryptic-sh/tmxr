@@ -56,6 +56,8 @@ default-command = ""
 # tmux's default: the size a detached new session's windows get.
 default-size = "80x24"
 extended-keys = "always"
+# tmux's default: extended keys in xterm's CSI 27;<modifiers>;<key>~ form.
+extended-keys-format = "xterm"
 set-clipboard = "on"
 # 24-bit colour on every terminal, as the tmux config's `terminal-overrides
 # ",*:RGB"`; "off" sends the 256, "16" the 16 ANSI colours, and "auto" asks

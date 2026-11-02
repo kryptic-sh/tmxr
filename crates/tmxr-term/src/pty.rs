@@ -8,6 +8,10 @@ use std::sync::mpsc::{Sender, channel};
 
 use portable_pty::{ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_system};
 
+/// Whether a pane's pseudo-terminal is a ConPTY: portable-pty's native one
+/// is on Windows, and a Unix pty everywhere else.
+pub const CONPTY: bool = cfg!(windows);
+
 /// What to run in a new pane.
 #[derive(Debug, Clone, Default)]
 pub struct SpawnSpec {

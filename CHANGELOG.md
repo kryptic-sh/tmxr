@@ -6,7 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Breaking
+
+- **`tmxr-term`'s `encode_key` takes the `extended-keys-format` option** as a
+  fourth argument, a new `ExtendedKeysFormat`; a library caller passes
+  `ExtendedKeysFormat::Xterm` for tmux's default.
+- **`tmxr-term`'s `InputModes` has `asked_keys` and `conpty` fields**, the level
+  a pane's program asked for and whether its pty is a ConPTY
+  (`tmxr_term::pty::CONPTY`); a library caller building one with a struct
+  literal sets them, or takes them from `..InputModes::default()`.
+
 ### Added
+
+- **The `extended-keys-format` server option**, as tmux's: `xterm` (the default)
+  or `csi-u`, the form a pane's program that asked for extended keys gets them
+  in.
 
 - **A pane's program can ask the terminal what tmux answers**: XTVERSION
   (`CSI > q`) answers `DCS >|tmxr` and tmxr's version, DECRQM (`CSI ? Ps $ p`,
@@ -17,6 +31,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   tmxr sends none unasked.
 
 ### Fixed
+
+- **Extended keys are tmux's**: a program that asked for xterm's modifyOtherKeys
+  (`CSI > 4 ; 1 m`, or any pane under `extended-keys always`) got C-; C-Enter
+  and S-Enter as `CSI 59;5u`, `CSI 13;5u` and `CSI 13;2u`, where tmux sends
+  xterm's `CSI 27;5;59~`, `CSI 27;5;13~` and `CSI 27;2;13~`; and one that asked
+  for level 2 (`CSI > 4 ; 2 m`) got level 1, where tmux sends every modified key
+  extended (C-a as `CSI 27;5;97~`, M-a as `CSI 27;3;97~`, BTab as
+  `CSI 27;2;9~`). At level 1 the keys that go extended are tmux's too: C-S-h is
+  `^H`, and C-?, C-BSpace and C-Escape go extended. Under
+  `extended-keys always`, tmxr's default, every pane is at level 1, so a shell
+  now gets C-BSpace, C-Escape, S-BSpace and C-? in extended form (C-BSpace as
+  `CSI 27;5;127~`, not `^H`), as tmux under `always` sends them. A ConPTY pane
+  (every pane on Windows) is the exception: conhost's input parser does not read
+  xterm's extended form, so there `always` acts as `on`, and a program that did
+  not ask for extended keys keeps the legacy bytes it got before. Ctrl with
+  `` ` ``, `{`, `|`, `}` or `~` sends the control byte tmux sends below level 2
+  (with no extended keys it sent nothing). `CSI > 4 n` turns modifyOtherKeys
+  off, and a level past 2 asks for none, as in tmux, where tmxr ignored the one
+  and took the other as level 2. A program that pushed kitty keyboard flags gets
+  kitty's `CSI u` keys as before.
 
 - **A pane's synchronized output is held, as in tmux 3.8**: a program that
   frames a redraw in `CSI ? 2026 h` … `CSI ? 2026 l` (Claude Code, Ink and

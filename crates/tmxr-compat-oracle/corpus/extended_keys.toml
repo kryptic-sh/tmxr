@@ -1,0 +1,107 @@
+# What a pane's program that asked for xterm's modifyOtherKeys gets for keys
+# from the client's terminal, as `cat -v` shows it on a raw terminal. The
+# terminal sends C-; C-Enter S-Enter as `CSI <key>;<modifiers>u`, which both
+# clients read, then C-a, M-a and BTab in their legacy bytes; one key at a
+# time, as tmux 3.6's client can split a key read in one piece with others.
+# tmux.conf sets `extended-keys always`.
+
+[[cases]]
+name = "level_1_extends_the_keys_with_no_legacy_form_in_xterms_form"
+attach = true
+unix_only = true
+program = "stty raw -echo; printf '\\033[>4;1m'; exec cat -v"
+steps = [
+  { sleep = 0.5 },
+  { keys = "\u001b[59;5u" },
+  { sleep = 0.2 },
+  { keys = "\u001b[13;5u" },
+  { sleep = 0.2 },
+  { keys = "\u001b[13;2u" },
+  { sleep = 0.2 },
+  { keys = "\u0001" },
+  { sleep = 0.2 },
+  { keys = "\u001ba" },
+  { sleep = 0.2 },
+  { keys = "\u001b[Z" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "capture-pane -p -t o", expect = "^[[27;5;59~^[[27;5;13~^[[27;2;13~^A^[a^[[Z" },
+  { command = "show -s extended-keys-format", expect = "extended-keys-format xterm" },
+]
+
+[[cases]]
+name = "level_2_extends_every_modified_key"
+attach = true
+unix_only = true
+program = "stty raw -echo; printf '\\033[>4;2m'; exec cat -v"
+steps = [
+  { sleep = 0.5 },
+  { keys = "\u001b[59;5u" },
+  { sleep = 0.2 },
+  { keys = "\u001b[13;5u" },
+  { sleep = 0.2 },
+  { keys = "\u001b[13;2u" },
+  { sleep = 0.2 },
+  { keys = "\u0001" },
+  { sleep = 0.2 },
+  { keys = "\u001ba" },
+  { sleep = 0.2 },
+  { keys = "\u001b[Z" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "capture-pane -p -t o", expect = "^[[27;5;59~^[[27;5;13~^[[27;2;13~^[[27;5;97~^[[27;3;97~^[[27;2;9~" },
+]
+
+[[cases]]
+name = "extended_keys_format_csi_u_at_either_level"
+attach = true
+unix_only = true
+program = "stty raw -echo; printf '\\033[>4;1m'; exec cat -v"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -s extended-keys-format csi-u" },
+  { keys = "\u001b[59;5u" },
+  { sleep = 0.2 },
+  { keys = "\u0001" },
+  { sleep = 0.2 },
+  { run = "split-window -t o 'stty raw -echo; printf \"\\033[>4;2m\"; exec cat -v'" },
+  { sleep = 0.5 },
+  { keys = "\u001b[59;5u" },
+  { sleep = 0.2 },
+  { keys = "\u001ba" },
+  { sleep = 0.2 },
+  { keys = "\u001b[Z" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "capture-pane -p -t o.0", expect = "^[[59;5u^A" },
+  { command = "capture-pane -p -t o.1", expect = "^[[59;5u^[[97;3u^[[9;2u" },
+]
+
+[[cases]]
+# `CSI > 4 n` turns the keys off, and a level past 2 is none; with
+# `extended-keys always` both panes are at level 1.
+name = "modify_other_keys_off_and_a_level_past_2"
+attach = true
+unix_only = true
+program = "stty raw -echo; printf '\\033[>4;2m\\033[>4n'; exec cat -v"
+steps = [
+  { sleep = 0.5 },
+  { keys = "\u0001" },
+  { sleep = 0.2 },
+  { keys = "\u001b[59;5u" },
+  { sleep = 0.2 },
+  { run = "split-window -t o 'stty raw -echo; printf \"\\033[>4;3m\"; exec cat -v'" },
+  { sleep = 0.5 },
+  { keys = "\u0001" },
+  { sleep = 0.2 },
+  { keys = "\u001b[59;5u" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "capture-pane -p -t o.0", expect = "^A^[[27;5;59~" },
+  { command = "capture-pane -p -t o.1", expect = "^A^[[27;5;59~" },
+  { format = "#{pane_key_mode}", expect = "Ext 1" },
+]

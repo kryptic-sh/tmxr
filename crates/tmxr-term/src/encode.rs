@@ -1,10 +1,12 @@
 //! Key and paste events → bytes for the program in a pane.
 //!
 //! Legacy encodings follow xterm's ctlseqs ("PC-Style Function Keys",
-//! "Alt and Meta Keys"). Keys with no legacy form (`C-;`, `C-Enter`,
-//! `C-S-h`, …) use the `CSI <codepoint> ; <modifiers> u` form when the
-//! program asked for extended keys (kitty flags or modifyOtherKeys), or when
-//! the server option `extended-keys always` forces them.
+//! "Alt and Meta Keys"). A program that asked for xterm's modifyOtherKeys
+//! (or that `extended-keys always` puts at level 1) gets the keys tmux's
+//! input_key sends extended in the `extended-keys-format` option's form:
+//! at level 1 the modified keys with no legacy form (`C-;`, `C-Enter`), at
+//! level 2 every modified key. A program that pushed kitty keyboard flags
+//! gets kitty's `CSI <codepoint> ; <modifiers> u`.
 
 use crossterm::event::{
     KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
@@ -20,8 +22,14 @@ pub struct InputModes {
     pub bracketed_paste: bool,
     /// Current kitty keyboard flags (bit 0: disambiguate escape codes).
     pub kitty_flags: u8,
-    /// xterm modifyOtherKeys level.
+    /// xterm modifyOtherKeys level, as tmux holds it: what the program
+    /// asked for, or 1 where `extended-keys always` gave it one.
     pub modify_other_keys: u8,
+    /// The modifyOtherKeys level the program asked for itself (`CSI > 4 ;
+    /// 1 m` or `2 m`), without the level `always` gives.
+    pub asked_keys: u8,
+    /// Whether the pane's pseudo-terminal is a ConPTY ([`crate::pty::CONPTY`]).
+    pub conpty: bool,
 }
 
 /// The `extended-keys` option, as tmux's: whether a program's request for
@@ -50,21 +58,45 @@ impl ExtendedKeys {
     }
 }
 
+/// The `extended-keys-format` option, as tmux's: the form a key goes out in
+/// when it goes extended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ExtendedKeysFormat {
+    /// `CSI <codepoint> ; <modifiers> u`.
+    CsiU,
+    /// xterm's `CSI 27 ; <modifiers> ; <codepoint> ~`, tmux's default.
+    #[default]
+    Xterm,
+}
+
+impl ExtendedKeysFormat {
+    /// The option's value; anything but `csi-u` is `xterm`, as tmux's
+    /// default.
+    pub fn from_option(value: &str) -> Self {
+        match value {
+            "csi-u" => Self::CsiU,
+            _ => Self::Xterm,
+        }
+    }
+}
+
 impl InputModes {
     /// The modifyOtherKeys level keys go out at: the pane's (which a
     /// request made under `extended-keys off` never set), at least 1 with
-    /// `always`.
+    /// `always`. A ConPTY pane is at the level its program asked for and
+    /// no other, `always` acting as `on`: conhost's input parser does not
+    /// read xterm's extended form, and takes the legacy bytes (0x08 for
+    /// C-BSpace among them) for the keys they are. Both sides are
+    /// unit-tested on every platform; that ConPTY reads the legacy bytes is
+    /// from commit 9faac49, not checked here, where only Linux runs.
     pub fn key_level(self, option: ExtendedKeys) -> u8 {
+        if self.conpty {
+            return self.asked_keys;
+        }
         match option {
             ExtendedKeys::Always => self.modify_other_keys.max(1),
             ExtendedKeys::Off | ExtendedKeys::On => self.modify_other_keys,
         }
-    }
-
-    /// Whether keys go extended: the kitty protocol's flag (which tmux has
-    /// no counterpart for, so the option leaves it alone) or a key level.
-    fn extended(self, option: ExtendedKeys) -> bool {
-        self.kitty_flags & 1 != 0 || self.key_level(option) > 0
     }
 }
 
@@ -82,33 +114,110 @@ fn csi_u(codepoint: u32, m: KeyModifiers) -> Vec<u8> {
     }
 }
 
+/// A modified key in the extended form `format` names, as tmux's
+/// input_key_extended; an unmodified one has none.
+fn extended(codepoint: u32, m: KeyModifiers, format: ExtendedKeysFormat) -> Vec<u8> {
+    match (modifier_param(m), format) {
+        (1, _) => Vec::new(),
+        (p, ExtendedKeysFormat::Xterm) => format!("\x1b[27;{p};{codepoint}~").into_bytes(),
+        (p, ExtendedKeysFormat::CsiU) => format!("\x1b[{codepoint};{p}u").into_bytes(),
+    }
+}
+
+/// The key tmux's input_key would have for a key with no entry in its
+/// table of special keys (a character, Enter, Tab, Escape or a modified
+/// Backspace): its codepoint and modifiers. The terminal's legacy bytes
+/// 0x1c..0x1f come from crossterm as C-4 .. C-7 and are C-\ .. C-_ to tmux
+/// (0x00 comes as C-Space, as tmux has it, and C-2 is only ever C-2);
+/// a control letter is lower case, and an upper-case letter, or a printable
+/// character with Shift alone, drops Shift, as tmux's tty_keys_next and
+/// tty_keys_extended_key.
+fn tmux_key(code: KeyCode, mut m: KeyModifiers) -> Option<(u32, KeyModifiers)> {
+    let c = match code {
+        KeyCode::Char(c) if m.contains(KeyModifiers::CONTROL) => match c {
+            '4' => '\\',
+            '5' => ']',
+            '6' => '^',
+            '7' => '_',
+            c => c.to_ascii_lowercase(),
+        },
+        KeyCode::Char(c) => {
+            let printable = c > ' ' && c != '\x7f';
+            if c.is_uppercase() || (printable && m == KeyModifiers::SHIFT) {
+                m.remove(KeyModifiers::SHIFT);
+            }
+            c
+        }
+        KeyCode::Enter => '\r',
+        KeyCode::Tab => '\t',
+        KeyCode::Esc => '\x1b',
+        KeyCode::Backspace => '\x7f',
+        _ => return None,
+    };
+    Some((u32::from(c), m))
+}
+
+/// Whether tmux's modifyOtherKeys level 1 sends a key as at level 0, as
+/// its input_key_mode1: a key with Meta and not Ctrl, and Ctrl with a key
+/// xterm's table gives a control byte; the rest go extended.
+fn level_one_is_legacy(codepoint: u32, m: KeyModifiers) -> bool {
+    if m & (KeyModifiers::CONTROL | KeyModifiers::ALT) == KeyModifiers::ALT {
+        return true;
+    }
+    m.contains(KeyModifiers::CONTROL)
+        && char::from_u32(codepoint).is_some_and(|c| matches!(c, ' ' | '/' | '2'..='8' | '@'..='~'))
+}
+
 /// The C0 control byte for `C-<c>`, where one exists.
 fn ctrl_byte(c: char) -> Option<u8> {
     Some(match c {
-        'a'..='z' => c as u8 - b'a' + 1,
-        'A'..='Z' => c as u8 - b'A' + 1,
-        '@' | ' ' | '2' => 0,
-        '[' | '3' => 0x1b,
-        '\\' | '4' => 0x1c,
-        ']' | '5' => 0x1d,
-        '^' | '6' => 0x1e,
-        '_' | '/' | '7' => 0x1f,
+        // As tmux's input_key_vt10x: the 0x40 bit and the case bit go.
+        '@'..='~' => c as u8 & 0x1f,
+        ' ' | '2' => 0,
+        '3' => 0x1b,
+        '4' => 0x1c,
+        '5' => 0x1d,
+        '6' => 0x1e,
+        '/' | '7' => 0x1f,
         '?' | '8' => 0x7f,
         _ => return None,
     })
 }
 
-/// Encode a key for a pane under the `extended-keys` option. Release
-/// events and keys with no encoding produce nothing.
-pub fn encode_key(key: &KeyEvent, modes: InputModes, option: ExtendedKeys) -> Vec<u8> {
+/// Encode a key for a pane under the `extended-keys` and
+/// `extended-keys-format` options. Release events and keys with no
+/// encoding produce nothing.
+pub fn encode_key(
+    key: &KeyEvent,
+    modes: InputModes,
+    option: ExtendedKeys,
+    format: ExtendedKeysFormat,
+) -> Vec<u8> {
     if key.kind == KeyEventKind::Release {
         return Vec::new();
     }
     let m = key.modifiers & (KeyModifiers::SHIFT | KeyModifiers::ALT | KeyModifiers::CONTROL);
     let alt = m.contains(KeyModifiers::ALT);
     let ctrl = m.contains(KeyModifiers::CONTROL);
-    let extended = modes.extended(option);
     let kitty = modes.kitty_flags & 1 != 0;
+
+    // A key tmux's table has no entry for goes extended at modifyOtherKeys
+    // level 2 if it is modified, and at level 1 if xterm's legacy form
+    // cannot carry it, as tmux's input_key; level 2 sends BTab as S-Tab.
+    // The kitty protocol, which tmux lacks, takes the keys it reports.
+    let level = if kitty { 0 } else { modes.key_level(option) };
+    if level > 0 {
+        let (code, mods) = match key.code {
+            KeyCode::BackTab if level >= 2 => (KeyCode::Tab, m | KeyModifiers::SHIFT),
+            code => (code, m),
+        };
+        if let Some((codepoint, mods)) = tmux_key(code, mods)
+            && !mods.is_empty()
+            && (level >= 2 || !level_one_is_legacy(codepoint, mods))
+        {
+            return extended(codepoint, mods, format);
+        }
+    }
 
     let with_alt = |mut bytes: Vec<u8>| {
         if alt {
@@ -137,28 +246,16 @@ pub fn encode_key(key: &KeyEvent, modes: InputModes, option: ExtendedKeys) -> Ve
     };
 
     match key.code {
+        // kitty reports the unshifted key with the shift modifier.
+        KeyCode::Char(c) if kitty && (ctrl || alt) => csi_u(u32::from(c.to_ascii_lowercase()), m),
+        KeyCode::Char(c) if ctrl => ctrl_byte(c).map_or_else(Vec::new, |b| with_alt(vec![b])),
         KeyCode::Char(c) => {
-            if kitty && (ctrl || alt) {
-                // kitty reports the unshifted key with the shift modifier.
-                return csi_u(u32::from(c.to_ascii_lowercase()), m);
-            }
-            if ctrl {
-                let shifted_letter = c.is_ascii_alphabetic() && m.contains(KeyModifiers::SHIFT);
-                return match ctrl_byte(c) {
-                    Some(_) if shifted_letter && extended => {
-                        csi_u(u32::from(c.to_ascii_lowercase()), m)
-                    }
-                    Some(b) => with_alt(vec![b]),
-                    None if extended => csi_u(u32::from(c), m),
-                    None => Vec::new(),
-                };
-            }
             let mut buf = [0u8; 4];
             with_alt(c.encode_utf8(&mut buf).as_bytes().to_vec())
         }
-        KeyCode::Enter if (ctrl || m.contains(KeyModifiers::SHIFT)) && extended => csi_u(13, m),
+        KeyCode::Enter if kitty && (ctrl || m.contains(KeyModifiers::SHIFT)) => csi_u(13, m),
         KeyCode::Enter => with_alt(b"\r".to_vec()),
-        KeyCode::Tab if ctrl && extended => csi_u(9, m),
+        KeyCode::Tab if kitty && ctrl => csi_u(9, m),
         KeyCode::Tab if m.contains(KeyModifiers::SHIFT) => b"\x1b[Z".to_vec(),
         KeyCode::Tab => with_alt(b"\t".to_vec()),
         KeyCode::BackTab => b"\x1b[Z".to_vec(),
@@ -319,7 +416,7 @@ mod tests {
     fn conpty_takes_c_h_and_c_j_as_win32_input() {
         let ctrl = |c, m| KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL | m);
         let win32 = |key: KeyEvent| {
-            let bytes = encode_key(&key, InputModes::default(), ExtendedKeys::On);
+            let bytes = encode_key(&key, InputModes::default(), ExtendedKeys::On, XTERM);
             conpty_key(&key, &bytes).map(|b| String::from_utf8(b).unwrap())
         };
         assert_eq!(
@@ -348,7 +445,7 @@ mod tests {
         };
         let key = ctrl('j', KeyModifiers::NONE);
         assert_eq!(
-            conpty_key(&key, &encode_key(&key, kitty, ExtendedKeys::On)),
+            conpty_key(&key, &encode_key(&key, kitty, ExtendedKeys::On, XTERM)),
             None
         );
     }
@@ -357,12 +454,14 @@ mod tests {
     const C: KeyModifiers = KeyModifiers::CONTROL;
     const A: KeyModifiers = KeyModifiers::ALT;
     const S: KeyModifiers = KeyModifiers::SHIFT;
+    const XTERM: ExtendedKeysFormat = ExtendedKeysFormat::Xterm;
 
     fn enc(code: KeyCode, m: KeyModifiers) -> Vec<u8> {
         encode_key(
             &KeyEvent::new(code, m),
             InputModes::default(),
             ExtendedKeys::On,
+            XTERM,
         )
     }
 
@@ -409,12 +508,15 @@ mod tests {
             ..InputModes::default()
         };
         let up = KeyEvent::new(KeyCode::Up, NONE);
-        assert_eq!(encode_key(&up, modes, ExtendedKeys::On), b"\x1bOA");
+        assert_eq!(encode_key(&up, modes, ExtendedKeys::On, XTERM), b"\x1bOA");
         let c_up = KeyEvent::new(KeyCode::Up, C);
-        assert_eq!(encode_key(&c_up, modes, ExtendedKeys::On), b"\x1b[1;5A");
+        assert_eq!(
+            encode_key(&c_up, modes, ExtendedKeys::On, XTERM),
+            b"\x1b[1;5A"
+        );
         let home = KeyEvent::new(KeyCode::Home, NONE);
         assert_eq!(
-            encode_key(&home, modes, ExtendedKeys::On),
+            encode_key(&home, modes, ExtendedKeys::On, XTERM),
             b"\x1b[1~",
             "not SS3"
         );
@@ -423,28 +525,200 @@ mod tests {
     #[test]
     fn keys_without_legacy_form_need_extended_mode() {
         let c_semi = KeyEvent::new(KeyCode::Char(';'), C);
-        assert!(encode_key(&c_semi, InputModes::default(), ExtendedKeys::On).is_empty());
+        assert!(encode_key(&c_semi, InputModes::default(), ExtendedKeys::On, XTERM).is_empty());
         assert_eq!(
-            encode_key(&c_semi, InputModes::default(), ExtendedKeys::Always),
-            b"\x1b[59;5u"
+            encode_key(&c_semi, InputModes::default(), ExtendedKeys::Always, XTERM),
+            b"\x1b[27;5;59~"
         );
-        let mok = InputModes {
-            modify_other_keys: 2,
+        let level = |n| InputModes {
+            modify_other_keys: n,
             ..InputModes::default()
         };
-        assert_eq!(encode_key(&c_semi, mok, ExtendedKeys::On), b"\x1b[59;5u");
-        let c_enter = KeyEvent::new(KeyCode::Enter, C);
-        assert_eq!(encode_key(&c_enter, mok, ExtendedKeys::On), b"\x1b[13;5u");
         // A level the pane holds stands whatever the option is now, as
         // tmux's; `always` extends keys without one.
-        assert_eq!(mok.key_level(ExtendedKeys::Off), 2);
+        assert_eq!(level(2).key_level(ExtendedKeys::Off), 2);
         assert_eq!(InputModes::default().key_level(ExtendedKeys::Always), 1);
-        let cs_h = KeyEvent::new(KeyCode::Char('H'), C | S);
-        assert_eq!(
-            encode_key(&cs_h, InputModes::default(), ExtendedKeys::On),
-            b"\x08"
+    }
+
+    /// tmux 3.6's bytes for a key at modifyOtherKeys level 1 and 2, under
+    /// each `extended-keys-format` (input_key, input_key_mode1 and
+    /// input_key_extended).
+    #[test]
+    fn extended_keys_are_tmuxs_at_each_level_and_format() {
+        const CSI_U: ExtendedKeysFormat = ExtendedKeysFormat::CsiU;
+        let level = |n| InputModes {
+            modify_other_keys: n,
+            ..InputModes::default()
+        };
+        // A key's bytes at level 1, at level 2, and at level 2 under csi-u.
+        let check = |code, m, one: &str, two: &str, two_u: &str| {
+            let key = KeyEvent::new(code, m);
+            let enc = |n, format| encode_key(&key, level(n), ExtendedKeys::On, format);
+            assert_eq!(enc(1, XTERM), one.as_bytes(), "{code:?} {m:?} level 1");
+            assert_eq!(enc(2, XTERM), two.as_bytes(), "{code:?} {m:?} level 2");
+            assert_eq!(enc(2, CSI_U), two_u.as_bytes(), "{code:?} {m:?} csi-u");
+        };
+        check(
+            KeyCode::Char(';'),
+            C,
+            "\x1b[27;5;59~",
+            "\x1b[27;5;59~",
+            "\x1b[59;5u",
         );
-        assert_eq!(encode_key(&cs_h, mok, ExtendedKeys::On), b"\x1b[104;6u");
+        check(
+            KeyCode::Enter,
+            C,
+            "\x1b[27;5;13~",
+            "\x1b[27;5;13~",
+            "\x1b[13;5u",
+        );
+        check(
+            KeyCode::Enter,
+            S,
+            "\x1b[27;2;13~",
+            "\x1b[27;2;13~",
+            "\x1b[13;2u",
+        );
+        check(KeyCode::Enter, A, "\x1b\r", "\x1b[27;3;13~", "\x1b[13;3u");
+        check(KeyCode::Tab, C, "\x1b[27;5;9~", "\x1b[27;5;9~", "\x1b[9;5u");
+        check(KeyCode::BackTab, S, "\x1b[Z", "\x1b[27;2;9~", "\x1b[9;2u");
+        check(
+            KeyCode::Esc,
+            C,
+            "\x1b[27;5;27~",
+            "\x1b[27;5;27~",
+            "\x1b[27;5u",
+        );
+        check(KeyCode::Esc, A, "\x1b\x1b", "\x1b[27;3;27~", "\x1b[27;3u");
+        check(
+            KeyCode::Backspace,
+            C,
+            "\x1b[27;5;127~",
+            "\x1b[27;5;127~",
+            "\x1b[127;5u",
+        );
+        check(
+            KeyCode::Backspace,
+            A,
+            "\x1b\x7f",
+            "\x1b[27;3;127~",
+            "\x1b[127;3u",
+        );
+        check(KeyCode::Char('a'), C, "\x01", "\x1b[27;5;97~", "\x1b[97;5u");
+        check(
+            KeyCode::Char('a'),
+            A,
+            "\x1ba",
+            "\x1b[27;3;97~",
+            "\x1b[97;3u",
+        );
+        check(
+            KeyCode::Char('x'),
+            C | A,
+            "\x1b\x18",
+            "\x1b[27;7;120~",
+            "\x1b[120;7u",
+        );
+        // The shift an upper-case letter carries is no modifier, nor is
+        // Shift alone on a printable character; on Space it is.
+        check(KeyCode::Char('A'), S, "A", "A", "A");
+        check(KeyCode::Char('a'), S, "a", "a", "a");
+        check(KeyCode::Char('%'), S, "%", "%", "%");
+        check(
+            KeyCode::Char(' '),
+            S,
+            "\x1b[27;2;32~",
+            "\x1b[27;2;32~",
+            "\x1b[32;2u",
+        );
+        check(
+            KeyCode::Char('A'),
+            A | S,
+            "\x1bA",
+            "\x1b[27;3;65~",
+            "\x1b[65;3u",
+        );
+        check(
+            KeyCode::Char('h'),
+            C | S,
+            "\x08",
+            "\x1b[27;6;104~",
+            "\x1b[104;6u",
+        );
+        check(KeyCode::Char(' '), C, "\0", "\x1b[27;5;32~", "\x1b[32;5u");
+        // C-2 is C-2, NUL's byte in the legacy form only.
+        check(KeyCode::Char('2'), C, "\0", "\x1b[27;5;50~", "\x1b[50;5u");
+        // The terminal's C-\\ arrives as C-4.
+        check(KeyCode::Char('4'), C, "\x1c", "\x1b[27;5;92~", "\x1b[92;5u");
+        check(
+            KeyCode::Char('{'),
+            C,
+            "\x1b",
+            "\x1b[27;5;123~",
+            "\x1b[123;5u",
+        );
+        check(
+            KeyCode::Char('1'),
+            C,
+            "\x1b[27;5;49~",
+            "\x1b[27;5;49~",
+            "\x1b[49;5u",
+        );
+        check(
+            KeyCode::Char('?'),
+            C,
+            "\x1b[27;5;63~",
+            "\x1b[27;5;63~",
+            "\x1b[63;5u",
+        );
+        check(
+            KeyCode::Char('é'),
+            C,
+            "\x1b[27;5;233~",
+            "\x1b[27;5;233~",
+            "\x1b[233;5u",
+        );
+        // Unmodified keys and tmux's table of special keys are as ever.
+        check(KeyCode::Char('a'), NONE, "a", "a", "a");
+        check(KeyCode::Enter, NONE, "\r", "\r", "\r");
+        check(KeyCode::Backspace, NONE, "\x7f", "\x7f", "\x7f");
+        check(KeyCode::Up, C, "\x1b[1;5A", "\x1b[1;5A", "\x1b[1;5A");
+        check(KeyCode::F(5), A, "\x1b[15;3~", "\x1b[15;3~", "\x1b[15;3~");
+        // csi-u at level 1 is the same choice of keys in the other form.
+        let c_enter = KeyEvent::new(KeyCode::Enter, C);
+        assert_eq!(
+            encode_key(&c_enter, level(1), ExtendedKeys::On, CSI_U),
+            b"\x1b[13;5u"
+        );
+        // `always` puts a pane that asked for nothing at level 1, not 2.
+        let c_a = KeyEvent::new(KeyCode::Char('a'), C);
+        assert_eq!(
+            encode_key(&c_a, InputModes::default(), ExtendedKeys::Always, XTERM),
+            b"\x01"
+        );
+    }
+
+    /// A ConPTY pane is at the level its program asked for, `always` or
+    /// not; another pane gets level 1 from `always`.
+    #[test]
+    fn a_conpty_pane_takes_only_the_level_its_program_asked_for() {
+        let modes = |held, asked, conpty| InputModes {
+            modify_other_keys: held,
+            asked_keys: asked,
+            conpty,
+            ..InputModes::default()
+        };
+        assert_eq!(modes(1, 0, false).key_level(ExtendedKeys::Always), 1);
+        assert_eq!(modes(0, 0, false).key_level(ExtendedKeys::Always), 1);
+        assert_eq!(modes(1, 0, true).key_level(ExtendedKeys::Always), 0);
+        assert_eq!(modes(2, 2, true).key_level(ExtendedKeys::Always), 2);
+        assert_eq!(modes(1, 1, true).key_level(ExtendedKeys::On), 1);
+        // So a shell under ConPTY gets C-BSpace as the 0x08 it reads.
+        let c_bs = KeyEvent::new(KeyCode::Backspace, C);
+        let enc = |m| encode_key(&c_bs, m, ExtendedKeys::Always, XTERM);
+        assert_eq!(enc(modes(1, 0, true)), b"\x08");
+        assert_eq!(enc(modes(1, 0, false)), b"\x1b[27;5;127~");
+        assert_eq!(enc(modes(1, 1, true)), b"\x1b[27;5;127~");
     }
 
     #[test]
@@ -453,7 +727,7 @@ mod tests {
             kitty_flags: 1,
             ..InputModes::default()
         };
-        let k = |code, m| encode_key(&KeyEvent::new(code, m), kitty, ExtendedKeys::On);
+        let k = |code, m| encode_key(&KeyEvent::new(code, m), kitty, ExtendedKeys::On, XTERM);
         assert_eq!(k(KeyCode::Char('h'), C), b"\x1b[104;5u");
         assert_eq!(k(KeyCode::Char('h'), A), b"\x1b[104;3u");
         assert_eq!(k(KeyCode::Esc, NONE), b"\x1b[27u");
@@ -465,7 +739,7 @@ mod tests {
     fn releases_are_ignored() {
         let mut ev = KeyEvent::new(KeyCode::Char('a'), NONE);
         ev.kind = KeyEventKind::Release;
-        assert!(encode_key(&ev, InputModes::default(), ExtendedKeys::On).is_empty());
+        assert!(encode_key(&ev, InputModes::default(), ExtendedKeys::On, XTERM).is_empty());
     }
 
     #[test]

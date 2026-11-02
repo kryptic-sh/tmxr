@@ -89,6 +89,11 @@ fn terminal_queries_match_tmux() {
     assert_passes("queries.toml");
 }
 
+#[test]
+fn extended_keys_match_tmux() {
+    assert_passes("extended_keys.toml");
+}
+
 /// Differences kept on purpose or not fixed yet: reported, never failing.
 #[test]
 fn known_divergences_report() {

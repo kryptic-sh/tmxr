@@ -37,6 +37,8 @@ pub struct Popup {
     pub exited: bool,
     /// The `extended-keys` option, for encoding keys as for a pane.
     pub extended_keys: tmxr_term::ExtendedKeys,
+    /// The `extended-keys-format` option, likewise.
+    pub extended_keys_format: tmxr_term::ExtendedKeysFormat,
     /// A paste buffer being edited in this popup's program.
     pub edit: Option<BufferEdit>,
 }
@@ -144,7 +146,12 @@ impl Popup {
                 OverlayAction::Keep
             };
         }
-        let bytes = encode_key(ev, self.emu.input_modes(), self.extended_keys);
+        let bytes = encode_key(
+            ev,
+            self.emu.input_modes(),
+            self.extended_keys,
+            self.extended_keys_format,
+        );
         if !bytes.is_empty() {
             let _ = self.pty.write(&bytes);
         }
@@ -258,6 +265,7 @@ impl Server {
             any_key: spec.any_key,
             exited: false,
             extended_keys: self.extended_keys(),
+            extended_keys_format: self.extended_keys_format(),
             edit: spec.edit,
         };
         if let Some(att) = self.clients.get_mut(&client).and_then(|c| c.att.as_mut()) {

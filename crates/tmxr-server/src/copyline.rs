@@ -160,12 +160,12 @@ impl Server {
 
     /// Send `key` to `pane` alone, whatever synchronize-panes says.
     fn key_to_one_pane(&mut self, pane: PaneId, key: &KeyEvent) -> Result<(), String> {
-        let option = self.extended_keys();
+        let (option, format) = (self.extended_keys(), self.extended_keys_format());
         let p = self.panes.get_mut(&pane).ok_or("no such pane")?;
         if p.input_off {
             return Ok(());
         }
-        let bytes = tmxr_term::encode_key(key, p.emu.input_modes(), option);
+        let bytes = tmxr_term::encode_key(key, p.emu.input_modes(), option, format);
         p.pty.write(&bytes).map_err(|e| e.to_string())
     }
 }

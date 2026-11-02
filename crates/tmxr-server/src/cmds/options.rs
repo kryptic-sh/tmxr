@@ -192,6 +192,14 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed) -> Res {
         "focus-events" => c.focus_events = super::on_off(value, c.focus_events)?,
         "default-terminal" => need()?.clone_into(&mut c.default_terminal),
         "extended-keys" => need()?.clone_into(&mut c.extended_keys),
+        "extended-keys-format" => match need()? {
+            v @ ("csi-u" | "xterm") => v.clone_into(&mut c.extended_keys_format),
+            v => {
+                return Err(format!(
+                    "extended-keys-format: unknown value: {v} (csi-u or xterm)"
+                ));
+            }
+        },
         "set-clipboard" => need()?.clone_into(&mut c.set_clipboard),
         "rgb-colour" => match need()? {
             v @ ("on" | "off" | "16" | "auto") => v.clone_into(&mut c.rgb_colour),
@@ -230,6 +238,7 @@ pub const SERVER_OPTIONS: &[&str] = &[
     "exit-empty",
     "exit-unattached",
     "extended-keys",
+    "extended-keys-format",
     "focus-events",
     "history-file",
     "message-limit",
@@ -317,6 +326,7 @@ fn config_option(c: &tmxr_config::Config, name: &str) -> Option<String> {
         "exit-empty" => on_off(c.exit_empty).to_owned(),
         "exit-unattached" => on_off(c.exit_unattached).to_owned(),
         "extended-keys" => c.extended_keys.clone(),
+        "extended-keys-format" => c.extended_keys_format.clone(),
         "focus-events" => on_off(c.focus_events).to_owned(),
         "history-file" => c.history_file.clone(),
         "message-limit" => c.message_limit.to_string(),
