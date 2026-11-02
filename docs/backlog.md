@@ -145,12 +145,25 @@ _reproduced_ by the reviewer against tmux 3.8 (`/usr/sbin/tmux`, the oracle's
 `stty raw -echo; exec cat -v` in the pane to show the bytes it gets. The symbols
 named were checked by reading; the runs were not repeated.
 
-- **A pane's synchronized output (`?2026`) is not held.** vt1k ignores mode 2026
-  and the server redraws as bytes arrive; tmux's `screen_write_start_sync` /
-  `screen_write_stop_sync` hold the pane's redraw until `?2026l` or at most 1 s.
-  A pane writing `?2026h` PARTONE, then 0.6 s later PARTTWO `?2026l`, reached
-  the terminal in two frames 0.6 s apart from tmxr, one from tmux. Programs that
-  frame redraws in 2026 (Claude Code, Ink and ratatui apps) tear and flicker.
+- **A synchronized-output hold outlasts a full redraw** (_reproduced_ by the
+  slice-4 reviewer against tmux 3.8, 2026-11-02): tmux ends a hold on any
+  `REDRAW_PANE` (`screen-redraw.c` calls `screen_write_stop_sync`): OSC 4 / 10 /
+  11 / 104 / 110 / 111, entering or leaving copy or a choose mode,
+  `respawn-pane`, `resize-pane`, `send-keys -R`, a whole-window client redraw
+  (attach, select-window), an active-pane change between differing window
+  styles. tmxr's hold (`tmxr_term::sync`) lasts through these to the `l` or
+  `SYNC_TIMEOUT`, and DECRQM `?2026` says 1 meanwhile. Arguably better for the
+  user; a deliberate difference until a program is seen to mind. Related: a
+  palette change mid-hold recolours the held frame (`draw_screen` and
+  `pane_style` read the live palette); `window_offset` follows the held cursor
+  where tmux's `tty_window_offset1` follows the live one (only when the client
+  is smaller than the window); a screen switch there and back within one read
+  does not end the hold; after copy mode tmxr goes back to the held frame where
+  tmux shows the live screen.
+- **Synchronized output on Windows is not verified**: whether ConPTY forwards
+  `?2026h` was not checked; the e2e test is `cfg(unix)`. No test fails if
+  `set_holds_sync(false)` leaves `popup.rs`, or if `render.rs`'s `cursor_style`
+  / `cursor_colour` / `window_offset` go back to the live screen.
 - **With `mouse off` the terminal reports every motion** (_read_, slice-2
   review): `mouse::capture` is one bool, so crossterm's capture turns on
   1000/1002/1003/1006 whatever the program asked; tmux copies the program's own
@@ -206,8 +219,6 @@ named were checked by reading; the runs were not repeated.
 - **Query replies that still differ from tmux 3.8** (_reproduced_ by the slice-3
   reviewer, 2026-11-02, `Hooks::private_mode` / `cursor_blinks` in
   `emulator.rs`):
-  - DECRQM `?2026` answers 0 (not recognised): tmxr does not hold synchronized
-    output yet (the entry above). Answer from the real state once it does.
   - `?2031` after `CSI ?2031h` answers 2 where tmux says 1: tmxr sends `?997`
     only in answer to a `?996`, never unasked, so "reset" is the honest answer.
   - `?12` after `CSI ?12l` on the default shape, with a blinking `cursor-style`:

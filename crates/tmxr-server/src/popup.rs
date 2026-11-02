@@ -242,11 +242,13 @@ impl Server {
             inner.width.max(1),
             inner.height.max(1),
         )?;
+        let mut emu = self.new_emulator(inner.height.max(1), inner.width.max(1), 0);
+        emu.set_holds_sync(false);
         let popup = Popup {
             id,
             spawn: started.spawn,
             pty: started.pty,
-            emu: self.new_emulator(inner.height.max(1), inner.width.max(1), 0),
+            emu,
             output: started.output,
             rect: spec.rect,
             border: spec.border,

@@ -11,6 +11,8 @@
 //! - [`emulator`]: the per-pane `vt1k` screen plus the side channels vt1k
 //!   leaves to its host (title, bell, OSC 52, OSC 7, replies to terminal
 //!   queries, extended-key modes, tmux passthrough via [`dcs`]).
+//! - [`sync`]: what a pane shows while its program holds the redraw
+//!   (synchronized output, mode 2026).
 //! - [`encode`]: turn crossterm key and paste events into the bytes the
 //!   program in the pane expects, given the modes it has set.
 //!
@@ -25,6 +27,7 @@ pub mod modes;
 pub mod palette;
 pub mod process;
 pub mod pty;
+pub mod sync;
 
 pub use emulator::{Emulator, Query, screen_size};
 pub use encode::{ExtendedKeys, InputModes, conpty_key, encode_key, encode_paste};

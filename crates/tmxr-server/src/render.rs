@@ -207,11 +207,11 @@ pub fn window_offset(srv: &Server, att: &crate::server::Attached) -> (u16, u16) 
     let Some(p) = srv.panes.get(&win.active) else {
         return (0, 0);
     };
-    let screen = p.emu.screen();
-    if screen.hide_cursor() {
+    let shown = p.emu.shown();
+    if shown.hide_cursor() {
         return (0, 0);
     }
-    let (row, col) = screen.cursor_position();
+    let (row, col) = shown.cursor_position();
     let follow = |c: u16, view: u16, size: u16| {
         if c < view {
             0
@@ -239,6 +239,7 @@ pub fn cursor_colour(srv: &Server, id: ClientId) -> Option<u32> {
     srv.panes
         .get(&pane)?
         .emu
+        .shown()
         .cursor_colour()
         .or_else(|| tmxr_command::colour::rgb(&srv.pane_options(pane).cursor_colour))
 }
@@ -255,7 +256,11 @@ pub fn cursor_style(srv: &Server, id: ClientId) -> u8 {
     else {
         return 0;
     };
-    match srv.panes.get(&pane).map_or(0, |p| p.emu.cursor_style()) {
+    match srv
+        .panes
+        .get(&pane)
+        .map_or(0, |p| p.emu.shown().cursor_style())
+    {
         0 => srv.pane_options(pane).cursor_style.ps(),
         ps => ps,
     }
@@ -915,8 +920,9 @@ fn with_default_colours(style: Style, base: Style) -> Style {
     }
 }
 
-/// Draw a program's screen into `area`. Returns where its cursor is, if
-/// shown and inside the area.
+/// Draw a program's screen into `area`, as it shows it (the frame it holds
+/// while it holds one). Returns where its cursor is, if shown and inside
+/// the area.
 fn draw_screen(
     emu: &tmxr_term::Emulator,
     buf: &mut Buffer,
@@ -924,7 +930,7 @@ fn draw_screen(
     base: Style,
     links: &RefCell<Links>,
 ) -> Option<Position> {
-    let screen = emu.screen();
+    let screen = emu.shown();
     let palette = emu.palette();
     for row in 0..area.height {
         for col in 0..area.width {

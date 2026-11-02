@@ -13,11 +13,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and `CSI Ps $ p` for insert mode) whether a mode is set, from what the pane
   keeps, for the modes tmux 3.8 reports, and DECRQSS (`DCS $ q SP q ST`) the
   cursor's style, else the `cursor-style` option's. Programs probing for a
-  feature this way found none. Synchronized output (2026) is answered as not
-  recognised, as tmxr does not hold a pane's redraw for it yet, and theme
-  updates (2031) as reset, as tmxr sends none unasked.
+  feature this way found none. Theme updates (2031) are answered as reset, as
+  tmxr sends none unasked.
 
 ### Fixed
+
+- **A pane's synchronized output is held, as in tmux 3.8**: a program that
+  frames a redraw in `CSI ? 2026 h` … `CSI ? 2026 l` (Claude Code, Ink and
+  ratatui apps) had each half-drawn frame drawn as it came, so it tore and
+  flickered. The pane now goes on showing what it showed at the `h` until the
+  `l`, a full reset, a resize, a switch to or from the alternate screen, or the
+  hold timing out (`tmxr_term::sync::SYNC_TIMEOUT`, tmux's); DECRQM for mode
+  2026 says whether it is held. A popup's program holds nothing, as in tmux.
+  Unlike tmux, a full redraw of the pane (a palette change, copy mode, attaching
+  or a window switch) does not end the hold early.
 
 - **DA1 (`CSI c`) answers `CSI ? 1 ; 2 c`, as tmux does**: tmxr said it was a
   VT220 (`CSI ? 62 ; 22 c`), which tmux never answers.

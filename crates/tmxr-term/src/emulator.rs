@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use crate::dcs::{Dcs, DcsSplitter};
 use crate::encode::{ExtendedKeys, InputModes};
 use crate::modes::{ModeSplitter, Piece};
+use crate::sync::{Frame, Hold, SYNC_TIMEOUT, Shown};
 
 /// Most kitty keyboard flag sets a pane keeps. The protocol asks a terminal
 /// to cap the stack, dropping the oldest entry on a push to a full one, so a
@@ -69,6 +70,11 @@ pub struct Hooks {
     /// Where the shell's input starts, from its OSC 133;B prompt mark:
     /// (lines of history then, screen row, column).
     input_mark: Option<(usize, u16, u16)>,
+    /// Whether a program's synchronized output holds what the screen
+    /// shows ([`Emulator::set_holds_sync`]).
+    holds_sync: bool,
+    /// The hold in progress, from a `CSI ? 2026 h`.
+    hold: Option<Hold>,
 }
 
 impl vt1k::Callbacks for Hooks {
@@ -173,6 +179,25 @@ impl vt1k::Callbacks for Hooks {
                     None => self.kitty_flags.push(new),
                 }
             }
+            // Synchronized output, as tmux 3.8's input_csi_dispatch_sm_private
+            // and _rm_private: `h` holds what the screen shows now, and
+            // another while held puts its end off; `l` lets it go.
+            (Some(b'?'), 'h' | 'l')
+                if i2.is_none() && params.iter().any(|&p| p == [SYNCHRONIZED_OUTPUT]) =>
+            {
+                if c == 'l' {
+                    self.hold = None;
+                } else if self.holds_sync {
+                    let until = std::time::Instant::now() + SYNC_TIMEOUT;
+                    match self.hold.as_mut() {
+                        Some(hold) => hold.until = until,
+                        None => {
+                            let frame = Frame::of(screen, self.cursor_colour);
+                            self.hold = Some(Hold { frame, until });
+                        }
+                    }
+                }
+            }
             // Kitty keyboard query: report the current flags, so programs
             // that probe for the protocol get a truthful answer.
             (Some(b'?'), 'u') => {
@@ -250,6 +275,9 @@ impl vt1k::Callbacks for Hooks {
     }
 }
 
+/// The DEC private mode a program brackets a redraw in.
+const SYNCHRONIZED_OUTPUT: u16 = 2026;
+
 /// DECRQM's answer for a mode it knows nothing of.
 const NOT_RECOGNISED: u8 = 0;
 /// DECRQM's answer for a mode that is always reset.
@@ -281,11 +309,10 @@ impl Hooks {
             1005 => set_or_reset(screen.mouse_utf8()),
             1006 => set_or_reset(screen.mouse_protocol_encoding() == MouseProtocolEncoding::Sgr),
             2004 => set_or_reset(screen.bracketed_paste()),
+            SYNCHRONIZED_OUTPUT => set_or_reset(self.hold.is_some()),
             // Theme updates: tmxr sends a pane no `CSI ? 997 n` unasked, so
             // the mode is never on, whatever the program set.
             2031 => set_or_reset(false),
-            // Synchronized output (2026) among them: tmxr does not hold a
-            // pane's redraw for it, so a program probing should not use it.
             _ => NOT_RECOGNISED,
         }
     }
@@ -413,7 +440,10 @@ impl Emulator {
             dimension(rows),
             dimension(cols),
             scrollback,
-            Hooks::default(),
+            Hooks {
+                holds_sync: true,
+                ..Hooks::default()
+            },
         );
         // A width change rewraps the lines, as tmux's reflow.
         parser.screen_mut().set_reflow(true);
@@ -571,6 +601,8 @@ impl Emulator {
         hooks.cwd = cwd;
         hooks.input_mark = mark;
         hooks.kitty_flags.clear();
+        // tmux's screen_write_reset sets the modes afresh, the hold's too.
+        hooks.hold = None;
         self.reset_keys();
         self.count_history(false);
     }
@@ -617,8 +649,11 @@ impl Emulator {
                     self.times.truncate(history);
                     self.parser.process(b"\x1bc");
                     // Keys go plain again, as tmux's screen_write_reset
-                    // and the kitty protocol's full reset have them.
-                    self.parser.callbacks_mut().kitty_flags.clear();
+                    // and the kitty protocol's full reset have them, and
+                    // the redraw is held no more.
+                    let hooks = self.parser.callbacks_mut();
+                    hooks.kitty_flags.clear();
+                    hooks.hold = None;
                     self.reset_keys();
                 }
                 Piece::ColourQuery { which, bel } => {
@@ -654,6 +689,7 @@ impl Emulator {
     pub fn process(&mut self, bytes: &[u8]) -> Vec<u8> {
         // Their places are in the replies the last call returned.
         self.parser.callbacks_mut().queries.clear();
+        let alternate = self.parser.screen().alternate_screen();
         if self.split {
             let split = self.dcs.split(bytes);
             // The text before each string is parsed first: a payload takes
@@ -684,6 +720,11 @@ impl Emulator {
         } else {
             self.feed(bytes);
         }
+        // Switching screens redraws the pane whole, which ends a hold, as
+        // tmux's redraw_draw stops one for a pane it redraws.
+        if self.parser.screen().alternate_screen() != alternate {
+            self.end_sync();
+        }
         // Leaving the alternate screen reflows a normal screen resized
         // under it.
         self.follow_reflow();
@@ -693,6 +734,37 @@ impl Emulator {
 
     pub fn screen(&self) -> &vt1k::Screen {
         self.parser.screen()
+    }
+
+    /// What the pane shows: the screen, or while its program holds the
+    /// redraw (synchronized output) the frame it holds.
+    pub fn shown(&self) -> Shown<'_> {
+        match &self.parser.callbacks().hold {
+            Some(hold) => Shown::Held(&hold.frame),
+            None => Shown::Live(self),
+        }
+    }
+
+    /// When the program's hold on the redraw ends if no `CSI ? 2026 l`
+    /// ends it first.
+    pub fn sync_until(&self) -> Option<std::time::Instant> {
+        self.parser.callbacks().hold.as_ref().map(|h| h.until)
+    }
+
+    /// End the program's hold on the redraw, as its time running out does
+    /// (tmux's screen_write_sync_callback). Returns whether it held one.
+    pub fn end_sync(&mut self) -> bool {
+        self.parser.callbacks_mut().hold.take().is_some()
+    }
+
+    /// Whether a program's synchronized output holds what the screen
+    /// shows: a window pane's does, a popup's not, as tmux's popup has no
+    /// pane for screen_write_start_sync to hold (and DECRQM says reset).
+    pub fn set_holds_sync(&mut self, holds: bool) {
+        self.parser.callbacks_mut().holds_sync = holds;
+        if !holds {
+            self.end_sync();
+        }
     }
 
     /// For moving the scrollback view; [`Emulator::resize`] resizes, so
@@ -707,6 +779,10 @@ impl Emulator {
     /// history first, then come in blank at the bottom. (tmux takes back only
     /// rows scrolled since the screen was last cleared, vt1k any it has.)
     pub fn resize(&mut self, rows: u16, cols: u16) {
+        // A new size ends a hold, as tmux's window_pane_resize.
+        if screen_size(self.parser.screen()) != (dimension(rows).get(), dimension(cols).get()) {
+            self.end_sync();
+        }
         self.parser
             .screen_mut()
             .set_size(dimension(rows), dimension(cols));
@@ -1284,12 +1360,15 @@ mod tests {
         assert_eq!(ask(&mut e, &[1000, 1002]), "\x1b[?1000;2$y\x1b[?1002;1$y");
         e.process(b"\x1b[?1003h");
         assert_eq!(ask(&mut e, &[1002, 1003]), "\x1b[?1002;2$y\x1b[?1003;1$y");
-        // 132 columns are never on; a mode not known, synchronized output
-        // among them, is not recognised; no mode, no answer.
-        assert_eq!(
-            ask(&mut e, &[3, 2026, 9999]),
-            "\x1b[?3;4$y\x1b[?2026;0$y\x1b[?9999;0$y"
-        );
+        // Synchronized output, set and reset.
+        assert_eq!(ask(&mut e, &[2026]), "\x1b[?2026;2$y");
+        e.process(b"\x1b[?2026h");
+        assert_eq!(ask(&mut e, &[2026]), "\x1b[?2026;1$y");
+        e.process(b"\x1b[?2026l");
+        assert_eq!(ask(&mut e, &[2026]), "\x1b[?2026;2$y");
+        // 132 columns are never on; a mode not known is not recognised; no
+        // mode, no answer.
+        assert_eq!(ask(&mut e, &[3, 9999]), "\x1b[?3;4$y\x1b[?9999;0$y");
         assert!(e.process(b"\x1b[?$p\x1b[?0$p").is_empty());
         // ANSI modes: insert mode the one known.
         assert_eq!(e.process(b"\x1b[4$p\x1b[20$p"), b"\x1b[4;2$y\x1b[20;0$y");
@@ -1564,5 +1643,85 @@ mod tests {
                 }
             )]
         );
+    }
+
+    /// The text a pane shows on its first row.
+    fn shown_row(e: &Emulator) -> String {
+        let shown = e.shown();
+        (0..screen_size(e.screen()).1)
+            .filter_map(|col| shown.cell(0, col))
+            .map(vt1k::Cell::contents)
+            .collect::<String>()
+            .trim_end()
+            .to_owned()
+    }
+
+    /// What `CSI ? 2026 h` shows until `CSI ? 2026 l`: the screen as it
+    /// was, its cursor and links with it, whatever the program writes.
+    #[test]
+    fn synchronized_output_holds_what_the_pane_shows() {
+        let mut e = Emulator::new(3, 20, 0);
+        e.process(b"\x1b]8;;https://a.example\x1b\\old\x1b]8;;\x1b\\");
+        assert!(e.sync_until().is_none());
+        let before = std::time::Instant::now();
+        e.process(b"\x1b[?2026h\x1b[H\x1b[2Jnew\x1b[2;5H");
+        assert!(e.sync_until().is_some_and(|t| t >= before + SYNC_TIMEOUT));
+        assert_eq!(shown_row(&e), "old");
+        assert_eq!(e.shown().cursor_position(), (0, 3));
+        let id = e.shown().cell(0, 0).and_then(vt1k::Cell::hyperlink_id);
+        assert_eq!(
+            id.and_then(|id| e.shown().hyperlink(id))
+                .map(|l| l.uri.as_str()),
+            Some("https://a.example")
+        );
+        // The screen itself has the new text.
+        assert_eq!(e.screen().cell(0, 0).map(vt1k::Cell::contents), Some("n"));
+        // Another `h` keeps the frame, and puts the end off.
+        let first = e.sync_until();
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        e.process(b"\x1b[?2026h more");
+        assert_eq!(shown_row(&e), "old");
+        assert!(e.sync_until() > first);
+        e.process(b"\x1b[?2026l");
+        assert!(e.sync_until().is_none());
+        assert_eq!(shown_row(&e), "new");
+        assert_eq!(e.shown().cursor_position(), (1, 9));
+    }
+
+    /// Each end of a hold tmux 3.8 has: `CSI ? 2026 l` among other modes,
+    /// a full reset, `send-keys -R`, a resize, switching screens and the
+    /// time running out; and a popup's program holds nothing.
+    #[test]
+    fn a_hold_ends_as_tmuxs_does() {
+        let held = |setup: &dyn Fn(&mut Emulator)| {
+            let mut e = Emulator::new(3, 20, 0);
+            e.process(b"\x1b[?2026h");
+            setup(&mut e);
+            e.sync_until().is_some()
+        };
+        assert!(held(&|_| {}));
+        assert!(held(&|e| {
+            e.process(b"\x1b[?2004;2026;9999h");
+        }));
+        assert!(!held(&|e| {
+            e.process(b"\x1b[?25;2026l");
+        }));
+        assert!(!held(&|e| {
+            e.process(b"\x1bc");
+        }));
+        assert!(!held(&|e| e.reset()));
+        assert!(!held(&|e| e.resize(4, 20)));
+        // The same size is no resize.
+        assert!(held(&|e| e.resize(3, 20)));
+        assert!(!held(&|e| {
+            e.process(b"\x1b[?1049h");
+        }));
+        assert!(!held(&|e| {
+            e.end_sync();
+        }));
+        let mut popup = Emulator::new(3, 20, 0);
+        popup.set_holds_sync(false);
+        assert_eq!(popup.process(b"\x1b[?2026h\x1b[?2026$p"), b"\x1b[?2026;2$y");
+        assert!(popup.sync_until().is_none());
     }
 }

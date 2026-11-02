@@ -54,6 +54,33 @@ steps = [{ sleep = 0.5 }]
 checks = [{ command = "capture-pane -p -t o" }]
 
 [[cases]]
+name = "decrqm_reports_synchronized_output_as_tmux_3_8"
+# tmux 3.8 holds a pane's synchronized output (mode 2026) and DECRQM says
+# whether it is set; 3.6 neither holds it nor answers, so this matches only
+# against 3.8.
+unix_only = true
+program = '''stty raw -echo; printf '\033[?2026$p\033[?2026h\033[?2026$p\033[?2026l\033[?2026$p'; exec cat -v'''
+steps = [{ sleep = 0.5 }]
+checks = [
+  { command = "capture-pane -p -t o", expect = "^[[?2026;2$y^[[?2026;1$y^[[?2026;2$y" },
+]
+
+[[cases]]
+name = "a_synchronized_redraw_is_held_until_its_end"
+# tmux 3.8 draws nothing a program writes after `CSI ? 2026 h` until its
+# `CSI ? 2026 l` or the hold's timeout, which each `h` puts off (here, for
+# longer than the check takes to come); 3.6 draws it as it comes. The hold
+# starts once the respawn's own redraw is done, as tmux 3.8 ends one on a
+# pane it redraws whole.
+attach = true
+unix_only = true
+steps = [
+  { run = "respawn-pane -k -t o 'sleep 0.5; printf \"\\033[?2026hHELDONE\"; for i in 1 2 3 4 5 6; do sleep 0.5; printf \"\\033[?2026h\"; done; printf \"HELDTWO\\033[?2026l\"; exec sleep 1000'" },
+  { sleep = 1 },
+]
+checks = [{ screen_contains = "HELDONE", expect = false }]
+
+[[cases]]
 name = "xtversion_names_tmxr"
 # tmux answers DCS >|tmux and its version; tmxr names itself and its own
 # version, as its #{version} does.

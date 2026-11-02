@@ -549,6 +549,27 @@ impl Server {
         self.panes.values().filter_map(|p| p.dead_line_at).min()
     }
 
+    /// Let go of the redraws programs have held for too long without a
+    /// `CSI ? 2026 l`, drawing their panes as they are, as tmux's
+    /// screen_write_sync_callback.
+    pub(super) fn end_due_syncs(&mut self) {
+        let now = Instant::now();
+        let mut windows = Vec::new();
+        for p in self.panes.values_mut() {
+            if p.emu.sync_until().is_some_and(|t| t <= now) && p.emu.end_sync() {
+                windows.push(p.window);
+            }
+        }
+        for w in windows {
+            self.mark_window_output(w);
+        }
+    }
+
+    /// The soonest a held redraw runs out, for the server loop to wake.
+    pub(super) fn next_sync_end(&self) -> Option<Instant> {
+        self.panes.values().filter_map(|p| p.emu.sync_until()).min()
+    }
+
     /// The answers to pane `pid`'s colour queries, as tmux's input_osc_10,
     /// `_11` and `_12`: the foreground and background its `window-style` (or
     /// `window-active-style`) gives, else those of the terminal of the first

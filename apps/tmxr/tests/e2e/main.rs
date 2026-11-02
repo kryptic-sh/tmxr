@@ -316,8 +316,12 @@ impl Tmxr {
                         }
                     }
                     // Answer terminal queries (ConPTY's cursor-position
-                    // probe, crossterm's capability probes) like a terminal.
-                    let replies = emu.lock().unwrap().process(&buf[..n]);
+                    // probe, crossterm's capability probes) like a terminal;
+                    // mode 2026's as answered above, which the emulator,
+                    // holding a pane's synchronized output, would say it
+                    // knows.
+                    let fed = without(&buf[..n], SYNC_QUERY);
+                    let replies = emu.lock().unwrap().process(&fed);
                     if !replies.is_empty() {
                         let _ = writer.lock().unwrap().write_all(&replies);
                     }
@@ -567,6 +571,21 @@ fn console_window_probe() {
 
 /// DECRQM for synchronized updates (mode 2026), which the client asks.
 const SYNC_QUERY: &[u8] = b"\x1b[?2026$p";
+
+/// `bytes` with each `cut` taken out.
+fn without(bytes: &[u8], cut: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i..].starts_with(cut) {
+            i += cut.len();
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    out
+}
 
 /// The default colours [`Tmxr::attach_sync`]'s terminal answers OSC 10 and
 /// 11 with, as Alacritty does (its colours, ended as asked).

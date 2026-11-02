@@ -884,3 +884,57 @@ fn struck_blinking_and_hidden_text_reach_the_client() {
     assert_eq!(flags("HIDDEN"), [[false, false, true]; 6]);
     assert_eq!(flags("plain"), [[false, false, false]; 5]);
 }
+
+/// A program's synchronized output (`CSI ? 2026 h` … `l`, as Claude Code
+/// and ratatui apps frame a redraw) reaches the terminal whole, as tmux 3.8
+/// holds it: what it wrote after the `h` arrives with what it wrote before
+/// the `l`, and a hold no `l` ends goes when its time runs out.
+#[cfg(unix)]
+#[test]
+fn a_synchronized_redraw_reaches_the_terminal_whole() {
+    use tmxr_term::sync::SYNC_TIMEOUT;
+    // Between the halves of a frame: well under a hold's time, so a slow
+    // runner forking `sleep` does not see the hold time out first.
+    const APART: Duration = Duration::from_millis(400);
+    const _: () = assert!(APART.as_millis() < SYNC_TIMEOUT.as_millis());
+    let t = Tmxr::new("held");
+    t.run(&["new-session", "-d", "-s", "held"]);
+    let s = t.attach(&["attach", "-t", "held"]);
+    s.wait_for("the status line", |text| text.contains("held"));
+    // When the terminal was first sent `text`.
+    let sent = |text: &str| {
+        let deadline = Instant::now() + TIMEOUT;
+        while !s.raw_text().contains(text) {
+            assert!(Instant::now() < deadline, "{text} never sent");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        Instant::now()
+    };
+    let frame = format!(
+        "printf '\\033[?2026hHELDONE'; sleep {}; printf 'HELDTWO\\033[?2026l'; exec sleep 100",
+        APART.as_secs_f32()
+    );
+    t.run(&["respawn-pane", "-k", "-t", "held", &frame]);
+    let one = sent("HELDONE");
+    let two = sent("HELDTWO");
+    assert!(
+        two.duration_since(one) < APART / 2,
+        "the frame's halves came {:?} apart",
+        two.duration_since(one)
+    );
+    let started = Instant::now();
+    t.run(&[
+        "respawn-pane",
+        "-k",
+        "-t",
+        "held",
+        "printf '\\033[?2026hHELDTHREE'; exec sleep 100",
+    ]);
+    let three = sent("HELDTHREE");
+    // Let go when its time runs out: the server wakes for it.
+    let held = three.duration_since(started);
+    assert!(
+        (SYNC_TIMEOUT..SYNC_TIMEOUT * 3).contains(&held),
+        "a hold let go after {held:?}"
+    );
+}

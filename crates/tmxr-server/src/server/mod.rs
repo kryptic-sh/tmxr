@@ -477,6 +477,7 @@ impl Server {
             .chain(self.copy_line.map(|c| c.due()))
             .chain(self.colour_requests.next_due())
             .chain(self.next_dead_line())
+            .chain(self.next_sync_end())
             .chain(self.next_escape())
             .collect();
         if !self.exiting {
@@ -1181,6 +1182,7 @@ impl Server {
         self.advance_copy_line();
         self.expire_colour_requests();
         self.write_due_dead_lines();
+        self.end_due_syncs();
         self.mark_away_clients();
         self.lock_idle_clients();
         self.tidy_format_jobs();
