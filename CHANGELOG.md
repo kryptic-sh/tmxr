@@ -6,7 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A pane's program can ask the terminal what tmux answers**: XTVERSION
+  (`CSI > q`) answers `DCS >|tmxr` and tmxr's version, DECRQM (`CSI ? Ps $ p`,
+  and `CSI Ps $ p` for insert mode) whether a mode is set, from what the pane
+  keeps, for the modes tmux 3.8 reports, and DECRQSS (`DCS $ q SP q ST`) the
+  cursor's style, else the `cursor-style` option's. Programs probing for a
+  feature this way found none. Synchronized output (2026) is answered as not
+  recognised, as tmxr does not hold a pane's redraw for it yet, and theme
+  updates (2031) as reset, as tmxr sends none unasked.
+
 ### Fixed
+
+- **DA1 (`CSI c`) answers `CSI ? 1 ; 2 c`, as tmux does**: tmxr said it was a
+  VT220 (`CSI ? 62 ; 22 c`), which tmux never answers.
 
 - **A program that asked for the mouse sees the wheel sideways**: scrolling left
   or right (nvim with `nowrap`, for one) was dropped. As in tmux, it is buttons

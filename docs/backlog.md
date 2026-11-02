@@ -203,13 +203,20 @@ named were checked by reading; the runs were not repeated.
   sends `CSI 59;5u`), and `CSI >4;2m` (`MODE_KEYS_EXTENDED_2`) reports every
   modified key extended (C-a as `CSI 27;5;97~`, where tmxr sends `^A`). tmxr has
   no `extended-keys-format` option.
-- **Terminal queries tmux answers go unanswered.** `Hooks::unhandled_csi` in
-  `emulator.rs` answers no XTVERSION (tmux: `DCS >|tmux 3.8 ST`), no DECRQM for
-  ANSI modes or DEC modes 1, 25, 1004, 1005, 1006, 1049, 2004, 2026, 2031
-  (`INPUT_CSI_QUERY_PRIVATE`), and no DECRQSS for the cursor style. Programs
-  probing `?2026$p` or XTVERSION decide the feature is missing. Its DA1 answer
-  is `?62;22c` under a comment saying "as tmux does"; tmux answers `?1;2c`
-  (`?1;2;4c` with sixel).
+- **Query replies that still differ from tmux 3.8** (_reproduced_ by the slice-3
+  reviewer, 2026-11-02, `Hooks::private_mode` / `cursor_blinks` in
+  `emulator.rs`):
+  - DECRQM `?2026` answers 0 (not recognised): tmxr does not hold synchronized
+    output yet (the entry above). Answer from the real state once it does.
+  - `?2031` after `CSI ?2031h` answers 2 where tmux says 1: tmxr sends `?997`
+    only in answer to a `?996`, never unasked, so "reset" is the honest answer.
+  - `?12` after `CSI ?12l` on the default shape, with a blinking `cursor-style`:
+    tmux 2, tmxr 1. tmux records `MODE_CURSOR_BLINKING_SET`; vt1k cannot tell
+    `?12l` from mode 12 never set.
+  - `CSI ?1:2$p` (a colon parameter) gets an answer; tmux's `input_get` refuses
+    it. `CSI ?70000$p` echoes 65535 (vt1k keeps parameters as `u16`).
+  - Nothing tests the popup's `cursor-style` wiring (`Server::popup_output`);
+    the pane path is tested.
 
 Checked by the reviewer and matching tmux: the one-byte, 1005 and 1006 mouse
 encodings (1015 ignored by both), mouse into a pane off the window's origin and
@@ -225,6 +232,15 @@ mouse-enabled pane.
 
 ## Decisions waiting on the owner
 
+- **tmxr sets no `TERM_PROGRAM`** (_read_ by the slice-3 reviewer): tmux sets
+  `TERM_PROGRAM=tmux` and `TERM_PROGRAM_VERSION` in every pane (`environ.c`), so
+  a pane started from WezTerm says WezTerm in tmxr and tmux in tmux; programs
+  that key features off `TERM_PROGRAM` then talk to WezTerm as if directly. tmxr
+  also sets `TMXR` rather than `TMUX` (`docs/plan/06-keys-and-bindings.md`), and
+  since 2026-11-02 answers XTVERSION as `tmxr <version>`. Options: set
+  `TERM_PROGRAM=tmxr` (consistent with XTVERSION; programs know no "tmxr"),
+  `TERM_PROGRAM=tmux` (programs treat it as tmux, as `TMXR` deliberately
+  avoids), or leave it inherited.
 - **Alt+Shift keys lose their Shift under a kitty-protocol terminal.**
   `Guard::enter` in `tmxr-client/src/terminal.rs` pushes kitty's
   `DISAMBIGUATE_ESCAPE_CODES`, which tmux never asks for; the terminal then

@@ -6,7 +6,8 @@
 //! leak its payload onto the screen as text. The splitter runs in front of the
 //! parser: ordinary bytes pass through, DCS strings are taken out whole even
 //! when they span reads, and `tmux;` payloads come back with their `ESC`s
-//! undoubled, ready to forward to the outer terminal.
+//! undoubled, ready to forward to the outer terminal. DECRQSS requests come
+//! back too, for the emulator to answer; any other DCS is dropped.
 
 /// Longest DCS string kept; a longer one (or one that never ends) is dropped
 /// rather than buffered without bound. Large enough for inline images.
@@ -16,6 +17,9 @@ const MAX_DCS: usize = 32 * 1024 * 1024;
 const PASSTHROUGH: &[u8] = b"tmux;";
 
 const ESC: u8 = 0x1b;
+/// CAN and SUB, which cancel a control string.
+const CAN: u8 = 0x18;
+const SUB: u8 = 0x1a;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 enum State {
@@ -32,14 +36,24 @@ enum State {
     SkipEsc,
 }
 
+/// A completed DCS string the splitter hands on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Dcs {
+    /// The payload of an `ESC P tmux; … ESC \`, its `ESC`s undoubled.
+    Passthrough(Vec<u8>),
+    /// A DECRQSS (`ESC P $ q … ESC \`): what follows its `q`, the setting
+    /// asked for (` q` for the cursor's style).
+    Decrqss(Vec<u8>),
+}
+
 /// One read, split.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Split {
     /// Everything but DCS strings, for the terminal parser.
     pub text: Vec<u8>,
-    /// Payloads of completed `ESC P tmux; … ESC \` strings, each with how
-    /// much of `text` came before it: where in the output it was printed.
-    pub passthrough: Vec<(usize, Vec<u8>)>,
+    /// The DCS strings handed on, each with how much of `text` came before
+    /// it: where in the output it was printed.
+    pub strings: Vec<(usize, Dcs)>,
     /// The last completed `ESC k … ESC \` window name, as tmux's
     /// `input_exit_rename` takes it.
     pub rename: Option<Vec<u8>>,
@@ -57,7 +71,7 @@ impl DcsSplitter {
     pub fn split(&mut self, bytes: &[u8]) -> Split {
         let mut out = Split {
             text: Vec::with_capacity(bytes.len()),
-            passthrough: Vec::new(),
+            strings: Vec::new(),
             rename: None,
         };
         for &b in bytes {
@@ -88,7 +102,11 @@ impl DcsSplitter {
                     if self.name {
                         out.rename = Some(std::mem::take(&mut self.dcs));
                     } else if let Some(payload) = self.dcs.strip_prefix(PASSTHROUGH) {
-                        out.passthrough.push((out.text.len(), payload.to_vec()));
+                        let payload = Dcs::Passthrough(payload.to_vec());
+                        out.strings.push((out.text.len(), payload));
+                    } else if let Some(setting) = decrqss(&self.dcs) {
+                        let request = Dcs::Decrqss(setting.to_vec());
+                        out.strings.push((out.text.len(), request));
                     }
                     self.dcs.clear();
                     State::Ground
@@ -142,6 +160,18 @@ impl DcsSplitter {
     }
 }
 
+/// The setting a DCS string asks for if it is a DECRQSS, as tmux's
+/// input_dcs_dispatch reads one: any parameters, then `$` as its one
+/// intermediate and `q` as its final byte. One with a CAN or SUB in it was
+/// cancelled, and tmux answers none.
+fn decrqss(dcs: &[u8]) -> Option<&[u8]> {
+    if dcs.iter().any(|&b| b == CAN || b == SUB) {
+        return None;
+    }
+    let start = dcs.iter().position(|b| !(0x30..=0x3f).contains(b))?;
+    dcs[start..].strip_prefix(b"$q")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -153,8 +183,8 @@ mod tests {
             let part = s.split(c);
             let before = all.text.len();
             all.text.extend(part.text);
-            all.passthrough
-                .extend(part.passthrough.into_iter().map(|(at, p)| (before + at, p)));
+            all.strings
+                .extend(part.strings.into_iter().map(|(at, d)| (before + at, d)));
             if part.rename.is_some() {
                 all.rename = part.rename;
             }
@@ -167,7 +197,7 @@ mod tests {
         let bytes = b"hi \x1b[31mred\x1b[0m \x1b]0;title\x07 \x1b\x1b[A";
         let out = split_all(&[bytes]);
         assert_eq!(out.text, bytes);
-        assert!(out.passthrough.is_empty());
+        assert!(out.strings.is_empty());
     }
 
     #[test]
@@ -175,7 +205,8 @@ mod tests {
         let out = split_all(&[b"a\x1bPtmux;\x1b\x1b]52;c;aGk=\x07\x1b\\b"]);
         assert_eq!(out.text, b"ab");
         // After the "a" it followed.
-        assert_eq!(out.passthrough, vec![(1, b"\x1b]52;c;aGk=\x07".to_vec())]);
+        let payload = b"\x1b]52;c;aGk=\x07".to_vec();
+        assert_eq!(out.strings, vec![(1, Dcs::Passthrough(payload))]);
     }
 
     #[test]
@@ -185,17 +216,15 @@ mod tests {
         let out = split_all(&bytes);
         assert_eq!(out, split_all(&[whole]));
         assert_eq!(out.text, b"xy");
-        assert_eq!(
-            out.passthrough,
-            vec![(1, b"\x1b_Gf=100;AAAA\x1b\\".to_vec())]
-        );
+        let payload = b"\x1b_Gf=100;AAAA\x1b\\".to_vec();
+        assert_eq!(out.strings, vec![(1, Dcs::Passthrough(payload))]);
     }
 
     #[test]
     fn a_lone_escape_ends_an_unterminated_dcs() {
         let out = split_all(&[b"\x1bPtmux;half\x1b[31mred"]);
         assert_eq!(out.text, b"\x1b[31mred");
-        assert!(out.passthrough.is_empty());
+        assert!(out.strings.is_empty());
     }
 
     #[test]
@@ -220,14 +249,33 @@ mod tests {
         assert_eq!(out.text, b"\x1b[31mred");
         // A name is never a passthrough, whatever it starts with.
         let out = split_all(&[b"\x1bktmux;x\x1b\\"]);
-        assert!(out.passthrough.is_empty());
+        assert!(out.strings.is_empty());
+    }
+
+    #[test]
+    fn decrqss_requests_are_taken_out() {
+        let out = split_all(&[b"a\x1bP$q q\x1b\\b\x1bP1$qm\x1b\\"]);
+        assert_eq!(out.text, b"ab");
+        assert_eq!(
+            out.strings,
+            vec![
+                (1, Dcs::Decrqss(b" q".to_vec())),
+                (2, Dcs::Decrqss(b"m".to_vec()))
+            ]
+        );
+        // Another intermediate, or none, is not one.
+        let out = split_all(&[b"\x1bP $q q\x1b\\\x1bPq q\x1b\\"]);
+        assert!(out.strings.is_empty());
+        // Cancelled by CAN or SUB, it asks nothing.
+        let out = split_all(&[b"\x1bP$q \x18q\x1b\\\x1bP$q\x1a q\x1b\\"]);
+        assert!(out.strings.is_empty());
     }
 
     #[test]
     fn other_dcs_strings_are_dropped() {
-        let out = split_all(&[b"a\x1bP$qm\x1b\\b"]);
+        let out = split_all(&[b"a\x1bP+q544e\x1b\\b"]);
         assert_eq!(out.text, b"ab");
-        assert!(out.passthrough.is_empty());
+        assert!(out.strings.is_empty());
     }
 
     #[test]
@@ -241,6 +289,6 @@ mod tests {
         assert!(s.dcs.capacity() < MAX_DCS, "buffer released");
         let out = s.split(b"\x1b\\after");
         assert_eq!(out.text, b"after");
-        assert!(out.passthrough.is_empty());
+        assert!(out.strings.is_empty());
     }
 }

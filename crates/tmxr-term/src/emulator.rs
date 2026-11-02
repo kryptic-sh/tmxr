@@ -3,7 +3,7 @@
 use std::num::NonZeroU16;
 use std::path::PathBuf;
 
-use crate::dcs::DcsSplitter;
+use crate::dcs::{Dcs, DcsSplitter};
 use crate::encode::{ExtendedKeys, InputModes};
 use crate::modes::{ModeSplitter, Piece};
 
@@ -49,6 +49,10 @@ pub struct Hooks {
     /// The `extended-keys` option as output arrives: `off` ignores a
     /// `CSI > 4 ; n m`, as tmux's input_csi_dispatch_sgr_other.
     extended_keys: ExtendedKeys,
+    /// The `cursor-style` option as output arrives, as DECSCUSR's `Ps`: the
+    /// cursor DECRQSS and DECRQM's mode 12 report while the program has
+    /// set no shape, as tmux's.
+    cursor_style_option: u8,
     /// kitty keyboard flags stack (`CSI > f u` pushes, `CSI < n u` pops).
     kitty_flags: Vec<u8>,
     /// The queries the server answers, from the last [`Emulator::process`],
@@ -93,16 +97,42 @@ impl vt1k::Callbacks for Hooks {
         &mut self,
         screen: &mut vt1k::Screen,
         i1: Option<u8>,
-        _i2: Option<u8>,
+        i2: Option<u8>,
         params: &[&[u16]],
         c: char,
     ) {
         let p = |i: usize| params.get(i).and_then(|v| v.first()).copied();
         match (i1, c) {
-            // DA1: identify as a VT220 with ANSI colour, as tmux does.
-            (None, 'c') if p(0).unwrap_or(0) == 0 => self.replies.extend(b"\x1b[?62;22c"),
+            // DA1: a VT100 with advanced video, as tmux built without
+            // sixel says (tmxr draws no sixel images).
+            (None, 'c') if p(0).unwrap_or(0) == 0 => self.replies.extend(b"\x1b[?1;2c"),
             // DA2: tmux reports terminal type 84.
             (Some(b'>'), 'c') => self.replies.extend(b"\x1b[>84;0;0c"),
+            // XTVERSION: tmxr's name and version (its `#{version}`), as
+            // tmux answers with its own.
+            (Some(b'>'), 'q') if p(0).unwrap_or(0) == 0 => {
+                let version = format!("\x1bP>|tmxr {}\x1b\\", env!("CARGO_PKG_VERSION"));
+                self.replies.extend(version.into_bytes());
+            }
+            // DECRQM, as tmux 3.8's input_csi_dispatch: whether an ANSI
+            // mode or a DEC private one is set.
+            (Some(b'$'), 'p') => {
+                if let Some(mode) = p(0).filter(|&m| m > 0) {
+                    let state = match mode {
+                        4 => set_or_reset(screen.insert_mode()),
+                        _ => NOT_RECOGNISED,
+                    };
+                    self.replies
+                        .extend(format!("\x1b[{mode};{state}$y").into_bytes());
+                }
+            }
+            (Some(b'?'), 'p') if i2 == Some(b'$') => {
+                if let Some(mode) = p(0).filter(|&m| m > 0) {
+                    let state = self.private_mode(screen, mode);
+                    self.replies
+                        .extend(format!("\x1b[?{mode};{state}$y").into_bytes());
+                }
+            }
             // DSR: status and cursor position (1-based).
             (Some(b'?'), 'n') if p(0) == Some(996) => {
                 self.queries.push((self.replies.len(), Query::Theme));
@@ -220,12 +250,83 @@ impl vt1k::Callbacks for Hooks {
     }
 }
 
+/// DECRQM's answer for a mode it knows nothing of.
+const NOT_RECOGNISED: u8 = 0;
+/// DECRQM's answer for a mode that is always reset.
+const PERMANENTLY_RESET: u8 = 4;
+
+/// DECRQM's answer for a mode that is `set` or not.
+fn set_or_reset(set: bool) -> u8 {
+    if set { 1 } else { 2 }
+}
+
+impl Hooks {
+    /// DECRQM's answer for DEC private mode `mode`, as tmux 3.8's
+    /// `INPUT_CSI_QUERY_PRIVATE`, from what the screen keeps.
+    fn private_mode(&self, screen: &vt1k::Screen, mode: u16) -> u8 {
+        use vt1k::{MouseProtocolEncoding, MouseProtocolMode};
+        match mode {
+            1 => set_or_reset(screen.application_cursor()),
+            // tmxr, as tmux, has no 132-column mode.
+            3 => PERMANENTLY_RESET,
+            6 => set_or_reset(screen.origin_mode()),
+            7 => set_or_reset(screen.autowrap()),
+            12 => set_or_reset(self.cursor_blinks(screen)),
+            25 => set_or_reset(!screen.hide_cursor()),
+            47 | 1047 | 1049 => set_or_reset(screen.alternate_screen()),
+            1000 => set_or_reset(screen.mouse_protocol_mode() == MouseProtocolMode::PressRelease),
+            1002 => set_or_reset(screen.mouse_protocol_mode() == MouseProtocolMode::ButtonMotion),
+            1003 => set_or_reset(screen.mouse_protocol_mode() == MouseProtocolMode::AnyMotion),
+            1004 => set_or_reset(screen.focus_reports()),
+            1005 => set_or_reset(screen.mouse_utf8()),
+            1006 => set_or_reset(screen.mouse_protocol_encoding() == MouseProtocolEncoding::Sgr),
+            2004 => set_or_reset(screen.bracketed_paste()),
+            // Theme updates: tmxr sends a pane no `CSI ? 997 n` unasked, so
+            // the mode is never on, whatever the program set.
+            2031 => set_or_reset(false),
+            // Synchronized output (2026) among them: tmxr does not hold a
+            // pane's redraw for it, so a program probing should not use it.
+            _ => NOT_RECOGNISED,
+        }
+    }
+
+    /// Whether the cursor blinks, as tmux's mode 12 report has it: as the
+    /// program set it with DECSCUSR or mode 12, else as `cursor-style`
+    /// says. (tmux also takes a `CSI ? 12 l` on the terminal's own shape as
+    /// the program's; vt1k does not keep that apart from never setting it,
+    /// so `cursor-style` answers for it here.)
+    fn cursor_blinks(&self, screen: &vt1k::Screen) -> bool {
+        if screen.cursor_style().decscusr() != 0 || screen.cursor_blinking() {
+            screen.cursor_blinking()
+        } else {
+            self.cursor_style_option % 2 == 1
+        }
+    }
+
+    /// The answer to a DECRQSS asking for `setting`, as tmux's
+    /// input_handle_decrqss: the cursor's style (` q`), as DECSCUSR's
+    /// `Ps`, is the only setting it reports.
+    fn decrqss(&self, screen: &vt1k::Screen, setting: &[u8]) -> Vec<u8> {
+        if !setting.starts_with(b" q") {
+            return b"\x1bP0$r\x1b\\".to_vec();
+        }
+        // The program's shape, blinking as its last mode 12 said, as tmux
+        // keeps the two apart; else the option's.
+        let ps = match screen.cursor_style().decscusr() {
+            0 => self.cursor_style_option,
+            shape => shape.div_ceil(2) * 2 - u8::from(screen.cursor_blinking()),
+        };
+        format!("\x1bP1$r q{ps} q\x1b\\").into_bytes()
+    }
+}
+
 /// Whether panes' tmux passthrough can be taken out and forwarded.
 ///
 /// Windows' built-in ConPTY forwards a program's DCS but drops its closing
 /// `ESC \` (seen on Windows 11 build 26300), so the end of a passthrough
 /// cannot be found and the splitter would hide the pane's later output; there
-/// the output goes to vt1k unsplit, as it would without passthrough.
+/// the output goes to vt1k unsplit, as it would without passthrough, and a
+/// DECRQSS goes unanswered there.
 /// Microsoft's newer ConPTY keeps the terminator, and portable-pty loads it
 /// when its `conpty.dll` (with the `OpenConsole.exe` it starts) sits beside
 /// the program, which is how tmxr's Windows release ships it.
@@ -480,6 +581,13 @@ impl Emulator {
         self.parser.callbacks_mut().extended_keys = option;
     }
 
+    /// The `cursor-style` option as DECSCUSR's `Ps`, for the output that
+    /// follows: the cursor's shape the program is told of while it has set
+    /// none.
+    pub fn set_cursor_style_option(&mut self, ps: u8) {
+        self.parser.callbacks_mut().cursor_style_option = ps;
+    }
+
     /// The extended-keys level a new or reset screen starts at, as tmux's
     /// screen_write_reset: 1 under `extended-keys always`, else none.
     pub fn reset_keys(&mut self) {
@@ -548,14 +656,26 @@ impl Emulator {
         self.parser.callbacks_mut().queries.clear();
         if self.split {
             let split = self.dcs.split(bytes);
-            // Each payload with the cursor where it was printed: the text
-            // before it is parsed first.
+            // The text before each string is parsed first: a payload takes
+            // the cursor where it was printed, a request is answered from
+            // the screen then.
             let mut done = 0;
-            for (at, payload) in split.passthrough {
+            for (at, string) in split.strings {
                 self.feed(&split.text[done..at]);
                 done = at;
-                let cursor = self.parser.screen().cursor_position();
-                self.passthrough.push((payload, cursor));
+                match string {
+                    Dcs::Passthrough(payload) => {
+                        let cursor = self.parser.screen().cursor_position();
+                        self.passthrough.push((payload, cursor));
+                    }
+                    Dcs::Decrqss(setting) => {
+                        let answer = self
+                            .parser
+                            .callbacks()
+                            .decrqss(self.parser.screen(), &setting);
+                        self.parser.callbacks_mut().replies.extend(answer);
+                    }
+                }
             }
             self.feed(&split.text[done..]);
             if split.rename.is_some() {
@@ -1122,9 +1242,90 @@ mod tests {
     fn cursor_position_and_device_attribute_queries_are_answered() {
         let mut e = Emulator::new(24, 80, 0);
         assert_eq!(e.process(b"ab\x1b[6n"), b"\x1b[1;3R");
-        assert_eq!(e.process(b"\x1b[c"), b"\x1b[?62;22c");
+        assert_eq!(e.process(b"\x1b[c"), b"\x1b[?1;2c");
         assert_eq!(e.process(b"\x1b[5n"), b"\x1b[0n");
         assert!(e.process(b"plain text").is_empty());
+    }
+
+    #[test]
+    fn xtversion_names_tmxr_and_its_version() {
+        let mut e = Emulator::new(24, 80, 0);
+        let answer = format!("\x1bP>|tmxr {}\x1b\\", env!("CARGO_PKG_VERSION"));
+        assert_eq!(e.process(b"\x1b[>q"), answer.as_bytes());
+        assert_eq!(e.process(b"\x1b[>0q"), answer.as_bytes());
+        assert!(e.process(b"\x1b[>1q").is_empty());
+    }
+
+    /// DECRQM's answers as tmux 3.8 gave them, each mode set and reset.
+    #[test]
+    fn mode_queries_report_the_modes_state() {
+        let mut e = Emulator::new(24, 80, 0);
+        let ask = |e: &mut Emulator, modes: &[u16]| {
+            let asks: String = modes.iter().map(|m| format!("\x1b[?{m}$p")).collect();
+            String::from_utf8(e.process(asks.as_bytes())).unwrap()
+        };
+        let modes = [
+            1, 6, 7, 12, 25, 1049, 1000, 1002, 1003, 1004, 1005, 1006, 2004, 2031,
+        ];
+        assert_eq!(
+            ask(&mut e, &modes),
+            "\x1b[?1;2$y\x1b[?6;2$y\x1b[?7;1$y\x1b[?12;2$y\x1b[?25;1$y\x1b[?1049;2$y\
+             \x1b[?1000;2$y\x1b[?1002;2$y\x1b[?1003;2$y\x1b[?1004;2$y\x1b[?1005;2$y\
+             \x1b[?1006;2$y\x1b[?2004;2$y\x1b[?2031;2$y"
+        );
+        e.process(b"\x1b[?1;6;12;1049;1000;1004;1005;1006;2004;2031h\x1b[?7;25l");
+        assert_eq!(
+            ask(&mut e, &modes),
+            "\x1b[?1;1$y\x1b[?6;1$y\x1b[?7;2$y\x1b[?12;1$y\x1b[?25;2$y\x1b[?1049;1$y\
+             \x1b[?1000;1$y\x1b[?1002;2$y\x1b[?1003;2$y\x1b[?1004;1$y\x1b[?1005;1$y\
+             \x1b[?1006;1$y\x1b[?2004;1$y\x1b[?2031;2$y"
+        );
+        e.process(b"\x1b[?1002h");
+        assert_eq!(ask(&mut e, &[1000, 1002]), "\x1b[?1000;2$y\x1b[?1002;1$y");
+        e.process(b"\x1b[?1003h");
+        assert_eq!(ask(&mut e, &[1002, 1003]), "\x1b[?1002;2$y\x1b[?1003;1$y");
+        // 132 columns are never on; a mode not known, synchronized output
+        // among them, is not recognised; no mode, no answer.
+        assert_eq!(
+            ask(&mut e, &[3, 2026, 9999]),
+            "\x1b[?3;4$y\x1b[?2026;0$y\x1b[?9999;0$y"
+        );
+        assert!(e.process(b"\x1b[?$p\x1b[?0$p").is_empty());
+        // ANSI modes: insert mode the one known.
+        assert_eq!(e.process(b"\x1b[4$p\x1b[20$p"), b"\x1b[4;2$y\x1b[20;0$y");
+        e.process(b"\x1b[4h");
+        assert_eq!(e.process(b"\x1b[4$p"), b"\x1b[4;1$y");
+        assert!(e.process(b"\x1b[$p").is_empty());
+    }
+
+    /// Mode 12 and DECRQSS tell the program's cursor, else the
+    /// `cursor-style` option's, as tmux 3.8 answered.
+    #[test]
+    fn cursor_queries_report_the_shape_and_blinking() {
+        let mut e = Emulator::new(24, 80, 0);
+        e.split = true;
+        let decrqss = b"\x1bP$q q\x1b\\";
+        assert_eq!(e.process(decrqss), b"\x1bP1$r q0 q\x1b\\");
+        e.set_cursor_style_option(3);
+        assert_eq!(e.process(decrqss), b"\x1bP1$r q3 q\x1b\\");
+        assert_eq!(e.process(b"\x1b[?12$p"), b"\x1b[?12;1$y");
+        // The program's shape, and its blinking apart from it.
+        e.process(b"\x1b[6 q");
+        assert_eq!(e.process(decrqss), b"\x1bP1$r q6 q\x1b\\");
+        assert_eq!(e.process(b"\x1b[?12$p"), b"\x1b[?12;2$y");
+        e.process(b"\x1b[?12h");
+        assert_eq!(e.process(decrqss), b"\x1bP1$r q5 q\x1b\\");
+        e.process(b"\x1b[1 q\x1b[?12l");
+        assert_eq!(e.process(decrqss), b"\x1bP1$r q2 q\x1b\\");
+        e.process(b"\x1b[4 q");
+        assert_eq!(e.process(decrqss), b"\x1bP1$r q4 q\x1b\\");
+        // Any other setting is not one tmux reports.
+        assert_eq!(e.process(b"\x1bP$qm\x1b\\"), b"\x1bP0$r\x1b\\");
+        // In order with the other answers.
+        assert_eq!(
+            e.process(b"\x1b[5n\x1bP$q q\x1b\\\x1b[c"),
+            b"\x1b[0n\x1bP1$r q4 q\x1b\\\x1b[?1;2c"
+        );
     }
 
     #[test]
@@ -1307,7 +1508,7 @@ mod tests {
     fn queries_for_the_server_keep_their_place_among_the_replies() {
         let mut e = Emulator::new(4, 20, 0);
         let replies = e.process(b"\x1b]11;?\x07\x1b[c\x1b[?996n\x1b]12;?\x1b\\");
-        let da1 = b"\x1b[?62;22c".len();
+        let da1 = b"\x1b[?1;2c".len();
         assert_eq!(replies.len(), da1);
         assert_eq!(
             e.take_queries(),
@@ -1340,7 +1541,7 @@ mod tests {
         let replies = e.process(b"\x1b]4;1;#102030\x07\x1b[5n\x1b]4;1;?;3;?\x07\x1b[c");
         let status = b"\x1b[0n".len();
         let answer = b"\x1b]4;1;rgb:1010/2020/3030\x07".len();
-        assert_eq!(&replies[status + answer..], b"\x1b[?62;22c");
+        assert_eq!(&replies[status + answer..], b"\x1b[?1;2c");
         assert_eq!(
             e.take_queries(),
             [(
@@ -1356,7 +1557,7 @@ mod tests {
         assert_eq!(
             e.take_queries(),
             [(
-                b"\x1b[?62;22c".len(),
+                b"\x1b[?1;2c".len(),
                 Query::Palette {
                     index: 3,
                     bel: false

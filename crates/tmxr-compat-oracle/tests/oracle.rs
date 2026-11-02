@@ -84,6 +84,11 @@ fn option_scopes_match_tmux() {
     assert_passes("options.toml");
 }
 
+#[test]
+fn terminal_queries_match_tmux() {
+    assert_passes("queries.toml");
+}
+
 /// Differences kept on purpose or not fixed yet: reported, never failing.
 #[test]
 fn known_divergences_report() {

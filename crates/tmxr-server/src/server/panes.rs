@@ -662,14 +662,18 @@ impl Server {
         match ev {
             PtyEvent::Output(bytes) => {
                 let options = self.pane_options(pid);
-                let (allow_title, alternate_ok) =
-                    (options.allow_set_title, options.alternate_screen);
+                let (allow_title, alternate_ok, cursor_style) = (
+                    options.allow_set_title,
+                    options.alternate_screen,
+                    options.cursor_style.ps(),
+                );
                 let extended_keys = self.extended_keys();
                 let Some(p) = self.panes.get_mut(&pid) else {
                     return;
                 };
                 p.emu.set_alternate_screen(alternate_ok);
                 p.emu.set_extended_keys(extended_keys);
+                p.emu.set_cursor_style_option(cursor_style);
                 // Output after the exit puts the dead line off again; once
                 // it is written, tmux has closed the pane's terminal
                 // (server_destroy_pane), so nothing more is read.

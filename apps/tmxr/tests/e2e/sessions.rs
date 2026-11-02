@@ -1685,7 +1685,7 @@ fn colour_queries_get_the_client_terminals_colours() {
     s.wait_for("the answers", |text| {
         // The answers wrap past the screen's width.
         text.replace('\n', "")
-            .contains("^[]11;rgb:1a1a/1b1b/2626^G^[[?62;22c^[]10;rgb:c0c0/caca/f5f5^[\\^[[?997;1n")
+            .contains("^[]11;rgb:1a1a/1b1b/2626^G^[[?1;2c^[]10;rgb:c0c0/caca/f5f5^[\\^[[?997;1n")
     });
 }
 
@@ -1736,10 +1736,10 @@ fn an_unset_palette_entry_is_asked_of_the_clients_terminal() {
     s.wait_for("the status line", |text| text.contains("pa"));
     t.run(&["send-keys", "-t", "pa", "x"]);
     s.wait_for_raw("the terminal asked", |raw| raw.contains("\x1b]4;1;?\x1b\\"));
-    assert!(!s.text().contains("^[[?62;22c"), "DA1 went ahead of it");
+    assert!(!s.text().contains("^[[?1;2c"), "DA1 went ahead of it");
     s.send(b"\x1b]4;1;rgb:cdcd/0000/0000\x1b\\");
     s.wait_for("the answers in order", |text| {
-        text.contains("^[]4;1;rgb:cdcd/0000/0000^G^[[?62;22c")
+        text.contains("^[]4;1;rgb:cdcd/0000/0000^G^[[?1;2c")
     });
 }
 
@@ -1761,7 +1761,7 @@ fn an_unanswered_palette_request_lets_the_other_answers_go() {
     s.wait_for("the status line", |text| text.contains("ps"));
     t.run(&["send-keys", "-t", "ps", "x"]);
     s.wait_for_raw("the terminal asked", |raw| raw.contains("\x1b]4;1;?\x1b\\"));
-    s.wait_for("DA1's answer alone", |text| text.contains("^[[?62;22c"));
+    s.wait_for("DA1's answer alone", |text| text.contains("^[[?1;2c"));
     assert!(!s.text().contains("^[]4;"), "{}", s.text());
 }
 
@@ -1789,7 +1789,7 @@ fn a_detached_clients_palette_request_lets_the_other_answers_go() {
     let asked = Instant::now();
     t.run(&["detach-client", "-s", "pg"]);
     t.wait_run(&["capture-pane", "-p", "-t", "pg"], "DA1's answer", |o| {
-        o.contains("^[[?62;22c")
+        o.contains("^[[?1;2c")
     });
     assert!(asked.elapsed() < PROMPTLY, "took {:?}", asked.elapsed());
 }
@@ -1917,7 +1917,7 @@ fn a_lost_clients_palette_request_lets_the_other_answers_go() {
     assert!(killed.success());
     s.wait_exit();
     t.wait_run(&["capture-pane", "-p", "-t", "pl"], "DA1's answer", |o| {
-        o.contains("^[[?62;22c")
+        o.contains("^[[?1;2c")
     });
     assert!(asked.elapsed() < PROMPTLY, "took {:?}", asked.elapsed());
 }

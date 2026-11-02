@@ -189,11 +189,14 @@ impl Server {
 
     /// The popup's program printed: feed its screen.
     pub fn popup_output(&mut self, id: PaneId, spawn: u64) {
+        // A popup is in no window: tmux's has the global window options.
+        let cursor_style = self.cfg.window.cursor_style.ps();
         let Some((client, p)) = self.popup_mut(id, spawn) else {
             return;
         };
         let bytes = p.output.0.take();
         p.emu.set_extended_keys(p.extended_keys);
+        p.emu.set_cursor_style_option(cursor_style);
         let replies = p.emu.process(&bytes);
         if !replies.is_empty() {
             let _ = p.pty.write(&replies);

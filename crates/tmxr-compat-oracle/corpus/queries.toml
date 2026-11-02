@@ -1,0 +1,45 @@
+# What a pane's program is told when it asks the terminal, as `cat -v` shows
+# the answers on a raw terminal. Only what tmux 3.6 and 3.8 answer alike: 3.8
+# answers DECRQM for more modes (known_divergences.toml).
+
+[[cases]]
+name = "decrqm_reports_the_modes_both_tmuxes_answer"
+unix_only = true
+program = '''stty raw -echo; printf '\033[?2004h\033[?1006h'; for m in 2004 1004 1006 12 2031; do printf "\033[?$m\$p"; done; exec cat -v'''
+steps = [{ sleep = 0.5 }]
+checks = [
+  { command = "capture-pane -p -t o", expect = "^[[?2004;1$y^[[?1004;2$y^[[?1006;1$y^[[?12;2$y^[[?2031;2$y" },
+]
+
+[[cases]]
+name = "decrqss_reports_the_cursor_style"
+# The terminal's own shape (0) until the program sets one; no other setting.
+unix_only = true
+program = '''stty raw -echo; printf '\033P$q q\033\\\033[4 q\033P$q q\033\\\033P$qm\033\\'; exec cat -v'''
+steps = [{ sleep = 0.5 }]
+checks = [
+  { command = "capture-pane -p -t o", expect = '^[P1$r q0 q^[\^[P1$r q4 q^[\^[P0$r^[\' },
+]
+
+[[cases]]
+name = "decrqss_and_mode_12_fall_back_to_cursor_style"
+# A program that set no shape is told the pane's cursor-style.
+unix_only = true
+program = '''stty raw -echo; sleep 1; printf '\033P$q q\033\\\033[?12$p'; exec cat -v'''
+steps = [{ run = "set -g cursor-style blinking-bar" }, { sleep = 1.5 }]
+checks = [
+  { command = "capture-pane -p -t o", expect = '^[P1$r q5 q^[\^[[?12;1$y' },
+]
+
+[[cases]]
+name = "xtversion_and_da1_are_answered"
+# Their whole answers differ: XTVERSION names the program and its version,
+# and tmux built with sixel adds 4 to DA1's (tmxr draws none).
+attach = true
+unix_only = true
+program = "stty raw -echo; printf '\\033[>q\\033[c'; exec cat -v"
+steps = [{ sleep = 0.5 }]
+checks = [
+  { screen_contains = "^[P>|", expect = true },
+  { screen_contains = '^[\^[[?1;2', expect = true },
+]
