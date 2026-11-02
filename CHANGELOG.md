@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A program that asked for the mouse sees the wheel sideways**: scrolling left
+  or right (nvim with `nowrap`, for one) was dropped. As in tmux, it is buttons
+  6 and 7, `MouseDown6Pane` and `MouseDown7Pane` (and their `SecondClick` /
+  `DoubleClick` / `TripleClick` forms) for a bind, and goes to the pane's
+  program when nothing binds it. Buttons 8 and up (back and forward) still do
+  not arrive: crossterm cannot read them.
+- **A double click no longer reaches a program that asked for the mouse as three
+  presses**: the `DoubleClick` key that follows a second press went to the
+  pane's program too, as a third press. tmux's `send-keys -M` passes it nowhere,
+  and now so does tmxr's.
+- **A click past column or row 223 reaches a program using the one-byte mouse
+  form**: it was dropped, having no byte for the position. It is now clamped to
+  the last one, as tmux does.
+
 ## [0.14.0] - 2026-11-01
 
 ### Breaking

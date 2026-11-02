@@ -158,11 +158,19 @@ named were checked by reading; the runs were not repeated.
   (`server_client_check_mouse`, "Forward mouse keys if disabled"). With
   `set -g mouse off` and a pane asking for 1002+1006, tmux's pane got the click;
   tmxr's got nothing.
-- **The horizontal wheel and buttons 8 and up are dropped.** `mouse::handle`
-  ends `_ => return`, which drops `ScrollLeft` / `ScrollRight`, though
-  `encode_mouse` encodes them; `button` knows three buttons. tmux passes SGR
-  66/67 and 128+ (`input_key_get_mouse` uses `m->sgr_b`). Sideways scrolling in
-  nvim with `nowrap`, and back/forward buttons, do nothing.
+- **Mouse buttons 8 and up (back and forward) never reach a program.** tmux
+  passes SGR 128+ through (`input_key_get_mouse` uses `m->sgr_b`); crossterm
+  (the kryptic-sh fork in `Cargo.lock`) fails to parse any button past 7
+  (`parse_cb`: "We do not support other buttons"), so the client never sees
+  them. Blocked on crossterm.
+- **A run of clicks needs the same cell** (_read_ by the slice-1 reviewer):
+  `count_click` in `mouse.rs` counts a press toward a double click only in the
+  cell of the last; tmux's `server_client_check_mouse` only needs the same
+  button, location and pane (`click_button` / `click_loc` / `click_wp`). A
+  double click whose second press lands a cell off is two single clicks in tmxr.
+- **The UTF-8 (1005) mouse form has no position limit** (_read_): `encode_mouse`
+  drops only values that are not chars, where tmux's `input_key_get_mouse` drops
+  a position past `0x7ff - 0x21`. Matters only past about 2000 columns.
 - **Programs cannot learn the pixel size.** `pty.rs` opens and resizes ptys with
   `pixel_width` / `pixel_height` 0, and `Hooks::unhandled_csi` does not answer
   `CSI 14 t` / `16 t` / `18 t`; tmux sets the pane's pixel size and answers them
@@ -182,10 +190,6 @@ named were checked by reading; the runs were not repeated.
   probing `?2026$p` or XTVERSION decide the feature is missing. Its DA1 answer
   is `?62;22c` under a comment saying "as tmux does"; tmux answers `?1;2c`
   (`?1;2;4c` with sixel).
-- **A click past column 222 is lost in the one-byte mouse encoding.**
-  `encode_mouse` returns nothing for a coordinate past a byte; tmux clamps it
-  to 255. Only programs using mode 1000 without 1005/1006 on a terminal that
-  wide.
 
 Checked by the reviewer and matching tmux: the one-byte, 1005 and 1006 mouse
 encodings (1015 ignored by both), mouse into a pane off the window's origin and

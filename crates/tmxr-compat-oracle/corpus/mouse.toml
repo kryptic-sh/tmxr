@@ -395,6 +395,122 @@ checks = [
   { screen_contains = "^[[<35;4;6M^[[<35;7;6M", expect = true },
 ]
 
+# A double click on a program that asked for the mouse reaches it as two
+# presses: the DoubleClick key the default bind sends on (send-keys -M) is
+# one tmux passes nowhere.
+[[cases]]
+name = "a_double_click_reaches_a_mouse_program_as_two_presses"
+attach = true
+unix_only = true
+program = "stty raw -echo; printf '\\033[?1000h\\033[?1006hready\\r\\n'; exec cat -v"
+steps = [
+  { wait_text = "ready" },
+  { mouse = { action = "double-click", at = [3, 5] } },
+  { sleep = 0.8 },
+]
+checks = [
+  { command = "capture-pane -p -t o" },
+  { screen_contains = "^[[<0;4;6M^[[<0;4;6m^[[<0;4;6M^[[<0;4;6m", expect = true },
+  { screen_contains = "^[[<0;4;6M^[[<0;4;6m^[[<0;4;6M^[[<0;4;6m^[[<0;4;6M", expect = false },
+]
+
+[[cases]]
+name = "a_triple_click_reaches_a_mouse_program_as_tmuxs_does"
+attach = true
+unix_only = true
+program = "stty raw -echo; printf '\\033[?1000h\\033[?1006hready\\r\\n'; exec cat -v"
+steps = [
+  { wait_text = "ready" },
+  { mouse = { action = "triple-click", at = [3, 5] } },
+  { sleep = 0.8 },
+]
+checks = [{ command = "capture-pane -p -t o" }]
+
+# The sideways wheel counts toward clicks as any button's press does, and
+# a left click between breaks the run, as in tmux.
+[[cases]]
+name = "the_sideways_wheel_counts_clicks_as_tmuxs_buttons"
+attach = true
+unix_only = true
+program = "stty raw -echo; printf '\\033[?1000h\\033[?1006hready\\r\\n'; exec cat -v"
+steps = [
+  { wait_text = "ready" },
+  { run = "bind -n MouseDown1Pane set -ga @seen D \\; send -M" },
+  { run = "bind -n SecondClick1Pane set -ga @seen S \\; send -M" },
+  { run = "bind -n MouseDown6Pane set -ga @seen 6 \\; send -M" },
+  { run = "bind -n SecondClick6Pane set -ga @seen s \\; send -M" },
+  { run = "bind -n DoubleClick6Pane set -ga @seen 2 \\; send -M" },
+  { run = "bind -n TripleClick6Pane set -ga @seen 3 \\; send -M" },
+  { mouse = { action = "wheel-left", at = [3, 5] } },
+  { mouse = { action = "click", at = [3, 5] } },
+  { mouse = { action = "wheel-left", at = [3, 5] } },
+  { mouse = { action = "wheel-left", at = [3, 5] } },
+  { mouse = { action = "wheel-left", at = [3, 5] } },
+  { sleep = 0.8 },
+  { mouse = { action = "wheel-left", at = [3, 5] } },
+  { mouse = { action = "wheel-left", at = [3, 5] } },
+  { sleep = 0.8 },
+]
+checks = [
+  { format = "#{@seen}", expect = "6D6s36s2" },
+  { command = "capture-pane -p -t o" },
+]
+
+# The horizontal wheel is buttons 6 and 7 to tmux, which no default bind
+# claims: a program that asked for the mouse gets them.
+[[cases]]
+name = "the_sideways_wheel_reaches_a_program_that_asked_for_the_mouse"
+attach = true
+unix_only = true
+program = "stty raw -echo; printf '\\033[?1000h\\033[?1006hready\\r\\n'; exec cat -v"
+steps = [
+  { wait_text = "ready" },
+  { mouse = { action = "wheel-left", at = [3, 5] } },
+  { mouse = { action = "wheel-right", at = [6, 5] } },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "capture-pane -p -t o" },
+  { screen_contains = "^[[<66;4;6M^[[<67;7;6M", expect = true },
+]
+
+# Twice in a cell is a double click, as for any button: the second press
+# goes on, the DoubleClick key after it does not.
+[[cases]]
+name = "a_sideways_wheel_twice_reaches_the_program_twice"
+attach = true
+unix_only = true
+program = "stty raw -echo; printf '\\033[?1000h\\033[?1006hready\\r\\n'; exec cat -v"
+steps = [
+  { wait_text = "ready" },
+  { mouse = { action = "wheel-left", at = [3, 5] } },
+  { mouse = { action = "wheel-left", at = [3, 5] } },
+  { sleep = 0.8 },
+]
+checks = [
+  { command = "capture-pane -p -t o" },
+  { screen_contains = "^[[<66;4;6M^[[<66;4;6M", expect = true },
+  { screen_contains = "^[[<66;4;6M^[[<66;4;6M^[[<66;4;6M", expect = false },
+]
+
+# Past column 222 the one-byte form has no byte for the position: tmux
+# clamps it to 255 (cat -v's M-^?) rather than drop the click.
+[[cases]]
+name = "a_click_past_the_one_byte_range_is_clamped"
+size = [240, 10]
+attach = true
+unix_only = true
+program = "stty raw -echo; printf '\\033[?1000hready\\r\\n'; exec cat -v"
+steps = [
+  { wait_text = "ready" },
+  { mouse = { action = "click", at = [230, 2] } },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "capture-pane -p -t o" },
+  { screen_contains = "^[[M M-^?#^[[M#M-^?#", expect = true },
+]
+
 # nvim selects by dragging when it has the mouse: the selection yanked and
 # put back is the text dragged over, as in tmux.
 [[cases]]

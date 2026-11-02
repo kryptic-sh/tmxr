@@ -81,6 +81,8 @@ pub struct MouseTarget {
     pub border: Option<Drag>,
     /// On a scrollbar's slider: how many rows below its top it was taken.
     pub grab: u16,
+    /// Not for the pane's program (tmux's `ignore`): a `DoubleClick`.
+    pub ignore: bool,
 }
 
 const MODS: KeyModifiers = KeyModifiers::CONTROL
@@ -123,13 +125,7 @@ pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
                     dragged: false,
                 }),
             );
-            let n = button(b);
-            let action = match count_click(srv, id, m, n) {
-                2 => MouseAction::SecondClick(n),
-                3 => MouseAction::TripleClick(n),
-                _ => MouseAction::Down(n),
-            };
-            (action, here)
+            (count_click(srv, id, m, button(b)), here)
         }
         MouseEventKind::Up(b) => {
             set_press(srv, id, None);
@@ -150,7 +146,11 @@ pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
         MouseEventKind::ScrollUp => (MouseAction::WheelUp, here),
         MouseEventKind::ScrollDown => (MouseAction::WheelDown, here),
         MouseEventKind::Moved => (MouseAction::Move, here),
-        _ => return,
+        // tmux has no wheel key for the wheel sideways: it is buttons 6
+        // and 7, a press with no release (server_client_check_mouse), which
+        // counts toward a double click as any press does.
+        MouseEventKind::ScrollLeft => (count_click(srv, id, m, 6), here),
+        MouseEventKind::ScrollRight => (count_click(srv, id, m, 7), here),
     };
     let Some(target) = locate(srv, id, m, at) else {
         return;
@@ -171,11 +171,11 @@ pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
     }
 }
 
-/// Record a press of `button` and return how many presses in a row it
-/// makes: 1, 2 (a double click) or 3; a fourth starts over.
-fn count_click(srv: &mut Server, id: ClientId, m: MouseEvent, button: u8) -> u8 {
+/// Record a press of `button` and return its key: `Down`, or the second
+/// or third press in a row; a fourth starts over.
+fn count_click(srv: &mut Server, id: ClientId, m: MouseEvent, button: u8) -> MouseAction {
     let Some(att) = srv.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
-        return 1;
+        return MouseAction::Down(button);
     };
     let now = Instant::now();
     let count = match att.click {
@@ -197,7 +197,11 @@ fn count_click(srv: &mut Server, id: ClientId, m: MouseEvent, button: u8) -> u8 
         count,
         double: None,
     });
-    count
+    match count {
+        2 => MouseAction::SecondClick(button),
+        3 => MouseAction::TripleClick(button),
+        _ => MouseAction::Down(button),
+    }
 }
 
 /// When the next pending `DoubleClick` is due, for the server loop to wake.
@@ -226,6 +230,12 @@ pub fn fire_double_clicks(srv: &mut Server) {
         })
         .collect();
     for (id, b, target) in due {
+        // The pane's program had the second press already: `send-keys -M`
+        // passes this one nowhere, as tmux's ignored DoubleClick event.
+        let target = MouseTarget {
+            ignore: true,
+            ..target
+        };
         dispatch(srv, id, MouseAction::DoubleClick(b), target);
     }
 }
@@ -301,6 +311,7 @@ fn locate(
         pane: None,
         border: None,
         grab: 0,
+        ignore: false,
     };
     let sess = srv.sessions.get(&session)?;
     let lines = srv.status_rows(session);
@@ -483,6 +494,7 @@ fn target_on(
         pane: Some(pane),
         border: None,
         grab: 0,
+        ignore: false,
     })
 }
 
@@ -491,6 +503,9 @@ fn target_on(
 pub fn forward(srv: &mut Server, ctx: &Ctx) -> Result<(), String> {
     let t = ctx.mouse.ok_or("send-keys -M needs a mouse event")?;
     let pane = t.pane.ok_or("no pane under the mouse")?;
+    if t.ignore {
+        return Ok(());
+    }
     // Where the event itself is, as tmux's input_key_mouse reports it: a
     // drag's key is located at its press, but its motion and release are
     // told where they happen. In window cells, as the pane's rect.

@@ -61,8 +61,10 @@ pub struct MouseKey {
     pub mods: KeyModifiers,
 }
 
-/// Buttons tmux names: 1 left, 2 middle, 3 right.
-const BUTTONS: std::ops::RangeInclusive<u8> = 1..=3;
+/// Buttons tmux names and a terminal can report: 1 left, 2 middle, 3
+/// right, and 6 and 7, the wheel left and right. tmux also names 8 to 11,
+/// buttons crossterm cannot read.
+const BUTTONS: [u8; 5] = [1, 2, 3, 6, 7];
 
 /// Builds a button action from its button number.
 type ButtonAction = fn(u8) -> MouseAction;
@@ -238,7 +240,8 @@ impl BindKey {
 
 impl MouseKey {
     fn tmux_code(&self) -> u64 {
-        let slot = |b: u8| u64::from(b.saturating_sub(1)).min(BUTTON_SLOTS - 1);
+        // Buttons 1 to 3, then 6 on: tmux has no 4 or 5.
+        let slot = |b: u8| u64::from(if b > 3 { b - 3 } else { b.saturating_sub(1) });
         let event = match self.action {
             MouseAction::Move => 0,
             MouseAction::Down(b) => 1 + slot(b),
@@ -358,6 +361,16 @@ mod tests {
             .map(|k| k.parse::<BindKey>().unwrap().tmux_code())
             .collect();
         assert!(codes.windows(2).all(|p| p[0] < p[1]), "{codes:?}");
+        // tmux.h has no buttons 4 and 5: MOUSEDOWN6 follows MOUSEDOWN3.
+        let code = |k: &str| k.parse::<BindKey>().unwrap().tmux_code();
+        assert_eq!(
+            code("MouseDown6Pane") - code("MouseDown1Pane"),
+            3 * MOUSE_PLACES
+        );
+        assert_eq!(
+            code("MouseDown7Pane") - code("MouseDown1Pane"),
+            4 * MOUSE_PLACES
+        );
     }
 
     #[test]
@@ -374,6 +387,8 @@ mod tests {
             "WheelUpPane",
             "WheelDownStatus",
             "MouseDown3StatusLeft",
+            "MouseDown6Pane",
+            "SecondClick7Pane",
             "MouseUp1StatusRight",
             "WheelUpStatusDefault",
             "M-MouseDown1Pane",
@@ -392,6 +407,7 @@ mod tests {
     fn bad_mouse_names_are_rejected_and_keys_still_parse() {
         for name in [
             "MouseDown4Pane",
+            "MouseDown5Pane",
             "MouseDown0Pane",
             "MouseDownPane",
             "MouseDown1",

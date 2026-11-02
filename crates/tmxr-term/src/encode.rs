@@ -300,11 +300,10 @@ pub fn encode_mouse(
                         let mut buf = [0u8; 4];
                         out.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
                     }
-                    _ => match u8::try_from(v) {
-                        Ok(b) => out.push(b),
-                        // Out of range for the one-byte form: not reportable.
-                        Err(_) => return Vec::new(),
-                    },
+                    // A position past the one-byte form's last byte is
+                    // clamped to it, as tmux's input_key_get_mouse does; no
+                    // button code reaches it.
+                    _ => out.push(u8::try_from(v).unwrap_or(u8::MAX)),
                 }
             }
             out
@@ -518,7 +517,12 @@ mod tests {
             ..ev(MouseEventKind::ScrollUp)
         };
         assert_eq!(encode_mouse(&wheel, 0, 0, pr, sgr), b"\x1b[<80;1;1M");
-        // Beyond column 222 the one-byte form cannot encode the position.
-        assert!(encode_mouse(&down, 300, 0, pr, MouseProtocolEncoding::Default).is_empty());
+        // Past column and row 222 the one-byte form clamps the position to
+        // 255, as tmux's input_key_get_mouse (MOUSE_PARAM_MAX).
+        let one_byte = |col, row| encode_mouse(&down, col, row, pr, MouseProtocolEncoding::Default);
+        assert_eq!(one_byte(222, 0), b"\x1b[M \xff!");
+        assert_eq!(one_byte(223, 0), b"\x1b[M \xff!");
+        assert_eq!(one_byte(300, 400), b"\x1b[M \xff\xff");
+        assert_eq!(one_byte(221, 223), b"\x1b[M \xfe\xff");
     }
 }
