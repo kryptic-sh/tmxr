@@ -170,10 +170,11 @@ named were checked by reading; the runs were not repeated.
   is smaller than the window); a screen switch there and back within one read
   does not end the hold; after copy mode tmxr goes back to the held frame where
   tmux shows the live screen.
-- **Synchronized output on Windows is not verified**: whether ConPTY forwards
-  `?2026h` was not checked; the e2e test is `cfg(unix)`. No test fails if
+- **Synchronized output not covered by a test**: no test fails if
   `set_holds_sync(false)` leaves `popup.rs`, or if `render.rs`'s `cursor_style`
-  / `cursor_colour` / `window_offset` go back to the live screen.
+  / `cursor_colour` / `window_offset` go back to the live screen. (Windows'
+  built-in ConPTY forwards `?2026h`, build 26300, 2026-11-04:
+  `a_synchronized_redraw_reaches_the_terminal_whole` runs there too.)
 - **With `mouse off` the terminal reports every motion** (_read_, slice-2
   review): `mouse::capture` is one bool, so crossterm's capture turns on
   1000/1002/1003/1006 whatever the program asked; tmux copies the program's own
@@ -1071,9 +1072,12 @@ mouse-enabled pane.
     client sends standard input ahead of the command); an empty pane is restored
     by resurrect empty, without what was shown in it; `display-message -v`;
     `display-message -a` lists tmxr's variables (`vars::NAMES`), fewer than
-    tmux's; the
-    `choose-*`pickers' tagging and sort keys (tmux's`t`, `T`, `O`), which tmxr's picker has no counterpart for; `choose-tree
-    -F`replaces the text after a row's mark, where tmux's is the whole tree line;`command-prompt`Tab completes and offers menus as tmux's (names, sessions, a session's windows, the`target`and`window-target`types;`prompt_tab\*\*`in`corpus/keys.toml`),
+    tmux's; the `choose-*`pickers' tagging and sort keys (tmux's`t`, `T`, `O`),
+    which tmxr's picker has no counterpart for; `choose-tree -F`replaces the
+    text after a row's mark, where tmux's is the whole tree
+    line;`command-prompt`Tab completes and offers menus as tmux's (names,
+    sessions, a session's windows,
+    the`target`and`window-target`types;`prompt_tab\*\*`in`corpus/keys.toml`),
     though which ten names a long menu keeps was matched by result (the last
     ten), not read from tmux's code.
   - Hooks and modes: the client's theme follows its terminal as tmux's: the

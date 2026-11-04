@@ -321,21 +321,21 @@ fn mouse_option_turns_the_client_terminal_mouse_on_and_off() {
     s.wait_mouse(true);
 }
 
-// Unix only: the program is a Unix shell's, and whether ConPTY hands a
-// Windows program's mouse modes on to the pane is not verified.
-#[cfg(unix)]
 #[test]
 fn with_mouse_off_the_active_panes_program_takes_the_terminal_mouse() {
     let t = Tmxr::new("mouseoff");
-    let s = t.attach(&["new", "-s", "mo", "/bin/sleep", "30"]);
+    let s = t.attach(&["new", "-s", "mo"]);
     s.wait_for("status line", |text| text.contains("mo"));
     s.wait_mouse(true);
     t.run(&["set-option", "-g", "mouse", "off"]);
     s.wait_mouse(false);
     // Off, the terminal reports the mouse while the active pane's program
     // asks for it: this one until Enter.
-    let asks = r"stty -echo; printf '\033[?1002h\033[?1006hasking'; read x; printf '\033[?1002l\033[?1006ldone'; sleep 30";
-    t.run(&["split-window", "-t", "mo", "/bin/sh", "-c", asks]);
+    let argv = script_program(&t);
+    let env = script_env(r"print:\e[?1002h\e[?1006hasking|read|print:\e[?1002l\e[?1006ldone");
+    let mut split = vec!["split-window", "-t", "mo", "-e", &env];
+    split.extend(argv.iter().map(String::as_str));
+    t.run(&split);
     s.wait_for("the program asking", |text| text.contains("asking"));
     s.wait_mouse(true);
     // Not with a pane active whose program did not ask.

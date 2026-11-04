@@ -610,6 +610,12 @@ const KEY_LOG_FOCUS: &str = "TMXR_E2E_KEY_LOG_FOCUS";
 /// records every key it is given, to the file `KEY_LOG` names in its
 /// environment.
 fn key_log_program(t: &Tmxr, name: &str) -> Vec<String> {
+    fixture_program(t, name, "key_log_fixture")
+}
+
+/// This test binary, copied as `name` into the test's directory, made to run
+/// only the ignored test `fixture`.
+fn fixture_program(t: &Tmxr, name: &str, fixture: &str) -> Vec<String> {
     let me = std::env::current_exe().unwrap();
     let path = t
         .dir
@@ -619,11 +625,81 @@ fn key_log_program(t: &Tmxr, name: &str) -> Vec<String> {
     std::fs::copy(me, &path).unwrap();
     vec![
         path.display().to_string(),
-        "key_log_fixture".into(),
+        fixture.into(),
         "--exact".into(),
         "--ignored".into(),
         "--nocapture".into(),
     ]
+}
+
+/// The steps [`script_fixture`] runs, `|` between them.
+const SCRIPT: &str = "TMXR_E2E_SCRIPT";
+
+/// A pane program that runs steps ([`script_fixture`]) on every platform,
+/// where a test would otherwise need a Unix shell. Copied once: Windows
+/// will not copy over a copy that is running.
+fn script_program(t: &Tmxr) -> Vec<String> {
+    fixture_program(t, "script", "script_fixture")
+}
+
+/// The `-e` argument that hands [`script_program`] its `steps`.
+fn script_env(steps: &str) -> String {
+    format!("{SCRIPT}={steps}")
+}
+
+/// Not a test: the program [`script_program`] starts. Runs each step of
+/// [`SCRIPT`] in turn, then waits to be killed: `print:TEXT` writes TEXT
+/// (`\e` in it as ESC), `sleep:MS` sleeps, and `read` waits for a line of
+/// input.
+#[test]
+#[ignore = "a fixture other tests run in a pane"]
+fn script_fixture() {
+    let Some(steps) = std::env::var_os(SCRIPT) else {
+        return;
+    };
+    // Escapes reach the pane as written, not as a console's glyphs; and
+    // with VT input on, as a program reading the mouse has it, ConPTY
+    // hands the program's mouse modes on to the pane.
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::Console::{
+            ENABLE_ECHO_INPUT, ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT, ENABLE_PROCESSED_OUTPUT,
+            ENABLE_VIRTUAL_TERMINAL_INPUT, ENABLE_VIRTUAL_TERMINAL_PROCESSING, GetStdHandle,
+            STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, SetConsoleMode,
+        };
+        // SAFETY: each sets the mode of this process's own console.
+        let set = unsafe {
+            SetConsoleMode(
+                GetStdHandle(STD_OUTPUT_HANDLE),
+                ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING,
+            ) != 0
+                && SetConsoleMode(
+                    GetStdHandle(STD_INPUT_HANDLE),
+                    ENABLE_PROCESSED_INPUT
+                        | ENABLE_LINE_INPUT
+                        | ENABLE_ECHO_INPUT
+                        | ENABLE_VIRTUAL_TERMINAL_INPUT,
+                ) != 0
+        };
+        assert!(set, "console without VT processing");
+    }
+    let mut out = std::io::stdout();
+    for step in steps.to_str().unwrap().split('|') {
+        if let Some(text) = step.strip_prefix("print:") {
+            out.write_all(text.replace(r"\e", "\x1b").as_bytes())
+                .unwrap();
+            out.flush().unwrap();
+        } else if let Some(ms) = step.strip_prefix("sleep:") {
+            std::thread::sleep(Duration::from_millis(ms.parse().unwrap()));
+        } else if step == "read" {
+            std::io::stdin().read_line(&mut String::new()).unwrap();
+        } else {
+            panic!("unknown step {step:?}");
+        }
+    }
+    loop {
+        std::thread::sleep(Duration::from_secs(60));
+    }
 }
 
 /// Not a test: the program [`key_log_program`] starts. In raw mode, it logs

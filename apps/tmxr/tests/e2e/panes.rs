@@ -889,12 +889,11 @@ fn struck_blinking_and_hidden_text_reach_the_client() {
 /// and ratatui apps frame a redraw) reaches the terminal whole, as tmux 3.8
 /// holds it: what it wrote after the `h` arrives with what it wrote before
 /// the `l`, and a hold no `l` ends goes when its time runs out.
-#[cfg(unix)]
 #[test]
 fn a_synchronized_redraw_reaches_the_terminal_whole() {
     use tmxr_term::sync::SYNC_TIMEOUT;
     // Between the halves of a frame: well under a hold's time, so a slow
-    // runner forking `sleep` does not see the hold time out first.
+    // runner does not see the hold time out first.
     const APART: Duration = Duration::from_millis(400);
     const _: () = assert!(APART.as_millis() < SYNC_TIMEOUT.as_millis());
     let t = Tmxr::new("held");
@@ -910,11 +909,17 @@ fn a_synchronized_redraw_reaches_the_terminal_whole() {
         }
         Instant::now()
     };
-    let frame = format!(
-        "printf '\\033[?2026hHELDONE'; sleep {}; printf 'HELDTWO\\033[?2026l'; exec sleep 100",
-        APART.as_secs_f32()
-    );
-    t.run(&["respawn-pane", "-k", "-t", "held", &frame]);
+    let argv = script_program(&t);
+    let respawn = |steps: &str| {
+        let env = script_env(steps);
+        let mut respawn = vec!["respawn-pane", "-k", "-t", "held", "-e", &env];
+        respawn.extend(argv.iter().map(String::as_str));
+        t.run(&respawn);
+    };
+    respawn(&format!(
+        r"print:\e[?2026hHELDONE|sleep:{}|print:HELDTWO\e[?2026l",
+        APART.as_millis()
+    ));
     let one = sent("HELDONE");
     let two = sent("HELDTWO");
     assert!(
@@ -923,13 +928,7 @@ fn a_synchronized_redraw_reaches_the_terminal_whole() {
         two.duration_since(one)
     );
     let started = Instant::now();
-    t.run(&[
-        "respawn-pane",
-        "-k",
-        "-t",
-        "held",
-        "printf '\\033[?2026hHELDTHREE'; exec sleep 100",
-    ]);
+    respawn(r"print:\e[?2026hHELDTHREE");
     let three = sent("HELDTHREE");
     // Let go when its time runs out: the server wakes for it.
     let held = three.duration_since(started);
