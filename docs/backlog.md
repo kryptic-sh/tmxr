@@ -69,9 +69,6 @@ means as the reviewer said, not checked.
   (tmux: `index in use: 1`), and `move-window -k -s b:0 -t @1` fails where tmux
   replaces the window (`target.rs` `destination`). `-N` with no session was not
   tried.
-- **Killing the current window leaves the new current one's alert flags**
-  (_reproduced_ 2026-11-04 with `monitor-bell`: tmux clears the bell flag of the
-  window that becomes current, as `session_set_current`; tmxr keeps it).
 - **`run-shell` output goes to the caller, not the pane** (_reproduced_
   2026-11-04): tmux shows `run-shell -t` output, `-b` too, in the pane's view
   mode (`pane_in_mode` 1); tmxr prints a foreground one to the calling client

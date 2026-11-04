@@ -297,6 +297,11 @@ impl Server {
                 .or_else(|| s.windows.keys().next_back().copied());
             if let Some(n) = next {
                 s.current = n;
+                // The window now in sight loses its alerts, as tmux's
+                // session_set_current clears them.
+                if let Some(win) = s.windows.get(&n).and_then(|w| self.windows.get_mut(w)) {
+                    win.clear_alerts();
+                }
             }
         }
         if self.session_options(sid).renumber_windows {
