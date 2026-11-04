@@ -129,6 +129,18 @@ Not reviewed: `binds.rs`'s `list-keys` formatting, `prompt.rs`'s placement
 arithmetic, the Windows half of `access.rs`, `copy/tests.rs`, the layout
 presets, most of `vars.rs`, and the Windows parts of `process.rs` (skimmed).
 
+## The session picker's preview (2026-11-04)
+
+- **What it leaves out** (`render::shown`, `Session::seen`): the `+` marks are
+  worked out when the picker opens, so output arriving while it is open adds
+  none until it opens again. The preview is drawn, not switched to: mouse clicks
+  on the status line while it is open act on the client's own session, and the
+  previewed session's windows keep their own size (a larger one is panned as any
+  is). A peek counts as seeing a session once the highlight moves off it or the
+  picker closes; a session shown by another client never has a `+`. Checked by
+  `session_picker_shows_the_highlighted_session_in_the_client` on Linux only;
+  not tried by hand.
+
 ## Gaps found by review (2026-11-02)
 
 A read-only review after v0.14.0, looking for input or terminal state that tmxr
@@ -1070,12 +1082,9 @@ mouse-enabled pane.
     client sends standard input ahead of the command); an empty pane is restored
     by resurrect empty, without what was shown in it; `display-message -v`;
     `display-message -a` lists tmxr's variables (`vars::NAMES`), fewer than
-    tmux's; the `choose-*`pickers' tagging and sort keys (tmux's`t`, `T`, `O`),
-    which tmxr's picker has no counterpart for; `choose-tree -F`replaces the
-    text after a row's mark, where tmux's is the whole tree
-    line;`command-prompt`Tab completes and offers menus as tmux's (names,
-    sessions, a session's windows,
-    the`target`and`window-target`types;`prompt_tab\*\*`in`corpus/keys.toml`),
+    tmux's; the
+    `choose-*`pickers' tagging and sort keys (tmux's`t`, `T`, `O`), which tmxr's picker has no counterpart for; `choose-tree
+    -F`replaces the text after a row's mark, where tmux's is the whole tree line;`command-prompt`Tab completes and offers menus as tmux's (names, sessions, a session's windows, the`target`and`window-target`types;`prompt_tab\*\*`in`corpus/keys.toml`),
     though which ten names a long menu keeps was matched by result (the last
     ten), not read from tmux's code.
   - Hooks and modes: the client's theme follows its terminal as tmux's: the
