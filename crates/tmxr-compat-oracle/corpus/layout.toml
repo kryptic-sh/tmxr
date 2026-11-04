@@ -588,3 +588,18 @@ checks = [
   { format = "#{window_panes}", expect = "1" },
   { command = "display -p -t o:1 '#{pane_dead} #{pane_input_off}'", expect = "1 1" },
 ]
+
+# Zooming another pane makes the active one the last, as tmux's
+# window_zoom makes the zoomed pane active.
+[[cases]]
+name = "resize_pane_z_on_another_pane_makes_the_last"
+steps = [
+  { run = "split-window -t o" },
+  { run = "split-window -t o" },
+  { run = "select-pane -t o:0.0" },
+  { run = "select-pane -t o:0.1" },
+  { run = "resize-pane -Z -t o:0.2" },
+]
+checks = [
+  { command = "list-panes -t o -F '#{pane_index} #{pane_active} #{pane_last}'", expect = "0 0 0\n1 0 1\n2 1 0" },
+]

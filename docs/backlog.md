@@ -69,9 +69,6 @@ means as the reviewer said, not checked.
   (tmux: `index in use: 1`), and `move-window -k -s b:0 -t @1` fails where tmux
   replaces the window (`target.rs` `destination`). `-N` with no session was not
   tried.
-- **`break-pane` leaves the mark on the moved pane** (_reproduced_ 2026-11-04:
-  after `select-pane -m` and `break-pane -d`, tmux has `pane_marked_set` 0, tmxr
-  1 with the moved pane marked); tmux's `window_lost_pane` clears it.
 - **Killing the current window leaves the new current one's alert flags**
   (_reproduced_ 2026-11-04 with `monitor-bell`: tmux clears the bell flag of the
   window that becomes current, as `session_set_current`; tmxr keeps it).
@@ -79,8 +76,6 @@ means as the reviewer said, not checked.
   2026-11-04): tmux shows `run-shell -t` output, `-b` too, in the pane's view
   mode (`pane_in_mode` 1); tmxr prints a foreground one to the calling client
   and drops a `-b` one.
-- **`resize-pane -Z -t <other>` does not update the last pane** (_reproduced_
-  2026-11-04: tmux's `last` becomes the pane that was active; tmxr's stays).
 - **A read-only client can make buffers** (_reproduced_ 2026-11-04: a bind to
   `capture-pane` sent to an `attach -r` client made a buffer; tmux makes none).
 - **Formats nest at most 10 deep** (_reproduced_ 2026-11-04 with

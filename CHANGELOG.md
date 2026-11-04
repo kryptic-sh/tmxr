@@ -125,6 +125,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   running `send-keys -K` for its own key recursed until the server's stack ran
   out. Keys sent by `send-keys -K` from inside the binds they reach stop 50 deep
   with `too many nested keys` (tmux spins for ever on it).
+- **A pane leaving its window loses the mark**: `break-pane` (and `join-pane`,
+  `move-pane`) left the moved pane marked, where tmux's `window_lost_pane`
+  clears it.
+- **`resize-pane -Z` on another pane makes the active one the last**:
+  `last-pane` afterwards went to the pane before that, where tmux's
+  `window_zoom` makes the zoomed pane active as `select-pane` would.
 
 ## [0.14.0] - 2026-11-01
 

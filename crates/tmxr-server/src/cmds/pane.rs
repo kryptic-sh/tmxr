@@ -141,6 +141,11 @@ pub(super) fn run(
             if a.has('Z') {
                 let w = srv.windows.get_mut(&wid).ok_or("no window")?;
                 if w.panes().len() > 1 || w.zoomed {
+                    // Zooming another pane makes it active, the one before
+                    // it the last, as tmux's window_zoom.
+                    if w.active != pid {
+                        w.last_pane = Some(w.active);
+                    }
                     w.active = pid;
                     w.zoomed = !w.zoomed;
                 }

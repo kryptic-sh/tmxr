@@ -223,3 +223,16 @@ steps = [
   { sleep = 1 },
 ]
 checks = [{ format = "#{history_size}", expect = "154" }]
+
+# A pane broken out of its window loses the mark, as tmux's
+# window_lost_pane clears it.
+[[cases]]
+name = "break_pane_clears_the_mark"
+steps = [
+  { run = "split-window -d -t o" },
+  { run = "select-pane -m -t o:0.1" },
+  { run = "break-pane -d -s o:0.1" },
+]
+checks = [
+  { command = "list-panes -a -F '#{pane_index} #{pane_marked} #{pane_marked_set}'", expect = "0 0 0\n0 0 0" },
+]

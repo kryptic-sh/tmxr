@@ -485,6 +485,11 @@ impl Server {
     }
 
     pub(crate) fn remove_pane_from_window(&mut self, wid: WindowId, pane: PaneId) {
+        // A pane leaving its window loses the mark, as tmux's
+        // window_lost_pane clears it.
+        if self.marked == Some(pane) {
+            self.marked = None;
+        }
         let Some(win) = self.windows.get_mut(&wid) else {
             return;
         };
