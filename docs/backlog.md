@@ -52,14 +52,6 @@ means as the reviewer said, not checked.
 
 ### Wrong against tmux 3.6
 
-- **`respawn-pane` empties the pane's history** (_reproduced_: 78 lines of
-  history were 0 after the respawn; tmux keeps them). `respawn_pane` in
-  `server/panes.rs` now carries the pane's hooks, options, input-off, pipe and
-  last search to the new `Pane`, but builds a new `Emulator`. tmux keeps the
-  pane's screen and runs `screen_reinit` on it: cursor home, modes and tabs
-  reset, the visible lines cleared, the history kept. Doing that here means
-  reusing the old emulator with a reset that leaves the history (vt1k's RIS
-  empties it) and resizing it to the new pty.
 - **`#{pane_current_command}` on Linux reads `/proc/<pid>/comm`** (_read_),
   which Linux cuts to 15 characters; tmux's `osdep_get_name` reads argv[0] from
   `/proc/<pid>/cmdline` and the format runs it through `parse_window_name`

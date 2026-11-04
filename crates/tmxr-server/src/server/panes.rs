@@ -279,7 +279,8 @@ impl Server {
         let session = self.session_of_window(wid).ok_or("window has no session")?;
         // What belongs to the pane, not its program, stays with it, as tmux
         // keeps the same pane for the new program: its hooks and options,
-        // its input turned off, its pipe and its last search.
+        // its input turned off, its pipe, its last search and its screen,
+        // made ready for the new program with the history kept.
         let old = self.panes.remove(&pid).map(|mut old| {
             let _ = old.pty.kill();
             old
@@ -296,6 +297,8 @@ impl Server {
             p.input_off = old.input_off;
             p.pipe = old.pipe;
             p.last_search = old.last_search;
+            p.emu = old.emu;
+            p.emu.reinit();
         }
         self.relayout(wid);
         Ok(())

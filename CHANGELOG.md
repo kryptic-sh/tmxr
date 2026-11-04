@@ -117,6 +117,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`source-file` prints what its file's commands print**: a `display -p` (or
   any command with output) in a sourced file printed nothing; its output is now
   `source-file`'s, nested files' included, in order, as tmux's.
+- **`respawn-pane` keeps the pane's history**: the new program started on an
+  empty screen with no history. As tmux's `screen_reinit`, the pane keeps its
+  screen for it: the history stays, the alternate screen is left, and the modes,
+  tabs and visible lines are reset.
 
 ## [0.14.0] - 2026-11-01
 

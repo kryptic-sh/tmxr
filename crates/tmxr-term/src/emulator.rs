@@ -591,6 +591,14 @@ impl Emulator {
             .collect()
     }
 
+    /// Make the screen ready for a pane's next program, as tmux's
+    /// screen_reinit for `respawn-pane`: the alternate screen left, then as
+    /// [`Emulator::reset`]. The history stays.
+    pub fn reinit(&mut self) {
+        self.parser.process(b"\x1b[?1049l");
+        self.reset();
+    }
+
     /// Reset the terminal as tmux's input_reset and screen_write_reset
     /// (`send-keys -R`): any sequence half received is dropped, the cell
     /// attributes, scroll region and modes go back to the defaults (the

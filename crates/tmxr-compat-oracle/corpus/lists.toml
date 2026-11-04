@@ -210,3 +210,16 @@ checks = [
   { command = "display -p -t @0 '#S'", expect = "member" },
   { command = "display -p -t %0 '#S'", expect = "member" },
 ]
+
+# respawn-pane keeps the pane's history, as tmux's screen_reinit clears
+# only the visible lines.
+[[cases]]
+name = "respawn_pane_keeps_the_history"
+size = [80, 24]
+pane = [{ seq = 100 }]
+steps = [
+  { wait_output = { command = "capture-pane -p -t o", contains = "100" } },
+  { run = "respawn-pane -k -t o" },
+  { sleep = 1 },
+]
+checks = [{ format = "#{history_size}", expect = "154" }]
