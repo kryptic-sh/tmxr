@@ -505,6 +505,18 @@ mouse-enabled pane.
   (`a_line_a_shrink_pushes_into_the_history_has_no_time_as_tmux`); tmxr keeps it
   through anything else done to the row (an erase, a line inserted above it),
   which tmux's grid may not (not compared).
+- **Windows: a pane's program may read one stray F3 at start** (_guessed_, not
+  reproduced). CI's bundled-ConPTY job (2026-11-04) saw `^[OR` reach the program
+  in the oracle's `a_program_not_asking_gets_no_mouse_with_the_mouse_off`, now
+  `windows = "never"`; locally it passed 3 of 3, as did a copy with no mouse
+  steps. portable-pty 0.9 creates each ConPTY with
+  `PSEUDOCONSOLE_INHERIT_CURSOR`, so a new pane's ConPTY asks `ESC[6n` and
+  waits; tmxr answers from the server loop (`p.emu.process` in the
+  `PtyEvent::Output` arm of `server/panes.rs`), and a fresh pane's reply is
+  `ESC[1;1R`, which a console no longer waiting reads as F3. A loaded server
+  answering late would give exactly this. Not confirmed; if it recurs, check
+  whether the reply came after ConPTY's wait. A fix to weigh: answer the startup
+  DSR from the pane's reader thread.
 - **Windows: an Enter sent before the shell's first read can stall**
   (2026-10-10). Probing with the real binary, `new-window -d` then at once
   `send-keys 'echo markN' Enter`, about 1 in 100 cmd panes showed the text but
@@ -1074,9 +1086,12 @@ mouse-enabled pane.
     client sends standard input ahead of the command); an empty pane is restored
     by resurrect empty, without what was shown in it; `display-message -v`;
     `display-message -a` lists tmxr's variables (`vars::NAMES`), fewer than
-    tmux's; the
-    `choose-*`pickers' tagging and sort keys (tmux's`t`, `T`, `O`), which tmxr's picker has no counterpart for; `choose-tree
-    -F`replaces the text after a row's mark, where tmux's is the whole tree line;`command-prompt`Tab completes and offers menus as tmux's (names, sessions, a session's windows, the`target`and`window-target`types;`prompt_tab\*\*`in`corpus/keys.toml`),
+    tmux's; the `choose-*`pickers' tagging and sort keys (tmux's`t`, `T`, `O`),
+    which tmxr's picker has no counterpart for; `choose-tree -F`replaces the
+    text after a row's mark, where tmux's is the whole tree
+    line;`command-prompt`Tab completes and offers menus as tmux's (names,
+    sessions, a session's windows,
+    the`target`and`window-target`types;`prompt_tab\*\*`in`corpus/keys.toml`),
     though which ten names a long menu keeps was matched by result (the last
     ten), not read from tmux's code.
   - Hooks and modes: the client's theme follows its terminal as tmux's: the
