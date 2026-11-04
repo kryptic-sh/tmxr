@@ -177,9 +177,10 @@ fn expand_loop(kind: LoopKind, flags: &str, fmt: &str, ctx: &dyn Context, pass: 
 /// The most times `#{R:…}` repeats its text, as tmux's.
 const MAX_REPEAT: usize = 10_000;
 
-/// Nesting limit for `#{E:…}`, so an option that refers to itself cannot
-/// recurse forever.
-const MAX_DEPTH: usize = 10;
+/// How deep formats nest (in `#{?…}`, `#{E:…}` and the rest), as tmux's
+/// `FORMAT_LOOP_LIMIT`, so an option that refers to itself cannot recurse
+/// forever.
+const MAX_DEPTH: usize = 100;
 
 /// `fmt` with its `strftime` sequences (`%H:%M`) as the time now, as tmux
 /// fills them in before expanding the status line, the terminal title and
@@ -447,7 +448,7 @@ fn job_text(after: &str) -> Option<(&str, &str)> {
 }
 
 fn expand_depth(fmt: &str, ctx: &dyn Context, pass: Pass) -> String {
-    if pass.depth > MAX_DEPTH {
+    if pass.depth >= MAX_DEPTH {
         return String::new();
     }
     let timed;
@@ -1819,6 +1820,22 @@ mod tests {
         let long = x("#{e|+|f|70000:1,2}");
         assert_eq!(long.len(), 70002, "past what Rust's formatter takes");
         assert!(long.starts_with("3.000") && long.ends_with("000"));
+    }
+
+    /// Formats nest as deep as tmux's allow, and that depth fits a 1 MiB
+    /// stack (Windows' main thread), past it nothing.
+    #[test]
+    fn formats_nest_to_tmuxs_limit_within_a_small_stack() {
+        let nested = |n: usize| format!("{}deep{}", "#{?client_prefix,".repeat(n), ",}".repeat(n));
+        std::thread::Builder::new()
+            .stack_size(1 << 20)
+            .spawn(move || {
+                assert_eq!(x(&nested(MAX_DEPTH - 1)), "deep");
+                assert_eq!(x(&nested(MAX_DEPTH)), "");
+            })
+            .unwrap()
+            .join()
+            .unwrap();
     }
 
     /// Past what Rust formats itself, the digits are still exact.

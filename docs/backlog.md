@@ -78,9 +78,6 @@ means as the reviewer said, not checked.
   and drops a `-b` one.
 - **A read-only client can make buffers** (_reproduced_ 2026-11-04: a bind to
   `capture-pane` sent to an `attach -r` client made a buffer; tmux makes none).
-- **Formats nest at most 10 deep** (_reproduced_ 2026-11-04 with
-  `#{?pane_active,…}` 12 deep: tmux prints the innermost text, tmxr an empty
-  line; 9 deep both print it). tmux allows 100.
 - **A failed `split-window` takes no pane id** (_reproduced_ 2026-11-04): tmux
   returns success with the pane gone at once, and its next split is `%2`; tmxr
   fails with `could not start pane` and reuses `%1`. `split` in
@@ -1081,12 +1078,9 @@ mouse-enabled pane.
     client sends standard input ahead of the command); an empty pane is restored
     by resurrect empty, without what was shown in it; `display-message -v`;
     `display-message -a` lists tmxr's variables (`vars::NAMES`), fewer than
-    tmux's; the `choose-*`pickers' tagging and sort keys (tmux's`t`, `T`, `O`),
-    which tmxr's picker has no counterpart for; `choose-tree -F`replaces the
-    text after a row's mark, where tmux's is the whole tree
-    line;`command-prompt`Tab completes and offers menus as tmux's (names,
-    sessions, a session's windows,
-    the`target`and`window-target`types;`prompt_tab\*\*`in`corpus/keys.toml`),
+    tmux's; the
+    `choose-*`pickers' tagging and sort keys (tmux's`t`, `T`, `O`), which tmxr's picker has no counterpart for; `choose-tree
+    -F`replaces the text after a row's mark, where tmux's is the whole tree line;`command-prompt`Tab completes and offers menus as tmux's (names, sessions, a session's windows, the`target`and`window-target`types;`prompt_tab\*\*`in`corpus/keys.toml`),
     though which ten names a long menu keeps was matched by result (the last
     ten), not read from tmux's code.
   - Hooks and modes: the client's theme follows its terminal as tmux's: the

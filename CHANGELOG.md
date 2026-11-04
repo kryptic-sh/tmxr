@@ -131,6 +131,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`resize-pane -Z` on another pane makes the active one the last**:
   `last-pane` afterwards went to the pane before that, where tmux's
   `window_zoom` makes the zoomed pane active as `select-pane` would.
+- **Formats nest 99 deep, as tmux's**: past 10 nested formats (`#{?…}` in
+  `#{?…}`, `#{E:…}` and the like) tmxr expanded nothing, where tmux goes to its
+  `FORMAT_LOOP_LIMIT`.
 
 ## [0.14.0] - 2026-11-01
 
