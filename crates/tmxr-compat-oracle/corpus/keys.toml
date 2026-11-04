@@ -28,8 +28,7 @@ checks = [
 # Home and End are the terminfo's khome and kend, ESC [ 1 ~ and ESC [ 4 ~,
 # whatever the cursor key mode (Up shows the mode is on); modified, CSI 1;m H.
 name = "home_and_end_send_tmuxs_bytes_in_either_cursor_mode"
-unix_only = true
-program = "printf '\\033[?1h'; stty raw -echo; exec cat -v"
+pane = [{ print = "\u001b[?1h" }, "raw", "cat"]
 steps = [
   { sleep = 0.5 },
   { run = "send-keys -t o Home End C-Home Up" },
@@ -1741,8 +1740,7 @@ checks = [
 # copy-mode -e leaves once halfpage-down or page-down reaches the bottom,
 # a selection or not.
 name = "copy_mode_e_leaves_at_the_bottom_as_tmux"
-unix_only = true
-program = "seq 100; exec sleep 1000"
+pane = [{ seq = 100 }]
 steps = [
   { sleep = 0.5 },
   { run = "copy-mode -e -t o" },

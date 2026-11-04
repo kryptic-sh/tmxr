@@ -14,7 +14,7 @@ mod driver;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub use driver::{Client, Server, Side};
 
@@ -36,6 +36,10 @@ pub struct Case {
     /// is the shell.
     #[serde(default)]
     pub program: Option<String>,
+    /// The session's program as steps [`pane_program`] runs, on every
+    /// platform: in place of `program`.
+    #[serde(default)]
+    pub pane: Option<Vec<PaneStep>>,
     /// Attach a client (needed for keys, the mouse and screen checks).
     #[serde(default)]
     pub attach: bool,
@@ -72,6 +76,32 @@ pub enum Step {
     /// Run `command` again until its output shows `contains`: to wait for
     /// something a pane's program does where no client is attached.
     WaitOutput { command: String, contains: String },
+}
+
+/// What [`pane_program`] does, in order, in place of a shell program. Once
+/// they are done it waits, as `exec sleep` would.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum PaneStep {
+    /// Write this text, as `printf`.
+    Print(String),
+    /// Write the numbers 1 to this, a line each, as `seq`.
+    Seq(u32),
+    /// Wait this many seconds.
+    Sleep(f64),
+    /// Read input raw and unechoed, as `stty raw -echo`; on Windows with
+    /// the console's virtual terminal input on, which is what makes ConPTY
+    /// hand the program the sequences (and mouse modes) it asks for.
+    Raw,
+    /// Write all input from now on as `cat -v` does, for ever.
+    Cat,
+}
+
+/// The file [`pane_program`] reads its steps from.
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PaneSteps {
+    pub steps: Vec<PaneStep>,
 }
 
 /// A mouse event: `click` (the press and release written apart), `tap`
@@ -226,6 +256,22 @@ pub fn tmxr_program() -> PathBuf {
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("../../target/debug")
                 .join(exe)
+        },
+        PathBuf::from,
+    )
+}
+
+/// The program a case's `pane` steps run in: `$ORACLE_PANE`, else
+/// `oracle-pane` beside the test binary's directory, where cargo builds it.
+pub fn pane_program() -> PathBuf {
+    std::env::var_os("ORACLE_PANE").map_or_else(
+        || {
+            let exe = format!("oracle-pane{}", std::env::consts::EXE_SUFFIX);
+            let me = std::env::current_exe().unwrap_or_default();
+            // The test binary is in `target/<profile>/deps`.
+            me.parent()
+                .and_then(Path::parent)
+                .map_or_else(|| PathBuf::from(&exe), |dir| dir.join(&exe))
         },
         PathBuf::from,
     )

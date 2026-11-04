@@ -8,8 +8,7 @@
 [[cases]]
 name = "level_1_extends_the_keys_with_no_legacy_form_in_xterms_form"
 attach = true
-unix_only = true
-program = "stty raw -echo; printf '\\033[>4;1m'; exec cat -v"
+pane = ["raw", { print = "\u001b[>4;1m" }, "cat"]
 steps = [
   { sleep = 0.5 },
   { keys = "\u001b[59;5u" },
@@ -33,8 +32,7 @@ checks = [
 [[cases]]
 name = "level_2_extends_every_modified_key"
 attach = true
-unix_only = true
-program = "stty raw -echo; printf '\\033[>4;2m'; exec cat -v"
+pane = ["raw", { print = "\u001b[>4;2m" }, "cat"]
 steps = [
   { sleep = 0.5 },
   { keys = "\u001b[59;5u" },
@@ -57,8 +55,7 @@ checks = [
 [[cases]]
 name = "extended_keys_format_csi_u_at_either_level"
 attach = true
-unix_only = true
-program = "stty raw -echo; printf '\\033[>4;1m'; exec cat -v"
+pane = ["raw", { print = "\u001b[>4;1m" }, "cat"]
 steps = [
   { sleep = 0.5 },
   { run = "set -s extended-keys-format csi-u" },
@@ -85,8 +82,7 @@ checks = [
 # `extended-keys always` both panes are at level 1.
 name = "modify_other_keys_off_and_a_level_past_2"
 attach = true
-unix_only = true
-program = "stty raw -echo; printf '\\033[>4;2m\\033[>4n'; exec cat -v"
+pane = ["raw", { print = "\u001b[>4;2m\u001b[>4n" }, "cat"]
 steps = [
   { sleep = 0.5 },
   { keys = "\u0001" },

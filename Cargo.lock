@@ -2498,12 +2498,14 @@ dependencies = [
 name = "tmxr-compat-oracle"
 version = "0.14.0"
 dependencies = [
+ "crossterm",
  "portable-pty",
  "serde",
  "tempfile",
  "tmxr-term",
  "toml",
  "vt1k",
+ "windows-sys",
 ]
 
 [[package]]

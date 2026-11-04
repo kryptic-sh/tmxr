@@ -19,10 +19,11 @@ TMUX_BIN=$(command -v tmux) cargo test -p tmxr-compat-oracle -- --nocapture
 
 `TMUX_BIN` names the tmux to compare against; without it the oracle checks tmxr
 alone against the cases' expected values, and skips cases that have none or need
-a Unix shell (as on Windows). The corpus is measured against tmux 3.6: another
-version differs for its own reasons. `TMXR_BIN` names the tmxr under test
-(default: the workspace's debug build). With `ORACLE_REQUIRE_TMUX` set, as CI
-sets it, a missing tmux fails instead of skipping.
+a Unix shell (as on Windows). A case whose pane runs `pane` steps rather than a
+shell `program` runs on Windows too. The corpus is measured against tmux 3.6:
+another version differs for its own reasons. `TMXR_BIN` names the tmxr under
+test (default: the workspace's debug build). With `ORACLE_REQUIRE_TMUX` set, as
+CI sets it, a missing tmux fails instead of skipping.
 
 The tmux side runs with `corpus/tmux.conf`, the owner's tmux config without its
 plugins, whose settings tmxr's defaults carry; the tmxr side with its defaults.
@@ -38,6 +39,8 @@ name = "a_drag_copies_the_selection"
 attach = true                               # a client, for keys and the mouse
 size = [100, 30]                            # default
 program = "printf 'alpha beta\\n'; exec sleep 1000" # by /bin/sh -c; Unix only
+# or, on every platform, steps for the oracle's own pane program (oracle-pane):
+# pane = ["raw", { print = "\u001b[?1000hready\r\n" }, "cat"]
 steps = [
   { wait_text = "alpha beta" },
   { mouse = { action = "drag", at = [0, 0], to = [4, 0] } },
@@ -59,6 +62,11 @@ checks = [
 `screen_background` compares how a case draws, not only what: set the styles
 under test to palette colours (`set -g copy-mode-selection-style bg=colour4`) so
 both sides draw the same colours whatever their themes.
+
+`pane` steps: `{ print = "…" }` writes text, `{ seq = 100 }` the numbers 1 to
+100 a line each, `{ sleep = 0.5 }` waits, `"raw"` reads input raw and unechoed
+(`stty raw -echo`), and `"cat"` writes all input from then on as `cat -v` does.
+After the last step the program waits.
 
 Mouse actions: `click`, `double-click`, `triple-click`, `down`, `up`, `drag`
 (`at` to `to`), `wheel-up`, `wheel-down`, `wheel-left`, `wheel-right`, `move`

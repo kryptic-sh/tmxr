@@ -87,8 +87,19 @@ impl Server {
         let (cols, rows) = case.size;
         let (cols, rows) = (cols.to_string(), rows.to_string());
         let mut new = vec!["new-session", "-d", "-s", SESSION, "-x", &cols, "-y", &rows];
+        let steps;
+        let pane = crate::pane_program().display().to_string();
         if let Some(program) = &case.program {
             new.extend(["/bin/sh", "-c", program]);
+        } else if let Some(pane_steps) = &case.pane {
+            let path = server.dir.path().join("pane.toml");
+            let text = toml::to_string(&crate::PaneSteps {
+                steps: pane_steps.clone(),
+            })
+            .map_err(|e| e.to_string())?;
+            std::fs::write(&path, text).map_err(|e| e.to_string())?;
+            steps = path.display().to_string();
+            new.extend([pane.as_str(), steps.as_str()]);
         }
         server.run_args(&new)?;
         if case.attach {
