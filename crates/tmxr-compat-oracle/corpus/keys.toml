@@ -855,16 +855,19 @@ checks = [
 name = "the_top_lines_time_as_tmux"
 # tmux's top_line_time: when the view's top line went into the history,
 # 0 for a line of the screen, shown by the default position format; a
-# line copy mode rewraps keeps its time on its first row only.
+# line copy mode rewraps keeps its time on its first row only. The lines
+# print once the client has sized the window: the status line then pushes
+# none into the history, and the row its going frees takes back one
+# output pushed there, with its time.
 unix_only = true
 attach = true
 size = [40, 8]
-program = "for i in $(seq 1 30); do echo \"line $i of the history, long enough to wrap\"; done; exec sleep 1000"
+program = "sleep 0.5; for i in $(seq 1 30); do echo \"line $i of the history, long enough to wrap\"; done; exec sleep 1000"
 steps = [
-  { sleep = 0.5 },
+  { sleep = 1 },
   { run = "set -g status off" },
   { run = "copy-mode -t o" },
-  { run = "set -gF @bottom '#{top_line_time}'" },
+  { run = "set -gF @bottom '#{e|>:#{top_line_time},1000}'" },
   { run = "send-keys -t o -X history-top" },
   { run = "set -gF @top '#{e|>:#{top_line_time},1000}'" },
   { sleep = 0.3 },

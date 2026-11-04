@@ -426,9 +426,13 @@ checks = [
   { format = "#{pane_in_mode}", expect = "0" },
 ]
 
-# A program that did not ask gets nothing.
+# A program that did not ask gets nothing. Not on Windows: the case's
+# client reports the mouse though nothing asked, and ConPTY turns such a
+# report into keys before tmxr's client reads it (Microsoft's made it F3
+# on CI); a real terminal sends none.
 [[cases]]
 name = "a_program_not_asking_gets_no_mouse_with_the_mouse_off"
+windows = "never"
 attach = true
 pane = ["raw", { print = "ready\r\n" }, "cat"]
 steps = [
