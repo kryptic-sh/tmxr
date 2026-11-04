@@ -326,6 +326,9 @@ pub struct Server {
     /// How many command files `source-file` has open inside each other,
     /// held under `cmds::source`'s `SOURCE_DEPTH_LIMIT`.
     pub source_depth: usize,
+    /// How deep `send-keys -K` is in keys its own binds sent, held under
+    /// `cmds::pane`'s `SENT_KEY_DEPTH_LIMIT`.
+    pub sent_key_depth: usize,
     last_save: Instant,
     /// What resurrect last wrote, so an unchanged layout is not saved again.
     pub last_saved: Option<crate::resurrect::Save>,
@@ -455,6 +458,7 @@ impl Server {
             in_hook: false,
             running: None,
             source_depth: 0,
+            sent_key_depth: 0,
             last_save: Instant::now(),
             last_saved: None,
             clock_shown: None,

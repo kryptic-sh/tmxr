@@ -121,6 +121,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   empty screen with no history. As tmux's `screen_reinit`, the pane keeps its
   screen for it: the history stays, the alternate screen is left, and the modes,
   tabs and visible lines are reset.
+- **A bind that sends its own key no longer kills the server**: a root bind
+  running `send-keys -K` for its own key recursed until the server's stack ran
+  out. Keys sent by `send-keys -K` from inside the binds they reach stop 50 deep
+  with `too many nested keys` (tmux spins for ever on it).
 
 ## [0.14.0] - 2026-11-01
 

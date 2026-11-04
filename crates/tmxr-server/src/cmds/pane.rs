@@ -13,6 +13,10 @@ use crate::server::{Server, SplitSize};
 use crate::target;
 use crate::vars::Vars;
 
+/// How deep `send-keys -K` may go in keys sent by its own keys' binds,
+/// as `source-file`'s nesting is bounded.
+const SENT_KEY_DEPTH_LIMIT: usize = 50;
+
 pub(super) fn run(
     srv: &mut Server,
     ctx: &Ctx,
@@ -537,11 +541,18 @@ pub(super) fn run(
                     Some(n) => n.parse::<usize>().map_err(|_| format!("bad count: {n}"))?,
                     None => 1,
                 };
+                // A bind that sends its own key stops here rather than when
+                // the stack runs out (tmux's never stops).
+                if srv.sent_key_depth >= SENT_KEY_DEPTH_LIMIT {
+                    return Err("too many nested keys".into());
+                }
+                srv.sent_key_depth += 1;
                 for _ in 0..repeat {
                     for key in &keys {
                         srv.client_key(client, KeyEvent::new(key.code, key.mods), true);
                     }
                 }
+                srv.sent_key_depth -= 1;
                 srv.update_latest(client);
                 return Ok(true);
             }

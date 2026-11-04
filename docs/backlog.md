@@ -63,46 +63,57 @@ means as the reviewer said, not checked.
   `tmxr-client` does not pause the input thread as the `Lock` arm does. The
   reviewer measured `Guard::enter`'s kitty query waiting out 2 s beside a
   blocked reader; the stall was not reproduced here.
-- _Reported_: `bind -n F1 send-keys -K F1` recurses through `client_key` in
-  `cmds/pane.rs` the way a self-sourcing file did; check it, and tmux's
-  behaviour, before bounding it.
-- _Reported_: destination targets `-N` (with no session), `sess:@id` and
-  `move-window -t @3` differ from tmux (`target.rs` `destination`; `+N` / `-N`
-  after a session are fixed).
-- _Reported_: `break-pane` does not clear the mark from the moved pane
-  (`window_lost_pane` does).
+- **Destination targets naming a window by id** (_reproduced_ 2026-11-04 against
+  tmux 3.6): `move-window -s a:1 -t @1` gives `can't find session: @1` (tmux:
+  `same index: 1`), `move-window -s b:0 -t a:@1` gives `can't find window: @1`
+  (tmux: `index in use: 1`), and `move-window -k -s b:0 -t @1` fails where tmux
+  replaces the window (`target.rs` `destination`). `-N` with no session was not
+  tried.
+- **`break-pane` leaves the mark on the moved pane** (_reproduced_ 2026-11-04:
+  after `select-pane -m` and `break-pane -d`, tmux has `pane_marked_set` 0, tmxr
+  1 with the moved pane marked); tmux's `window_lost_pane` clears it.
+- **Killing the current window leaves the new current one's alert flags**
+  (_reproduced_ 2026-11-04 with `monitor-bell`: tmux clears the bell flag of the
+  window that becomes current, as `session_set_current`; tmxr keeps it).
+- **`run-shell` output goes to the caller, not the pane** (_reproduced_
+  2026-11-04): tmux shows `run-shell -t` output, `-b` too, in the pane's view
+  mode (`pane_in_mode` 1); tmxr prints a foreground one to the calling client
+  and drops a `-b` one.
+- **`resize-pane -Z -t <other>` does not update the last pane** (_reproduced_
+  2026-11-04: tmux's `last` becomes the pane that was active; tmxr's stays).
+- **A read-only client can make buffers** (_reproduced_ 2026-11-04: a bind to
+  `capture-pane` sent to an `attach -r` client made a buffer; tmux makes none).
+- **Formats nest at most 10 deep** (_reproduced_ 2026-11-04 with
+  `#{?pane_active,…}` 12 deep: tmux prints the innermost text, tmxr an empty
+  line; 9 deep both print it). tmux allows 100.
+- **A failed `split-window` takes no pane id** (_reproduced_ 2026-11-04): tmux
+  returns success with the pane gone at once, and its next split is `%2`; tmxr
+  fails with `could not start pane` and reuses `%1`. `split` in
+  `server/panes.rs` removes the layout leaf but not the id `insert_leaf` pushed
+  into `win.order`; whether that stale entry can collide with the reused id was
+  not checked.
 - _Reported_: the kitty keyboard flags are one stack for both screens, so
   leaving the alternate screen keeps a program's flags; the protocol keeps one
   per screen.
-- _Reported_: `select-pane -d` and `pipe-pane` were said to be lost on
-  `respawn-pane`; both are now carried over, with the options.
 
 ### Reported, not checked
 
-- Resurrect's prune in `resurrect.rs` `write` orders saves by their millisecond
-  names, so a clock set back can delete the newest; saves are written 0644/0755
-  though they hold command lines.
+- Resurrect's prune in `resurrect.rs` `write` sorts saves by their millisecond
+  names as strings, so a clock set back deletes the newest and leaves `last`
+  pointing at a missing file (_read_ 2026-11-04); saves are written with the
+  umask's modes (0644 / 0755 seen) though they hold command lines.
 - `PanePipe::open` leaks the child it started when its thread fails to spawn;
   `jobs.rs` `start_job` then drops the reply and the waiting client hangs.
-- A `split-window` whose spawn fails leaves its id in `win.order` and has
-  already unzoomed the window (`insert_leaf`); not reproduced: no pane was
-  listed twice after a layout.
-- `Detached` is sent with `try_send`, so a client whose queue is full loses it
-  and exits as `[lost server]`, skipping `-E` / `-P`.
-- After the current window is killed, the new current window keeps its alert
-  flags (tmux's `session_set_current` clears them).
-- `run-shell -b` output is dropped; tmux shows it.
-- `resize-pane -Z -t <other>` sets `active` directly, so `last_pane` is not
-  updated.
+- `Detached` can be lost (_read_ 2026-11-04): the server's exit sends it with
+  `try_send`, and `detach_as` through `Server::send`, which on a full queue only
+  marks a redraw; the client is then removed, so it exits as `[lost server]`,
+  skipping `-E` / `-P`.
 - A root-table bind in clock mode leaves clock mode instead of running.
-- A read-only client can make buffers through `capture-pane` without `-p`.
 - A long `command-prompt` input runs off the screen's edge (`draw_ask`) where
   tmux scrolls it.
 - `backend::Links::carrier` searches a table that only grows.
 - `#[none]` resets colours too; `fg=1` sets nothing and `fg=Red` becomes RGB
-  rather than palette red (not compared: `display -p` shows styles as written).
-- Formats nest at most 10 deep where tmux allows 100 (the probe was
-  inconclusive: both sides printed nothing).
+  rather than palette red (not compared: no command shows a style as drawn).
 - `--import-tmux-conf` joins a line ending `\\` to the next and imports both
   sides of `%if` / `%else`.
 - X11 `cmyk:` colour parsing is quadratic in its input (160K characters took 5.9
@@ -1063,12 +1074,9 @@ mouse-enabled pane.
     client sends standard input ahead of the command); an empty pane is restored
     by resurrect empty, without what was shown in it; `display-message -v`;
     `display-message -a` lists tmxr's variables (`vars::NAMES`), fewer than
-    tmux's; the `choose-*`pickers' tagging and sort keys (tmux's`t`, `T`, `O`),
-    which tmxr's picker has no counterpart for; `choose-tree -F`replaces the
-    text after a row's mark, where tmux's is the whole tree
-    line;`command-prompt`Tab completes and offers menus as tmux's (names,
-    sessions, a session's windows,
-    the`target`and`window-target`types;`prompt_tab\*\*`in`corpus/keys.toml`),
+    tmux's; the
+    `choose-*`pickers' tagging and sort keys (tmux's`t`, `T`, `O`), which tmxr's picker has no counterpart for; `choose-tree
+    -F`replaces the text after a row's mark, where tmux's is the whole tree line;`command-prompt`Tab completes and offers menus as tmux's (names, sessions, a session's windows, the`target`and`window-target`types;`prompt_tab\*\*`in`corpus/keys.toml`),
     though which ten names a long menu keeps was matched by result (the last
     ten), not read from tmux's code.
   - Hooks and modes: the client's theme follows its terminal as tmux's: the

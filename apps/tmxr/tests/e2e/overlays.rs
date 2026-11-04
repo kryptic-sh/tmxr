@@ -440,6 +440,17 @@ fn send_keys_k_types_into_the_client_and_its_binds() {
             .status
             .success()
     );
+    // A bind that sends its own key stops after so many, and the server
+    // lives (tmux's spins for ever).
+    t.run(&["set", "-g", "@n", "0"]);
+    t.run(&[
+        "bind",
+        "-n",
+        "F1",
+        "set -gF @n '#{e|+:#{@n},1}' ; send-keys -K F1",
+    ]);
+    t.run(&["send-keys", "-K", "F1"]);
+    assert_eq!(opt("@n"), "50");
 }
 
 #[test]
