@@ -94,6 +94,7 @@ fn keyed(title: &'static str, items: Vec<(Item, Option<String>)>) -> PickerOverl
             if width > 0 {
                 let shown = key.as_ref().map_or_else(String::new, |k| format!("({k})"));
                 item.label = format!("{shown:<width$} {}", item.label);
+                item.lead += width + 1;
             }
             if let Some(k) = key {
                 keys.push((k, item.target.clone()));
@@ -389,6 +390,7 @@ impl Overlay {
                     label: format!("{mark} {text}"),
                     matches: s.name.clone(),
                     target: Target::Session(s.id, s.name.clone()),
+                    lead: 2,
                 };
                 (item, choose.key(&vars, line))
             })
@@ -478,6 +480,7 @@ impl Overlay {
                     label: format!("{mark} {text}"),
                     matches: format!("{}:{idx} {}", s.name, w.name),
                     target: Target::Window(s.id, *idx, s.name.clone()),
+                    lead: 2,
                 };
                 (item, choose.key(&vars, line))
             })
@@ -543,6 +546,7 @@ impl Overlay {
                     label: text,
                     matches: format!("{} {session}", c.id),
                     target: Target::Client(c.id),
+                    lead: 0,
                 };
                 Some((item, choose.key(&vars_of(c), line)))
             })
@@ -598,6 +602,7 @@ impl Overlay {
                     label: text,
                     matches: format!("{} {preview}", b.name),
                     target: Target::Buffer(b.name.clone()),
+                    lead: 0,
                 };
                 (item, choose.key(&context(b), line))
             })
@@ -615,11 +620,13 @@ impl Overlay {
             label: format!("option {line}"),
             matches: line,
             target: Target::Edit(set),
+            lead: "option ".len(),
         });
         let options = crate::cmds::option_lines(srv).into_iter().map(|l| Item {
             label: format!("option {l}"),
             matches: l.clone(),
             target: Target::Edit(format!("set-option -g {l}")),
+            lead: "option ".len(),
         });
         let binds = srv.keys.list(None).into_iter().map(|(table, key, b)| {
             let line = crate::cmds::bind_line(&table, &key, &b);
@@ -627,6 +634,7 @@ impl Overlay {
                 label: line.clone(),
                 matches: line.clone(),
                 target: Target::Edit(line),
+                lead: 0,
             }
         });
         let items = local.chain(options).chain(binds).collect();
@@ -763,6 +771,7 @@ mod tests {
                 label: (*n).to_owned(),
                 matches: (*n).to_owned(),
                 target: Target::Session(i as u32, (*n).to_owned()),
+                lead: 0,
             })
             .collect()
     }
@@ -871,6 +880,41 @@ mod tests {
         let mut mru = vec!["work", "dots", "main"];
         current_first(&mut mru, |s| *s == "main");
         assert_eq!(mru, ["main", "work", "dots"]);
+    }
+
+    #[test]
+    fn a_match_lights_the_typed_text_past_the_rows_key_and_mark() {
+        let rows = ["main: 1 windows", "work: 2 windows", "dots: 1 windows"]
+            .iter()
+            .enumerate()
+            .map(|(i, text)| {
+                let name = text.split(':').next().unwrap();
+                let item = Item {
+                    label: format!("{} {text}", if i == 0 { "*" } else { " " }),
+                    matches: name.to_owned(),
+                    target: Target::Session(i as u32, name.to_owned()),
+                    lead: 2,
+                };
+                (item, Some(i.to_string()))
+            })
+            .collect();
+        let mut o = Overlay::Picker(Box::new(keyed("sessions", rows)));
+        for c in ['i', 'w', 'k'] {
+            o.key(&k(KeyCode::Char(c)));
+        }
+        let Overlay::Picker(p) = &o else {
+            unreachable!()
+        };
+        let (label, hits, _) = p.picker.visible_rows(0..1).remove(0);
+        let lit: String = label
+            .chars()
+            .enumerate()
+            .filter(|(i, _)| hits.contains(i))
+            .map(|(_, c)| c)
+            .collect();
+        assert_eq!(label, "(1)   work: 2 windows");
+        assert_eq!(lit, "wk", "{hits:?}");
+        assert_eq!(hits, [6, 9]);
     }
 
     #[test]

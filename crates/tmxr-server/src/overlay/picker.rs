@@ -29,6 +29,10 @@ pub(super) struct Item {
     pub(super) label: String,
     pub(super) matches: String,
     pub(super) target: Target,
+    /// How many of the label's characters lead it and are not shown text
+    /// to match (a row's key, the current item's mark): no match is
+    /// highlighted in them.
+    pub(super) lead: usize,
 }
 
 /// Move the current session to the top of a most-recently-used list. The
@@ -61,6 +65,18 @@ impl PickerLogic for Source {
 
     fn match_text(&self, idx: usize) -> String {
         self.items[idx].matches.clone()
+    }
+
+    /// The query's matches in the label, past its lead: the picker's own
+    /// positions are in the match text, which is not the label.
+    fn label_match_positions(&self, idx: usize, query: &str, label: &str) -> Option<Vec<usize>> {
+        let lead = self.items[idx].lead;
+        let shown: String = label.chars().skip(lead).collect();
+        Some(
+            hjkl_picker::score(&shown, query).map_or_else(Vec::new, |(_, at)| {
+                at.into_iter().map(|i| i + lead).collect()
+            }),
+        )
     }
 
     fn has_preview(&self) -> bool {

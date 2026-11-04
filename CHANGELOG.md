@@ -98,6 +98,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   was full, the server dropped the message telling it to capture the mouse or
   ask for focus reports, and never sent it again; it now sends it with the next
   frame.
+- **A picker lights the characters a search matched**: typing in the session,
+  window, client or buffer picker lit characters at the start of each row (its
+  key and mark) rather than the ones that matched, as the matches were found in
+  a session's name and drawn on the whole row. They are now found in the row as
+  shown, after its key and mark.
 
 ## [0.14.0] - 2026-11-01
 
