@@ -114,6 +114,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   key and mark) rather than the ones that matched, as the matches were found in
   a session's name and drawn on the whole row. They are now found in the row as
   shown, after its key and mark.
+- **`source-file` prints what its file's commands print**: a `display -p` (or
+  any command with output) in a sourced file printed nothing; its output is now
+  `source-file`'s, nested files' included, in order, as tmux's.
 
 ## [0.14.0] - 2026-11-01
 

@@ -101,7 +101,12 @@ pub(super) fn run(
                 let toml = file.extension().is_some_and(|e| e == "toml");
                 if !toml {
                     if !a.has('n') {
-                        errors.extend(super::source::run_command_file(srv, ctx, file));
+                        errors.extend(super::source::run_command_file(
+                            srv,
+                            ctx,
+                            file,
+                            &mut out.stdout,
+                        ));
                     }
                     continue;
                 }

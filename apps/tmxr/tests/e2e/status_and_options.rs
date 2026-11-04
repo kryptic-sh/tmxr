@@ -721,6 +721,29 @@ fn a_command_file_that_sources_itself_stops() {
     assert_eq!(t.run(&["show-options", "-gv", "@n"]).trim(), "x".repeat(50));
 }
 
+/// What a sourced file's commands print is source-file's output, nested
+/// files' too, in order (as tmux 3.6, checked by hand 2026-11-04).
+#[test]
+fn a_sourced_files_commands_print_through_source_file() {
+    let t = Tmxr::new("sourceprint");
+    t.run(&["new-session", "-d", "-s", "sp"]);
+    let inner = t.dir.path().join("inner.conf");
+    let outer = t.dir.path().join("outer.conf");
+    std::fs::write(&inner, "display -p two\n").unwrap();
+    std::fs::write(
+        &outer,
+        format!(
+            "display -p one\nsource-file '{}'\ndisplay -p three\n",
+            inner.display()
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        t.run(&["source-file", outer.to_str().unwrap()]),
+        "one\ntwo\nthree\n"
+    );
+}
+
 /// The tmux command file both tests below read; what tmux 3.6 made of it
 /// is in their expectations (checked by hand, 2026-10-22).
 #[cfg(unix)]

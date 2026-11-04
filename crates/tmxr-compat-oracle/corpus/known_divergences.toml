@@ -54,6 +54,7 @@ checks = [{ command = "capture-pane -p -t o" }]
 
 [[cases]]
 name = "decrqm_reports_synchronized_output_as_tmux_3_8"
+windows = "bundled-conpty"
 # tmux 3.8 holds a pane's synchronized output (mode 2026) and DECRQM says
 # whether it is set; 3.6 neither holds it nor answers, so this matches only
 # against 3.8.

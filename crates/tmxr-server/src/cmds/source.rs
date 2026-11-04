@@ -8,21 +8,26 @@ use std::path::Path;
 use super::{Ctx, expand_for, run_detached};
 use crate::server::Server;
 
-/// Run the tmux command file at `path`, returning each error as tmux
-/// reports one: `path:line: error` for one in reading it, the command's own
-/// for one as it runs. As tmux's, the whole file is read
+/// Run the tmux command file at `path`, its commands' output added to
+/// `stdout`, returning each error as tmux reports one: `path:line: error`
+/// for one in reading it, the command's own for one as it runs. As tmux's, the whole file is read
 /// first: `%if`, `%hidden` and `NAME=VALUE` take effect as it is, and a
 /// command that does not parse (an unknown one, a bad flag) means none of
 /// the file's commands run. A command that fails as it runs stops the rest
 /// of its statement (a line, or a `{ … }` block over several), not the file.
-pub(super) fn run_command_file(srv: &mut Server, ctx: &Ctx, path: &Path) -> Vec<String> {
+pub(super) fn run_command_file(
+    srv: &mut Server,
+    ctx: &Ctx,
+    path: &Path,
+    stdout: &mut String,
+) -> Vec<String> {
     // A file that sources itself stops here, as tmux's
     // `CMD_SOURCE_FILE_DEPTH_LIMIT`, not when the stack runs out.
     if srv.source_depth >= SOURCE_DEPTH_LIMIT {
         return vec!["too many nested files".into()];
     }
     srv.source_depth += 1;
-    let errors = read_and_run(srv, ctx, path);
+    let errors = read_and_run(srv, ctx, path, stdout);
     srv.source_depth -= 1;
     errors
 }
@@ -30,7 +35,7 @@ pub(super) fn run_command_file(srv: &mut Server, ctx: &Ctx, path: &Path) -> Vec<
 /// How deep `source-file` may nest, as tmux's.
 const SOURCE_DEPTH_LIMIT: usize = 50;
 
-fn read_and_run(srv: &mut Server, ctx: &Ctx, path: &Path) -> Vec<String> {
+fn read_and_run(srv: &mut Server, ctx: &Ctx, path: &Path, stdout: &mut String) -> Vec<String> {
     let text = match std::fs::read_to_string(path) {
         Ok(t) => t,
         Err(e) => return vec![format!("{}: {e}", path.display())],
@@ -75,6 +80,8 @@ fn read_and_run(srv: &mut Server, ctx: &Ctx, path: &Path) -> Vec<String> {
     if file.errors.is_empty() {
         for cmds in std::mem::take(&mut file.parsed) {
             let out = run_detached(srv, ctx, &cmds);
+            // What its commands print is source-file's own, as tmux's.
+            stdout.push_str(&out.stdout);
             // An error as it runs is the command's own, with no place in
             // the file, as tmux's.
             if out.status != 0 {

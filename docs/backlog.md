@@ -60,10 +60,6 @@ means as the reviewer said, not checked.
   reset, the visible lines cleared, the history kept. Doing that here means
   reusing the old emulator with a reset that leaves the history (vt1k's RIS
   empties it) and resizing it to the new pty.
-- **`display -p` in a sourced file prints nothing** (_reproduced_ 2026-10-29: a
-  file of `display -p ok` printed `ok` from tmux 3.6, nothing from tmxr).
-  `run_command_file` in `cmds/source.rs` keeps only each statement's errors,
-  dropping its stdout.
 - **`#{pane_current_command}` on Linux reads `/proc/<pid>/comm`** (_read_),
   which Linux cuts to 15 characters; tmux's `osdep_get_name` reads argv[0] from
   `/proc/<pid>/cmdline` and the format runs it through `parse_window_name`
