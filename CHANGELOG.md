@@ -30,6 +30,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   feature this way found none. Theme updates (2031) are answered as reset, as
   tmxr sends none unasked.
 
+### Changed
+
+- **Dependencies updated to their latest releases**: the hjkl crates (clipboard,
+  config, layout, picker, picker-tui, xdg) to 0.44.0, toml 1.2.0, and psm 0.1.32
+  among the locked ones.
+
 ### Fixed
 
 - **Extended keys are tmux's**: a program that asked for xterm's modifyOtherKeys
