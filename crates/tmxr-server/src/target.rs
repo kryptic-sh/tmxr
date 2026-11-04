@@ -206,6 +206,16 @@ pub fn destination(srv: &Server, ctx: &Ctx, spec: &str) -> Res<(SessionId, Optio
         };
         Some((forward, n))
     };
+    // A window id alone names its window where it is, as tmux's
+    // cmd_find_get_window.
+    if let Some(id) = spec
+        .strip_prefix('@')
+        .and_then(|n| n.parse::<WindowId>().ok())
+    {
+        let sid = best_session_with_window(srv, id)
+            .ok_or_else(|| format!("can't find window: {spec}"))?;
+        return Ok((sid, Some(best_index(srv, sid, id))));
+    }
     let (sess, rest) = match spec.split_once(':') {
         Some((sess, rest)) => (sess, rest),
         None if index(spec).is_some() || offset(spec).is_some() => ("", spec),
@@ -338,6 +348,16 @@ pub fn window(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, u3
 }
 
 fn window_index(srv: &Server, sid: SessionId, spec: &str) -> Res<u32> {
+    // A window id names a window the session holds, as tmux's
+    // cmd_find_get_window_with_session.
+    if let Some(id) = spec.strip_prefix('@') {
+        return id
+            .parse::<WindowId>()
+            .ok()
+            .filter(|w| srv.sessions[&sid].index_of(*w).is_some())
+            .map(|w| best_index(srv, sid, w))
+            .ok_or_else(|| format!("can't find window: {spec}"));
+    }
     let s = &srv.sessions[&sid];
     let indices: Vec<u32> = s.windows.keys().copied().collect();
     let pos = indices.iter().position(|i| *i == s.current).unwrap_or(0);

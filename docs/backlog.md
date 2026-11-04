@@ -63,12 +63,9 @@ means as the reviewer said, not checked.
   `tmxr-client` does not pause the input thread as the `Lock` arm does. The
   reviewer measured `Guard::enter`'s kitty query waiting out 2 s beside a
   blocked reader; the stall was not reproduced here.
-- **Destination targets naming a window by id** (_reproduced_ 2026-11-04 against
-  tmux 3.6): `move-window -s a:1 -t @1` gives `can't find session: @1` (tmux:
-  `same index: 1`), `move-window -s b:0 -t a:@1` gives `can't find window: @1`
-  (tmux: `index in use: 1`), and `move-window -k -s b:0 -t @1` fails where tmux
-  replaces the window (`target.rs` `destination`). `-N` with no session was not
-  tried.
+- **A destination of `-N` with no session** (`target.rs` `destination`) was not
+  compared with tmux; window ids (`@1`, `sess:@1`) and `+N` / `-N` after a
+  session match tmux 3.6.
 - **`run-shell` output goes to the caller, not the pane** (_reproduced_
   2026-11-04): tmux shows `run-shell -t` output, `-b` too, in the pane's view
   mode (`pane_in_mode` 1); tmxr prints a foreground one to the calling client

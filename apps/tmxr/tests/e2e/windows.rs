@@ -732,3 +732,21 @@ fn an_equals_sign_asks_for_the_exact_name() {
         "can't find window: mai",
     );
 }
+
+/// A window id after a session names that session's window, which a move
+/// then finds in use, as tmux 3.6 says (checked by hand, 2026-11-04).
+#[test]
+fn a_window_id_destination_in_use_is_an_error() {
+    let t = Tmxr::new("destid");
+    t.run(&["new-session", "-d", "-s", "o"]);
+    t.run(&["new-window", "-d", "-t", "o:1"]);
+    for to in ["o:@1", "@1"] {
+        let out = t.output(&["move-window", "-s", "o:0", "-t", to]);
+        assert!(!out.status.success(), "{to}");
+        assert_eq!(
+            String::from_utf8_lossy(&out.stderr).trim(),
+            "index in use: 1",
+            "{to}"
+        );
+    }
+}

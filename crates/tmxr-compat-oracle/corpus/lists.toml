@@ -252,3 +252,16 @@ steps = [
 checks = [
   { command = "list-windows -t o -F '#{window_active} #{window_bell_flag}'", expect = "1 0" },
 ]
+
+# A window id names a destination, alone or after a session, as tmux's
+# cmd_find_get_window and cmd_find_get_window_with_session.
+[[cases]]
+name = "a_window_id_is_a_destination"
+steps = [
+  { run = "new-window -d -t o:1" },
+  { run = "new-session -d -s p" },
+  { run = "move-window -k -s p:0 -t @1" },
+]
+checks = [
+  { command = "list-windows -a -F '#{session_name}:#{window_index} #{window_id}'", expect = "o:0 @0\no:1 @2" },
+]

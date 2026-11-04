@@ -140,6 +140,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Killing the current window clears the next one's alerts**: the window that
   became current kept its bell, activity or silence flag, where tmux's
   `session_set_current` clears them as `select-window` does.
+- **A window id is a destination**: `move-window -t @1` and `-t sess:@1` (and
+  `link-window`) said `can't find session` or `can't find window`; a window id
+  alone names its window where it is, and after a session the session's window,
+  as tmux's. A destination index in use says `index in use: N`, as tmux's
+  `move-window` does.
 
 ## [0.14.0] - 2026-11-01
 

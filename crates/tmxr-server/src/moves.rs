@@ -11,8 +11,10 @@ impl Server {
         let base = self.session_options(dst).base_index;
         let s = self.sessions.get(&dst).ok_or("no such session")?;
         Ok(match index {
+            // As tmux's session_attach says it (new-window's spawn has the
+            // other wording).
             Some(i) if s.windows.get(&i).is_some_and(|w| *w != wid) => {
-                return Err(format!("index {i} in use"));
+                return Err(format!("index in use: {i}"));
             }
             Some(i) => i,
             None => (base..)
