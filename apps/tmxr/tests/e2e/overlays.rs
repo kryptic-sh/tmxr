@@ -524,7 +524,7 @@ fn session_picker_kills_renames_and_creates_sessions() {
 }
 
 #[test]
-fn session_picker_previews_the_highlighted_session() {
+fn session_picker_shows_the_highlighted_session_in_the_client() {
     let t = Tmxr::new("preview");
     t.run(&["new-session", "-d", "-s", "alpha"]);
     t.wait_prompt("alpha");
@@ -534,21 +534,59 @@ fn session_picker_previews_the_highlighted_session() {
         "marker in alpha",
         |o| o.matches("preview-marker").count() >= 2,
     );
+    t.run(&["set", "-g", "status-left", "[#{session_name}]"]);
     let s = t.attach(&["new", "-s", "bravo"]);
-    s.wait_for("status line", |text| text.contains("bravo"));
+    s.wait_for("status line", |text| text.contains("[bravo]"));
     assert!(!s.text().contains("preview-marker"));
 
-    // The picker opens on alpha: its pane shows under the list.
+    // The picker opens on alpha, which printed unseen (+), and the client
+    // shows alpha, status line and all, under the list.
     s.send(PREFIX);
     s.send(b"s");
-    s.wait_for("alpha previewed", |text| {
-        text.contains("sessions 2/2") && text.contains("preview-marker")
+    s.wait_for("alpha shown", |text| {
+        text.contains("sessions 2/2")
+            && text.contains("+ alpha:")
+            && text.contains("preview-marker")
+            && text.contains("[alpha]")
     });
     // Up moves to bravo, which never printed the marker.
     s.send(b"\x1b[A");
-    s.wait_for("bravo previewed", |text| {
+    s.wait_for("bravo shown", |text| {
         text.contains("sessions 2/2") && !text.contains("preview-marker")
     });
+    // Escape goes back to the client's own session, which it never left.
+    s.send(b"\x1b[B");
+    s.wait_for("alpha again", |text| text.contains("[alpha]"));
+    s.send(b"\x1b");
+    s.wait_for("bravo back", |text| {
+        !text.contains("sessions") && text.contains("[bravo]") && !text.contains("preview-marker")
+    });
+    let session = |t: &Tmxr| t.run(&["display-message", "-p", "#{client_session}"]);
+    assert_eq!(session(&t).trim(), "bravo");
+
+    // alpha was seen in the picker: no mark until it prints again.
+    s.send(PREFIX);
+    s.send(b"s");
+    s.wait_for("the picker", |text| text.contains("sessions 2/2"));
+    assert!(!s.text().contains("+ alpha:"), "{}", s.text());
+    s.send(b"\x1b");
+    s.wait_for("the picker gone", |text| !text.contains("sessions"));
+    t.run(&["send-keys", "-t", "alpha", "echo again", "Enter"]);
+    t.wait_run(
+        &["capture-pane", "-p", "-t", "alpha"],
+        "again in alpha",
+        |o| o.matches("again").count() >= 2,
+    );
+    s.send(PREFIX);
+    s.send(b"s");
+    s.wait_for("the mark again", |text| text.contains("+ alpha:"));
+    // Enter switches to it.
+    s.send(b"\r");
+    t.wait_run(
+        &["display-message", "-p", "#{client_session}"],
+        "on alpha",
+        |o| o.trim() == "alpha",
+    );
 }
 
 #[test]

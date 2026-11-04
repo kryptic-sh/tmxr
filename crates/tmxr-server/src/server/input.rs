@@ -400,6 +400,7 @@ impl Server {
                 (p.vi, p.separators, p.paste) = (vi, separators, paste);
                 p.completions = completions;
             }
+            let peeked = ov.peeked();
             let action = ov.key(&ev);
             // display-panes -N: the overlay stays and the key goes on.
             if action == OverlayAction::Pass {
@@ -459,6 +460,17 @@ impl Server {
                         self.switch_client(id, sid);
                         let _ = self.select_window(sid, idx);
                     }
+                }
+                // A session the picker showed has been seen once it moves
+                // on or closes.
+                let now = self
+                    .clients
+                    .get(&id)
+                    .and_then(|c| c.att.as_ref())
+                    .and_then(|a| a.overlay.as_ref())
+                    .and_then(Overlay::peeked);
+                if let Some(left) = peeked.filter(|&s| Some(s) != now) {
+                    self.leave_session(left);
                 }
                 self.mark_client_dirty(id);
                 return;

@@ -831,7 +831,8 @@ mouse-enabled pane.
   s). Servers no longer inherit anything (`spawn::spawn_detached` on Windows,
   `close_inherited_fds` on Unix). If nextest reports "leaky" again, its `LEAK`
   line names the test; it would be a different cause.
-- **`session_picker_previews_the_highlighted_session` timed out now and then**
+- **`session_picker_shows_the_highlighted_session_in_the_client` (then
+  `session_picker_previews_the_highlighted_session`) timed out now and then**
   (twice recorded, both in slow full runs). Probable cause, found 2026-10-10: it
   typed `echo preview-marker` into a session made a moment before, the ConPTY
   Enter stall above, so the marker never printed. It now waits for the prompt
@@ -1072,12 +1073,9 @@ mouse-enabled pane.
     client sends standard input ahead of the command); an empty pane is restored
     by resurrect empty, without what was shown in it; `display-message -v`;
     `display-message -a` lists tmxr's variables (`vars::NAMES`), fewer than
-    tmux's; the `choose-*`pickers' tagging and sort keys (tmux's`t`, `T`, `O`),
-    which tmxr's picker has no counterpart for; `choose-tree -F`replaces the
-    text after a row's mark, where tmux's is the whole tree
-    line;`command-prompt`Tab completes and offers menus as tmux's (names,
-    sessions, a session's windows,
-    the`target`and`window-target`types;`prompt_tab\*\*`in`corpus/keys.toml`),
+    tmux's; the
+    `choose-*`pickers' tagging and sort keys (tmux's`t`, `T`, `O`), which tmxr's picker has no counterpart for; `choose-tree
+    -F`replaces the text after a row's mark, where tmux's is the whole tree line;`command-prompt`Tab completes and offers menus as tmux's (names, sessions, a session's windows, the`target`and`window-target`types;`prompt_tab\*\*`in`corpus/keys.toml`),
     though which ten names a long menu keeps was matched by result (the last
     ten), not read from tmux's code.
   - Hooks and modes: the client's theme follows its terminal as tmux's: the

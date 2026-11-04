@@ -135,6 +135,7 @@ impl Server {
             },
         );
         self.clients.remove(&id);
+        self.leave_session(att.session);
         let ctx = Ctx {
             pane: self.active_pane_of_session(att.session),
             ..Ctx::default()
@@ -153,19 +154,47 @@ impl Server {
         self.check_unattached();
     }
 
+    /// A client stops showing `session`: what it shows from now on is news.
+    pub(crate) fn leave_session(&mut self, session: SessionId) {
+        if let Some(s) = self.sessions.get_mut(&session) {
+            s.seen = Instant::now();
+        }
+    }
+
+    /// Whether `session` printed since a client last showed it, and none
+    /// shows it now: its row in the session picker is marked.
+    pub fn session_has_news(&self, session: SessionId) -> bool {
+        let Some(s) = self.sessions.get(&session) else {
+            return false;
+        };
+        let shown = self
+            .clients
+            .values()
+            .any(|c| c.att.as_ref().is_some_and(|a| a.shows(session)));
+        !shown
+            && s.windows
+                .values()
+                .filter_map(|w| self.windows.get(w))
+                .any(|w| w.last_output > s.seen)
+    }
+
     /// Point an attached client at another session.
     pub fn switch_client(&mut self, id: ClientId, session: SessionId) {
         let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
             return;
         };
-        if att.session != session {
-            att.last_session = Some(att.session);
+        let left = (att.session != session).then_some(att.session);
+        if let Some(left) = left {
+            att.last_session = Some(left);
             att.session = session;
             // A new session starts the status timer again, as tmux's.
             att.status_at = Instant::now();
         }
         att.dirty = true;
         att.full_redraw = true;
+        if let Some(left) = left {
+            self.leave_session(left);
+        }
         self.make_latest(id);
         self.touch_session(session);
         // The session it left loses a client too.

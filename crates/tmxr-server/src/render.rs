@@ -14,7 +14,7 @@ use tmxr_config::{PaneIndicators, PaneLines};
 
 use crate::backend::{AnsiBackend, Links};
 use crate::copy::cell_style;
-use crate::model::{ClientId, PaneId, WindowId};
+use crate::model::{ClientId, PaneId, SessionId, WindowId};
 use crate::overlay::{Overlay, PickerOverlay, Previewed};
 use crate::server::Server;
 use crate::vars::Vars;
@@ -23,6 +23,8 @@ use crate::vars::Vars;
 /// sat and how wide it was, so a frame drawn only for pane output repeats it.
 #[derive(Debug, Clone)]
 pub struct StatusCache {
+    /// The session it was drawn for.
+    session: SessionId,
     top: u16,
     cols: u16,
     cells: Vec<Vec<ratatui::buffer::Cell>>,
@@ -178,23 +180,37 @@ pub(crate) fn runs_width(text: &str) -> u16 {
         .sum()
 }
 
+/// The session client `att` shows: the session picker's highlighted one
+/// while it is open (its preview), else the client's own.
+fn shown(srv: &Server, att: &crate::server::Attached) -> SessionId {
+    match &att.overlay {
+        Some(Overlay::Picker(p)) => p
+            .peeked()
+            .filter(|s| srv.sessions.contains_key(s))
+            .unwrap_or(att.session),
+        _ => att.session,
+    }
+}
+
 /// Where a client's view of its window starts, for a window larger than
 /// the client (tmux 3.6's `tty_window_offset1`): a pan holds the view,
 /// clamped to the window; otherwise it follows the active pane's cursor,
 /// centring it once it would leave the first screenful.
 pub fn window_offset(srv: &Server, att: &crate::server::Attached) -> (u16, u16) {
+    window_offset_in(srv, att, att.session)
+}
+
+/// [`window_offset`] for `session`'s window, as the client shows it.
+fn window_offset_in(srv: &Server, att: &crate::server::Attached, session: SessionId) -> (u16, u16) {
     let Some(win) = srv
         .sessions
-        .get(&att.session)
+        .get(&session)
         .and_then(crate::model::Session::current_window)
         .and_then(|w| srv.windows.get(&w))
     else {
         return (0, 0);
     };
-    let (sx, sy) = (
-        att.cols,
-        att.rows.saturating_sub(srv.status_rows(att.session)),
-    );
+    let (sx, sy) = (att.cols, att.rows.saturating_sub(srv.status_rows(session)));
     if sx >= win.cols && sy >= win.rows {
         return (0, 0);
     }
@@ -235,7 +251,7 @@ pub fn cursor_colour(srv: &Server, id: ClientId) -> Option<u32> {
         .clients
         .get(&id)
         .and_then(|c| c.att.as_ref())
-        .and_then(|a| srv.active_pane_of_session(a.session))?;
+        .and_then(|a| srv.active_pane_of_session(shown(srv, a)))?;
     srv.panes
         .get(&pane)?
         .emu
@@ -252,7 +268,7 @@ pub fn cursor_style(srv: &Server, id: ClientId) -> u8 {
         .clients
         .get(&id)
         .and_then(|c| c.att.as_ref())
-        .and_then(|a| srv.active_pane_of_session(a.session))
+        .and_then(|a| srv.active_pane_of_session(shown(srv, a)))
     else {
         return 0;
     };
@@ -279,21 +295,22 @@ pub fn draw(
         return (ranges, None);
     };
     let (cols, rows) = (att.cols, att.rows);
-    let session = srv.sessions.get(&att.session);
+    let shown = shown(srv, att);
+    let session = srv.sessions.get(&shown);
     let window = session.and_then(|s| s.current_window());
     let links = term.backend().links();
     let links = &*links;
     let _ = term.draw(|f| {
         let buf = f.buffer_mut();
-        let pane_rows = rows.saturating_sub(srv.status_rows(att.session));
-        let top = srv.window_top(att.session);
+        let pane_rows = rows.saturating_sub(srv.status_rows(shown));
+        let top = srv.window_top(shown);
         let mut cursor = None;
         if let Some(wid) = window {
             cursor = match srv.windows.get(&wid) {
                 // Larger than the client, or below a status line at the
                 // top: drawn whole, then the part in view copied out.
                 Some(win) if win.cols > cols || win.rows > pane_rows || top > 0 => {
-                    let (ox, oy) = window_offset(srv, att);
+                    let (ox, oy) = window_offset_in(srv, att, shown);
                     let (w, h) = (win.cols.max(cols), win.rows.max(pane_rows));
                     let mut whole = Buffer::empty(Rect::new(0, 0, w, h));
                     let at = draw_window(srv, id, wid, &mut whole, w, h, links);
@@ -351,6 +368,7 @@ fn still_fits(
     rows: u16,
 ) -> bool {
     cache.cols == cols
+        && cache.session == shown(srv, att)
         && status_place(srv, att, rows)
             .is_some_and(|(top, lines)| cache.top == top && cache.cells.len() == usize::from(lines))
 }
@@ -373,6 +391,7 @@ fn take_status(
         })
         .collect();
     Some(StatusCache {
+        session: shown(srv, att),
         top,
         cols,
         cells,
@@ -977,11 +996,14 @@ fn draw_status(srv: &Server, id: ClientId, buf: &mut Buffer, cols: u16, rows: u1
         return ranges;
     }
     let y = status_row(srv, att, rows);
-    let Some(session) = srv.sessions.get(&att.session) else {
+    let Some(session) = srv.sessions.get(&shown(srv, att)) else {
         return ranges;
     };
     let active = srv.active_pane_of_session(session.id);
-    let vars = Vars::for_pane(srv, active, Some(id));
+    let vars = Vars {
+        session: Some(session.id),
+        ..Vars::for_pane(srv, active, Some(id))
+    };
     let opts = srv.session_options(session.id);
     // status-fg / status-bg over status-style unless `default`, as tmux's
     // status_redraw.
@@ -1089,7 +1111,7 @@ fn status_ranges(spans: &[(u16, u16, crate::format_draw::Range)]) -> StatusRange
 /// one over the window's last row while a message or prompt shows with
 /// `status off`, as tmux's screen_redraw_set_context.
 fn drawn_status_rows(srv: &Server, att: &crate::server::Attached) -> u16 {
-    let lines = srv.status_rows(att.session);
+    let lines = srv.status_rows(shown(srv, att));
     let asking = matches!(
         att.overlay,
         Some(Overlay::Prompt(_) | Overlay::Confirm { .. })
@@ -1105,7 +1127,7 @@ fn drawn_status_rows(srv: &Server, att: &crate::server::Attached) -> u16 {
 /// first with `status-position top`, else the first of the bottom rows it
 /// takes.
 fn status_row(srv: &Server, att: &crate::server::Attached, rows: u16) -> u16 {
-    if srv.status_at_top(att.session) {
+    if srv.status_at_top(shown(srv, att)) {
         0
     } else {
         rows.saturating_sub(drawn_status_rows(srv, att))
@@ -1127,8 +1149,8 @@ fn draw_overlay(
     let mode_style = style_option(&opts.mode_style, &vars);
     let border = style_option(&opts.pane_active_border_style, &vars);
     // The window's rows, top..y.
-    let top = srv.window_top(att.session);
-    let y = top + rows.saturating_sub(srv.status_rows(att.session));
+    let top = srv.window_top(shown(srv, att));
+    let y = top + rows.saturating_sub(srv.status_rows(shown(srv, att)));
     // A menu's or popup's own style (-s, -S, -H), else the option's.
     let look = |spec: &Option<String>, option: &str| {
         style_option(spec.as_deref().unwrap_or(option), &vars)
@@ -1150,7 +1172,7 @@ fn draw_overlay(
                 let word_x = Line::raw(format!("{}{lead}{}", p.prompt, open.prefix)).width() as u16;
                 let row = status_row(srv, att, rows);
                 let (_, h) = menu.size();
-                let top_row = if srv.status_at_top(att.session) {
+                let top_row = if srv.status_at_top(shown(srv, att)) {
                     row + 1
                 } else {
                     row.saturating_sub(h)
@@ -1247,9 +1269,10 @@ pub fn title(srv: &Server, id: ClientId) -> Option<String> {
 /// Fewest rows worth giving a preview.
 const PREVIEW_MIN_ROWS: u16 = 3;
 
-/// The picker overlay: query row, matches, and for sessions and windows a
-/// preview of the highlighted entry's active pane, centred in the window's
-/// rows `top..y`. Returns the query cursor while typing.
+/// The picker overlay: query row, matches, and for windows a preview of
+/// the highlighted entry's active pane (a session's is the whole client,
+/// [`shown`]), centred in the window's rows `top..y`. Returns the query
+/// cursor while typing.
 fn draw_picker(
     srv: &Server,
     p: &PickerOverlay,
@@ -1262,7 +1285,7 @@ fn draw_picker(
     let picker = &p.picker;
     let preview_pane = p.previewed().and_then(|v| {
         let window = match v {
-            Previewed::Session(s) => srv.sessions.get(&s)?.current_window()?,
+            Previewed::Session(_) => return None,
             Previewed::Window(s, i) => *srv.sessions.get(&s)?.windows.get(&i)?,
         };
         srv.windows.get(&window).map(|w| w.active)
@@ -1339,12 +1362,15 @@ fn draw_picker(
         } else {
             Style::default()
         };
+        let news = p.news_at(&label);
         let spans: Vec<Span> = label
             .chars()
             .enumerate()
             .map(|(ci, ch)| {
                 let st = if hits.contains(&ci) {
                     base.patch(highlight)
+                } else if news == Some(ci) {
+                    base.fg(Color::Green).add_modifier(Modifier::BOLD)
                 } else {
                     base
                 };

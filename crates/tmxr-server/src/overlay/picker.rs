@@ -25,6 +25,11 @@ pub(super) enum Target {
     Edit(String),
 }
 
+/// The mark on a session's row that printed since it was last shown
+/// ([`crate::server::Server::session_has_news`]), where the current one has
+/// `*`.
+pub const NEWS: &str = "+";
+
 pub(super) struct Item {
     pub(super) label: String,
     pub(super) matches: String,
@@ -110,9 +115,9 @@ pub struct PickerOverlay {
     pub picker: Picker,
     /// Whether keys go to the query (typing) or move the selection (normal).
     typing: bool,
-    /// Each row's label and target, to find the highlighted row's target
-    /// (the picker owns its source and exposes rows only by label).
-    rows: Vec<(String, Target)>,
+    /// Each row's label, target and lead, to find the highlighted row's
+    /// target (the picker owns its source and exposes rows only by label).
+    rows: Vec<(String, Target, usize)>,
     /// A command for the chosen item, its `%%` the item's target, as the
     /// template `choose-tree`, `choose-client` and `choose-buffer` take.
     pub template: Option<String>,
@@ -145,7 +150,7 @@ impl PickerOverlay {
         let many = items.len() > 1 && title == "sessions";
         let rows = items
             .iter()
-            .map(|i| (i.label.clone(), i.target.clone()))
+            .map(|i| (i.label.clone(), i.target.clone(), i.lead))
             .collect();
         let mut picker = Picker::new(Box::new(Source { title, items }));
         if !query.is_empty() {
@@ -191,10 +196,31 @@ impl PickerOverlay {
             return None;
         }
         let label = self.picker.visible_rows(sel..sel + 1).into_iter().next()?.0;
-        match self.rows.iter().find(|(l, _)| *l == label)?.1 {
+        match self.rows.iter().find(|(l, ..)| *l == label)?.1 {
             Target::Session(id, _) => Some(Previewed::Session(id)),
             Target::Window(s, i, _) => Some(Previewed::Window(s, i)),
             Target::Buffer(_) | Target::Client(_) | Target::Edit(_) => None,
+        }
+    }
+
+    /// Where the [`NEWS`] mark is in session picker row `label`, if it
+    /// has it: the column before its text.
+    pub fn news_at(&self, label: &str) -> Option<usize> {
+        if !self.is_sessions() {
+            return None;
+        }
+        let (_, _, lead) = self.rows.iter().find(|(l, ..)| l == label)?;
+        let at = lead.checked_sub(2)?;
+        (label.chars().nth(at)? == NEWS.chars().next()?).then_some(at)
+    }
+
+    /// The session the session picker's highlighted row stands for: the
+    /// client shows it in place of its own while the picker is open, as
+    /// the picker's preview.
+    pub fn peeked(&self) -> Option<SessionId> {
+        match self.previewed()? {
+            Previewed::Session(id) if self.is_sessions() => Some(id),
+            _ => None,
         }
     }
 

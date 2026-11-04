@@ -160,6 +160,14 @@ pub struct Attached {
     pub pan: Option<(WindowId, u16, u16)>,
 }
 
+impl Attached {
+    /// Whether the client shows `session`: its own, or the one its session
+    /// picker shows in its place.
+    pub fn shows(&self, session: SessionId) -> bool {
+        self.session == session || self.overlay.as_ref().and_then(Overlay::peeked) == Some(session)
+    }
+}
+
 /// Paste buffer.
 pub struct Buffer {
     pub name: String,
@@ -674,9 +682,10 @@ impl Server {
                     .forget(|d| d.then.reply.as_ref().is_some_and(|r| r.0 == id));
                 self.forget_format_jobs(id);
                 if let Some(c) = self.clients.remove(&id)
-                    && c.att.is_some()
+                    && let Some(att) = c.att
                 {
                     debug!(client = id, "attached client went away");
+                    self.leave_session(att.session);
                     self.client_gone(id);
                 }
             }
@@ -1129,7 +1138,7 @@ impl Server {
     pub fn mark_session_dirty(&mut self, session: SessionId) {
         for c in self.clients.values_mut() {
             if let Some(a) = c.att.as_mut()
-                && a.session == session
+                && a.shows(session)
             {
                 a.dirty = true;
             }
@@ -1161,7 +1170,7 @@ impl Server {
             .collect();
         for c in self.clients.values_mut() {
             if let Some(a) = c.att.as_mut()
-                && sessions.contains(&a.session)
+                && sessions.iter().any(|&s| a.shows(s))
             {
                 a.content_dirty = true;
             }

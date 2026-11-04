@@ -81,6 +81,7 @@ impl Server {
                 last_attached: None,
                 key_at: None,
                 pasting: false,
+                seen: Instant::now(),
             },
         );
         if let Err(e) = self.new_window(id, None, window_name, Some(cwd), argv, &[], size, true) {

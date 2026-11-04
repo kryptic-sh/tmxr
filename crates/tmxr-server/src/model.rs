@@ -310,6 +310,9 @@ pub struct Session {
     /// per session as tmux's SESSION_PASTING.
     pub key_at: Option<Instant>,
     pub pasting: bool,
+    /// When a client last stopped showing it (or it was made): output in
+    /// it since is news, which the session picker marks.
+    pub seen: Instant,
 }
 
 impl Session {

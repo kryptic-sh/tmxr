@@ -32,6 +32,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The session picker previews in the whole client**: it is the list of
+  sessions alone, and while it is open the client shows the highlighted session
+  in its place, status line and all, so it is seen at full size. `Enter`
+  switches to it; `Escape`, `q` or anything else that closes the picker leaves
+  the client on its own session, which it never left (the sessions' order,
+  `last-session` and `destroy-unattached` are untouched by looking).
+  `choose-tree -N` shows no preview, as before. The window picker keeps its
+  preview under the list.
+- **The session picker marks sessions with news**: a green `+` where the current
+  session has `*`, for a session that printed since a client last showed it
+  (looking at it in the picker counts).
 - **Dependencies updated to their latest releases**: the hjkl crates (clipboard,
   config, layout, picker, picker-tui, xdg) to 0.44.0, toml 1.2.0, and psm 0.1.32
   among the locked ones.

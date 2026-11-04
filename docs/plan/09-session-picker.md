@@ -21,9 +21,14 @@ Replaces tmux's `choose-tree -Zs` on `prefix s` (and `choose-tree -Zw` on
   through a prompt, and `Enter` on a name no session matches creates that
   session and switches to it. Each runs as a command addressing the session by
   its `$id`.
-- Preview: under the list, the highlighted session's (or window's) active pane
-  as it looks, colours included, cropped to the rows up to its cursor. Shown
-  when at least three rows are left for it.
+- Preview: the session picker is the list alone, and the client shows the
+  highlighted session in place of its own (status line and all) while it is
+  open; `Enter` switches to it, and closing the picker any other way leaves the
+  client on the session it never left. The window picker shows the highlighted
+  window's active pane under its list, colours included, cropped to the rows up
+  to its cursor, when at least three rows are left for it.
+- A session that printed since a client last showed it (the picker's preview
+  counts) has a green `+` where the current one has `*`.
 
 ## Implementation
 
@@ -41,7 +46,9 @@ Replaces tmux's `choose-tree -Zs` on `prefix s` (and `choose-tree -Zw` on
   hjkl does, except `Escape`. The session picker's `C-x` / `C-r` come first in
   both; keys arrive as the crossterm `KeyEvent`s the client already sends.
 - Rendering: the list, input row and preview are drawn by tmxr (`draw_picker` in
-  `render.rs`) with the `mode-style` for the selected row.
+  `render.rs`) with the `mode-style` for the selected row; `render::shown` is
+  the session a client draws, the session picker's highlighted one while it is
+  open.
 - The same overlay backs the window picker (`prefix w`, `choose-tree -w`: every
   session's windows, the current session's first), `find-window` (`prefix f`:
   the window picker opened with the prompt's text as its query) and the buffer

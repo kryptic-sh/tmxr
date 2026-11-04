@@ -16,7 +16,7 @@ use crate::vars::Vars;
 
 pub use boxes::{BoxLook, Lines};
 use picker::{Item, Target, current_first};
-pub use picker::{PickerOverlay, Previewed};
+pub use picker::{NEWS, PickerOverlay, Previewed};
 pub use prompt::{Completions, Prompt};
 
 /// The orders `-O` names, for the `choose-*` pickers.
@@ -338,6 +338,14 @@ impl Overlay {
         }
     }
 
+    /// The session a session picker shows the client in its place.
+    pub fn peeked(&self) -> Option<SessionId> {
+        match self {
+            Self::Picker(p) => p.peeked(),
+            _ => None,
+        }
+    }
+
     /// Whether the overlay has timed out and should close by itself.
     pub fn expired(&self) -> bool {
         matches!(self, Self::Panes { until: Some(until), .. } if *until <= Instant::now())
@@ -368,7 +376,13 @@ impl Overlay {
                     .clients
                     .values()
                     .any(|c| c.att.as_ref().is_some_and(|a| a.session == s.id));
-                let mark = if Some(s.id) == current { "*" } else { " " };
+                let mark = if Some(s.id) == current {
+                    "*"
+                } else if srv.session_has_news(s.id) {
+                    NEWS
+                } else {
+                    " "
+                };
                 let window = s.current_window();
                 let vars = Vars {
                     srv,
