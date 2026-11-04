@@ -12,24 +12,30 @@ checks = [{ format = "#{pane_index}", expect = "0" }]
 [[cases]]
 name = "a_drag_copies_the_selection"
 attach = true
-program = "printf 'alpha beta gamma\n'; exec sleep 1000"
+pane = [{ print = "alpha beta gamma\n" }]
 steps = [
   { wait_text = "alpha beta gamma" },
   { mouse = { action = "drag", at = [0, 0], to = [4, 0] } },
   { sleep = 0.5 },
 ]
-checks = [{ command = "show-buffer" }, { format = "#{pane_in_mode}" }]
+checks = [
+  { command = "show-buffer", expect = "alpha" },
+  { format = "#{pane_in_mode}", expect = "0" },
+]
 
 [[cases]]
 name = "a_double_click_copies_the_word"
 attach = true
-program = "printf 'alpha beta gamma\n'; exec sleep 1000"
+pane = [{ print = "alpha beta gamma\n" }]
 steps = [
   { wait_text = "alpha beta gamma" },
   { mouse = { action = "double-click", at = [7, 0] } },
   { sleep = 1.0 },
 ]
-checks = [{ command = "show-buffer" }, { format = "#{pane_in_mode}" }]
+checks = [
+  { command = "show-buffer", expect = "beta" },
+  { format = "#{pane_in_mode}", expect = "0" },
+]
 
 [[cases]]
 name = "a_triple_click_copies_the_line"
