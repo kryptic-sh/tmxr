@@ -512,6 +512,8 @@ mouse-enabled pane.
   the shell reads". The e2e tests that type into a new pane wait for its prompt
   first (`Tmxr::wait_prompt`);
   `environment_commands_set_show_and_reach_new_panes` failed this way once.
+  Probed again on 2026-11-04 (Windows 11 build 26300, built-in ConPTY): none of
+  200 `cmd.exe` panes and 100 of the user's own shell stalled.
 - **`a_32_bit_programs_directory_is_read` failed once** (2026-10-10, CI's
   bundled-ConPTY Windows job, run 38044583669): the 32-bit `cmd`'s directory
   read as `C:\Windows\System32` for the whole 20 s. It passed 25 runs in a row
@@ -1069,9 +1071,12 @@ mouse-enabled pane.
     client sends standard input ahead of the command); an empty pane is restored
     by resurrect empty, without what was shown in it; `display-message -v`;
     `display-message -a` lists tmxr's variables (`vars::NAMES`), fewer than
-    tmux's; the
-    `choose-*`pickers' tagging and sort keys (tmux's`t`, `T`, `O`), which tmxr's picker has no counterpart for; `choose-tree
-    -F`replaces the text after a row's mark, where tmux's is the whole tree line;`command-prompt`Tab completes and offers menus as tmux's (names, sessions, a session's windows, the`target`and`window-target`types;`prompt_tab\*\*`in`corpus/keys.toml`),
+    tmux's; the `choose-*`pickers' tagging and sort keys (tmux's`t`, `T`, `O`),
+    which tmxr's picker has no counterpart for; `choose-tree -F`replaces the
+    text after a row's mark, where tmux's is the whole tree
+    line;`command-prompt`Tab completes and offers menus as tmux's (names,
+    sessions, a session's windows,
+    the`target`and`window-target`types;`prompt_tab\*\*`in`corpus/keys.toml`),
     though which ten names a long menu keeps was matched by result (the last
     ten), not read from tmux's code.
   - Hooks and modes: the client's theme follows its terminal as tmux's: the
@@ -1130,9 +1135,13 @@ mouse-enabled pane.
   `a_server_nothing_reaches_goes_after_its_grace`), longer than the client's
   `SPAWN_TIMEOUT`, which a const assertion holds it to. Considered and declined:
   the client killing the server it spawned when it gives up, as a server that
-  did open its pipe may by then serve another client, and how a busy pipe
-  reaches `wait_for_server` on Windows was not established. Why the start took
-  so long under load is still not known, so the failures themselves remain.
+  did open its pipe may by then serve another client. A busy pipe is not the
+  cause (read 2026-11-04): interprocess 2.4.7's connect, in its default
+  `ConnectWaitMode::Unbounded`, meets `ERROR_PIPE_BUSY` with `WaitNamedPipeW`
+  and waits on (`RawPipeStream::connect_spin_loop`), so a busy pipe makes a
+  client wait, never fail. Why the start took so long under load is still not
+  known, so the failures themselves remain. Two full Windows
+  `cargo test --workspace` runs on 2026-11-04 failed none (492 passed in each).
 - **`word_separators_and_wrap_search_reach_copy_mode` failed once** (Windows,
   full e2e suite, 2026-10-18) at its first `#{copy_cursor_word}` check; four
   runs alone and the next full run passed. The failure output was not kept, so
