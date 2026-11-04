@@ -369,13 +369,20 @@ impl Client {
                 feed.lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .process(&buf[..n]);
-                // A device-attributes query answered as a terminal would, so
-                // neither multiplexer waits on one.
-                if buf[..n].windows(3).any(|w| w == b"\x1b[c") {
-                    let mut w = answer
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    let _ = w.write_all(b"\x1b[?62;22c");
+                // A device-attributes query and a cursor position report
+                // answered as a terminal would, so nothing waits on one:
+                // Windows' own ConPTY asks where the cursor is before it
+                // draws anything.
+                for (query, reply) in [
+                    (&b"\x1b[c"[..], &b"\x1b[?62;22c"[..]),
+                    (b"\x1b[6n", b"\x1b[1;1R"),
+                ] {
+                    if buf[..n].windows(query.len()).any(|w| w == query) {
+                        let mut w = answer
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        let _ = w.write_all(reply);
+                    }
                 }
             }
         });

@@ -50,6 +50,36 @@ pub struct Case {
     /// Windows.
     #[serde(default)]
     pub unix_only: bool,
+    /// Where it runs against tmxr alone on Windows, where a pane's program
+    /// is behind ConPTY: what it is sent and what it asks pass through
+    /// ConPTY first.
+    #[serde(default)]
+    pub windows: OnWindows,
+}
+
+/// Where a case runs on Windows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum OnWindows {
+    /// Under any ConPTY.
+    #[default]
+    Always,
+    /// Only with Microsoft's ConPTY beside tmxr (as the release ships it):
+    /// Windows' own answers the program's queries itself, or re-encodes
+    /// what it is sent, before tmxr sees them.
+    BundledConpty,
+    /// Never: every ConPTY re-encodes what the program is sent (keys, the
+    /// one-byte mouse form) or sets modes of its own.
+    Never,
+}
+
+/// Whether tmxr runs with Microsoft's ConPTY beside it (`conpty.dll` and
+/// `OpenConsole.exe`, as
+/// `pkg/windows/fetch-conpty.sh` puts it), which it then uses over
+/// Windows' own.
+fn bundled_conpty(tmxr: &Path) -> bool {
+    tmxr.parent()
+        .is_some_and(|d| d.join("conpty.dll").is_file() && d.join("OpenConsole.exe").is_file())
 }
 
 const fn default_size() -> (u16, u16) {
@@ -302,6 +332,16 @@ const SETTLE: Duration = Duration::from_secs(3);
 fn run_case(case: &Case, tmux: Option<&Path>, tmxr: &Path) -> Status {
     if tmux.is_none() && (case.unix_only || cfg!(windows) && case.program.is_some()) {
         return Status::Skipped("needs tmux and a Unix shell".into());
+    }
+    if cfg!(windows) {
+        match case.windows {
+            OnWindows::Always => {}
+            OnWindows::BundledConpty if bundled_conpty(tmxr) => {}
+            OnWindows::BundledConpty => {
+                return Status::Skipped("needs the bundled ConPTY".into());
+            }
+            OnWindows::Never => return Status::Skipped("ConPTY changes what it checks".into()),
+        }
     }
     if tmux.is_none() && case.checks.iter().all(|c| c.expected().is_none()) {
         return Status::Skipped("no tmux, and no expected values".into());

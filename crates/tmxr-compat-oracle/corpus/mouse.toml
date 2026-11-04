@@ -447,6 +447,7 @@ checks = [
 # The pane under the mouse gets it, not the active one, and is not focused.
 [[cases]]
 name = "the_pane_under_the_mouse_gets_it_with_the_mouse_off"
+unix_only = true
 attach = true
 pane = ["raw", { print = "\u001b[?1002h\u001b[?1006hready\r\n" }, "cat"]
 steps = [
@@ -467,6 +468,7 @@ checks = [
 # On the status line or a border, the mouse reaches no program.
 [[cases]]
 name = "the_status_line_and_borders_take_no_mouse_with_the_mouse_off"
+unix_only = true
 attach = true
 pane = ["raw", { print = "\u001b[?1002h\u001b[?1006hready\r\n" }, "cat"]
 steps = [
@@ -487,6 +489,7 @@ checks = [
 # its program gets only the release.
 [[cases]]
 name = "a_click_ends_the_clock_with_the_mouse_off"
+unix_only = true
 attach = true
 pane = ["raw", { print = "\u001b[?1002h\u001b[?1006hready\r\n" }, "cat"]
 steps = [
@@ -540,6 +543,7 @@ checks = [
 # a left click between breaks the run, as in tmux.
 [[cases]]
 name = "the_sideways_wheel_counts_clicks_as_tmuxs_buttons"
+windows = "bundled-conpty"
 attach = true
 pane = ["raw", { print = "\u001b[?1000h\u001b[?1006hready\r\n" }, "cat"]
 steps = [
@@ -569,6 +573,7 @@ checks = [
 # claims: a program that asked for the mouse gets them.
 [[cases]]
 name = "the_sideways_wheel_reaches_a_program_that_asked_for_the_mouse"
+windows = "bundled-conpty"
 attach = true
 pane = ["raw", { print = "\u001b[?1000h\u001b[?1006hready\r\n" }, "cat"]
 steps = [
@@ -586,6 +591,7 @@ checks = [
 # goes on, the DoubleClick key after it does not.
 [[cases]]
 name = "a_sideways_wheel_twice_reaches_the_program_twice"
+windows = "bundled-conpty"
 attach = true
 pane = ["raw", { print = "\u001b[?1000h\u001b[?1006hready\r\n" }, "cat"]
 steps = [
@@ -604,6 +610,7 @@ checks = [
 # clamps it to 255 (cat -v's M-^?) rather than drop the click.
 [[cases]]
 name = "a_click_past_the_one_byte_range_is_clamped"
+windows = "never"
 size = [240, 10]
 attach = true
 pane = ["raw", { print = "\u001b[?1000hready\r\n" }, "cat"]

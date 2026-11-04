@@ -63,6 +63,11 @@ checks = [
 under test to palette colours (`set -g copy-mode-selection-style bg=colour4`) so
 both sides draw the same colours whatever their themes.
 
+On Windows a pane's program is behind ConPTY, which can answer its queries or
+re-encode what it is sent before tmxr sees them: `windows = "bundled-conpty"`
+runs a case only with Microsoft's ConPTY beside tmxr (as the release ships it,
+`pkg/windows/fetch-conpty.sh`), and `windows = "never"` not at all.
+
 `pane` steps: `{ print = "…" }` writes text, `{ seq = 100 }` the numbers 1 to
 100 a line each, `{ sleep = 0.5 }` waits, `"raw"` reads input raw and unechoed
 (`stty raw -echo`), and `"cat"` writes all input from then on as `cat -v` does.

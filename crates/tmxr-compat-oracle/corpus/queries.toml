@@ -4,6 +4,7 @@
 
 [[cases]]
 name = "decrqm_reports_the_modes_both_tmuxes_answer"
+windows = "never"
 pane = ["raw", { print = "\u001b[?2004h\u001b[?1006h\u001b[?2004$p\u001b[?1004$p\u001b[?1006$p\u001b[?12$p\u001b[?2031$p" }, "cat"]
 steps = [{ sleep = 0.5 }]
 checks = [
@@ -12,6 +13,7 @@ checks = [
 
 [[cases]]
 name = "decrqss_reports_the_cursor_style"
+windows = "bundled-conpty"
 # The terminal's own shape (0) until the program sets one; no other setting.
 pane = ["raw", { print = "\u001bP$q q\u001b\\\u001b[4 q\u001bP$q q\u001b\\\u001bP$qm\u001b\\" }, "cat"]
 steps = [{ sleep = 0.5 }]
@@ -21,6 +23,7 @@ checks = [
 
 [[cases]]
 name = "decrqss_and_mode_12_fall_back_to_cursor_style"
+windows = "bundled-conpty"
 # A program that set no shape is told the pane's cursor-style.
 pane = ["raw", { sleep = 1 }, { print = "\u001bP$q q\u001b\\\u001b[?12$p" }, "cat"]
 steps = [{ run = "set -g cursor-style blinking-bar" }, { sleep = 1.5 }]
@@ -30,6 +33,7 @@ checks = [
 
 [[cases]]
 name = "xtversion_and_da1_are_answered"
+windows = "bundled-conpty"
 # Their whole answers differ: XTVERSION names the program and its version,
 # and tmux built with sixel adds 4 to DA1's (tmxr draws none).
 attach = true

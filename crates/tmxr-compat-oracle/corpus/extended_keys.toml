@@ -7,6 +7,7 @@
 
 [[cases]]
 name = "level_1_extends_the_keys_with_no_legacy_form_in_xterms_form"
+windows = "never"
 attach = true
 pane = ["raw", { print = "\u001b[>4;1m" }, "cat"]
 steps = [
@@ -31,6 +32,7 @@ checks = [
 
 [[cases]]
 name = "level_2_extends_every_modified_key"
+windows = "never"
 attach = true
 pane = ["raw", { print = "\u001b[>4;2m" }, "cat"]
 steps = [
@@ -54,6 +56,7 @@ checks = [
 
 [[cases]]
 name = "extended_keys_format_csi_u_at_either_level"
+windows = "never"
 attach = true
 pane = ["raw", { print = "\u001b[>4;1m" }, "cat"]
 steps = [
@@ -81,6 +84,7 @@ checks = [
 # `CSI > 4 n` turns the keys off, and a level past 2 is none; with
 # `extended-keys always` both panes are at level 1.
 name = "modify_other_keys_off_and_a_level_past_2"
+windows = "never"
 attach = true
 pane = ["raw", { print = "\u001b[>4;2m\u001b[>4n" }, "cat"]
 steps = [
