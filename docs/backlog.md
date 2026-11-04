@@ -1073,9 +1073,12 @@ mouse-enabled pane.
     client sends standard input ahead of the command); an empty pane is restored
     by resurrect empty, without what was shown in it; `display-message -v`;
     `display-message -a` lists tmxr's variables (`vars::NAMES`), fewer than
-    tmux's; the
-    `choose-*`pickers' tagging and sort keys (tmux's`t`, `T`, `O`), which tmxr's picker has no counterpart for; `choose-tree
-    -F`replaces the text after a row's mark, where tmux's is the whole tree line;`command-prompt`Tab completes and offers menus as tmux's (names, sessions, a session's windows, the`target`and`window-target`types;`prompt_tab\*\*`in`corpus/keys.toml`),
+    tmux's; the `choose-*`pickers' tagging and sort keys (tmux's`t`, `T`, `O`),
+    which tmxr's picker has no counterpart for; `choose-tree -F`replaces the
+    text after a row's mark, where tmux's is the whole tree
+    line;`command-prompt`Tab completes and offers menus as tmux's (names,
+    sessions, a session's windows,
+    the`target`and`window-target`types;`prompt_tab\*\*`in`corpus/keys.toml`),
     though which ten names a long menu keeps was matched by result (the last
     ten), not read from tmux's code.
   - Hooks and modes: the client's theme follows its terminal as tmux's: the
@@ -1317,6 +1320,18 @@ mouse-enabled pane.
   without a console (a GUI, a scheduled task) would give their plain spawns
   windows; crcbl's `crcbl_spawn::command` and tmxr's `tmxr_term::child::command`
   are the pattern for that.
+
+- **The mouse fixes by hand on Windows** (2026-11-04): the drag position
+  (61051f2), any-motion 1003 (d934b40), the sideways wheel, no third press on a
+  double click and the column-223 clamp (4501364), and `mouse off` giving the
+  mouse to a program that asks (c3b5ff3) were never tried in a real Windows
+  Terminal. A test server was set up with a logger pane, but no client attached
+  before the session ended, so nothing was logged. Only the e2e and oracle cases
+  cover them on Windows. To finish it, run a byte logger in a pane (SGR
+  1000/1002/1003/1006, and X10 1000/1002), then click, double click, drag, wheel
+  up, down and sideways, and click past column 223 in a terminal wider than
+  that. Also drag-select in Claude Code inside the pane and with `mouse off`,
+  and check the terminal's own selection.
 
 - **`socket-acl` flakes**: a traced repeat on macOS (run 38062106864) was a
   `kill-server` that printed "server closed the connection": the server exited
