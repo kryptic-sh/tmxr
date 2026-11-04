@@ -431,7 +431,7 @@ fn dispatch(srv: &mut Server, ctx: &Ctx, p: &Parsed, out: &mut Outcome) -> Res {
     // A read-only client runs only what looks; a hook's commands are the
     // owner's, whoever's event fired it.
     if !srv.in_hook
-        && !access::READ_ONLY.contains(&p.name())
+        && !access::read_only_may_run(p)
         && ctx
             .client
             .and_then(|c| srv.clients.get(&c))

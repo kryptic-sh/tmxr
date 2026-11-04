@@ -134,6 +134,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Formats nest 99 deep, as tmux's**: past 10 nested formats (`#{?…}` in
   `#{?…}`, `#{E:…}` and the like) tmxr expanded nothing, where tmux goes to its
   `FORMAT_LOOP_LIMIT`.
+- **A read-only client can no longer make buffers**: `capture-pane` without `-p`
+  (from a bind, say) wrote a paste buffer for an `attach -r` client; it is
+  refused now, and `capture-pane -p` still looks.
 
 ## [0.14.0] - 2026-11-01
 

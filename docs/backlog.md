@@ -76,8 +76,6 @@ means as the reviewer said, not checked.
   2026-11-04): tmux shows `run-shell -t` output, `-b` too, in the pane's view
   mode (`pane_in_mode` 1); tmxr prints a foreground one to the calling client
   and drops a `-b` one.
-- **A read-only client can make buffers** (_reproduced_ 2026-11-04: a bind to
-  `capture-pane` sent to an `attach -r` client made a buffer; tmux makes none).
 - **A failed `split-window` takes no pane id** (_reproduced_ 2026-11-04): tmux
   returns success with the pane gone at once, and its next split is `%2`; tmxr
   fails with `could not start pane` and reuses `%1`. `split` in

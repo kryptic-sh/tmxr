@@ -10,8 +10,9 @@ use crate::access::lock;
 use crate::model::ClientId;
 use crate::server::Server;
 
-/// What a read-only client may run, as tmux's read-only commands: attach,
-/// detach and switch, and the commands that only look.
+/// What a read-only client may run: tmux 3.6's read-only commands
+/// (`attach-session`, `detach-client`, `list-clients`, `switch-client`),
+/// and, more than tmux allows, the commands that only look.
 pub const READ_ONLY: &[&str] = &[
     "attach-session",
     "capture-pane",
@@ -35,6 +36,13 @@ pub const READ_ONLY: &[&str] = &[
     "show-window-options",
     "switch-client",
 ];
+
+/// Whether a read-only client may run `p`: a [`READ_ONLY`] command that
+/// changes nothing as given (`capture-pane` only with `-p`, as without it
+/// it makes a buffer).
+pub(super) fn read_only_may_run(p: &Parsed) -> bool {
+    READ_ONLY.contains(&p.name()) && (p.name() != "capture-pane" || p.args.has('p'))
+}
 
 pub(super) fn run(
     srv: &mut Server,
@@ -121,6 +129,18 @@ fn clients_of(srv: &Server, user: &str) -> Vec<ClientId> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_read_only_client_captures_only_to_look() {
+        let may = |line: &str| {
+            let argv: Vec<String> = line.split(' ').map(str::to_owned).collect();
+            super::read_only_may_run(&tmxr_command::parse(&argv).unwrap())
+        };
+        assert!(may("capture-pane -p"));
+        assert!(!may("capture-pane"));
+        assert!(may("list-panes"));
+        assert!(!may("kill-server"));
+    }
+
     #[test]
     fn read_only_names_are_commands() {
         for name in super::READ_ONLY {

@@ -1039,6 +1039,13 @@ fn read_only_clients_look_but_do_not_touch() {
     s.send(b"c");
     s.wait_for("the refusal", |text| text.contains("read-only"));
     assert_eq!(t.run(&["list-windows", "-t", "ro"]).lines().count(), 1);
+    // capture-pane without -p makes a buffer, so it is refused.
+    t.run(&["bind", "-n", "F2", "capture-pane"]);
+    s.send(b"\x1bOQ");
+    s.wait_for("the capture refused", |text| {
+        text.contains("capture-pane: the client")
+    });
+    assert_eq!(t.run(&["list-buffers"]), "");
     // Detaching still works.
     s.send(PREFIX);
     s.send(b"d");
