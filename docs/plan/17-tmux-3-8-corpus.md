@@ -53,11 +53,16 @@ Also seen by the slice-2 reviewer (2026-11-02): a click on an open menu's item
 closes the menu in tmux 3.8 where tmxr's menu code (from 3.6) does not, with the
 mouse on or off.
 
-When CI moves to 3.8, move `decrqm_reports_synchronized_output_as_tmux_3_8`,
-`a_synchronized_redraw_is_held_until_its_end` and
-`decrqm_reports_modes_tmux_3_6_does_not` out of `known_divergences.toml`: they
-match 3.8 and only diverge from 3.6, which has no mode 2026 and answers fewer
-DECRQM modes.
+When CI moves to 3.8, move these out of `known_divergences.toml`; they match 3.8
+and only diverge from 3.6:
+
+- `decrqm_reports_synchronized_output_as_tmux_3_8`,
+  `a_synchronized_redraw_is_held_until_its_end` and
+  `decrqm_reports_modes_tmux_3_6_does_not`: 3.6 has no mode 2026 and answers
+  fewer DECRQM modes.
+- `mouse_motion_leaves_clock_mode_with_the_mouse_off` (to `clock.toml`): 3.6's
+  `window_pane_key` gives mouse motion to a mode, ending the clock; 3.8 drops
+  it.
 
 Each was only seen to diverge; none was read against tmux 3.7/3.8's source or
 changelog yet, so which are tmux changes and which are tmxr bugs the 3.6 run hid

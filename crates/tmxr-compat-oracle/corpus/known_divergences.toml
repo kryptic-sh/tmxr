@@ -86,3 +86,25 @@ name = "xtversion_names_tmxr"
 pane = ["raw", { print = "\u001b[>q" }, "cat"]
 steps = [{ sleep = 0.5 }]
 checks = [{ command = "capture-pane -p -t o" }]
+
+[[cases]]
+name = "mouse_motion_leaves_clock_mode_with_the_mouse_off"
+# tmux 3.8's window_pane_key drops mouse motion for a pane in a mode, so
+# moving over a clock pane keeps the clock, as tmxr's; 3.6 gives the motion
+# to the clock, which ends, so this matches only against 3.8.
+attach = true
+unix_only = true
+program = "stty raw -echo; printf '\\033[?1003h\\033[?1006hready\\r\\n'; exec cat -v"
+steps = [
+  { run = "set -g mouse off" },
+  { wait_text = "ready" },
+  { run = "clock-mode -t o" },
+  { sleep = 0.5 },
+  { mouse = { action = "move", at = [5, 5] } },
+  { mouse = { action = "move", at = [6, 5] } },
+  { sleep = 0.5 },
+]
+checks = [
+  { format = "#{pane_in_mode}", expect = "1" },
+  { command = "capture-pane -p -t o -S 0 -E 0", expect = "ready" },
+]
