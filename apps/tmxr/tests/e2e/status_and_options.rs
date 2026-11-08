@@ -1717,6 +1717,8 @@ fn a_programs_hyperlink_reaches_the_client() {
     t.wait_run(&["show-options", "-gv", "@link"], "the link clicked", |o| {
         o.trim() == "[https://example.com/y]"
     });
+    // Past the click time: on the same pane, sooner is a double click.
+    std::thread::sleep(PAST_CLICK_TIME);
     s.click(2, 9, 0);
     t.wait_run(&["show-options", "-gv", "@link"], "off the link", |o| {
         o.trim() == "[]"
@@ -1724,6 +1726,7 @@ fn a_programs_hyperlink_reaches_the_client() {
     // clear-history -H forgets the links, the screen's too.
     t.run(&["clear-history", "-H", "-t", "hl"]);
     t.run(&["set-option", "-g", "@link", "x"]);
+    std::thread::sleep(PAST_CLICK_TIME);
     s.click(2, 2, 0);
     t.wait_run(&["show-options", "-gv", "@link"], "the link gone", |o| {
         o.trim() == "[]"

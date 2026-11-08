@@ -280,6 +280,25 @@ steps = [
 checks = [{ format = "#{@seen}", expect = "DUSU2" }]
 
 [[cases]]
+name = "a_double_click_counts_across_cells_of_a_pane"
+# tmux continues a run of clicks on the same button (3.8: and the same place
+# and pane), not the same cell. Sent in one write, so the runner's speed
+# cannot split them.
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "bind -n MouseDown1Pane set -ga @seen D" },
+  { run = "bind -n MouseUp1Pane set -ga @seen U" },
+  { run = "bind -n SecondClick1Pane set -ga @seen S" },
+  { run = "bind -n DoubleClick1Pane set -ga @seen 2" },
+  { sleep = 0.5 },
+  { keys = "\u001b[<0;4;6M\u001b[<0;4;6m\u001b[<0;9;7M\u001b[<0;9;7m" },
+  { sleep = 1.0 },
+]
+checks = [{ format = "#{@seen}", expect = "DUSU2" }]
+
+[[cases]]
 name = "a_slider_drag_ends_on_the_slider"
 attach = true
 program = "seq 1 200; exec sleep 1000"

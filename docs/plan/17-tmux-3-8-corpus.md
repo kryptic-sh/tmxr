@@ -63,6 +63,8 @@ and only diverge from 3.6:
 - `mouse_motion_leaves_clock_mode_with_the_mouse_off` (to `clock.toml`): 3.6's
   `window_pane_key` gives mouse motion to a mode, ending the clock; 3.8 drops
   it.
+- `presses_on_two_panes_are_two_clicks` (to `mouse.toml`): 3.6 counts a double
+  click on the button alone, 3.8 on the same place and pane too.
 
 Each was only seen to diverge; none was read against tmux 3.7/3.8's source or
 changelog yet, so which are tmux changes and which are tmxr bugs the 3.6 run hid

@@ -49,6 +49,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A double click counts anywhere on the same pane, as tmux's**: a second press
+  counted toward a double or triple click only in the very cell of the first, so
+  one that landed a cell off was two single clicks. As tmux does, a run of
+  clicks now needs the same button and modifiers on the same pane (or the same
+  part of the status line or border), wherever in it.
 - **Clock mode is a mode, as tmux's**: `#{pane_in_mode}` is 1 and `#{pane_mode}`
   `clock-mode` while a pane shows the clock, so the default mouse binds treat it
   as tmux's do. A root-table bind now runs in clock mode rather than ending it,

@@ -49,14 +49,17 @@ pub struct Press {
     pub dragged: bool,
 }
 
-/// A press, and how many presses in a row it ends: a press in the same
-/// cell with the same button within [`CLICK_TIME`] of the last counts on.
+/// A press, and how many presses in a row it ends: one with the same
+/// button and modifiers, on the same pane or other place, within
+/// [`CLICK_TIME`] of the last counts on, wherever in it (tmux's
+/// `click_button`, `click_loc` and `click_wp`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Click {
     pub at: Instant,
-    pub col: u16,
-    pub row: u16,
     pub button: u8,
+    pub mods: KeyModifiers,
+    pub location: MouseLocation,
+    pub pane: Option<PaneId>,
     pub count: u8,
     /// After a second click: where the `DoubleClick` goes, sent once
     /// `CLICK_TIME` passes with no third click.
@@ -131,7 +134,7 @@ pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
                     dragged: false,
                 }),
             );
-            (count_click(srv, id, m, button(b)), here)
+            (MouseAction::Down(button(b)), here)
         }
         MouseEventKind::Up(b) => {
             set_press(srv, id, None);
@@ -155,11 +158,16 @@ pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
         // tmux has no wheel key for the wheel sideways: it is buttons 6
         // and 7, a press with no release (server_client_check_mouse), which
         // counts toward a double click as any press does.
-        MouseEventKind::ScrollLeft => (count_click(srv, id, m, 6), here),
-        MouseEventKind::ScrollRight => (count_click(srv, id, m, 7), here),
+        MouseEventKind::ScrollLeft => (MouseAction::Down(6), here),
+        MouseEventKind::ScrollRight => (MouseAction::Down(7), here),
     };
     let Some(target) = locate(srv, id, m, at) else {
         return;
+    };
+    // A press counts toward a double click where it lands.
+    let action = match action {
+        MouseAction::Down(b) => count_click(srv, id, &target, b),
+        other => other,
     };
     if matches!(action, MouseAction::SecondClick(_))
         && let Some(click) = srv
@@ -248,17 +256,20 @@ pub fn capture(srv: &Server, id: ClientId) -> bool {
     }
 }
 
-/// Record a press of `button` and return its key: `Down`, or the second
-/// or third press in a row; a fourth starts over.
-fn count_click(srv: &mut Server, id: ClientId, m: MouseEvent, button: u8) -> MouseAction {
+/// Record a press of `button` at `target` and return its key: `Down`, or
+/// the second or third press in a row; a fourth starts over.
+fn count_click(srv: &mut Server, id: ClientId, target: &MouseTarget, button: u8) -> MouseAction {
     let Some(att) = srv.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
         return MouseAction::Down(button);
     };
     let now = Instant::now();
+    let mods = target.event.modifiers & MODS;
     let count = match att.click {
         Some(c)
             if c.button == button
-                && (c.col, c.row) == (m.column, m.row)
+                && c.mods == mods
+                && c.location == target.location
+                && c.pane == target.pane
                 && now.duration_since(c.at) <= CLICK_TIME
                 && c.count < 3 =>
         {
@@ -268,9 +279,10 @@ fn count_click(srv: &mut Server, id: ClientId, m: MouseEvent, button: u8) -> Mou
     };
     att.click = Some(Click {
         at: now,
-        col: m.column,
-        row: m.row,
         button,
+        mods,
+        location: target.location,
+        pane: target.pane,
         count,
         double: None,
     });

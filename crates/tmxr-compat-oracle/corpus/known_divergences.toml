@@ -108,3 +108,23 @@ checks = [
   { format = "#{pane_in_mode}", expect = "1" },
   { command = "capture-pane -p -t o -S 0 -E 0", expect = "ready" },
 ]
+
+[[cases]]
+name = "presses_on_two_panes_are_two_clicks"
+# tmux 3.8 continues a run of clicks only on the same place and pane
+# (click_loc / click_wp), as tmxr does; 3.6 checks the button alone, so its
+# second press is a double click, and this matches only against 3.8.
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "split-window -h -t o 'exec sleep 1000'" },
+  { run = "bind -n MouseDown1Pane set -ga @seen D" },
+  { run = "bind -n MouseUp1Pane set -ga @seen U" },
+  { run = "bind -n SecondClick1Pane set -ga @seen S" },
+  { run = "bind -n DoubleClick1Pane set -ga @seen 2" },
+  { sleep = 0.5 },
+  { keys = "\u001b[<0;4;6M\u001b[<0;4;6m\u001b[<0;70;6M\u001b[<0;70;6m" },
+  { sleep = 1.0 },
+]
+checks = [{ format = "#{@seen}", expect = "DUDU" }]

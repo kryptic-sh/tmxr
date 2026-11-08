@@ -199,11 +199,6 @@ named were checked by reading; the runs were not repeated.
   (the kryptic-sh fork in `Cargo.lock`) fails to parse any button past 7
   (`parse_cb`: "We do not support other buttons"), so the client never sees
   them. Blocked on crossterm.
-- **A run of clicks needs the same cell** (_read_ by the slice-1 reviewer):
-  `count_click` in `mouse.rs` counts a press toward a double click only in the
-  cell of the last; tmux's `server_client_check_mouse` only needs the same
-  button, location and pane (`click_button` / `click_loc` / `click_wp`). A
-  double click whose second press lands a cell off is two single clicks in tmxr.
 - **The UTF-8 (1005) mouse form has no position limit** (_read_): `encode_mouse`
   drops only values that are not chars, where tmux's `input_key_get_mouse` drops
   a position past `0x7ff - 0x21`. Matters only past about 2000 columns.

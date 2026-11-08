@@ -26,6 +26,10 @@ use tmxr_term::Emulator;
 const COLS: u16 = 100;
 const ROWS: u16 = 30;
 const TIMEOUT: Duration = Duration::from_secs(30);
+/// Longer than the server's `mouse::CLICK_TIME` (tmux's
+/// `KEYC_CLICK_TIMEOUT`): a press this long after the last on the same pane
+/// is a click of its own, not the second of a double click.
+const PAST_CLICK_TIME: Duration = Duration::from_millis(500);
 
 struct Tmxr {
     dir: tempfile::TempDir,

@@ -1691,8 +1691,9 @@ fn tmuxs_pane_menu_works_from_the_prefix_and_the_right_button() {
         .lines()
         .position(|l| l.starts_with("rightword") && l.contains('│'))
         .expect("the word in the left pane");
-    // Another cell of the word: a second press in the same cell this soon
-    // is a double click, which tmux binds to nothing either.
+    // Past the click time: a second press on the same pane this soon is a
+    // double click, which tmux binds to nothing either.
+    std::thread::sleep(PAST_CLICK_TIME);
     s.mouse(2, 6, u16::try_from(row).unwrap(), false);
     s.wait_for("the menu again", |text| text.contains("Copy rightword"));
     s.send(b"m");
