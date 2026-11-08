@@ -49,6 +49,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A split whose program cannot start gives its pane id up, as tmux's**: the
+  next pane took the same id, and the failed one stayed in the window's pane
+  order. Pane ids are now never given out twice.
 - **A slow client no longer loses the cursor's shape, its colour or the title**:
   they go out with a frame only when they change, so a frame dropped on a full
   queue took a change with it for good. The next frame now sends all three

@@ -336,7 +336,12 @@ impl Server {
         if let Err(e) = self.spawn_pane(new, wid, session, argv.as_deref(), cwd, env, r.w, r.h) {
             if let Some(win) = self.windows.get_mut(&wid) {
                 let _ = win.layout.remove_leaf(new as usize);
+                win.order.retain(|&p| p != new);
             }
+            // The id is spent all the same, as tmux's pane whose program
+            // failed to start: pane ids are never given out twice.
+            self.next_pane = self.next_pane.max(new + 1);
+            self.relayout(wid);
             return Err(e);
         }
         if focus {

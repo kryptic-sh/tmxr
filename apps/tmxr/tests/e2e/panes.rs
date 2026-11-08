@@ -100,6 +100,23 @@ fn default_command_is_what_a_new_pane_runs() {
     shows("dc:2", "given-cmd");
 }
 
+/// A split whose program cannot start uses up its pane id, as tmux's does
+/// (its pane dies at once), and leaves the window as it was.
+#[test]
+fn a_failed_split_spends_its_pane_id() {
+    let t = Tmxr::new("failsplit");
+    t.run(&["new-session", "-d", "-s", "fs"]);
+    let failed = t.output(&["split-window", "-t", "fs", "no-such-program-xyz", "arg"]);
+    assert!(!failed.status.success(), "the split started");
+    let new = t.run(&["split-window", "-d", "-t", "fs", "-P", "-F", "#{pane_id}"]);
+    assert_eq!(new.trim(), "%2");
+    let panes = t.run(&["list-panes", "-t", "fs", "-F", "#{pane_index}:#{pane_id}"]);
+    assert_eq!(
+        panes.split_whitespace().collect::<Vec<_>>(),
+        ["0:%0", "1:%2"]
+    );
+}
+
 #[test]
 fn panes_join_and_swap_across_windows() {
     let t = Tmxr::new("joinp");

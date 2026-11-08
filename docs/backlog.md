@@ -70,12 +70,13 @@ means as the reviewer said, not checked.
   2026-11-04): tmux shows `run-shell -t` output, `-b` too, in the pane's view
   mode (`pane_in_mode` 1); tmxr prints a foreground one to the calling client
   and drops a `-b` one.
-- **A failed `split-window` takes no pane id** (_reproduced_ 2026-11-04): tmux
-  returns success with the pane gone at once, and its next split is `%2`; tmxr
-  fails with `could not start pane` and reuses `%1`. `split` in
-  `server/panes.rs` removes the layout leaf but not the id `insert_leaf` pushed
-  into `win.order`; whether that stale entry can collide with the reused id was
-  not checked.
+- **A `split-window` whose program cannot start fails** (_reproduced_
+  2026-11-04; kept 2026-11-08): `split-window -t o no-such-program arg` makes
+  tmux fork a pane whose exec fails, so the command succeeds and the pane dies
+  at once (kept dead under `remain-on-exit`); tmxr's `Pty::spawn` finds no
+  program and the command fails with `could not start pane: …`. The id is used
+  up either way (`a_failed_split_spends_its_pane_id`). Matching tmux means
+  making a pane with no program, dead from the start.
 - _Reported_: the kitty keyboard flags are one stack for both screens, so
   leaving the alternate screen keeps a program's flags; the protocol keeps one
   per screen.
