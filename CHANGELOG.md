@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-09
+
 ### Breaking
 
 - **`tmxr-term`'s `encode_key` takes the `extended-keys-format` option** as a
@@ -2216,7 +2218,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   published to GitHub Releases with `.sha256` files, and shell completions and a
   man page from the hidden `tmxr --completions <shell>` and `tmxr --man`.
 
-[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/kryptic-sh/tmxr/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/kryptic-sh/tmxr/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/kryptic-sh/tmxr/compare/v0.12.2...v0.13.0
 [0.12.2]: https://github.com/kryptic-sh/tmxr/compare/v0.12.1...v0.12.2
