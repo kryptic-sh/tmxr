@@ -614,21 +614,42 @@ pub(super) fn run(
                     .ok_or_else(|| format!("repeat count {n}"))?,
                 None => 1,
             };
+            // A pane showing the clock takes the first key, as tmux's
+            // window_pane_key gives each key to the mode: one sent for an
+            // attached client ends the clock, and the keys after reach the
+            // program; with none, every key is dropped.
+            let from_client = ctx
+                .client
+                .and_then(|c| srv.clients.get(&c))
+                .is_some_and(|c| c.att.is_some());
             for _ in 0..repeat {
                 for word in pos {
                     // -H: each word is a byte in hex; one that is not is
                     // skipped, as tmux's.
                     if a.has('H') {
-                        if let Ok(b) = u8::from_str_radix(word, 16) {
+                        if let Ok(b) = u8::from_str_radix(word, 16)
+                            && !srv.clock_takes_key(pid, from_client)
+                        {
                             srv.type_bytes_to_pane(pid, &[b]);
                         }
                         continue;
                     }
                     match word.parse::<Key>() {
                         Ok(k) if !a.has('l') && word.chars().count() > 1 => {
-                            srv.send_key_to_pane(pid, &KeyEvent::new(k.code, k.mods));
+                            if !srv.clock_takes_key(pid, from_client) {
+                                srv.send_key_to_pane(pid, &KeyEvent::new(k.code, k.mods));
+                            }
                         }
-                        _ => srv.type_to_pane(pid, word),
+                        _ => {
+                            // Typed text is a key a character.
+                            let mut rest = word.chars();
+                            while srv.panes.get(&pid).is_some_and(|p| p.clock)
+                                && rest.next().is_some()
+                            {
+                                srv.clock_takes_key(pid, from_client);
+                            }
+                            srv.type_to_pane(pid, rest.as_str());
+                        }
                     }
                 }
             }

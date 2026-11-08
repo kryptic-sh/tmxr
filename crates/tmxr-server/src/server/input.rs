@@ -545,14 +545,6 @@ impl Server {
             return;
         }
         let active = self.active_pane_of_session(session);
-        // Any key leaves clock mode, as in tmux, and is not passed on.
-        if let Some(p) = active.and_then(|p| self.panes.get_mut(&p))
-            && std::mem::take(&mut p.clock)
-        {
-            let window = p.window;
-            self.mark_window_dirty(window);
-            return;
-        }
         let in_copy = active
             .and_then(|p| self.panes.get(&p))
             .is_some_and(|p| p.copy.is_some());
@@ -582,15 +574,34 @@ impl Server {
             }
             return;
         }
+        // Clock mode has no key table: the root table's binds run in it,
+        // as tmux's server_client_key_callback finds no mode table.
         if let Some(b) = self.keys.get(&root, &key.into()).cloned() {
             self.run_bind(id, &b.cmd, Some(ev));
             return;
         }
         if let Some(p) = active
+            && !self.clock_takes_key(p, true)
             && !self.client_read_only(id)
         {
             self.send_key_to_pane(p, &ev);
         }
+    }
+
+    /// Whether `pane` shows the clock, which then takes a key meant for its
+    /// program, as tmux's window_pane_key gives a mode the key: one from a
+    /// client ends the clock (window_clock_key), and one sent with no
+    /// client behind it is dropped.
+    pub(crate) fn clock_takes_key(&mut self, pane: PaneId, from_client: bool) -> bool {
+        let Some(p) = self.panes.get_mut(&pane).filter(|p| p.clock) else {
+            return false;
+        };
+        if from_client {
+            p.clock = false;
+            let window = p.window;
+            self.mark_window_dirty(window);
+        }
+        true
     }
 
     /// Whether `id` is a read-only client, whose input reaches no pane.

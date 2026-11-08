@@ -75,6 +75,11 @@ fn keys_match_tmux() {
 }
 
 #[test]
+fn clock_mode_matches_tmux() {
+    assert_passes("clock.toml");
+}
+
+#[test]
 fn copy_mode_highlights_match_tmux() {
     assert_passes("highlights.toml");
 }

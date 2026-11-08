@@ -1018,8 +1018,11 @@ impl<'a> Context for Vars<'a> {
                 cm.cy.saturating_sub(cm.top).to_string()
             }
             "pane_mode" => {
-                if pane?.copy.is_some() {
+                let p = pane?;
+                if p.copy.is_some() {
                     "copy-mode".to_owned()
+                } else if p.clock {
+                    "clock-mode".to_owned()
                 } else {
                     String::new()
                 }
@@ -1057,7 +1060,7 @@ impl<'a> Context for Vars<'a> {
             "selection_start_y" => pane?.copy.as_ref()?.selection_bounds()?.0.0.to_string(),
             "selection_end_x" => pane?.copy.as_ref()?.selection_bounds()?.1.1.to_string(),
             "selection_end_y" => pane?.copy.as_ref()?.selection_bounds()?.1.0.to_string(),
-            "pane_in_mode" => flag(pane?.copy.is_some()),
+            "pane_in_mode" => flag(pane?.copy.is_some() || pane?.clock),
             "history_size" => pane?.emu.history_size().to_string(),
             "pane_pipe" => flag(pane?.pipe.is_some()),
             "mouse_any_flag" => {

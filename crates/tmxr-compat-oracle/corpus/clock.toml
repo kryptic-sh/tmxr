@@ -1,0 +1,100 @@
+# Clock mode, as tmux's window-clock.c: a mode like copy mode in the
+# formats, with no key table of its own, so the root table's binds run in it
+# and any other key, typed, sent or the mouse's, ends it without reaching
+# the program.
+
+[[cases]]
+name = "clock_mode_is_a_pane_mode"
+unix_only = true
+program = "exec sleep 1000"
+steps = [{ run = "clock-mode -t o" }, { sleep = 0.3 }]
+checks = [{ format = "#{pane_in_mode} [#{pane_mode}]", expect = "1 [clock-mode]" }]
+
+[[cases]]
+name = "a_root_bind_runs_in_clock_mode"
+attach = true
+unix_only = true
+program = "stty raw -echo; exec cat -v"
+steps = [
+  { run = "bind -n F5 set -g @hit yes" },
+  { run = "clock-mode -t o" },
+  { sleep = 0.5 },
+  { keys = "\u001b[15~" },
+  { sleep = 0.5 },
+]
+checks = [{ format = "#{@hit} #{pane_in_mode}", expect = "yes 1" }]
+
+[[cases]]
+name = "an_unbound_key_ends_clock_mode_unsent"
+attach = true
+unix_only = true
+program = "stty raw -echo; printf 'ready\\r\\n'; exec cat -v"
+steps = [
+  { wait_text = "ready" },
+  { run = "clock-mode -t o" },
+  { sleep = 0.5 },
+  { keys = "x" },
+  { sleep = 0.5 },
+]
+checks = [
+  { format = "#{pane_in_mode}", expect = "0" },
+  { command = "capture-pane -p -t o", expect = "ready" },
+]
+
+[[cases]]
+name = "send_keys_with_no_client_is_dropped_in_clock_mode"
+# tmux's window_pane_key gives a mode a key only from a client: send-keys
+# run outside one neither ends the clock nor reaches the program.
+unix_only = true
+program = "stty raw -echo; printf 'ready\\r\\n'; exec cat -v"
+steps = [
+  { wait_output = { command = "capture-pane -p -t o", contains = "ready" } },
+  { run = "clock-mode -t o" },
+  { sleep = 0.3 },
+  { run = "send-keys -t o x" },
+  { sleep = 0.5 },
+]
+checks = [
+  { format = "#{pane_in_mode}", expect = "1" },
+  { command = "capture-pane -p -t o", expect = "ready" },
+]
+
+[[cases]]
+name = "the_wheel_ends_clock_mode_on_a_mouse_program"
+# The default WheelUpPane passes the wheel on (send-keys -M) in a mode or to
+# a program with the mouse; in clock mode it reaches the clock, which ends.
+attach = true
+unix_only = true
+program = "stty raw -echo; printf '\\033[?1000h\\033[?1006hready\\r\\n'; exec cat -v"
+steps = [
+  { wait_text = "ready" },
+  { run = "clock-mode -t o" },
+  { sleep = 0.5 },
+  { mouse = { action = "wheel-up", at = [5, 5] } },
+  { sleep = 0.5 },
+]
+checks = [
+  { format = "#{pane_in_mode}", expect = "0" },
+  { command = "capture-pane -p -t o", expect = "ready" },
+]
+
+[[cases]]
+name = "mouse_motion_leaves_clock_mode_with_the_mouse_off"
+# No mode takes mouse motion (tmux's window_pane_key drops it), so moving
+# over a clock pane keeps the clock; a press ends it.
+attach = true
+unix_only = true
+program = "stty raw -echo; printf '\\033[?1003h\\033[?1006hready\\r\\n'; exec cat -v"
+steps = [
+  { run = "set -g mouse off" },
+  { wait_text = "ready" },
+  { run = "clock-mode -t o" },
+  { sleep = 0.5 },
+  { mouse = { action = "move", at = [5, 5] } },
+  { mouse = { action = "move", at = [6, 5] } },
+  { sleep = 0.5 },
+]
+checks = [
+  { format = "#{pane_in_mode}", expect = "1" },
+  { command = "capture-pane -p -t o -S 0 -E 0", expect = "ready" },
+]

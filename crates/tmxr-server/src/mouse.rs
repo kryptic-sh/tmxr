@@ -182,8 +182,8 @@ pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
 /// forwards mouse keys when the option is off. As its input_key_mouse, one
 /// off every pane (on the status line, a border or a scrollbar), on a pane
 /// in copy mode, or for a program that did not ask for the mouse goes
-/// nowhere. On a pane showing the clock it ends the clock, as any key does
-/// (tmux's window_clock_key), and goes no further.
+/// nowhere. On a pane showing the clock a press ends the clock, as any key
+/// does (tmux's window_clock_key), and goes no further.
 fn pass_through(srv: &mut Server, id: ClientId, m: MouseEvent) {
     if srv.client_read_only(id) {
         return;
@@ -194,14 +194,10 @@ fn pass_through(srv: &mut Server, id: ClientId, m: MouseEvent) {
     if target.location != MouseLocation::Pane {
         return;
     }
-    if let Some(p) = target.pane.and_then(|p| srv.panes.get_mut(&p))
-        && std::mem::take(&mut p.clock)
-    {
-        let window = p.window;
-        srv.mark_window_dirty(window);
-        return;
-    }
-    if target.pane.is_none_or(|p| in_mode(srv, p)) {
+    // Copy mode takes no mouse key (tmux's has no `.key`); the clock's is
+    // [`forward`]'s to give.
+    let in_copy = |p: PaneId| srv.panes.get(&p).is_some_and(|p| p.copy.is_some());
+    if target.pane.is_none_or(in_copy) {
         return;
     }
     let ctx = Ctx {
@@ -590,6 +586,15 @@ pub fn forward(srv: &mut Server, ctx: &Ctx) -> Result<(), String> {
     let t = ctx.mouse.ok_or("send-keys -M needs a mouse event")?;
     let pane = t.pane.ok_or("no pane under the mouse")?;
     if t.ignore {
+        return Ok(());
+    }
+    // A pane showing the clock takes the event for itself, and ends; no
+    // mode takes the mouse moving (tmux's window_pane_key drops it).
+    let motion = t.event.kind == MouseEventKind::Moved;
+    if srv.panes.get(&pane).is_some_and(|p| p.clock) {
+        if !motion {
+            srv.clock_takes_key(pane, ctx.client.is_some());
+        }
         return Ok(());
     }
     // Where the event itself is, as tmux's input_key_mouse reports it: a

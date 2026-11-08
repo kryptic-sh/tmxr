@@ -49,6 +49,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Clock mode is a mode, as tmux's**: `#{pane_in_mode}` is 1 and `#{pane_mode}`
+  `clock-mode` while a pane shows the clock, so the default mouse binds treat it
+  as tmux's do. A root-table bind now runs in clock mode rather than ending it,
+  as clock mode has no key table of its own; only an unbound key, a mouse press,
+  the wheel or `send-keys` from a client ends it, and none of them reaches the
+  program. A `send-keys` with no client behind it is dropped, and mouse motion
+  no longer ends the clock.
 - **Extended keys are tmux's**: a program that asked for xterm's modifyOtherKeys
   (`CSI > 4 ; 1 m`, or any pane under `extended-keys always`) got C-; C-Enter
   and S-Enter as `CSI 59;5u`, `CSI 13;5u` and `CSI 13;2u`, where tmux sends

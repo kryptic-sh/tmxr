@@ -92,7 +92,6 @@ means as the reviewer said, not checked.
   `try_send`, and `detach_as` through `Server::send`, which on a full queue only
   marks a redraw; the client is then removed, so it exits as `[lost server]`,
   skipping `-E` / `-P`.
-- A root-table bind in clock mode leaves clock mode instead of running.
 - A long `command-prompt` input runs off the screen's edge (`draw_ask`) where
   tmux scrolls it.
 - `backend::Links::carrier` searches a table that only grows.
@@ -188,8 +187,6 @@ named were checked by reading; the runs were not repeated.
   send, so when `Server::send` drops the frame on a full queue they are not sent
   again (_read_ by the slice-2 reviewer; the mouse and focus modes, which had
   the same fault, are fixed).
-- **`#{pane_in_mode}` is 0 in clock mode** (_reproduced_ by the slice-2
-  reviewer); tmux 3.8 gives 1 (`clock-mode`).
 - **Not covered by a test**: with `mouse off`, the copy-mode check in
   `pass_through` for a pane other than the active one, read-only clients, a menu
   or another overlay, the `fire_double_clicks` guard, and a capture change on a
