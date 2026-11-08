@@ -15,6 +15,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a pane's program asked for and whether its pty is a ConPTY
   (`tmxr_term::pty::CONPTY`); a library caller building one with a struct
   literal sets them, or takes them from `..InputModes::default()`.
+- **`tmxr-config`'s `Config` has an `extended_keys_format` field**, the
+  `extended-keys-format` option; a caller building one with a struct literal
+  sets it.
+- **`tmxr-server`'s public structs gained fields**: `model::Pane::view` (view
+  mode's screen), `copy::CopyMode::view`, `jobs::Work::Shell::show_in` (with the
+  new `jobs::ShowIn`), and `mouse::Click` counts a run of clicks by `mods`,
+  `location` and `pane` where it had `col` and `row`. A library caller building
+  these with struct literals sets the new fields.
 
 ### Added
 
