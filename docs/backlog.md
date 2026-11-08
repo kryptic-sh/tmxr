@@ -100,7 +100,10 @@ means as the reviewer said, not checked.
   exit still sends it with `try_send`, which is safe only because the process
   then ends and its sockets close. interprocess 2.4.7's `Stream` has no shutdown
   to close the write side with; that would need the platforms' own sockets (Unix
-  stream, Windows named pipe).
+  stream, Windows named pipe). The fix was shown by a manual run only (client
+  stopped while the pane printed 4000 screens, then `detach-client`: the client
+  hung for 20 s and more without it, and exited saying
+  `[detached (from session s)]` with it), not by a test.
 - A long `command-prompt` input runs off the screen's edge (`draw_ask`) where
   tmux scrolls it.
 - `backend::Links::carrier` searches a table that only grows.
