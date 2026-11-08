@@ -51,6 +51,7 @@ impl Server {
             content_dirty: false,
             status_cache: None,
             full_redraw: true,
+            resend_cursor_and_title: false,
             locked: false,
             last_input: Instant::now(),
             pending_escape: None,

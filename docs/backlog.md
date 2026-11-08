@@ -182,18 +182,13 @@ named were checked by reading; the runs were not repeated.
   first motion into a new pane is lost; tmxr sends it.
 - **A popup's program gets no mouse**: tmxr's popups take none, with the mouse
   on or off; tmux gives a popup's program its mouse.
-- **A dropped frame loses its cursor style, colour and title**: `render_all`
-  appends them to the frame only when they change and records them before the
-  send, so when `Server::send` drops the frame on a full queue they are not sent
-  again (_read_ by the slice-2 reviewer; the mouse and focus modes, which had
-  the same fault, are fixed).
 - **Not covered by a test**: with `mouse off`, the copy-mode check in
   `pass_through` for a pane other than the active one, read-only clients, a menu
   or another overlay, the `fire_double_clicks` guard, and a capture change on a
-  second client or after a session switch. The full-queue resend was shown only
-  by a manual SIGSTOP run (client stopped while the pane printed 4000 screens,
-  then asked for the mouse: `?1003h` reached the terminal with the fix, never
-  without), not by a test.
+  second client or after a session switch. The full-queue resends were shown
+  only by manual SIGSTOP runs (client stopped while the pane printed 4000
+  screens, then asked for the mouse, or set its cursor's shape: `?1003h` and
+  `CSI 5 q` reached the terminal with the fixes, never without), not by a test.
 - **Mouse buttons 8 and up (back and forward) never reach a program.** tmux
   passes SGR 128+ through (`input_key_get_mouse` uses `m->sgr_b`); crossterm
   (the kryptic-sh fork in `Cargo.lock`) fails to parse any button past 7

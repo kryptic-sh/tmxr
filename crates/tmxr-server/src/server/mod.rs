@@ -130,6 +130,9 @@ pub struct Attached {
     pub status_cache: Option<crate::render::StatusCache>,
     /// The last frame was dropped (slow client); repaint everything.
     pub full_redraw: bool,
+    /// A dropped frame may have carried the cursor's shape or colour or the
+    /// title: the next sends them whatever they are.
+    pub resend_cursor_and_title: bool,
     /// Running the lock command (`lock-client`) until it reports back.
     pub locked: bool,
     pub last_input: Instant,
@@ -751,6 +754,7 @@ impl Server {
                     match msg {
                         ServerMsg::Mouse(on) => a.mouse = !on,
                         ServerMsg::FocusEvents(on) => a.focus_events = !on,
+                        ServerMsg::Output(_) => a.resend_cursor_and_title = true,
                         _ => {}
                     }
                 }
@@ -1358,13 +1362,14 @@ impl Server {
                 a.term = Some(term);
                 a.status_ranges = ranges;
                 a.status_cache = status;
+                let resend = std::mem::take(&mut a.resend_cursor_and_title);
                 // So does the cursor shape.
-                if a.cursor_style != cursor_style {
+                if resend || a.cursor_style != cursor_style {
                     a.cursor_style = cursor_style;
                     bytes.extend_from_slice(format!("\x1b[{cursor_style} q").as_bytes());
                 }
                 // And its colour, as tmux's Cs and Cr.
-                if a.cursor_colour != cursor_colour {
+                if resend || a.cursor_colour != cursor_colour {
                     a.cursor_colour = cursor_colour;
                     let set = match cursor_colour {
                         Some(rgb) => {
@@ -1376,7 +1381,7 @@ impl Server {
                     bytes.extend_from_slice(set.as_bytes());
                 }
                 // The title goes out only when it changes, as tmux's.
-                if title.is_some() && a.title != title {
+                if title.is_some() && (resend || a.title != title) {
                     a.title = title;
                     let t = a.title.as_deref().unwrap_or_default();
                     bytes.extend_from_slice(format!("\x1b]0;{t}\x07").as_bytes());

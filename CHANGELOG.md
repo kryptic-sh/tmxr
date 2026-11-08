@@ -49,6 +49,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A slow client no longer loses the cursor's shape, its colour or the title**:
+  they go out with a frame only when they change, so a frame dropped on a full
+  queue took a change with it for good. The next frame now sends all three
+  again.
 - **A double click counts anywhere on the same pane, as tmux's**: a second press
   counted toward a double or triple click only in the very cell of the first, so
   one that landed a cell off was two single clicks. As tmux does, a run of
