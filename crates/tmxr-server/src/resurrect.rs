@@ -334,7 +334,7 @@ pub fn capture(srv: &Server) -> Save {
 
 /// Write a save to `dir`, update `last`, prune old saves.
 pub fn write(save: &Save, dir: &Path, keep: usize) -> Result<PathBuf, String> {
-    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    private_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis())
@@ -348,24 +348,60 @@ pub fn write(save: &Save, dir: &Path, keep: usize) -> Result<PathBuf, String> {
         .map_err(|e| e.to_string())?
         .filter_map(Result::ok)
         .map(|e| e.path())
-        .filter(|p| {
-            p.file_name()
-                .and_then(|n| n.to_str())
-                .is_some_and(|n| n.starts_with("tmxr-") && n.ends_with(".json"))
-        })
+        .filter(|p| *p != path && save_stamp(p).is_some())
         .collect();
-    saves.sort();
-    let excess = saves.len().saturating_sub(keep.max(1));
-    for old in &saves[..excess] {
+    // Oldest first by the time each was written, as a number. The one just
+    // written is never among them, so a clock set back cannot prune it and
+    // leave `last` naming a file that is gone.
+    saves.sort_by_key(|p| save_stamp(p));
+    let excess = (saves.len() + 1).saturating_sub(keep.max(1));
+    for old in &saves[..excess.min(saves.len())] {
         let _ = std::fs::remove_file(old);
     }
     Ok(path)
 }
 
-/// Write via a temporary file and rename, so a reader never sees a torn file.
+/// When a save at `path` (`tmxr-<millis>.json`) was written.
+fn save_stamp(path: &Path) -> Option<u128> {
+    path.file_name()?
+        .to_str()?
+        .strip_prefix("tmxr-")?
+        .strip_suffix(".json")?
+        .parse()
+        .ok()
+}
+
+/// Make `dir` if need be, readable by its owner alone, as saves hold the
+/// command lines of what ran in each pane. Windows' data directory is the
+/// user's own already.
+fn private_dir(dir: &Path) -> std::io::Result<()> {
+    let mut builder = std::fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{DirBuilderExt as _, PermissionsExt as _};
+        builder.mode(0o700);
+        builder.create(dir)?;
+        // One an older tmxr made with the umask's mode is closed too.
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
+    }
+    #[cfg(not(unix))]
+    builder.create(dir)
+}
+
+/// Write via a temporary file and rename, so a reader never sees a torn
+/// file; readable by its owner alone (see [`private_dir`]).
 fn write_replace(path: &Path, data: &[u8]) -> Result<(), String> {
     let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, data).map_err(|e| format!("{}: {e}", tmp.display()))?;
+    // A temporary file a crash left keeps its own mode: start afresh.
+    let _ = std::fs::remove_file(&tmp);
+    let mut file = std::fs::OpenOptions::new();
+    file.write(true).create_new(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut file, 0o600);
+    file.open(&tmp)
+        .and_then(|mut f| std::io::Write::write_all(&mut f, data))
+        .map_err(|e| format!("{}: {e}", tmp.display()))?;
     std::fs::rename(&tmp, path).map_err(|e| format!("{}: {e}", path.display()))
 }
 
@@ -781,5 +817,39 @@ mod tests {
             .count();
         assert_eq!(saves, 2);
         assert_eq!(read_last(&dir.path().join("nothing-here")).unwrap(), None);
+    }
+
+    #[test]
+    fn a_save_after_the_clock_went_back_is_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        // Saves from a later time than now, as a clock set back finds.
+        let future: Vec<PathBuf> = [u128::from(u64::MAX) - 2, u128::from(u64::MAX) - 1]
+            .iter()
+            .map(|n| dir.path().join(format!("tmxr-{n}.json")))
+            .collect();
+        for f in &future {
+            std::fs::write(f, "{}").unwrap();
+        }
+        let s = sample();
+        let new = write(&s, dir.path(), 2).unwrap();
+        assert!(new.exists(), "the save just written was pruned");
+        assert_eq!(read_last(dir.path()).unwrap(), Some(s));
+        // The oldest of the rest went, by its number: keep 2.
+        assert!(!future[0].exists() && future[1].exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn saves_are_readable_by_their_owner_alone() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let base = tempfile::tempdir().unwrap();
+        let dir = base.path().join("resurrect");
+        std::fs::create_dir(&dir).unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let path = write(&sample(), &dir, 2).unwrap();
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&dir), 0o700);
+        assert_eq!(mode(&path), 0o600);
+        assert_eq!(mode(&dir.join("last")), 0o600);
     }
 }

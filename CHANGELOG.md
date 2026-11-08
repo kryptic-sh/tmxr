@@ -56,6 +56,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Resurrect saves are private and survive a clock set back**: saves, which
+  hold each pane's command line, were written with the umask's modes; they are
+  now readable by their owner alone (0600, in a 0700 directory, an older one
+  closed on the next save) on Unix. And the prune ordered saves so that one
+  written after the clock went back was the first deleted, leaving `last` naming
+  a file that was gone; the save just written is now never pruned.
 - **A split whose program cannot start gives its pane id up, as tmux's**: the
   next pane took the same id, and the failed one stayed in the window's pane
   order. Pane ids are now never given out twice.

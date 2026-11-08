@@ -90,10 +90,6 @@ means as the reviewer said, not checked.
 
 ### Reported, not checked
 
-- Resurrect's prune in `resurrect.rs` `write` sorts saves by their millisecond
-  names as strings, so a clock set back deletes the newest and leaves `last`
-  pointing at a missing file (_read_ 2026-11-04); saves are written with the
-  umask's modes (0644 / 0755 seen) though they hold command lines.
 - `PanePipe::open` leaks the child it started when its thread fails to spawn;
   `jobs.rs` `start_job` then drops the reply and the waiting client hangs.
 - `Detached` can be lost (_read_ 2026-11-04): the server's exit sends it with
