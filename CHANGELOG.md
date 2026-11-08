@@ -56,6 +56,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A client detached while it is behind on output exits, and says why**: a slow
+  client whose queue was full lost the message telling it it was detached, and
+  as nothing closes its connection it went on waiting, never exiting. The
+  message now waits for room in the queue.
 - **Resurrect saves are private and survive a clock set back**: saves, which
   hold each pane's command line, were written with the umask's modes; they are
   now readable by their owner alone (0600, in a 0700 directory, an older one

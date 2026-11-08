@@ -763,6 +763,29 @@ impl Server {
         }
     }
 
+    /// Send client `id` its last message, which a full queue must not drop
+    /// as [`Server::send`] drops a frame: the client is about to be
+    /// forgotten, and would otherwise wait on a connection nothing writes
+    /// to again. When there is no room, a thread waits for the client's
+    /// writer to make some, and ends once the message is queued or the
+    /// connection is gone.
+    pub(crate) fn send_last(&mut self, client: ClientId, msg: ServerMsg) {
+        let Some(c) = self.clients.get(&client) else {
+            return;
+        };
+        if let Err(TrySendError::Full(msg)) = c.tx.try_send(msg) {
+            let tx = c.tx.clone();
+            let waiting = std::thread::Builder::new()
+                .name(format!("tmxr-client-{client}-last"))
+                .spawn(move || {
+                    let _ = tx.send(msg);
+                });
+            if let Err(e) = waiting {
+                tracing::warn!(client, error = %e, "could not start a thread for a last message");
+            }
+        }
+    }
+
     fn client_msg(&mut self, id: ClientId, msg: ClientMsg) {
         match msg {
             ClientMsg::Hello(mut hello) => {

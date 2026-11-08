@@ -127,7 +127,7 @@ impl Server {
         };
         // Leave the alternate screen state as the client found it; the client
         // restores its own terminal modes on receiving this.
-        self.send(
+        self.send_last(
             id,
             ServerMsg::Detached {
                 reason,

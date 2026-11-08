@@ -92,10 +92,15 @@ means as the reviewer said, not checked.
 
 - `PanePipe::open` leaks the child it started when its thread fails to spawn;
   `jobs.rs` `start_job` then drops the reply and the waiting client hangs.
-- `Detached` can be lost (_read_ 2026-11-04): the server's exit sends it with
-  `try_send`, and `detach_as` through `Server::send`, which on a full queue only
-  marks a redraw; the client is then removed, so it exits as `[lost server]`,
-  skipping `-E` / `-P`.
+- **A connection the server drops is never closed** (_reproduced_ 2026-11-08):
+  when the server forgets a client its writer thread (`conn.rs`) ends, but the
+  reader thread holds the same stream and blocks reading, so the client sees no
+  end of file and waits forever. `detach_as` now delivers `Detached` even to a
+  full queue (`Server::send_last`), so a detached client exits; the server's
+  exit still sends it with `try_send`, which is safe only because the process
+  then ends and its sockets close. interprocess 2.4.7's `Stream` has no shutdown
+  to close the write side with; that would need the platforms' own sockets (Unix
+  stream, Windows named pipe).
 - A long `command-prompt` input runs off the screen's edge (`draw_ask`) where
   tmux scrolls it.
 - `backend::Links::carrier` searches a table that only grows.
