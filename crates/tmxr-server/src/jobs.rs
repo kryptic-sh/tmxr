@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::cmds::{Ctx, Outcome};
-use crate::model::{ClientId, SessionId};
+use crate::model::{ClientId, PaneId, SessionId};
 use crate::server::{Event, Server};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,6 +18,8 @@ pub enum Work {
         line: String,
         cwd: Option<PathBuf>,
         stderr: bool,
+        /// Where its output is shown, if not to whoever ran it.
+        show_in: Option<ShowIn>,
     },
     /// A tmux command line (`run-shell -C`), run on the server thread.
     Command(String),
@@ -32,6 +34,17 @@ pub enum Work {
     Wait,
     /// `wait-for`: a signal on a channel, or its lock.
     Channel(crate::waits::Wait),
+}
+
+/// A pane whose view mode a `run-shell`'s output is written to, as tmux's
+/// cmd_run_shell_print.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShowIn {
+    /// The one `-t` named; if it is gone, as [`ShowIn::Client`].
+    Pane(PaneId),
+    /// `-b`'s: the client's active pane, or with none the current
+    /// session's (tmux's cmd_find_from_nothing).
+    Client(Option<ClientId>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,7 +103,9 @@ impl Server {
             .spawn(move || {
                 std::thread::sleep(job.delay);
                 let (output, ok, status) = match &job.work {
-                    Work::Shell { line, cwd, stderr } => {
+                    Work::Shell {
+                        line, cwd, stderr, ..
+                    } => {
                         let (output, status) = crate::server::shell_text(
                             line,
                             cwd.as_deref(),
@@ -143,6 +158,17 @@ impl Server {
                 Some(cmd) => crate::cmds::run_line(self, ctx, cmd),
                 None => Outcome::default(),
             },
+            Work::Shell {
+                show_in: Some(to), ..
+            } => {
+                if let Some(pane) = self.show_in_pane(*to, ctx) {
+                    crate::copy::add_to_view(self, pane, &output);
+                }
+                Outcome {
+                    status,
+                    ..Outcome::default()
+                }
+            }
             Work::Shell { .. } | Work::Wait | Work::Channel(_) => Outcome {
                 stdout: output,
                 status,
@@ -184,6 +210,26 @@ impl Server {
                 }
             }
         }
+    }
+}
+
+impl Server {
+    /// The pane `to` names, if any is left.
+    fn show_in_pane(&self, to: ShowIn, ctx: &Ctx) -> Option<PaneId> {
+        if let ShowIn::Pane(p) = to
+            && self.panes.contains_key(&p)
+        {
+            return Some(p);
+        }
+        let client = match to {
+            ShowIn::Client(c) => c,
+            ShowIn::Pane(_) => ctx.client,
+        };
+        let session = client
+            .and_then(|c| self.clients.get(&c)?.att.as_ref())
+            .map(|a| a.session)
+            .or_else(|| crate::target::current_session(self, ctx))?;
+        self.active_pane_of_session(session)
     }
 }
 

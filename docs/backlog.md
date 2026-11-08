@@ -66,10 +66,17 @@ means as the reviewer said, not checked.
 - **A destination of `-N` with no session** (`target.rs` `destination`) was not
   compared with tmux; window ids (`@1`, `sess:@1`) and `+N` / `-N` after a
   session match tmux 3.6.
-- **`run-shell` output goes to the caller, not the pane** (_reproduced_
-  2026-11-04): tmux shows `run-shell -t` output, `-b` too, in the pane's view
-  mode (`pane_in_mode` 1); tmxr prints a foreground one to the calling client
-  and drops a `-b` one.
+- **Command output from a bind is not shown in view mode** (_read_ 2026-11-08):
+  tmux's `cmdq_print` shows any command's output run for an attached client
+  (`bind x list-keys`, a foreground `run-shell` with no `-t`) in its active
+  pane's view mode; tmxr's `Server::report` shows one line in the status line
+  and more in a text overlay. `run-shell -t` / `-b` use view mode
+  (`copy::add_to_view`) since 2026-11-08.
+- **View mode's edges** (_read_ 2026-11-08, `copy::add_to_view`): it replaces a
+  copy mode the pane was in, where tmux stacks the view over it and returns to
+  the copy mode on leaving; its screen (`Pane::view`) is not resized with the
+  pane, so output added after a resize wraps at the old width;
+  `refresh-from-pane` in a view reads the pane, not the view.
 - **A `split-window` whose program cannot start fails** (_reproduced_
   2026-11-04; kept 2026-11-08): `split-window -t o no-such-program arg` makes
   tmux fork a pane whose exec fails, so the command succeeds and the pane dies

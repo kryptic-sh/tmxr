@@ -446,6 +446,13 @@ pub(super) fn run(
                     cwd: a
                         .value('c')
                         .map(|c| std::path::PathBuf::from(expand_for(srv, ctx, pane, c))),
+                    // As tmux's: `-t`'s pane shows the output in view mode,
+                    // and `-b`'s, run for no one, the client's pane does.
+                    show_in: match (a.value('t'), a.has('b')) {
+                        (Some(_), _) => pane.map(crate::jobs::ShowIn::Pane),
+                        (None, true) => Some(crate::jobs::ShowIn::Client(ctx.client)),
+                        (None, false) => None,
+                    },
                 },
                 None if a.has('d') => Work::Wait,
                 None => return Err("run-shell: no command".into()),
@@ -459,7 +466,8 @@ pub(super) fn run(
                 rest: Vec::new(),
             };
             if a.has('b') {
-                // In the background: nothing waits, and its output is dropped.
+                // In the background: nothing waits, and its output is shown
+                // in a pane (`show_in`).
                 let quiet = Ctx {
                     client: None,
                     ..ctx.clone()

@@ -1,0 +1,63 @@
+# Where run-shell's output goes, as tmux's cmd_run_shell_print: with -t
+# into that pane's view mode, and with -b (run for no one) into a pane's,
+# both whether a client waits or not.
+
+[[cases]]
+name = "run_shell_t_shows_its_output_in_view_mode"
+# A view starts at its top, the cursor at its corner; the command client
+# gets nothing.
+unix_only = true
+program = "exec sleep 1000"
+steps = [{ sleep = 0.3 }]
+checks = [
+  { command = "run-shell -t o 'seq 1 50'", expect = "" },
+  { format = "#{pane_in_mode} [#{pane_mode}] #{scroll_position} #{copy_cursor_x},#{copy_cursor_y}", expect = "1 [view-mode] 20 0,0" },
+]
+
+[[cases]]
+name = "a_view_keeps_its_place_as_output_is_added"
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "run-shell -t o 'seq 1 50'" },
+  { run = "run-shell -t o 'printf \"a\\nb\"'" },
+]
+checks = [{ format = "[#{pane_mode}] #{scroll_position}", expect = "[view-mode] 22" }]
+
+[[cases]]
+name = "a_failed_command_says_so_in_the_view"
+unix_only = true
+program = "exec sleep 1000"
+# In the background (-b), so the command client itself succeeds.
+steps = [{ run = "run-shell -b -t o 'echo out; exit 3'" }, { sleep = 0.5 }]
+checks = [
+  { format = "[#{pane_mode}]", expect = "[view-mode]" },
+  { command = "send-keys -t o -X cursor-down" },
+  { command = "send-keys -t o -X select-line" },
+  { command = "send-keys -t o -X copy-selection" },
+  { command = "show-buffer" },
+]
+
+[[cases]]
+name = "run_shell_b_shows_its_output_in_a_pane"
+unix_only = true
+program = "exec sleep 1000"
+steps = [{ run = "run-shell -b 'echo bg'" }, { sleep = 0.5 }]
+checks = [{ format = "#{pane_in_mode} [#{pane_mode}]", expect = "1 [view-mode]" }]
+
+[[cases]]
+name = "a_view_shows_the_output_and_cancel_leaves_it"
+attach = true
+unix_only = true
+program = "printf 'underneath\\n'; exec sleep 1000"
+steps = [
+  { wait_text = "underneath" },
+  { run = "run-shell -t o 'printf \"alpha\\nbeta\\n\"'" },
+  { wait_text = "beta" },
+]
+checks = [
+  { screen_contains = "alpha", expect = true },
+  { screen_contains = "underneath", expect = false },
+  { command = "send-keys -t o -X cancel" },
+  { format = "#{pane_in_mode}", expect = "0" },
+]

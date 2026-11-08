@@ -12,7 +12,7 @@ mod words;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-pub use commands::{command, enter, enter_from, refuses_args};
+pub use commands::{add_to_view, command, enter, enter_from, refuses_args};
 pub use model::{
     Cell, Line, Underline, cell_style, colour, link_of, snapshot, snapshot_lines,
     snapshot_normal_rows,
@@ -56,6 +56,9 @@ pub struct CopyMode {
     /// The pane whose screen and history this shows, when not its own
     /// (`copy-mode -s`): what `refresh-from-pane` reads again.
     pub source: Option<crate::model::PaneId>,
+    /// It shows text written to it, not a pane (tmux's view mode, which
+    /// `run-shell` output opens): its lines are the pane's `view` screen.
+    pub view: bool,
     pub lines: Vec<Line>,
     /// Lines the shell marked as starting a prompt (OSC 133 A) and an
     /// output (C), for `next-prompt` / `previous-prompt` (`-o`).
@@ -234,6 +237,7 @@ impl CopyMode {
             last_sx: 0,
             rect: false,
             source: None,
+            view: false,
             selflag: SelFlag::Char,
             lineflag: LineFlag::None,
             sel_reset: ((0, 0), (0, 0)),

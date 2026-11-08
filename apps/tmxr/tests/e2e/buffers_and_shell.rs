@@ -319,17 +319,16 @@ fn run_shell_children_get_tmxr_and_the_session_environment() {
         show("#{pid}"),
         show("#{session_id}").trim_start_matches('$')
     );
-    assert_eq!(t.run(&["run-shell", "-t", "je", &var("TMXR")]).trim(), want);
-    assert_eq!(
-        t.run(&["run-shell", "-t", "je", &var("E2E_JOB")]).trim(),
-        "fromsession"
-    );
+    // No -t, which would show the output in the pane, as tmux's: the one
+    // session is the current one.
+    assert_eq!(t.run(&["run-shell", &var("TMXR")]).trim(), want);
+    assert_eq!(t.run(&["run-shell", &var("E2E_JOB")]).trim(), "fromsession");
     // So a tmxr command a job runs reaches this server, not the default one.
     let has = format!(
         "{} has-session -t je && echo found",
         env!("CARGO_BIN_EXE_tmxr")
     );
-    assert_eq!(t.run(&["run-shell", "-t", "je", &has]).trim(), "found");
+    assert_eq!(t.run(&["run-shell", &has]).trim(), "found");
 }
 
 #[test]

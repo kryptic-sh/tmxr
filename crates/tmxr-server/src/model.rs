@@ -49,6 +49,10 @@ pub struct Pane {
     pub dead_line_at: Option<std::time::Instant>,
     /// `clock-mode`: the pane shows a big clock until a key is pressed.
     pub clock: bool,
+    /// The screen view mode writes to (tmux's window_view_mode), while the
+    /// pane's copy mode is a view ([`crate::copy::CopyMode::view`]):
+    /// `run-shell` output shown in the pane.
+    pub view: Option<tmxr_term::Emulator>,
     /// `select-pane -d`: no keys, pastes or mouse reach the program, as
     /// tmux's `PANE_INPUTOFF`, until `select-pane -e`.
     pub input_off: bool,

@@ -92,6 +92,7 @@ impl Server {
                 dead_signal: None,
                 dead_line_at: None,
                 clock: false,
+                view: None,
                 input_off: false,
                 focused: false,
                 output: started.output,

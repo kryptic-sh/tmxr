@@ -80,6 +80,11 @@ fn clock_mode_matches_tmux() {
 }
 
 #[test]
+fn run_shell_output_matches_tmux() {
+    assert_passes("run_shell.toml");
+}
+
+#[test]
 fn copy_mode_highlights_match_tmux() {
     assert_passes("highlights.toml");
 }

@@ -1019,8 +1019,8 @@ impl<'a> Context for Vars<'a> {
             }
             "pane_mode" => {
                 let p = pane?;
-                if p.copy.is_some() {
-                    "copy-mode".to_owned()
+                if let Some(cm) = &p.copy {
+                    if cm.view { "view-mode" } else { "copy-mode" }.to_owned()
                 } else if p.clock {
                     "clock-mode".to_owned()
                 } else {

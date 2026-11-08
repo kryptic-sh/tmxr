@@ -20,6 +20,47 @@ fn take_options(srv: &mut Server, pane: PaneId) {
     }
 }
 
+/// Show `text` in `pane`'s view mode, as tmux's window_copy_add: written to
+/// the mode's own screen as terminal output (its colours kept), each line
+/// after the first on a new line. A pane not showing a view starts one at
+/// its top; one showing it keeps its place as lines are added.
+pub fn add_to_view(srv: &mut Server, pane: PaneId, text: &str) {
+    let history = srv.pane_session_options(Some(pane)).history_limit;
+    let Some(p) = srv.panes.get_mut(&pane) else {
+        return;
+    };
+    let fresh = !p.copy.as_ref().is_some_and(|cm| cm.view);
+    if fresh {
+        let (rows, cols) = tmxr_term::screen_size(p.emu.screen());
+        p.view = Some(tmxr_term::Emulator::new(rows, cols, history));
+    }
+    let Some(view) = p.view.as_mut() else {
+        return;
+    };
+    let mut written = !fresh;
+    for line in text.lines() {
+        if written {
+            view.process(b"\r\n");
+        }
+        view.process(line.as_bytes());
+        written = true;
+    }
+    match p.copy.as_mut().filter(|cm| cm.view) {
+        Some(cm) => cm.lines = super::snapshot(view.screen()),
+        None => {
+            let mut cm = CopyMode::new(view.screen_mut());
+            (cm.view, cm.top, cm.cy, cm.cx) = (true, 0, 0, 0);
+            p.copy = Some(cm);
+        }
+    }
+    let window = p.window;
+    srv.mark_window_dirty(window);
+    if fresh {
+        take_options(srv, pane);
+        srv.refit_scrollbar(pane);
+    }
+}
+
 /// Enter copy mode in `pane` (no-op if already in it).
 pub fn enter(srv: &mut Server, pane: PaneId, page_up: bool) {
     enter_from(srv, pane, pane, page_up);

@@ -32,6 +32,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`run-shell -t` and `run-shell -b` show their output in a pane's view mode,
+  as tmux's**: `-t` printed to whoever ran it and `-b` dropped its output. Now
+  `-t`'s pane, and for `-b` without `-t` the client's (else the current
+  session's) active pane, enters view mode (`#{pane_mode}` `view-mode`, a copy
+  mode over the output, colours kept) at its top, and more output is added
+  without moving it; a command client gets nothing on its standard output. A
+  failed command's `'…' returned N` line is shown there too.
 - **The session picker previews in the whole client**: it is the list of
   sessions alone, and while it is open the client shows the highlighted session
   in its place, status line and all, so it is seen at full size. `Enter`
