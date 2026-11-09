@@ -608,6 +608,10 @@ const TERMINAL_THEME: &[u8] = b"\x1b[?997;1n";
 const KEY_LOG: &str = "TMXR_E2E_KEY_LOG";
 /// Set, [`key_log_fixture`] asks for focus reports and logs them too.
 const KEY_LOG_FOCUS: &str = "TMXR_E2E_KEY_LOG_FOCUS";
+/// Set, [`key_log_fixture`] writes its value to the terminal (`\e` in it as
+/// ESC), as a program asking for a key mode does, then `raw-on`, and logs
+/// the bytes it reads, escaped, one read a line, rather than keys.
+const KEY_LOG_RAW: &str = "TMXR_E2E_KEY_LOG_RAW";
 
 /// This test binary, copied as `name` into the test's directory, made to run
 /// [`key_log_fixture`]: a program the navigator sees by that name that
@@ -709,7 +713,8 @@ fn script_fixture() {
 /// Not a test: the program [`key_log_program`] starts. In raw mode, it logs
 /// `ready`, then each key press it reads as `code modifiers`, one a line;
 /// with [`KEY_LOG_FOCUS`] set it asks for focus reports and logs each as
-/// `FocusGained` or `FocusLost` (and on Unix, no keys).
+/// `FocusGained` or `FocusLost` (and on Unix, no keys); with [`KEY_LOG_RAW`]
+/// set it logs bytes instead.
 #[test]
 #[ignore = "a fixture other tests run in a pane"]
 fn key_log_fixture() {
@@ -719,6 +724,20 @@ fn key_log_fixture() {
     };
     let mut log = std::fs::File::create(log).unwrap();
     crossterm::terminal::enable_raw_mode().unwrap();
+    if let Some(mode) = std::env::var_os(KEY_LOG_RAW) {
+        let mode = mode.to_str().unwrap().replace(r"\e", "\x1b");
+        print!("{mode}raw-on");
+        std::io::stdout().flush().unwrap();
+        writeln!(log, "ready").unwrap();
+        let mut buf = [0u8; 256];
+        loop {
+            let n = std::io::stdin().read(&mut buf).unwrap();
+            if n == 0 {
+                return;
+            }
+            writeln!(log, "{}", buf[..n].escape_ascii()).unwrap();
+        }
+    }
     // On Windows the fixture read a focus event it never asked for (in the
     // navigator test), so focus is logged only when the test wants it.
     let focus = std::env::var_os(KEY_LOG_FOCUS).is_some();

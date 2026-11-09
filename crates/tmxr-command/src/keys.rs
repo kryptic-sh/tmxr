@@ -297,6 +297,11 @@ mod tests {
             KeyModifiers::CONTROL | KeyModifiers::SHIFT,
         ));
         assert_eq!(ch, k("C-h"));
+        // Alt with a shifted letter, as a kitty terminal reporting
+        // alternate keys sends it, is M-A and not M-a.
+        let meta_upper = Key::from_event(&KeyEvent::new(KeyCode::Char('A'), KeyModifiers::ALT));
+        assert_eq!(meta_upper, k("M-A"));
+        assert_ne!(meta_upper, k("M-a"));
         // Super / Hyper never take part in matching.
         let sup = Key::from_event(&KeyEvent::new(
             KeyCode::Char('h'),

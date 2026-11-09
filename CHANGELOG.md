@@ -6,6 +6,37 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **In terminals with the kitty keyboard protocol, a pane that pushed kitty
+  flags no longer always gets the terminal's own unshifted key for every shifted
+  key**, as the client now asks the terminal for the shifted character, which
+  the binds below need, and the unshifted key is lost on the way in. Alt+Shift
+  (or Ctrl+Shift) with a digit or symbol goes as the shifted character without
+  Shift: `CSI 33;3u` for Alt+Shift+1, where 0.15.0 sent `CSI 49;4u`, the
+  protocol's form. A letter goes as its lowercase form with Shift, a guess that
+  is wrong where the layout's keys do not match Unicode's case mapping: Turkish
+  Alt+Shift+ı now sends `CSI 105;4u` (Shift+i), and Alt+Shift+i (`İ`) sends
+  `CSI 304;3u`, where 0.15.0 sent the terminal's own key (`CSI 305;4u` and
+  `CSI 105;4u`). The client's own key parser (planned) restores both.
+
+### Fixed
+
+- **Alt+Shift keys reach binds as the keys they are, in terminals with the kitty
+  keyboard protocol** (Alacritty, kitty, foot, Ghostty, WezTerm). `bind -n M-H`
+  never fired (`M-h` ran instead); Alt+Shift with a digit or symbol arrived as
+  the unshifted key, so `bind M-!` and copy mode's default `M-<`, `M->`, `M-{`
+  and `M-}` binds never fired. They now arrive as M-H, M-! and M-<.
+- **Alt+Shift keys reach panes with their Shift, in those terminals.** A legacy
+  pane gets `ESC A` and `ESC !` where it got `ESC a` and `ESC 1`, as from a
+  legacy terminal; a modifyOtherKeys pane gets the shifted character with Alt
+  (`CSI 27;3;65~` for M-A), as tmux encodes M-A; a pane that pushed kitty flags
+  gets a letter as its key with Shift (`CSI 97;4u`), and so does
+  `send-keys M-A`, which sent `CSI 97;3u`.
+- **A pane's program asking for its kitty keyboard flags (`CSI ? u`) is told
+  only the flags tmxr encodes**. A program that pushed flags tmxr does not
+  implement was told they were on and then got legacy keys.
+
 ## [0.15.0] - 2026-11-09
 
 ### Breaking

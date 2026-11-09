@@ -38,6 +38,11 @@ struct Probe {
 /// later one runs beside the input thread, which would take them.
 static PROBE: OnceLock<Probe> = OnceLock::new();
 
+/// Whether the terminal reports keys in the kitty protocol now: set by each
+/// [`Guard::enter`], which asks again after a suspend or a lock, and cleared
+/// as the terminal is restored, for the input thread to read per batch.
+static KITTY_KEYS: AtomicBool = AtomicBool::new(false);
+
 /// How long the synchronized-update probe waits for the terminal's answers.
 #[cfg(unix)]
 const PROBE_WAIT: Duration = Duration::from_secs(1);
@@ -132,6 +137,7 @@ fn probe(out: &mut impl Write) -> io::Result<Probe> {
 }
 
 fn restore(kitty: bool) {
+    KITTY_KEYS.store(false, Ordering::Release);
     let mut out = io::stdout();
     if kitty {
         let _ = execute!(out, PopKeyboardEnhancementFlags);
@@ -168,14 +174,20 @@ impl Guard {
         // tmux asks as its terminal starts.
         out.write_all(b"\x1b[?2031h\x1b[?996n")?;
         // Unambiguous key reports (C-h vs Backspace, C-i vs Tab, Escape vs
-        // Alt) where the terminal supports the kitty protocol.
+        // Alt) where the terminal supports the kitty protocol, with the
+        // shifted character of a key held with Shift, which crossterm
+        // otherwise drops for the unshifted one (M-A would arrive as M-a).
         let kitty = crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false);
         if kitty {
             execute!(
                 out,
-                PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
+                PushKeyboardEnhancementFlags(
+                    KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                        | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
+                )
             )?;
         }
+        KITTY_KEYS.store(kitty, Ordering::Release);
         let prev = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |info| {
             restore(kitty);
@@ -300,6 +312,34 @@ fn console_key(ev: Event) -> Event {
     }
 }
 
+/// The key a kitty-protocol terminal meant by a Ctrl chord on an uppercase
+/// letter: reporting alternate keys, it sends Ctrl+Shift+h as `H` with Ctrl
+/// and no Shift. Read it as the letter's key with Shift, as the terminal
+/// reports it without alternate keys. Binds need it: they fold case under
+/// Ctrl for ASCII alone, so `É` with Ctrl would stay C-É and `bind C-é`
+/// never fire. So does a pane under modifyOtherKeys, which would get C-h
+/// for C-S-h. Mending the event here, where it enters, gives every reader
+/// of it the key the terminal meant, rather than each one guessing.
+///
+/// Other shifted characters keep the character (Ctrl+Shift+1 is C-!, as
+/// tmux names it). That is a known limit for a kitty-aware pane, which
+/// should get the unshifted key with Shift: crossterm drops the unshifted
+/// key the terminal sends beside the shifted one, so it is not known here.
+fn kitty_key(ev: Event) -> Event {
+    match ev {
+        Event::Key(mut k) if k.modifiers.contains(KeyModifiers::CONTROL) => {
+            if let KeyCode::Char(c) = k.code
+                && let Some(key) = tmxr_term::encode::unshifted_letter(c)
+            {
+                k.code = KeyCode::Char(key);
+                k.modifiers |= KeyModifiers::SHIFT;
+            }
+            Event::Key(k)
+        }
+        ev => ev,
+    }
+}
+
 /// Wake the input thread out of a read waiting for an event: crossterm's
 /// reader watches for SIGWINCH, so one raised here ends it with a `Resize`
 /// to the size the terminal already has, which the server takes as a
@@ -373,6 +413,9 @@ pub fn spawn_input(send: Sender, size: Option<(u16, u16)>) -> Input {
                 }
                 if console_bytes {
                     events = events.into_iter().map(console_key).collect();
+                }
+                if KITTY_KEYS.load(Ordering::Acquire) {
+                    events = events.into_iter().map(kitty_key).collect();
                 }
                 let Ok(send) = send.lock() else { break };
                 if write_msg(&mut &**send, &ClientMsg::Input(events)).is_err() {
@@ -536,6 +579,35 @@ mod tests {
         ] {
             assert_eq!(console_key(from.clone()), to, "{from:?}");
         }
+    }
+
+    #[test]
+    fn a_kitty_ctrl_chord_on_an_uppercase_letter_is_the_letter_with_shift() {
+        let ctrl = KeyModifiers::CONTROL;
+        let ctrl_shift = KeyModifiers::CONTROL | KeyModifiers::SHIFT;
+        let ctrl_alt = KeyModifiers::CONTROL | KeyModifiers::ALT;
+        let alt = KeyModifiers::ALT;
+        // Field by field: crossterm's own equality takes `H` for `h` with
+        // Shift, which is the difference under test.
+        let read = |ev| match kitty_key(ev) {
+            Event::Key(k) => (k.code, k.modifiers),
+            ev => panic!("not a key: {ev:?}"),
+        };
+        for (code, mods, want) in [
+            ('H', ctrl, ('h', ctrl_shift)),
+            ('H', ctrl_alt, ('h', ctrl_alt | KeyModifiers::SHIFT)),
+            ('É', ctrl, ('é', ctrl_shift)),
+            ('С', ctrl, ('с', ctrl_shift)),
+            // Shift with Alt alone keeps its character, as do other
+            // shifted characters and the unshifted letter.
+            ('A', alt, ('A', alt)),
+            ('!', ctrl, ('!', ctrl)),
+            ('h', ctrl, ('h', ctrl)),
+        ] {
+            let got = read(key(KeyCode::Char(code), mods));
+            assert_eq!(got, (KeyCode::Char(want.0), want.1), "{code:?} {mods:?}");
+        }
+        assert_eq!(kitty_key(Event::FocusGained), Event::FocusGained);
     }
 
     #[cfg(unix)]

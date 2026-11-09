@@ -4,7 +4,7 @@ use std::num::NonZeroU16;
 use std::path::PathBuf;
 
 use crate::dcs::{Dcs, DcsSplitter};
-use crate::encode::{ExtendedKeys, InputModes};
+use crate::encode::{ExtendedKeys, InputModes, KITTY_FLAGS_ENCODED};
 use crate::modes::{ModeSplitter, Piece};
 use crate::sync::{Frame, Hold, SYNC_TIMEOUT, Shown};
 
@@ -215,10 +215,10 @@ impl vt1k::Callbacks for Hooks {
                     }
                 }
             }
-            // Kitty keyboard query: report the current flags, so programs
-            // that probe for the protocol get a truthful answer.
+            // Kitty keyboard query: report the current flags tmxr encodes,
+            // so programs that probe for the protocol get a truthful answer.
             (Some(b'?'), 'u') => {
-                let flags = self.kitty_flags.last().copied().unwrap_or(0);
+                let flags = self.kitty_flags.last().copied().unwrap_or(0) & KITTY_FLAGS_ENCODED;
                 self.replies.extend(format!("\x1b[?{flags}u").into_bytes());
             }
             _ => {}
@@ -1599,6 +1599,18 @@ mod tests {
         e.process(b"\x1b[>4;2m");
         e.process(b"\x1b[>1u");
         assert_eq!(e.input_modes().kitty_flags, 1);
+        assert_eq!(e.process(b"\x1b[?u"), b"\x1b[?1u");
+        e.process(b"\x1b[<u");
+        assert_eq!(e.input_modes().kitty_flags, 0);
+        // The query answers only the flags tmxr encodes; the stack keeps
+        // what was pushed.
+        e.process(b"\x1b[>31u");
+        assert_eq!(e.process(b"\x1b[?u"), b"\x1b[?1u");
+        assert_eq!(e.input_modes().kitty_flags, 31);
+        e.process(b"\x1b[=8u");
+        assert_eq!(e.process(b"\x1b[?u"), b"\x1b[?0u");
+        e.process(b"\x1b[=1;2u");
+        assert_eq!(e.input_modes().kitty_flags, 9);
         assert_eq!(e.process(b"\x1b[?u"), b"\x1b[?1u");
         e.process(b"\x1b[<u");
         assert_eq!(e.input_modes().kitty_flags, 0);

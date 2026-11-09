@@ -126,6 +126,104 @@ fn ctrl_hjkl_prefix_hjkl_and_arrows_move_between_panes() {
     }
 }
 
+/// Alt+Shift+h from a kitty-protocol terminal is M-H, not M-h, Alt+Shift
+/// with a digit or symbol is the shifted character (M-!, M-<), as tmux
+/// names those keys, and Ctrl+Shift with a letter is Ctrl with the letter
+/// (C-h, C-é). The test's terminal answers the client's probe for the
+/// protocol and keeps the flags it pushes, and sends the key as such a
+/// terminal does under them: with alternate keys the shifted character
+/// rides along (`CSI 104:72;4u`), without them only the unshifted key and
+/// Shift (`CSI 104;4u`). ConPTY does not pass these.
+#[cfg(unix)]
+#[test]
+fn alt_shift_from_a_kitty_terminal_keeps_its_shift() {
+    let t = Tmxr::new("altshift");
+    let s = t.attach(&["new", "-s", "as"]);
+    s.wait_for("status line", |text| text.contains("as"));
+    t.run(&["bind", "-n", "M-H", "rename-window", "upper"]);
+    t.run(&["bind", "-n", "M-h", "rename-window", "lower"]);
+    t.run(&["bind", "-n", "C-h", "rename-window", "ctrl"]);
+    t.run(&["bind", "-n", "M-!", "rename-window", "bang"]);
+    t.run(&["bind", "-n", "M-<", "rename-window", "less"]);
+    t.run(&["bind", "-n", "C-é", "rename-window", "eacute"]);
+    let flags = s.emu.lock().unwrap().input_modes().kitty_flags;
+    assert_ne!(flags & 1, 0, "the client pushed kitty flags: {flags}");
+    let alternate = flags & 4 != 0;
+    let key = |code: &str, alt: &str, mods: u8| {
+        if alternate {
+            format!("\x1b[{code}:{alt};{mods}u")
+        } else {
+            format!("\x1b[{code};{mods}u")
+        }
+    };
+    let name = |t: &Tmxr, want: &str| {
+        t.wait_run(
+            &["display-message", "-p", "-t", "as", "#{window_name}"],
+            &format!("window named {want}"),
+            |o| o.trim() == want,
+        );
+    };
+    s.send(key("104", "72", 4).as_bytes());
+    name(&t, "upper");
+    s.send(b"\x1b[104;3u");
+    name(&t, "lower");
+    // Ctrl+Shift+h is still C-h to binds, as tmux names it.
+    s.send(key("104", "72", 6).as_bytes());
+    name(&t, "ctrl");
+    s.send(key("49", "33", 4).as_bytes());
+    name(&t, "bang");
+    s.send(key("44", "60", 4).as_bytes());
+    name(&t, "less");
+    // Ctrl+Shift+é is C-é, as Ctrl+Shift+h is C-h.
+    s.send(key("233", "201", 6).as_bytes());
+    name(&t, "eacute");
+}
+
+/// Ctrl+Shift+h from a kitty-protocol terminal reporting alternate keys
+/// (`CSI 104:72;6u`, which crossterm reads as `H` with Ctrl) reaches a pane
+/// as Ctrl+Shift+h: kitty's `CSI 104;6u` where the program pushed kitty
+/// flags, and tmux's `CSI 27;6;104~` where it asked for modifyOtherKeys
+/// level 2. ConPTY does not pass these.
+#[cfg(unix)]
+#[test]
+fn ctrl_shift_from_a_kitty_terminal_reaches_a_pane_with_its_shift() {
+    let t = Tmxr::new("ctrlshift");
+    t.run(&["new-session", "-d", "-s", "cs"]);
+    t.run(&["set", "-s", "extended-keys", "on"]);
+    // To binds it is C-h, which the root table would take.
+    t.run(&["unbind", "-n", "C-h"]);
+    let s = t.attach(&["attach", "-t", "cs"]);
+    s.wait_for("status line", |text| text.contains("cs"));
+    let flags = s.emu.lock().unwrap().input_modes().kitty_flags;
+    assert_eq!(flags & 5, 5, "the client pushed flags 1 and 4: {flags}");
+    for (name, mode, want) in [
+        ("kittypane", r"\e[>1u", r"\x1b[104;6u"),
+        ("mokpane", r"\e[>4;2m", r"\x1b[27;6;104~"),
+    ] {
+        let log = t.dir.path().join(format!("{name}.log"));
+        let argv = key_log_program(&t, name);
+        let env = format!("{KEY_LOG}={}", log.display());
+        let raw = format!("{KEY_LOG_RAW}={mode}");
+        let mut new = vec!["new-window", "-t", "cs", "-e", &env, "-e", &raw];
+        new.extend(argv.iter().map(String::as_str));
+        t.run(&new);
+        // On screen, the mode it asked for is the server's too.
+        t.wait_run(&["capture-pane", "-p", "-t", "cs"], "the mode", |o| {
+            o.contains("raw-on")
+        });
+        s.send(b"\x1b[104:72;6u");
+        let deadline = Instant::now() + TIMEOUT;
+        loop {
+            let got = std::fs::read_to_string(&log).unwrap_or_default();
+            if got.lines().any(|l| l == want) {
+                break;
+            }
+            assert!(Instant::now() < deadline, "{name}: no {want} in {got:?}");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+}
+
 /// Windows Terminal sends keys as win32-input-mode events, not bytes, and
 /// sets `WT_SESSION`: C-j and C-h come as themselves.
 #[cfg(windows)]
