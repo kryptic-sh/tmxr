@@ -37,10 +37,10 @@ Read in the tree on 2026-11-09, after step 1 (`bde1ed4`):
 - **Server → client.** There is a pattern to follow: `ServerMsg::Mouse(bool)`
   and `ServerMsg::FocusEvents(bool)` already switch a client's terminal modes.
 - **Panes.** The emulator (`tmxr-term/src/emulator.rs`) keeps one stack of kitty
-  flags per pane (`CSI > u` push, `CSI < u` pop, `CSI = u` set, `CSI ? u` query;
-  cleared by `ESC c`). `encode_key` (`tmxr-term/src/encode.rs`) acts on flag 1
-  only, and the `CSI ? u` reply is masked to `KITTY_FLAGS_ENCODED`, which each
-  later step widens.
+  flags per screen of each pane (`CSI > u` push, `CSI < u` pop, `CSI = u` set,
+  `CSI ? u` query; both emptied by a full reset). `encode_key`
+  (`tmxr-term/src/encode.rs`) acts on flag 1 only, and the `CSI ? u` reply is
+  masked to `KITTY_FLAGS_ENCODED`, which each later step widens.
 - **Binds.** `Key::normalise` (`tmxr-command/src/keys.rs`) folds Shift into a
   character and lowercases a character held with Ctrl, so key tables know only
   tmux's `C-` / `M-` / `S-` model.
@@ -163,10 +163,6 @@ Decided by the owner (2026-11-09):
 - **Keys tmxr synthesises:** a release for every key held when focus moves away
   from a pane that asked for releases, so no program sees a key stuck down;
   `send-keys` keys, which have no release.
-- **Separate stacks for the main and alternate screens.** The emulator keeps
-  one, so leaving the alternate screen keeps a program's flags; the protocol
-  keeps one per screen (_reported_ by an earlier review, moved here from the
-  backlog; to confirm against the spec).
 
 ### Binds
 
@@ -254,7 +250,8 @@ it too, and gains the modified keys its tier reports:
 
 1. Done in `bde1ed4` (the Alt+Shift fix and the honest query reply); the line
    stays so later steps keep the numbers ttyr's and hjkl's plans cite.
-2. The emulator's per-screen stacks.
+2. Done in `b4bf28f` (a kitty flag stack per screen, as the protocol has; a full
+   reset empties both, as kitty's own does).
 3. Adopt `ttyr`'s key type and parser (blocked on ttyr's input half); the
    protocol bump; `TerminalInfo`'s keyboard field. No behaviour change yet
    beyond what the parser fixes, which includes the backlog's real Ctrl+4 …
