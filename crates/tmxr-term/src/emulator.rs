@@ -57,8 +57,11 @@ pub struct Hooks {
     /// cursor DECRQSS and DECRQM's mode 12 report while the program has
     /// set no shape, as tmux's.
     cursor_style_option: u8,
-    /// kitty keyboard flags stack (`CSI > f u` pushes, `CSI < n u` pops).
-    kitty_flags: Vec<u8>,
+    /// kitty keyboard flags stacks (`CSI > f u` pushes, `CSI < n u` pops),
+    /// the main screen's then the alternate's: the protocol keeps one per
+    /// screen, so a program that leaves the alternate screen without
+    /// popping leaves the main screen's keys as they were.
+    kitty_flags: [Vec<u8>; 2],
     /// The queries the server answers, from the last [`Emulator::process`],
     /// each with where in `replies` its answer goes.
     queries: Vec<(usize, Query)>,
@@ -173,27 +176,30 @@ impl vt1k::Callbacks for Hooks {
                 self.modify_other_keys = u8::from(self.extended_keys == ExtendedKeys::Always);
             }
             (Some(b'>'), 'u') => {
-                if self.kitty_flags.len() >= KITTY_STACK_LIMIT {
-                    self.kitty_flags.remove(0);
+                let stack = self.kitty_stack(screen);
+                if stack.len() >= KITTY_STACK_LIMIT {
+                    stack.remove(0);
                 }
-                self.kitty_flags.push(p(0).unwrap_or(0) as u8);
+                stack.push(p(0).unwrap_or(0) as u8);
             }
             (Some(b'<'), 'u') => {
+                let stack = self.kitty_stack(screen);
                 for _ in 0..p(0).unwrap_or(1).max(1) {
-                    self.kitty_flags.pop();
+                    stack.pop();
                 }
             }
             (Some(b'='), 'u') => {
                 let flags = p(0).unwrap_or(0) as u8;
-                let top = self.kitty_flags.last().copied().unwrap_or(0);
+                let stack = self.kitty_stack(screen);
+                let top = stack.last().copied().unwrap_or(0);
                 let new = match p(1).unwrap_or(1) {
                     2 => top | flags,
                     3 => top & !flags,
                     _ => flags,
                 };
-                match self.kitty_flags.last_mut() {
+                match stack.last_mut() {
                     Some(t) => *t = new,
-                    None => self.kitty_flags.push(new),
+                    None => stack.push(new),
                 }
             }
             // Synchronized output, as tmux 3.8's input_csi_dispatch_sm_private
@@ -218,7 +224,7 @@ impl vt1k::Callbacks for Hooks {
             // Kitty keyboard query: report the current flags tmxr encodes,
             // so programs that probe for the protocol get a truthful answer.
             (Some(b'?'), 'u') => {
-                let flags = self.kitty_flags.last().copied().unwrap_or(0) & KITTY_FLAGS_ENCODED;
+                let flags = self.kitty_top(screen) & KITTY_FLAGS_ENCODED;
                 self.replies.extend(format!("\x1b[?{flags}u").into_bytes());
             }
             _ => {}
@@ -306,6 +312,20 @@ fn set_or_reset(set: bool) -> u8 {
 }
 
 impl Hooks {
+    /// The kitty flags stack of the screen showing.
+    fn kitty_stack(&mut self, screen: &vt1k::Screen) -> &mut Vec<u8> {
+        &mut self.kitty_flags[usize::from(screen.alternate_screen())]
+    }
+
+    /// The kitty flags the screen showing has set: its stack's top, or
+    /// none.
+    fn kitty_top(&self, screen: &vt1k::Screen) -> u8 {
+        self.kitty_flags[usize::from(screen.alternate_screen())]
+            .last()
+            .copied()
+            .unwrap_or(0)
+    }
+
     /// DECRQM's answer for DEC private mode `mode`, as tmux 3.8's
     /// `INPUT_CSI_QUERY_PRIVATE`, from what the screen keeps.
     fn private_mode(&self, screen: &vt1k::Screen, mode: u16) -> u8 {
@@ -625,7 +645,8 @@ impl Emulator {
         hooks.clipboard.truncate(clips);
         hooks.cwd = cwd;
         hooks.input_mark = mark;
-        hooks.kitty_flags.clear();
+        // Both screens' keys go plain, the one not showing as well.
+        hooks.kitty_flags = Default::default();
         // tmux's screen_write_reset sets the modes afresh, the hold's too.
         hooks.hold = None;
         self.reset_keys();
@@ -674,11 +695,11 @@ impl Emulator {
                     let history = self.history_end.saturating_sub(self.times_from);
                     self.times.truncate(history);
                     self.parser.process(b"\x1bc");
-                    // Keys go plain again, as tmux's screen_write_reset
-                    // and the kitty protocol's full reset have them, and
-                    // the redraw is held no more.
+                    // Keys go plain again on both screens, as tmux's
+                    // screen_write_reset and kitty's full reset have them,
+                    // and the redraw is held no more.
                     let hooks = self.parser.callbacks_mut();
-                    hooks.kitty_flags.clear();
+                    hooks.kitty_flags = Default::default();
                     hooks.hold = None;
                     self.reset_keys();
                 }
@@ -1006,7 +1027,7 @@ impl Emulator {
         InputModes {
             app_cursor: s.application_cursor(),
             bracketed_paste: s.bracketed_paste(),
-            kitty_flags: h.kitty_flags.last().copied().unwrap_or(0),
+            kitty_flags: h.kitty_top(s),
             modify_other_keys: h.modify_other_keys,
             asked_keys: h.asked_keys,
             conpty: crate::pty::CONPTY,
@@ -1638,6 +1659,83 @@ mod tests {
         assert!(e.focus_reports());
         e.process(b"\x1b[?1004l");
         assert!(!e.focus_reports());
+    }
+
+    /// The main and alternate screens keep a kitty flags stack each, as the
+    /// protocol has them: a program that leaves the alternate screen
+    /// without popping its flags leaves the shell's keys plain.
+    #[test]
+    fn a_kitty_push_on_the_alternate_screen_stays_there() {
+        let mut e = Emulator::new(24, 80, 0);
+        e.process(b"\x1b[?1049h\x1b[>1u");
+        assert_eq!(e.input_modes().kitty_flags, 1);
+        e.process(b"\x1b[?1049l");
+        assert_eq!(e.input_modes().kitty_flags, 0);
+    }
+
+    /// Push, pop and set act on the screen showing, and each screen's
+    /// flags come back with it.
+    #[test]
+    fn each_screen_keeps_its_kitty_flags_across_a_switch() {
+        let mut e = Emulator::new(24, 80, 0);
+        e.process(b"\x1b[>8u\x1b[?1049h\x1b[>1u\x1b[?1049l");
+        assert_eq!(e.input_modes().kitty_flags, 8, "kept on the main");
+        e.process(b"\x1b[?1049h");
+        assert_eq!(e.input_modes().kitty_flags, 1, "kept on the alternate");
+        e.process(b"\x1b[=0u\x1b[?1049l\x1b[=1;2u\x1b[?1049h");
+        assert_eq!(e.input_modes().kitty_flags, 0, "set on the alternate");
+        // 47 and 1047 switch screens as 1049 does.
+        e.process(b"\x1b[?1049l\x1b[?47h\x1b[<u\x1b[?47l");
+        assert_eq!(e.input_modes().kitty_flags, 9, "a pop leaves the other");
+        e.process(b"\x1b[?1047h\x1b[>2u\x1b[?1047l");
+        assert_eq!(e.input_modes().kitty_flags, 9);
+    }
+
+    /// `CSI ? u` answers the flags of the screen showing.
+    #[test]
+    fn the_kitty_query_answers_the_screens_flags() {
+        let mut e = Emulator::new(24, 80, 0);
+        e.process(b"\x1b[>1u\x1b[?1049h");
+        assert_eq!(e.process(b"\x1b[?u"), b"\x1b[?0u");
+        e.process(b"\x1b[>1u\x1b[?1049l\x1b[<u");
+        assert_eq!(e.process(b"\x1b[?u"), b"\x1b[?0u");
+        e.process(b"\x1b[?1049h");
+        assert_eq!(e.process(b"\x1b[?u"), b"\x1b[?1u");
+    }
+
+    /// Each screen's stack holds the limit on its own: filling one drops
+    /// nothing from the other.
+    #[test]
+    fn each_kitty_stack_has_its_own_limit() {
+        let mut e = Emulator::new(24, 80, 0);
+        e.process(b"\x1b[>9u\x1b[?1049h");
+        for flags in 1..=20 {
+            e.process(format!("\x1b[>{flags}u").as_bytes());
+        }
+        e.process(format!("\x1b[<{KITTY_STACK_LIMIT}u").as_bytes());
+        assert_eq!(e.input_modes().kitty_flags, 0, "the stack holds the limit");
+        e.process(b"\x1b[?1049l");
+        assert_eq!(e.input_modes().kitty_flags, 9);
+    }
+
+    /// A full reset (`ESC c`) and tmxr's own reset empty both stacks, the
+    /// one not showing as well.
+    #[test]
+    fn resets_empty_both_kitty_stacks() {
+        let mut e = Emulator::new(24, 80, 0);
+        e.process(b"\x1b[>1u\x1b[?1049h\x1b[>8u\x1b[?1049l\x1bc\x1b[?1049h");
+        assert_eq!(e.input_modes().kitty_flags, 0, "ESC c, alternate");
+        e.process(b"\x1b[>1u\x1b[?1049l\x1b[>8u\x1b[?1049h\x1bc");
+        assert_eq!(e.input_modes().kitty_flags, 0, "ESC c, main");
+        e.process(b"\x1b[>8u\x1b[?1049h\x1b[>1u\x1b[?1049l");
+        e.reset();
+        e.process(b"\x1b[?1049h");
+        assert_eq!(e.input_modes().kitty_flags, 0, "reset, alternate");
+        e.process(b"\x1b[>1u\x1b[?1049l\x1b[>8u\x1b[?1049h");
+        e.reset();
+        assert!(e.screen().alternate_screen(), "the reset keeps the screen");
+        e.process(b"\x1b[?1049l");
+        assert_eq!(e.input_modes().kitty_flags, 0, "reset, main");
     }
 
     /// The queries the server answers are named in order, each with where

@@ -224,6 +224,42 @@ fn ctrl_shift_from_a_kitty_terminal_reaches_a_pane_with_its_shift() {
     }
 }
 
+/// A program that pushed kitty flags on the alternate screen and left it
+/// without popping them leaves the main screen's keys legacy: Ctrl+Shift+h
+/// from a kitty terminal reaches the pane as C-h, not as `CSI 104;6u`.
+/// ConPTY does not pass these.
+#[cfg(unix)]
+#[test]
+fn kitty_flags_pushed_on_the_alternate_screen_stay_there() {
+    let t = Tmxr::new("altkitty");
+    t.run(&["new-session", "-d", "-s", "ak"]);
+    // To binds it is C-h, which the root table would take.
+    t.run(&["unbind", "-n", "C-h"]);
+    let s = t.attach(&["attach", "-t", "ak"]);
+    s.wait_for("status line", |text| text.contains("ak"));
+    let log = t.dir.path().join("keys.log");
+    let argv = key_log_program(&t, "altpane");
+    let env = format!("{KEY_LOG}={}", log.display());
+    let raw = format!(r"{KEY_LOG_RAW}=\e[?1049h\e[>1u\e[?1049l");
+    let mut new = vec!["new-window", "-t", "ak", "-e", &env, "-e", &raw];
+    new.extend(argv.iter().map(String::as_str));
+    t.run(&new);
+    t.wait_run(&["capture-pane", "-p", "-t", "ak"], "the mode", |o| {
+        o.contains("raw-on")
+    });
+    s.send(b"\x1b[104:72;6u");
+    let deadline = Instant::now() + TIMEOUT;
+    loop {
+        let got = std::fs::read_to_string(&log).unwrap_or_default();
+        if let Some(key) = got.lines().find(|&l| l != "ready") {
+            assert_eq!(key, r"\x08", "{got:?}");
+            break;
+        }
+        assert!(Instant::now() < deadline, "no key in {got:?}");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
 /// Windows Terminal sends keys as win32-input-mode events, not bytes, and
 /// sets `WT_SESSION`: C-j and C-h come as themselves.
 #[cfg(windows)]

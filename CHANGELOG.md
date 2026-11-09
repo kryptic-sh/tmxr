@@ -36,6 +36,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **A pane's program asking for its kitty keyboard flags (`CSI ? u`) is told
   only the flags tmxr encodes**. A program that pushed flags tmxr does not
   implement was told they were on and then got legacy keys.
+- **A program that leaves the alternate screen without popping its kitty
+  keyboard flags no longer leaves them on for the shell.** After an editor or
+  pager that crashed, or exited without popping, the shell got kitty-encoded
+  keys it could not read, such as `CSI 104;6u` for Ctrl+Shift+h. The main and
+  alternate screens now keep a flags stack each, as the protocol has them, and a
+  full reset (`ESC c`, `send-keys -R`) empties both.
 
 ## [0.15.0] - 2026-11-09
 
