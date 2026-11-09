@@ -49,8 +49,13 @@ Read in the tree on 2026-11-09, after step 1 (`bde1ed4`):
 
 ### Capabilities, both ways
 
-- **A client says what its terminal speaks.** `TerminalInfo` gains a keyboard
-  field with three tiers, the best the terminal has:
+- **A client says what its terminal speaks.** Once attached, after its probe, it
+  sends `ClientMsg::Keyboard` with one of three tiers, the best the terminal
+  has, and sends it again after a suspend or a lock if the probe then says
+  otherwise. Not in the hello: the probe runs at `Attached`, so a command
+  client's terminal is never put in raw mode or kept waiting, and an attach from
+  any command list is probed the same way. Until it says, the server takes the
+  client as `Legacy`:
   - `Kitty`: the probe found the kitty protocol. The protocol's query reports
     the current flags, not the supported ones, so the client assumes every flag;
     a terminal that ignores one just never sends what it adds.
@@ -60,8 +65,13 @@ Read in the tree on 2026-11-09, after step 1 (`bde1ed4`):
     sequences, typed text as UTF-8).
 
 - **The server says what a client should ask for.** A new
-  `ServerMsg::KeyboardFlags(u8)`, beside `Mouse` and `FocusEvents`. The client
-  applies it with `CSI = flags ; 1 u` and ignores it on a legacy terminal.
+  `ServerMsg::KeyboardFlags(u8)`, beside `Mouse` and `FocusEvents`, sent only to
+  a client that said `Kitty`: at once when it says so
+  (`Server::client_keyboard`), then on each change. The client asks its terminal
+  for no flags until told, so under `kitty-keys off` a kitty terminal is only
+  ever asked for none. It applies them through `ttyr`'s guard
+  (`Mode::KeyboardFlags`, which pops the flags it pushed and pushes the new
+  ones).
 - **Which flags.** For each client, the flags of the pane its keys go to,
   unioned with flag 1 and flag 4, which tmxr itself needs to tell keys apart.
   When tmxr reads the keys itself (copy mode, the command prompt, menus,
@@ -225,15 +235,16 @@ it too, and gains the modified keys its tier reports:
 - Clients of both kinds on one session each work: the server never assumes a
   client's keyboard from another's.
 - A legacy client is never sent `ServerMsg::KeyboardFlags`, so nothing new is
-  written to its terminal. Not yet true: until step 3 adds the keyboard tier to
-  `TerminalInfo`, the server cannot tell a legacy client apart and sends the
-  message to every client on change; a legacy client drops it (the client's
-  kitty probe said no), so nothing reaches its terminal. Step 3 closes it.
+  written to its terminal: the server sends it only to a client that said
+  `Keyboard::Kitty` (`kitty::speaks`).
 
 ### Lifecycle
 
-- Detach, suspend (`ServerMsg::Suspend`), lock and a client crash already pop
-  the flags; resume and unlock must apply the current ones again.
+- Detach, suspend (`ServerMsg::Suspend`), lock and a client panic pop the flags,
+  once (`ttyr`'s guard records the push). Resume and unlock push the flags the
+  server last sent again (`suspend_with`), if the terminal still answers the
+  kitty query; if its tier changed, the client says so and the server sends a
+  kitty terminal its flags afresh.
 - Keys typed while a change of flags is in flight arrive in the old encoding.
   The parser reads every encoding whatever was asked, so only releases can go
   missing; the synthesised releases above cover a key held across the change.
@@ -255,17 +266,17 @@ it too, and gains the modified keys its tier reports:
    stays so later steps keep the numbers ttyr's and hjkl's plans cite.
 2. Done in `b4bf28f` (a kitty flag stack per screen, as the protocol has; a full
    reset empties both, as kitty's own does).
-3. Adopt `ttyr`'s key type and parser (blocked on ttyr's input half); the
-   protocol bump; `TerminalInfo`'s keyboard field. No behaviour change yet
-   beyond what the parser fixes, which includes the backlog's real Ctrl+4 …
-   Ctrl+7 that crossterm reports as the legacy control byte (`tmux_key` at level
-   2), and what step 1 left (in the CHANGELOG's Changed entry): a kitty-aware
-   pane gets Alt/Ctrl+Shift with a digit or symbol as the shifted character
-   (`CSI 33;3u` for Alt+Shift+1, where the protocol says `CSI 49;4u`), and a
-   letter's unshifted key is guessed from Unicode case (`unshifted_letter`),
-   wrong on layouts like Turkish. With the unshifted key from the terminal,
-   `kitty_key` and `unshifted_letter` go, and the pinned test
-   `kitty_sends_a_shifted_symbol_as_itself_without_shift` changes.
+3. Done: adopt `ttyr`'s key type and parser; the protocol bump; the client's
+   keyboard tier. No behaviour change yet beyond what the parser fixes, which
+   includes the backlog's real Ctrl+4 … Ctrl+7 that crossterm reports as the
+   legacy control byte (`tmux_key` at level 2), and what step 1 left (in the
+   CHANGELOG's Changed entry): a kitty-aware pane gets Alt/Ctrl+Shift with a
+   digit or symbol as the shifted character (`CSI 33;3u` for Alt+Shift+1, where
+   the protocol says `CSI 49;4u`), and a letter's unshifted key is guessed from
+   Unicode case (`unshifted_letter`), wrong on layouts like Turkish. With the
+   unshifted key from the terminal, `kitty_key` and `unshifted_letter` go, and
+   the pinned test `kitty_sends_a_shifted_symbol_as_itself_without_shift`
+   changes.
    - First half done in `543610c`: tmxr's key, mouse and input event types are
      `ttyr`'s (pinned by git rev) in every layer, and the wire carries
      `ttyr::event::Event` (protocol 15). The client still reads with crossterm
@@ -294,14 +305,28 @@ it too, and gains the modified keys its tier reports:
      byte by `KeyEncoding`. Left: `TerminalInfo`'s keyboard field, and moving
      the terminal modes (raw mode, the alternate screen, the kitty push and pop,
      restore) from crossterm to `ttyr::terminal`'s guard.
+   - 3c done: on Unix the client's terminal modes are `ttyr::terminal`'s guard
+     (`enable`/`disable`, `Mode::KeyboardFlags` for the push and its
+     replacement, `suspend_with` for both `suspend-client` and `lock-client`,
+     `restore_on_panic` once), with tmxr's own resets (SGR 0, the cursor's shape
+     and colour) and the mouse (all of 1000/1002/1003/1006, where `ttyr`'s mouse
+     mode turns on one level) in a hook installed once over `ttyr`'s; crossterm
+     is a Windows-only dependency of `tmxr-client`, where it keeps the console's
+     modes and reading until step 8. After its probe the client sends its
+     terminal's `Keyboard` tier (`ClientMsg::Keyboard`; protocol 15, unreleased,
+     so not bumped again): `Kitty` where the probe saw a flags report before
+     DA1, else `Legacy`; nothing reports `Xterm` until step 5. The server sends
+     `KeyboardFlags` to `Kitty` clients only, the first at once when the tier
+     arrives, and the client pushes no flags until told.
 4. Done in `7b1dfa0`: `ServerMsg::KeyboardFlags` (protocol 14), the `kitty-keys`
    option, and `kitty::flags` in tmxr-server, the one place that decides each
    client's flags. It follows focus already, but asks only for tmxr's own 1|4
    until step 6 widens `KITTY_FLAGS_ENCODED`; step 6's tests must then show
-   focus changing what a client is asked for. Left for step 3: legacy clients
-   are still sent the message (see the fallback guarantees).
+   focus changing what a client is asked for.
 5. The xterm tier: XTVERSION in the client's probe, `terminal-features`,
-   `CSI > 4 ; 2 m` under `extended-keys`.
+   `CSI > 4 ; 2 m` under `extended-keys`. Until then no client reports
+   `Keyboard::Xterm` (`Guard::keyboard` in `tmxr-client`): a terminal without
+   the kitty protocol reports `Legacy`.
 6. `encode_key` for flags 2, 4, 8 and 16, with the fallback and the synthesised
    releases.
 7. Kitty-style key names and the extended tmux names, in every place a key is

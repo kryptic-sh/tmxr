@@ -6,13 +6,25 @@
 //! the one place that decides, read for each client as its frame is drawn,
 //! and the client is told when the answer changes, as the mouse mode is
 //! ([`crate::mouse::capture`]): whatever moves focus or changes a program's
-//! flags also marks the client for a redraw.
+//! flags also marks the client for a redraw. A client whose terminal does
+//! not speak the protocol ([`speaks`]) is never told any.
 
+use tmxr_proto::Keyboard;
 use tmxr_term::encode::{KITTY_FLAGS_ENCODED, TMXR_KITTY_FLAGS};
 
 use crate::model::ClientId;
 use crate::overlay::Overlay;
 use crate::server::Server;
+
+/// Whether attached client `id` said its terminal speaks the kitty
+/// keyboard protocol (`ClientMsg::Keyboard`): only then is it told which
+/// flags to ask for.
+pub fn speaks(srv: &Server, id: ClientId) -> bool {
+    srv.clients
+        .get(&id)
+        .and_then(|c| c.att.as_ref())
+        .is_some_and(|att| att.keyboard == Keyboard::Kitty)
+}
 
 /// The kitty keyboard flags client `id`'s terminal should report keys
 /// under now.
@@ -39,12 +51,6 @@ pub fn flags(srv: &Server, id: ClientId) -> u8 {
             })
         });
     wanted(srv.cfg.kitty_keys, program, KITTY_FLAGS_ENCODED)
-}
-
-/// The flags a client is told to ask for as it attaches, before it shows
-/// a pane whose program could add its own.
-pub fn at_attach(srv: &Server) -> u8 {
-    wanted(srv.cfg.kitty_keys, None, KITTY_FLAGS_ENCODED)
 }
 
 /// The flags of the program keys go to past `overlay`: a popup's own

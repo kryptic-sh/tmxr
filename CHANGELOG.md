@@ -8,11 +8,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Breaking
 
-- **The client-server protocol is now 15** (the server tells the client which
-  kitty keyboard flags to ask its terminal for, and the client sends its
-  terminal's input as `ttyr`'s events rather than crossterm's): after upgrading,
-  a running server must be restarted (`tmxr kill-server`); the client says so if
-  it meets one.
+- **The client-server protocol is now 15** (once attached the client says which
+  keyboard protocol its terminal speaks, the server tells a client whose
+  terminal speaks the kitty protocol which flags to ask it for, and the client
+  sends its terminal's input as `ttyr`'s events rather than crossterm's): after
+  upgrading, a running server must be restarted (`tmxr kill-server`); the client
+  says so if it meets one.
+- **`tmxr-proto`'s `ClientMsg` has a `Keyboard` variant**, carrying the new
+  `Keyboard` enum (`Legacy`, `Xterm`, `Kitty`): the best keyboard protocol the
+  attached client's terminal speaks. No client reports `Xterm` yet.
+  **`tmxr-server`'s `server::Attached` has a `keyboard` field** holding it; a
+  library caller building one with a struct literal sets it.
 - **The library crates take `ttyr`'s key, mouse and input event types in place
   of crossterm's**: `tmxr-proto`'s `ClientMsg::Input` carries
   `ttyr::event::Event`; `tmxr-term`'s `encode_key`, `conpty_key` and
@@ -37,6 +43,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`tmxr-server`'s `kitty::speaks`**: whether an attached client said its
+  terminal speaks the kitty keyboard protocol.
 - **The `kitty-keys` server option**, tmxr's own: `on` (the default) or `off`.
   `off` turns the kitty keyboard protocol off both ways: no client asks its
   terminal for it (nor again after `suspend-client` or `lock-client`), and a
@@ -44,10 +52,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   flags are on (`CSI ? u`), so it falls back to legacy keys by itself. Turning
   it off drops the flags programs had pushed; turning it on again does not bring
   them back. `extended-keys` stays tmux's and covers xterm-style extended keys
-  only.
+  only. With it `on`, the flags a kitty terminal is asked for are the server's
+  to say, and the terminal is asked for none until the server says: once the
+  client has told the server its terminal speaks the protocol, at attach and
+  again after `suspend-client` or `lock-client`. 0.15.0's client pushed tmxr's
+  own flags (1 and 4) itself as it attached. A change of flags pops those pushed
+  and pushes the new ones (`CSI < 1 u CSI > flags u`). A terminal without the
+  protocol is asked for nothing, as in 0.15.0.
 
 ### Changed
 
+- **On Unix the client takes and gives back its terminal through `ttyr`, not
+  crossterm**: raw mode, the alternate screen, bracketed paste, focus and colour
+  scheme reports, the kitty flags, and their restore on detach, on a panic and
+  around `suspend-client` and `lock-client`. Raw mode is set on the controlling
+  terminal (`/dev/tty`) rather than on standard input. Mouse capture no longer
+  turns on urxvt's mouse form (mode 1015), which tmux does not ask for either:
+  still 1000, 1002, 1003 and SGR's 1006. crossterm is now a Windows-only
+  dependency of `tmxr-client`.
+- **The cursor colour reset the client writes as it gives its terminal back
+  (`OSC 112`) ends with ST (`ESC \`) rather than BEL**, on every platform.
 - **The client also asks its terminal for its name and version** (XTVERSION,
   `CSI > q`) when it attaches, and asks all its questions again on the way back
   from `suspend-client` and `lock-client`, where it asked only for the kitty
@@ -56,6 +80,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A client that panics pops its kitty keyboard flags once.** It added a panic
+  hook popping them each time it took its terminal (at attach, and again after
+  each `suspend-client` or `lock-client`), and popped them once more as it
+  unwound, so a panic could pop them twice or more for the one push, and so pop
+  the terminal's own flags. Its terminal is now given back once.
 - **Alt+Shift keys reach binds as the keys they are, in terminals with the kitty
   keyboard protocol** (Alacritty, kitty, foot, Ghostty, WezTerm). `bind -n M-H`
   never fired (`M-h` ran instead); Alt+Shift with a digit or symbol arrived as

@@ -129,18 +129,12 @@ impl Keys {
         Ok((probe, events))
     }
 
-    /// The Windows console hands over input records, so it is not asked;
-    /// whether it speaks the kitty protocol is crossterm's answer.
+    /// The Windows console hands over input records, so it is not asked,
+    /// and has no kitty keyboard protocol (crossterm, which reads it, says
+    /// none there).
     #[cfg(windows)]
     pub(super) fn probe(&mut self, _out: &mut impl Write) -> io::Result<(Probe, Vec<Event>)> {
-        let kitty = crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false);
-        Ok((
-            Probe {
-                kitty,
-                ..Probe::default()
-            },
-            Vec::new(),
-        ))
+        Ok((Probe::default(), Vec::new()))
     }
 }
 

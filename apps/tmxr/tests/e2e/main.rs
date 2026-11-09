@@ -229,8 +229,10 @@ impl Tmxr {
             env!("CARGO_BIN_EXE_tmxr"),
             &self.args(rest),
             &[],
-            true,
-            None,
+            Answers {
+                sync: true,
+                ..Answers::default()
+            },
         )
     }
 
@@ -244,8 +246,26 @@ impl Tmxr {
             env!("CARGO_BIN_EXE_tmxr"),
             &self.args(rest),
             &[],
-            false,
-            Some(keys.to_vec()),
+            Answers {
+                typed_before_da1: Some(keys.to_vec()),
+                ..Answers::default()
+            },
+        )
+    }
+
+    /// [`Tmxr::attach`] in a terminal without the kitty keyboard protocol:
+    /// it answers no kitty query (`CSI ? u`), as xterm does not.
+    #[cfg(unix)]
+    fn attach_legacy(&self, rest: &[&str]) -> Screen {
+        self.terminal(
+            self.dir.path(),
+            env!("CARGO_BIN_EXE_tmxr"),
+            &self.args(rest),
+            &[],
+            Answers {
+                kitty: false,
+                ..Answers::default()
+            },
         )
     }
 
@@ -257,23 +277,23 @@ impl Tmxr {
         args: &[String],
         vars: &[(&str, Option<&str>)],
     ) -> Screen {
-        self.terminal(cwd, program, args, vars, false, None)
+        self.terminal(cwd, program, args, vars, Answers::default())
     }
 
-    /// [`Tmxr::spawn_at`], the terminal answering DECRQM for mode 2026 as
-    /// set, OSC 10 / 11 with its colours and `CSI ? 996 n` with its color
-    /// scheme when `sync` (else, as one that knows none of them, not at all),
-    /// and with `typed_before_da1` typed just ahead of its answer to the
-    /// first DA1 query.
+    /// [`Tmxr::spawn_at`], the terminal answering as `answers` says.
     fn terminal(
         &self,
         cwd: &Path,
         program: &str,
         args: &[String],
         vars: &[(&str, Option<&str>)],
-        sync: bool,
-        mut typed_before_da1: Option<Vec<u8>>,
+        answers: Answers,
     ) -> Screen {
+        let Answers {
+            sync,
+            kitty,
+            mut typed_before_da1,
+        } = answers;
         let pair = native_pty_system()
             .openpty(PtySize {
                 rows: ROWS,
@@ -348,7 +368,10 @@ impl Tmxr {
                     // mode 2026's as answered above, which the emulator,
                     // holding a pane's synchronized output, would say it
                     // knows.
-                    let fed = without(&buf[..n], SYNC_QUERY);
+                    let mut fed = without(&buf[..n], SYNC_QUERY);
+                    if !kitty {
+                        fed = without(&fed, KITTY_QUERY);
+                    }
                     let replies = emu.lock().unwrap().process(&fed);
                     if !replies.is_empty() {
                         let _ = writer.lock().unwrap().write_all(&replies);
@@ -368,6 +391,29 @@ impl Tmxr {
             paused,
             #[cfg(unix)]
             light,
+        }
+    }
+}
+
+/// How [`Tmxr::terminal`]'s terminal answers what the client asks it.
+struct Answers {
+    /// DECRQM for mode 2026 as set, OSC 10 / 11 with its colours and
+    /// `CSI ? 996 n` with its color scheme; else, as a terminal that knows
+    /// none of them, not at all.
+    sync: bool,
+    /// The kitty keyboard query (`CSI ? u`), through the emulator.
+    kitty: bool,
+    /// Typed just ahead of its answer to the first DA1 query.
+    typed_before_da1: Option<Vec<u8>>,
+}
+
+impl Default for Answers {
+    /// A terminal with the kitty protocol, and none of the rest.
+    fn default() -> Self {
+        Self {
+            sync: false,
+            kitty: true,
+            typed_before_da1: None,
         }
     }
 }
@@ -582,6 +628,37 @@ impl Screen {
             .collect()
     }
 
+    /// How many times the terminal was asked to pop kitty keyboard flags
+    /// (`CSI < n u`).
+    #[cfg(unix)]
+    fn kitty_pops(&self) -> usize {
+        let raw = self.raw_text();
+        raw.split("\x1b[<")
+            .skip(1)
+            .filter(|seq| {
+                let digits = seq.bytes().take_while(u8::is_ascii_digit).count();
+                seq[digits..].starts_with('u')
+            })
+            .count()
+    }
+
+    /// Wait until the terminal's kitty keyboard flags are `want`.
+    #[cfg(unix)]
+    fn wait_kitty_flags(&self, want: u8) {
+        let deadline = Instant::now() + TIMEOUT;
+        loop {
+            let flags = self.emu.lock().unwrap().input_modes().kitty_flags;
+            if flags == want {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "terminal flags {flags}, not {want}"
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
     /// Wait until what the terminal was sent satisfies `pred`.
     #[cfg(unix)]
     fn wait_for_raw(&self, what: &str, pred: impl Fn(&str) -> bool) {
@@ -616,6 +693,11 @@ fn console_window_probe() {
 
 /// DECRQM for synchronized updates (mode 2026), which the client asks.
 const SYNC_QUERY: &[u8] = b"\x1b[?2026$p";
+
+/// The kitty keyboard protocol's query for the flags on (`CSI ? u`), which
+/// the client asks; the emulator answers it unless the harness's terminal is
+/// one without the protocol.
+const KITTY_QUERY: &[u8] = b"\x1b[?u";
 
 /// The primary device attributes query (DA1), which the client asks last
 /// of its questions to the terminal.

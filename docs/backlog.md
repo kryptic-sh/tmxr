@@ -234,7 +234,7 @@ named were checked by reading; the runs were not repeated.
   built-in ConPTY forwards `?2026h`, build 26300, 2026-11-04:
   `a_synchronized_redraw_reaches_the_terminal_whole` runs there too.)
 - **With `mouse off` the terminal reports every motion** (_read_, slice-2
-  review): `mouse::capture` is one bool, so crossterm's capture turns on
+  review): `mouse::capture` is one bool, so the client's capture turns on
   1000/1002/1003/1006 whatever the program asked; tmux copies the program's own
   mode (`tty_update_mode`). Programs get the same bytes (`encode_mouse` filters
   by their mode), but each motion goes through `mouse::handle`, which sets
@@ -309,8 +309,8 @@ mouse-enabled pane.
 ## Plan 18's crossterm bridge (2026-11-10)
 
 - **The Windows client's bridge labels every key `Legacy`.**
-  `crossterm_bridge::ttyr_event` (`tmxr-client`, built on Windows only, and for
-  its tests) cannot tell which form a key came in, and the console has no kitty
+  `crossterm_bridge::ttyr_event` (`tmxr-client`, built and tested on Windows
+  only) cannot tell which form a key came in, and the console has no kitty
   protocol. So under Windows Terminal's win32-input-mode, which does tell a real
   Ctrl+4 from Ctrl+`\`, a Ctrl+4 to Ctrl+7 is read as the legacy control byte
   (`legacy_control` in `tmxr-term`'s `encode.rs`): `C-\` to `C-_` at
@@ -348,11 +348,38 @@ mouse-enabled pane.
   answers arrive, and the stale DA1 ends it with partial answers. Keys the user
   types come after the late answers, so their own prefix+C-z cannot trigger it.
   Found by reading.
-- **Every `Guard::enter` wraps the panic hook again**, each with its own
-  `kitty`, so a panic after several suspends or locks pops the kitty flags once
-  per hook plus once in `Drop`, possibly popping the terminal's own. As in
-  0.15.0. ttyr's `restore_on_panic` installs one hook; plan 18 step 3's move to
-  ttyr's guard fixes it.
+- **The Unix client's raw mode is the controlling terminal's, a limit of `ttyr`
+  at its pin** (35b22a9): its only public raw mode, `enable_raw_mode`, opens
+  `/dev/tty`; the fd-taking `enable_raw_mode_on` sits in its private
+  `terminal::unix` module, and so does `window_size_of`, so the hello's size
+  (`ttyr::terminal::size`) is `/dev/tty`'s too. crossterm used standard input
+  when it was a terminal, so a client whose stdin and stdout are a terminal but
+  which has no controlling terminal attached in 0.15.0 and now fails to. The
+  reader already reads a dup of stdin (`Keys::open`). Needs `ttyr` to take raw
+  mode (and the size) on a given fd; asked of `ttyr` by the coordinator. Found
+  by reading; not tried.
+- **tmxr inside tmxr whose outer server has `kitty-keys off` reports the kitty
+  tier.** The outer pane's emulator still answers the kitty query (`CSI ? u`,
+  the `(Some(b'?'), 'u')` arm of `tmxr-term`'s `emulator.rs`) with `CSI ? 0 u`
+  while it ignores every push, pop and set, so the inner client's probe sees a
+  flags report before DA1, says `Keyboard::Kitty`, and pushes flags the outer
+  server drops. Keys still work (the outer pane encodes legacy), but the tier is
+  wrong, which step 7's `list-keys` marks will read. Options: (a) a pane under
+  `kitty-keys off` does not answer the query at all, as a terminal without the
+  protocol does, so programs time out to DA1 as they do on xterm; costs nothing
+  for programs that send DA1 behind it (as the protocol's spec advises) and a
+  wait for those that do not. (b) It answers in a form the inner client reads as
+  legacy, which no form of `CSI ? flags u` is: the protocol has no "unsupported"
+  answer, so this needs tmxr's own signal (say, the inner client trusting
+  `kitty-keys` from `TMXR`), and helps only tmxr's own client. Found by reading;
+  not tested.
+- **`docs/plan/03-protocol.md`'s `TerminalInfo` is stale**: it lists
+  `{ cols, rows, term, job_control }`, without `tty` or `colour_answers`, and
+  its `ClientMsg` list lacks `Keyboard`.
+- **The panic-restore test (`a_panic_gives_the_terminal_back_once`, in
+  `tmxr-client`'s `terminal/guard/unix/tests.rs`) was run on Linux only**; it
+  runs a pty fixture made the controlling terminal with `setsid` and
+  `TIOCSCTTY`, whose macOS run is CI's first.
 - **Windows AltGr arrives as Ctrl+Alt** through crossterm, so AltGr+q (`@` on a
   German layout) is read as Ctrl+Alt+`@` and sent as `ESC NUL`, and a non-ASCII
   AltGr character such as Polish `ł` sends nothing (`encode.rs` `ctrl_byte`

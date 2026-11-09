@@ -58,6 +58,22 @@ pub struct TerminalInfo {
     pub colour_answers: bool,
 }
 
+/// A terminal's keyboard tier: how it can report keys beyond the bytes a
+/// VT sends ([`ClientMsg::Keyboard`]).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Keyboard {
+    /// Bytes as a VT sends them: ASCII control bytes and escape sequences,
+    /// typed text as UTF-8.
+    #[default]
+    Legacy,
+    /// xterm's modifyOtherKeys (tmux's `extkeys` feature). No client reports
+    /// it yet: telling it apart takes the terminal's name (plan 18 step 5).
+    Xterm,
+    /// The kitty keyboard protocol: the terminal answered its query before
+    /// DA1.
+    Kitty,
+}
+
 /// Messages from a client to the server.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ClientMsg {
@@ -77,6 +93,11 @@ pub enum ClientMsg {
         fg: Option<u32>,
         bg: Option<u32>,
     },
+    /// The best keyboard protocol the attached client's terminal speaks, as
+    /// it answered when asked: sent after attaching, and again when asked
+    /// after a suspend or a lock, if it changed. Until it comes the server
+    /// takes the terminal as [`Keyboard::Legacy`].
+    Keyboard(Keyboard),
     /// The client wants to detach (sent on terminal hangup).
     Detach,
     /// The client is back from `suspend-client` or a lock; its terminal was
@@ -127,9 +148,10 @@ pub enum ServerMsg {
     FocusEvents(bool),
     /// The kitty keyboard flags the attached client's terminal should
     /// report keys under now: tmxr's own and those of the program its keys
-    /// go to, or none under `kitty-keys off`. The client sets them (`CSI =
-    /// flags ; 1 u`) where its terminal speaks the protocol and ignores
-    /// them elsewhere.
+    /// go to, or none under `kitty-keys off`. Sent only to a client that
+    /// said its terminal speaks the protocol ([`Keyboard::Kitty`]), at once
+    /// when it says so and on each change after; it asks its terminal for
+    /// them in place of those it asked for before, and for none until told.
     KeyboardFlags(u8),
     /// Stop the client process (`suspend-client`), as `C-z` stops a program.
     Suspend,

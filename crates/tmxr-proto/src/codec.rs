@@ -61,7 +61,7 @@ pub fn read_msg<R: Read, T: DeserializeOwned>(r: &mut R) -> Result<Option<T>, Pr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ClientMsg, Hello, PROTOCOL_VERSION, ServerMsg, TerminalInfo};
+    use crate::{ClientMsg, Hello, Keyboard, PROTOCOL_VERSION, ServerMsg, TerminalInfo};
     use ttyr::event::{
         ColorScheme, ColorSlot, Event, KeyCode, KeyEvent, KeyModifiers, Report, TerminalColor,
     };
@@ -97,6 +97,7 @@ mod tests {
                 fg: Some(0xc0caf5),
                 bg: None,
             },
+            ClientMsg::Keyboard(Keyboard::Kitty),
             ClientMsg::Detach,
             ClientMsg::Resumed,
             ClientMsg::LockFailed("lock: not found".into()),
@@ -180,7 +181,7 @@ mod tests {
         );
     }
 
-    const GOLDEN: u64 = 18_204_916_481_309_410_369;
+    const GOLDEN: u64 = 14_980_846_194_941_620_781;
 
     /// FNV-1a 64-bit (http://www.isthe.com/chongo/tech/comp/fnv/), used only to
     /// pin the golden bytes in a readable constant.

@@ -152,8 +152,13 @@ pub struct Attached {
     /// Whether this client was last told to ask for focus reports.
     pub focus_events: bool,
     /// The kitty keyboard flags this client was last told to ask for
-    /// (`crate::kitty::flags`); `None` when that went astray.
+    /// (`crate::kitty::flags`); `None` when that went astray, or for a
+    /// client not told any, whose terminal has not said it speaks the
+    /// protocol.
     pub keyboard_flags: Option<u8>,
+    /// The keyboard tier the client said its terminal has
+    /// (`ClientMsg::Keyboard`); `Legacy` until it says.
+    pub keyboard: tmxr_proto::Keyboard,
     /// When this client's status timer last fired (`status-interval`).
     pub status_at: Instant,
     /// Focused: from attaching until the terminal reports focus out, then
@@ -857,6 +862,7 @@ impl Server {
                     c.colours_asked = Some(Instant::now());
                 }
             }
+            ClientMsg::Keyboard(keyboard) => self.client_keyboard(id, keyboard),
             ClientMsg::Detach => self.detach(id, "detached"),
             ClientMsg::Resumed | ClientMsg::LockFailed(_) => {
                 // The shell had the terminal: repaint everything, and tell
@@ -875,6 +881,25 @@ impl Server {
                 }
             }
         }
+    }
+
+    /// Client `id` says its terminal's keyboard tier: a kitty terminal is
+    /// told its flags at once, without waiting for them to change, and any
+    /// other is told none from now on.
+    fn client_keyboard(&mut self, id: ClientId, keyboard: tmxr_proto::Keyboard) {
+        let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
+            return;
+        };
+        att.keyboard = keyboard;
+        att.keyboard_flags = None;
+        if !crate::kitty::speaks(self, id) {
+            return;
+        }
+        let flags = crate::kitty::flags(self, id);
+        if let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
+            att.keyboard_flags = Some(flags);
+        }
+        self.send(id, ServerMsg::KeyboardFlags(flags));
     }
 
     fn client_terminal(&self, id: ClientId) -> Option<&tmxr_proto::TerminalInfo> {
@@ -1363,8 +1388,9 @@ impl Server {
             let mouse = crate::mouse::capture(self, id);
             let focus = self.cfg.focus_events;
             // Likewise the kitty keyboard flags, as focus moves or the
-            // focused program changes its own.
-            let keyboard = crate::kitty::flags(self, id);
+            // focused program changes its own, where the terminal speaks
+            // the protocol.
+            let keyboard = crate::kitty::speaks(self, id).then(|| crate::kitty::flags(self, id));
             let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
                 continue;
             };
@@ -1378,7 +1404,7 @@ impl Server {
             att.content_dirty = false;
             let tell_mouse = std::mem::replace(&mut att.mouse, mouse) != mouse;
             let tell_focus = std::mem::replace(&mut att.focus_events, focus) != focus;
-            let tell_keyboard = att.keyboard_flags.replace(keyboard) != Some(keyboard);
+            let tell_keyboard = keyboard.filter(|&k| att.keyboard_flags.replace(k) != Some(k));
             let full = std::mem::take(&mut att.full_redraw);
             let Some(mut term) = att.term.take() else {
                 continue;
@@ -1429,7 +1455,7 @@ impl Server {
             if tell_focus {
                 self.send(id, ServerMsg::FocusEvents(focus));
             }
-            if tell_keyboard {
+            if let Some(keyboard) = tell_keyboard {
                 self.send(id, ServerMsg::KeyboardFlags(keyboard));
             }
         }
@@ -1548,6 +1574,75 @@ pub(crate) fn config_file(source: tmxr_config::ConfigSource) -> Option<PathBuf> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tmxr_proto::{Keyboard, TerminalInfo};
+    use tmxr_term::encode::TMXR_KITTY_FLAGS;
+
+    /// A server with client 1, in a terminal, attached to session 0 (which
+    /// does not exist), with `kitty-keys` as `kitty_keys`; and what the
+    /// server sends the client.
+    fn attached(kitty_keys: bool) -> (Server, std::sync::mpsc::Receiver<ServerMsg>) {
+        let hello = Hello {
+            protocol: PROTOCOL_VERSION,
+            version: String::new(),
+            cwd: String::new(),
+            pid: 0,
+            env: Vec::new(),
+            terminal: Some(TerminalInfo {
+                cols: 80,
+                rows: 24,
+                term: "xterm-256color".into(),
+                job_control: false,
+                tty: String::new(),
+                colour_answers: false,
+            }),
+        };
+        let (mut srv, rx) = testing::with_client(Some(hello));
+        srv.cfg.kitty_keys = kitty_keys;
+        srv.attach(1, 0);
+        (srv, rx)
+    }
+
+    /// The kitty flags the server has told the client so far.
+    fn flags_told(rx: &std::sync::mpsc::Receiver<ServerMsg>) -> Vec<u8> {
+        rx.try_iter()
+            .filter_map(|msg| match msg {
+                ServerMsg::KeyboardFlags(flags) => Some(flags),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_client_is_told_kitty_flags_only_once_it_says_its_terminal_speaks_them() {
+        for kitty_keys in [true, false] {
+            let wanted = if kitty_keys { TMXR_KITTY_FLAGS } else { 0 };
+            let (mut srv, rx) = attached(kitty_keys);
+            // Its tier unknown at attach: told nothing, nor as frames go.
+            srv.render_all();
+            assert_eq!(flags_told(&rx), Vec::<u8>::new(), "{kitty_keys}");
+            // Neither once it says legacy or xterm.
+            for keyboard in [Keyboard::Legacy, Keyboard::Xterm] {
+                srv.client_msg(1, ClientMsg::Keyboard(keyboard));
+                srv.render_all();
+                assert_eq!(flags_told(&rx), Vec::<u8>::new(), "{keyboard:?}");
+            }
+            // Kitty: its flags at once, none under `kitty-keys off`.
+            srv.client_msg(1, ClientMsg::Keyboard(Keyboard::Kitty));
+            assert_eq!(flags_told(&rx), vec![wanted], "{kitty_keys}");
+            // And again as they change.
+            srv.cfg.kitty_keys = !kitty_keys;
+            srv.clients.get_mut(&1).unwrap().att.as_mut().unwrap().dirty = true;
+            srv.render_all();
+            let now = if kitty_keys { 0 } else { TMXR_KITTY_FLAGS };
+            assert_eq!(flags_told(&rx), vec![now], "{kitty_keys}");
+            // Back to legacy (a terminal asked again after a suspend): no more.
+            srv.client_msg(1, ClientMsg::Keyboard(Keyboard::Legacy));
+            srv.cfg.kitty_keys = kitty_keys;
+            srv.clients.get_mut(&1).unwrap().att.as_mut().unwrap().dirty = true;
+            srv.render_all();
+            assert_eq!(flags_told(&rx), Vec::<u8>::new(), "{kitty_keys}");
+        }
+    }
 
     #[test]
     fn foreground_commands_wake_the_server_only_away_from_a_status_redraw() {

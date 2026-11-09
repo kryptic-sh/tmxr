@@ -11,7 +11,6 @@ authors.workspace = true
 readme.workspace = true
 
 [dependencies]
-crossterm = "0.29.0"
 interprocess = "2.4.7"
 tmxr-command.workspace = true
 tmxr-proto.workspace = true
@@ -25,6 +24,7 @@ workspace = true
 libc = "0.2.191"
 
 [target."cfg(windows)".dependencies]
+crossterm = "0.29.0"
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Console", "Win32_System_Threading"] }
 
 [target."cfg(windows)".dev-dependencies]

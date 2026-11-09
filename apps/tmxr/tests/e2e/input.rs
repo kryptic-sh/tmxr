@@ -513,6 +513,110 @@ fn kitty_keys_takes_on_or_off() {
     assert_eq!(t.run(&["show", "-s", "kitty-keys"]).trim(), "kitty-keys on");
 }
 
+/// Opens a window in session `session` whose program pushes kitty flags
+/// (`CSI > 1 u`), and waits until it has.
+#[cfg(unix)]
+fn kitty_pane(t: &Tmxr, session: &str, name: &str) {
+    let log = t.dir.path().join(format!("{name}.log"));
+    let argv = key_log_program(t, name);
+    let env = format!("{KEY_LOG}={}", log.display());
+    let raw = format!(r"{KEY_LOG_RAW}=\e[>1u");
+    let mut new = vec!["new-window", "-t", session, "-e", &env, "-e", &raw];
+    new.extend(argv.iter().map(String::as_str));
+    t.run(&new);
+    t.wait_run(&["capture-pane", "-p", "-t", session], "the mode", |o| {
+        o.contains("raw-on")
+    });
+}
+
+/// Moves focus away from the window a program that pushed kitty flags runs
+/// in and back, turns `kitty-keys` off and on, and waits for a frame drawn
+/// after all of it, so the client was told whatever the server tells it.
+#[cfg(unix)]
+fn move_focus_and_kitty_keys(t: &Tmxr, s: &Screen, session: &str) {
+    t.run(&["select-window", "-t", &format!("{session}:0")]);
+    t.run(&["select-window", "-t", &format!("{session}:1")]);
+    t.run(&["set", "-s", "kitty-keys", "off"]);
+    t.run(&["set", "-s", "kitty-keys", "on"]);
+    t.run(&["display-message", "-d", "0", "moved-it-all"]);
+    s.wait_for("the message", |text| text.contains("moved-it-all"));
+}
+
+/// A terminal without the kitty keyboard protocol (it answers no `CSI ? u`)
+/// is sent no kitty flags at all: not at attach, nor as a pane's program
+/// pushes flags and focus moves to it and away, nor as `kitty-keys` changes,
+/// nor a pop on detach. Unix only: the Windows client never asks (the
+/// console has no protocol), and the probe that tells a terminal apart is
+/// Unix's.
+#[cfg(unix)]
+#[test]
+fn a_legacy_terminal_is_sent_no_kitty_flags() {
+    let t = Tmxr::new("legacyflags");
+    t.run(&["new-session", "-d", "-s", "lf"]);
+    let mut s = t.attach_legacy(&["attach", "-t", "lf"]);
+    s.wait_for("status line", |text| text.contains("lf"));
+    assert!(
+        s.raw_text().contains("\x1b[?u"),
+        "the client asked whether the terminal speaks the protocol"
+    );
+    kitty_pane(&t, "lf", "legacypane");
+    move_focus_and_kitty_keys(&t, &s, "lf");
+    t.run(&["detach-client", "-s", "lf"]);
+    s.wait_exit();
+    assert_eq!(s.kitty_requests(), Vec::<u8>::new());
+    assert_eq!(s.kitty_pops(), 0);
+}
+
+/// A kitty terminal is asked for tmxr's flags at attach, on the alternate
+/// screen, asked again in their place as they change (here by `kitty-keys`:
+/// focus does not change them until the encoder takes more flags than
+/// tmxr's own), and popped as often as pushed by detach, the last on the
+/// alternate screen before it is left. Unix only, as above.
+#[cfg(unix)]
+#[test]
+fn a_kitty_terminal_gets_its_flags_pushed_replaced_and_popped() {
+    let t = Tmxr::new("kittyflags");
+    t.run(&["new-session", "-d", "-s", "kf"]);
+    let mut s = t.attach(&["attach", "-t", "kf"]);
+    s.wait_for("status line", |text| text.contains("kf"));
+    // Told after the client says its terminal speaks the protocol, which
+    // can be after the first frame.
+    s.wait_kitty_flags(TMXR_KITTY_FLAGS);
+    kitty_pane(&t, "kf", "kittypane");
+    move_focus_and_kitty_keys(&t, &s, "kf");
+    // The flags go out after the frame `move_focus_and_kitty_keys` waits for.
+    s.wait_kitty_flags(TMXR_KITTY_FLAGS);
+    s.wait_for_raw("none, then tmxr's again", |_| {
+        s.kitty_requests().ends_with(&[0, TMXR_KITTY_FLAGS])
+    });
+    let requests = s.kitty_requests();
+    assert_eq!(requests.first(), Some(&TMXR_KITTY_FLAGS), "{requests:?}");
+    assert!(requests.contains(&0), "{requests:?}");
+    t.run(&["detach-client", "-s", "kf"]);
+    s.wait_exit();
+    let raw = s.raw_text();
+    assert_eq!(s.kitty_pops(), s.kitty_requests().len(), "{raw:?}");
+    let last_pop = raw.rfind("\x1b[<1u").unwrap();
+    let left = raw.rfind("\x1b[?1049l").unwrap();
+    assert!(last_pop < left, "popped after leaving the alternate screen");
+}
+
+/// A client attached by a command list whose first command does not attach
+/// (`new -d ; attach`) asks its kitty terminal for tmxr's flags as any
+/// attach does, once it has said the terminal speaks the protocol. Unix
+/// only, as above.
+#[cfg(unix)]
+#[test]
+fn a_command_list_attach_gets_its_kitty_flags() {
+    let t = Tmxr::new("listkitty");
+    let s = t.attach(&["new", "-d", "-s", "lk", ";", "attach", "-t", "lk"]);
+    s.wait_for("status line", |text| text.contains("lk"));
+    s.wait_for_raw("tmxr's flags pushed", |_| {
+        s.kitty_requests() == vec![TMXR_KITTY_FLAGS]
+    });
+    s.wait_kitty_flags(TMXR_KITTY_FLAGS);
+}
+
 /// Windows Terminal sends keys as win32-input-mode events, not bytes, and
 /// sets `WT_SESSION`: C-j and C-h come as themselves.
 #[cfg(windows)]

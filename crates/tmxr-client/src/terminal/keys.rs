@@ -30,6 +30,15 @@ pub struct Keys {
     console_bytes: bool,
 }
 
+/// The terminal's size, columns then rows: the controlling terminal's on
+/// Unix, the console's on Windows.
+pub fn size() -> io::Result<(u16, u16)> {
+    #[cfg(unix)]
+    return ttyr::terminal::size();
+    #[cfg(windows)]
+    return crossterm::terminal::size();
+}
+
 impl Keys {
     /// Start reading the terminal on standard input (the controlling
     /// terminal, where standard input is not one), the terminal raw mode is

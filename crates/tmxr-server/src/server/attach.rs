@@ -29,7 +29,6 @@ impl Server {
         )
         .ok();
         let table = self.default_key_table(session);
-        let keyboard = crate::kitty::at_attach(self);
         let Some(c) = self.clients.get_mut(&id) else {
             return;
         };
@@ -62,7 +61,9 @@ impl Server {
             status_ranges: crate::render::StatusRanges::default(),
             mouse: false,
             focus_events: false,
-            keyboard_flags: Some(keyboard),
+            // Told none until it says its terminal speaks the protocol.
+            keyboard_flags: None,
+            keyboard: tmxr_proto::Keyboard::Legacy,
             // As tmux's: focused until its terminal reports otherwise.
             focused: true,
             away: false,
@@ -70,10 +71,6 @@ impl Server {
             pan: None,
             status_at: Instant::now(),
         });
-        // Ahead of `Attached`, so the client takes its terminal asking for
-        // these from the start, none under `kitty-keys off`; sent with the
-        // client attached, so one that goes astray is sent again.
-        self.send(id, ServerMsg::KeyboardFlags(keyboard));
         self.send(id, ServerMsg::Attached);
         self.make_latest(id);
         self.touch_session(session);

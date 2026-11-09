@@ -7,8 +7,8 @@
 //! See `docs/plan/02-architecture.md`.
 
 // The Windows client reads the console with crossterm until ttyr does;
-// built for its tests everywhere.
-#[cfg(any(windows, test))]
+// crossterm is a Windows dependency only, so its tests run there.
+#[cfg(windows)]
 mod crossterm_bridge;
 mod spawn;
 mod terminal;
@@ -117,9 +117,14 @@ fn wait_for_server(endpoint: &Endpoint) -> io::Result<Stream> {
     }
 }
 
+/// Whether this client runs in a terminal it could attach.
+fn in_terminal() -> bool {
+    io::stdin().is_terminal() && io::stdout().is_terminal()
+}
+
 fn hello() -> Hello {
-    let terminal = (io::stdin().is_terminal() && io::stdout().is_terminal())
-        .then(|| crossterm::terminal::size().ok())
+    let terminal = in_terminal()
+        .then(|| terminal::size().ok())
         .flatten()
         .map(|(cols, rows)| TerminalInfo {
             cols,
@@ -173,8 +178,9 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
     let mut input: Option<terminal::Input> = None;
     let mut term: Option<terminal::Guard> = None;
     // The kitty keyboard flags the server last asked for, which the
-    // terminal is asked for again after a suspend or a lock.
-    let mut keyboard_flags = tmxr_term::encode::TMXR_KITTY_FLAGS;
+    // terminal is asked for again after a suspend or a lock; none until it
+    // says, which it does only once told the terminal speaks the protocol.
+    let mut keyboard_flags: Option<u8> = None;
     let mut stdout = io::stdout().lock();
     loop {
         let Ok(Some(msg)) = read_msg::<_, ServerMsg>(&mut recv) else {
@@ -201,11 +207,15 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                 if let Some(s) = send.take() {
                     let mut keys = terminal::Keys::open()?;
                     let mut first: Vec<_> = keys.resized_since(size).into_iter().collect();
-                    let (guard, early) = terminal::Guard::enter(keyboard_flags, &mut keys)?;
+                    let (guard, early) = terminal::Guard::enter(&mut keys)?;
                     first.extend(early);
                     let (fg, bg) = guard.colours();
+                    let keyboard = guard.keyboard();
                     term = Some(guard);
                     write_msg(&mut &*s, &ClientMsg::TerminalColours { fg, bg }).map_err(to_io)?;
+                    // The server tells a kitty terminal its flags once it
+                    // knows; until then the terminal is asked for none.
+                    write_msg(&mut &*s, &ClientMsg::Keyboard(keyboard)).map_err(to_io)?;
                     let shared = Arc::new(Mutex::new(s));
                     input = Some(terminal::spawn_input(Arc::clone(&shared), keys, first)?);
                     writer = Some(shared);
@@ -252,7 +262,7 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                     &mut term,
                     input.as_ref(),
                     writer.as_ref(),
-                    keyboard_flags,
+                    &mut keyboard_flags,
                     || terminal::suspend().map(|()| ClientMsg::Resumed),
                 )?;
             }
@@ -263,7 +273,7 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                     &mut term,
                     input.as_ref(),
                     writer.as_ref(),
-                    keyboard_flags,
+                    &mut keyboard_flags,
                     || {
                         Ok(match terminal::run_lock(&command) {
                             Ok(()) => ClientMsg::Resumed,
@@ -273,17 +283,17 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                 )?;
             }
             ServerMsg::Mouse(on) => {
-                if term.is_some() {
-                    terminal::set_mouse(on)?;
+                if let Some(t) = &term {
+                    t.set_mouse(on)?;
                 }
             }
             ServerMsg::FocusEvents(on) => {
-                if term.is_some() {
-                    terminal::set_focus_events(on)?;
+                if let Some(t) = &term {
+                    t.set_focus_events(on)?;
                 }
             }
             ServerMsg::KeyboardFlags(flags) => {
-                keyboard_flags = flags;
+                keyboard_flags = Some(flags);
                 if let Some(t) = &term {
                     t.set_keyboard_flags(flags)?;
                 }
@@ -294,32 +304,35 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
 
 /// Give the terminal to `run` (a suspend, the lock command) and take it
 /// back, asking it again what it speaks and for the kitty keyboard `flags`
-/// the server last sent; then tell the server its colours where they
-/// changed, that it is back with the message `run` returns, and the input
-/// read as the terminal answered. The
-/// input thread is paused throughout, so what is typed meanwhile goes to
+/// the server last sent ([`terminal::Guard::hand_over`]); then tell the
+/// server its colours and its keyboard tier where they changed (forgetting
+/// `flags` where the tier did: the server says them again for a kitty
+/// terminal), that it is back with the message `run` returns, and the input
+/// read as the terminal answered. The input
+/// thread is paused throughout, so what is typed meanwhile goes to
 /// whatever `run` hands the terminal to, and nothing it reads after
 /// overtakes that input. Does nothing with no input thread (not attached).
 fn hand_over(
     term: &mut Option<terminal::Guard>,
     input: Option<&terminal::Input>,
     writer: Option<&terminal::Sender>,
-    flags: u8,
+    flags: &mut Option<u8>,
     run: impl FnOnce() -> io::Result<ClientMsg>,
 ) -> io::Result<()> {
-    let (Some(input), Some(writer)) = (input, writer) else {
+    let (Some(guard), Some(input), Some(writer)) = (term.as_mut(), input, writer) else {
         return Ok(());
     };
     let mut paused = input.pause()?;
-    let colours = term.as_ref().map(terminal::Guard::colours);
-    drop(term.take());
-    let back = run();
-    let (guard, early) = terminal::Guard::enter(flags, &mut paused)?;
-    // The server keeps the terminal's colours from attach: tell it of new
-    // ones, as attaching does.
+    let (colours, keyboard) = (guard.colours(), guard.keyboard());
+    let (back, early) = guard.hand_over(&mut paused, *flags, run)?;
+    // The server keeps the terminal's colours and keyboard tier from
+    // attach: tell it of new ones, as attaching does.
     let (fg, bg) = guard.colours();
-    let recoloured = colours != Some((fg, bg));
-    *term = Some(guard);
+    let recoloured = colours != (fg, bg);
+    let rekeyed = (keyboard != guard.keyboard()).then(|| guard.keyboard());
+    if rekeyed.is_some() {
+        *flags = None;
+    }
     {
         let mut w = &**writer
             .lock()
@@ -327,6 +340,9 @@ fn hand_over(
         let to_io = |e: tmxr_proto::ProtoError| io::Error::other(e.to_string());
         if recoloured {
             write_msg(&mut w, &ClientMsg::TerminalColours { fg, bg }).map_err(to_io)?;
+        }
+        if let Some(keyboard) = rekeyed {
+            write_msg(&mut w, &ClientMsg::Keyboard(keyboard)).map_err(to_io)?;
         }
         write_msg(&mut w, &back?).map_err(to_io)?;
     }
