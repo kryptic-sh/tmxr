@@ -128,6 +128,31 @@ Read in tmux 3.6's source (`tty-features.c`, `tty-keys.c`, `tty.c`) on
 - This changes the client–server protocol: bump `Hello.protocol`, and say so
   under Breaking.
 
+### Options
+
+Decided by the owner (2026-11-09):
+
+- **`extended-keys` stays exactly tmux's** (`off`, `on`, `always`, with
+  `extended-keys-format`) and covers the xterm tier alone: whether a client asks
+  its terminal for modifyOtherKeys, and what panes get, as tmux does. A tmux
+  config means the same in tmxr, and the oracle keeps comparing it.
+- **`kitty-keys`, a new server option, `on` or `off`, default `on`**, beside
+  tmxr's other own server options (`rgb-colour`, `socket-access`) in
+  `SERVER_OPTIONS`. It covers the kitty tier in both directions. `off`: no
+  client asks its terminal for the protocol (each falls to the xterm tier or
+  legacy), and the emulator ignores a pane's pushes and answers the query with
+  no flags, so programs fall back themselves. No `always`: the protocol is one a
+  program asks for, and kitty encoding sent unasked breaks a program. `on` keeps
+  today's behaviour, where the client already pushes flag 1.
+- **The two are independent.** With `extended-keys off` and `kitty-keys on`, a
+  kitty terminal still gets the protocol, an xterm-style one goes legacy, and a
+  pane that pushes kitty flags still gets them. A tmux config with
+  `extended-keys off` therefore still sees kitty keys in tmxr, as it does today;
+  `kitty-keys off` is the switch for that.
+- Changing either while clients are attached takes effect at once: the server
+  sends each client its new tier's request (`ServerMsg::KeyboardFlags`, or
+  `CSI > 4 ; 2 m` / `CSI > 4 m`).
+
 ### Keys into panes
 
 - `encode_key` honours flags 1, 2, 4, 8 and 16 per the spec, from the pane's
@@ -174,8 +199,15 @@ accepted, anywhere a key is named, and either can be used.
   legacy terminal already does.
 - `send-keys`, `list-keys`, `bind`, `unbind`, the config and the hjkl `<…>`
   names all take both forms.
-- A bind on a key a legacy terminal cannot send (C-S-h, Super) just never fires
-  there; `list-keys` could mark it.
+- **A bind the client cannot use is listed as such** (decided 2026-11-09). A
+  bind on a key the client's tier cannot send (C-S-h from a legacy terminal,
+  Super from an xterm-tier one) never fires there, and `list-keys` says so with
+  a trailing comment naming the tier it needs, `# needs kitty keys` or
+  `# needs extended keys`, which keeps each line a valid command. "The client"
+  is the one `list-keys` runs for: the attached client that ran it from a bind
+  or the prompt, or the client attached to the pane it was typed in. A command
+  client with none prints no marks. Every default bind is sendable from a legacy
+  terminal, so the oracle's `list-keys` cases see no marks.
 
 ### Fallback guarantees
 
@@ -214,12 +246,6 @@ it too, and gains the modified keys its tier reports:
   sequence survives ConPTY at all is not known. Expect panes on Windows to stay
   at flag 1 or below.
 
-## Decisions for the owner
-
-1. **`extended-keys off`**: whether it also stops the kitty protocol for panes
-   (today the kitty path bypasses the option).
-2. **Bind on a key the client cannot send**: silent, or marked in `list-keys`.
-
 ## Order
 
 1. The Alt+Shift fix and the honest query reply (above). Shippable alone.
@@ -228,13 +254,14 @@ it too, and gains the modified keys its tier reports:
    field. No behaviour change yet beyond what the parser fixes, which includes
    the backlog's real Ctrl+4 … Ctrl+7 that crossterm reports as the legacy
    control byte (`tmux_key` at level 2).
-4. `ServerMsg::KeyboardFlags` and the choke point that follows focus.
+4. `ServerMsg::KeyboardFlags`, the choke point that follows focus, and the
+   `kitty-keys` option.
 5. The xterm tier: XTVERSION in the client's probe, `terminal-features`,
    `CSI > 4 ; 2 m` under `extended-keys`.
 6. `encode_key` for flags 2, 4, 8 and 16, with the fallback and the synthesised
    releases.
 7. Kitty-style key names and the extended tmux names, in every place a key is
-   named.
+   named; `list-keys` marking the binds the client cannot use.
 8. Windows.
 
 ## Testing
@@ -250,6 +277,11 @@ it too, and gains the modified keys its tier reports:
 - e2e for the xterm tier: a harness terminal answering XTVERSION as `XTerm(…)`
   must receive `CSI > 4 ; 2 m`, and its `CSI 27 ;…~` keys must reach binds and
   panes.
+- e2e for the options: `kitty-keys off` sends a kitty client no flags and a
+  pane's query answers none; `extended-keys off` stops `CSI > 4 ; 2 m` and
+  leaves the kitty tier alone; each takes effect on attached clients.
+- e2e for `list-keys`: a bind on `C-S-h` is marked for a legacy client and not
+  for a kitty one; a command client prints no marks.
 - e2e for the fallback: the same assertions from a harness terminal that answers
   no kitty probe, and one of each kind attached to one session.
 - By hand: Alacritty, kitty, foot, Ghostty and WezTerm, plus one legacy terminal
