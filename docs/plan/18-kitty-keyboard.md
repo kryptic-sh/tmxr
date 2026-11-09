@@ -127,6 +127,15 @@ Read in tmux 3.6's source (`tty-features.c`, `tty-keys.c`, `tty.c`) on
   else, so the loss in crossterm stops at the client.
 - This changes the client–server protocol: bump `Hello.protocol`, and say so
   under Breaking.
+- **hjkl needs the same decoder** (its plan `docs/plan/01-kitty-keyboard.md`,
+  phase 3, 2026-11-09): hjkl reads keys through crossterm 0.29 too and has the
+  same Alt+Shift bug. hjkl's owner-facing options are its own input reader,
+  upstreaming to crossterm, or a pre-parser; one shared house crate for both (as
+  `hjkl-kitty` is already shared with gpur) is the obvious shape. Which is the
+  owner's call, before step 3 starts.
+- hjkl's phase 6 (Super/Meta, F13–F35, keypad and media keys) changes
+  `hjkl-picker-tui::handle_key`, which tmxr's session picker calls; the version
+  bump is coordinated with hjkl.
 
 ### Options
 
@@ -197,8 +206,13 @@ accepted, anywhere a key is named, and either can be used.
   names; tmux's key tables (`bind -T`, `switch-client -T`) already do that.
 - A release never runs a bind; a repeat runs it as a press, as an auto-repeating
   legacy terminal already does.
-- `send-keys`, `list-keys`, `bind`, `unbind`, the config and the hjkl `<…>`
-  names all take both forms.
+- `send-keys`, `list-keys`, `bind`, `unbind` and the config take both forms.
+- **The hjkl `<…>` form follows hjkl, not kitty** (hjkl's reply, 2026-11-09):
+  vim/neovim notation, no `alt+shift+h` inside `<…>`. `parse_bracketed`
+  (`keys.rs`) already takes `C-`, `S-`, `A-` and `M-` in any case and order; it
+  gains neovim's `D-` (Super/Cmd) and `T-` (Meta), and neovim's key names as
+  hjkl adds them (`<F13>`, `<kEnter>`). A shifted letter is its uppercase
+  (`<M-A>`), `<M-S-a>` is the same key, and `<C-S-h>` is apart from `<C-h>`.
 - **A bind the client cannot use is listed as such** (decided 2026-11-09). A
   bind on a key the client's tier cannot send (C-S-h from a legacy terminal,
   Super from an xterm-tier one) never fires there, and `list-keys` says so with
