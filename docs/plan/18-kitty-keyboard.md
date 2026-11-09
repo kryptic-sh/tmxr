@@ -225,7 +225,10 @@ it too, and gains the modified keys its tier reports:
 - Clients of both kinds on one session each work: the server never assumes a
   client's keyboard from another's.
 - A legacy client is never sent `ServerMsg::KeyboardFlags`, so nothing new is
-  written to its terminal.
+  written to its terminal. Not yet true: until step 3 adds the keyboard tier to
+  `TerminalInfo`, the server cannot tell a legacy client apart and sends the
+  message to every client on change; a legacy client drops it (the client's
+  kitty probe said no), so nothing reaches its terminal. Step 3 closes it.
 
 ### Lifecycle
 
@@ -263,8 +266,12 @@ it too, and gains the modified keys its tier reports:
    wrong on layouts like Turkish. With the unshifted key from the terminal,
    `kitty_key` and `unshifted_letter` go, and the pinned test
    `kitty_sends_a_shifted_symbol_as_itself_without_shift` changes.
-4. `ServerMsg::KeyboardFlags`, the choke point that follows focus, and the
-   `kitty-keys` option.
+4. Done in `7b1dfa0`: `ServerMsg::KeyboardFlags` (protocol 14), the `kitty-keys`
+   option, and `kitty::flags` in tmxr-server, the one place that decides each
+   client's flags. It follows focus already, but asks only for tmxr's own 1|4
+   until step 6 widens `KITTY_FLAGS_ENCODED`; step 6's tests must then show
+   focus changing what a client is asked for. Left for step 3: legacy clients
+   are still sent the message (see the fallback guarantees).
 5. The xterm tier: XTVERSION in the client's probe, `terminal-features`,
    `CSI > 4 ; 2 m` under `extended-keys`.
 6. `encode_key` for flags 2, 4, 8 and 16, with the fallback and the synthesised
