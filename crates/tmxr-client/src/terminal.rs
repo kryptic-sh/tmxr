@@ -1,9 +1,12 @@
 //! The attached client's terminal: modes in, modes out, input pump.
 
 use std::io::{self, Write};
+use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
+#[cfg(unix)]
+use std::time::Instant;
 
 use crossterm::event::{
     DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
@@ -16,9 +19,12 @@ use crossterm::terminal::{
 };
 use interprocess::local_socket::Stream;
 use tmxr_proto::{ClientMsg, write_msg};
-use ttyr::event::{Event, KeyCode, KeyModifiers};
-
-use crate::crossterm_bridge::ttyr_event;
+use ttyr::event::Event;
+// Read in the answers to the probe, which only Unix asks.
+#[cfg(any(unix, test))]
+use ttyr::event::{ColorSlot, ModeSetting, Report};
+#[cfg(any(windows, test))]
+use ttyr::event::{KeyCode, KeyModifiers};
 
 /// Restores the terminal when dropped — on detach, on error, and (through
 /// the panic hook installed in [`Guard::enter`]) on panic.
@@ -28,121 +34,230 @@ pub struct Guard {
 }
 
 /// What the terminal said when asked: whether it takes synchronized
-/// updates (DEC mode 2026), and its default foreground and background
-/// colours (OSC 10 / 11) as RGB.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+/// updates (DEC mode 2026), its default foreground and background colours
+/// (OSC 10 / 11) as RGB, whether it speaks the kitty keyboard protocol, and
+/// its name and version (XTVERSION).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct Probe {
     sync: bool,
     fg: Option<u32>,
     bg: Option<u32>,
+    kitty: bool,
+    /// Kept for plan 18 step 5, whose xterm tier goes by the terminal's
+    /// name; nothing reads it yet.
+    version: Option<String>,
 }
 
-/// The terminal's answers, asked once, at the first [`Guard::enter`]: a
-/// later one runs beside the input thread, which would take them.
-static PROBE: OnceLock<Probe> = OnceLock::new();
+// Only Unix asks; built for its tests everywhere.
+#[cfg(any(unix, test))]
+impl Probe {
+    /// The answers among `read`, the events read while the terminal
+    /// answered, up to (not including) its answer to DA1; and the rest of
+    /// `read` in the order they came, input for the server (keys typed, a
+    /// resize, a report the probe did not ask for). `complete` is whether
+    /// DA1's answer came: if not, the terminal answered too slowly (over
+    /// SSH, say), and `last`, what it said when last asked, if it was, is
+    /// kept rather than taken from what part of its answers came in time.
+    fn read(read: Vec<Event>, complete: bool, last: Option<&Self>) -> (Self, Vec<Event>) {
+        let mut probe = Self::default();
+        let mut others = Vec::new();
+        for event in read {
+            match event {
+                Event::Report(Report::Mode {
+                    mode: SYNC_MODE,
+                    private: true,
+                    setting,
+                }) => {
+                    probe.sync = matches!(
+                        setting,
+                        ModeSetting::Set | ModeSetting::Reset | ModeSetting::PermanentlySet
+                    );
+                }
+                Event::Report(Report::TerminalColor(colour))
+                    if colour.slot == ColorSlot::Foreground =>
+                {
+                    probe.fg = Some(tmxr_command::colour::from_rgb16(colour.rgb));
+                }
+                Event::Report(Report::TerminalColor(colour))
+                    if colour.slot == ColorSlot::Background =>
+                {
+                    probe.bg = Some(tmxr_command::colour::from_rgb16(colour.rgb));
+                }
+                Event::Report(Report::KeyboardEnhancementFlags(_)) => probe.kitty = true,
+                Event::Report(Report::TerminalVersion(version)) => probe.version = Some(version),
+                event => others.push(event),
+            }
+        }
+        match last {
+            Some(last) if !complete => (last.clone(), others),
+            _ => (probe, others),
+        }
+    }
+}
 
-/// Whether the terminal reports keys in the kitty protocol now: set by each
-/// [`Guard::enter`], which asks again after a suspend or a lock, and by
-/// [`Guard::set_keyboard_flags`], and cleared as the terminal is restored,
-/// for the input thread to read per batch. With no flags set the terminal
-/// sends legacy keys, so it is clear then too.
-static KITTY_KEYS: AtomicBool = AtomicBool::new(false);
+/// Synchronized output's DEC private mode.
+#[cfg(any(unix, test))]
+const SYNC_MODE: u16 = 2026;
 
-/// How long the synchronized-update probe waits for the terminal's answers.
+/// How long the probe waits for the terminal's answers.
 #[cfg(unix)]
 const PROBE_WAIT: Duration = Duration::from_secs(1);
 
-/// What the terminal's answers in `reply` say of synchronized updates:
-/// `None` until its DA1 answer (`CSI ? … c`), which every terminal sends and
-/// comes after DECRPM's, has arrived; then whether DECRPM (`CSI ? 2026 ; Ps
-/// $ y`) said the mode is set, reset or permanently set (`Ps` 1 to 3).
-#[cfg(unix)]
-fn sync_answer(reply: &[u8]) -> Option<bool> {
-    let text = String::from_utf8_lossy(reply);
-    let da1 = text.match_indices("\x1b[?").any(|(i, _)| {
-        let rest = &text[i + 3..];
-        let end = rest.find(|c: char| !(c.is_ascii_digit() || c == ';'));
-        end.is_some_and(|e| rest[e..].starts_with('c'))
-    });
-    if !da1 {
-        return None;
-    }
-    Some(
-        ["1", "2", "3"]
-            .iter()
-            .any(|ps| text.contains(&format!("\x1b[?2026;{ps}$y"))),
-    )
+/// The terminal's input, read only by the input thread once it runs; it
+/// lends it out while paused ([`Input::pause`]). On Unix, ttyr's reader:
+/// the one reader of the terminal in the process, which also answers the
+/// probe. On Windows, crossterm's reader of the console, which ttyr does
+/// not read yet (its phase 07).
+pub struct Keys {
+    #[cfg(unix)]
+    reader: ttyr::reader::Reader,
+    /// What the terminal said when last asked, kept where it does not
+    /// answer in time when asked again.
+    #[cfg(unix)]
+    last: Option<Probe>,
+    /// Whether keys arrive as the bytes a terminal sends, turned into key
+    /// events by the console ([`keys_from_console_bytes`]).
+    #[cfg(windows)]
+    console_bytes: bool,
 }
 
-/// The colour the terminal's answer to `OSC which ; ?` in `reply` names
-/// (`OSC which ; spec`, ended by a BEL or `ESC \`), read as tmux's
-/// tty_keys_colours reads it.
-#[cfg(unix)]
-fn colour_answer(reply: &[u8], which: u8) -> Option<u32> {
-    let text = String::from_utf8_lossy(reply);
-    let head = format!("\x1b]{which};");
-    let rest = &text[text.find(&head)? + head.len()..];
-    let end = rest.find(['\x07', '\x1b'])?;
-    tmxr_command::colour::parse_x11(&rest[..end])
-}
-
-/// Ask the terminal whether it takes synchronized updates and what its
-/// default colours are, as tmux asks at attach, reading its answers
-/// straight from the terminal before crossterm reads it (what is read here
-/// crossterm never sees).
-#[cfg(unix)]
-fn probe(out: &mut impl Write) -> io::Result<Probe> {
-    // DECRQM for mode 2026, OSC 10 and 11, then DA1 to know when the
-    // answers are in: terminals answer in order.
-    out.write_all(b"\x1b[?2026$p\x1b]10;?\x1b\\\x1b]11;?\x1b\\\x1b[c")?;
-    out.flush()?;
-    let deadline = std::time::Instant::now() + PROBE_WAIT;
-    let mut reply = Vec::new();
-    let answers = |reply: &[u8], sync: bool| Probe {
-        sync,
-        fg: colour_answer(reply, 10),
-        bg: colour_answer(reply, 11),
-    };
-    loop {
-        if let Some(sync) = sync_answer(&reply) {
-            return Ok(answers(&reply, sync));
-        }
-        let left = deadline.saturating_duration_since(std::time::Instant::now());
-        if left.is_zero() {
-            return Ok(answers(&reply, false));
-        }
-        let mut pfd = libc::pollfd {
-            fd: libc::STDIN_FILENO,
-            events: libc::POLLIN,
-            revents: 0,
+impl Keys {
+    /// Start reading the terminal on standard input (the controlling
+    /// terminal, where standard input is not one), the terminal raw mode is
+    /// set on.
+    /// A resize from now on is read as an event; the size here is the one
+    /// to compare a size from before with.
+    #[cfg(unix)]
+    pub fn open() -> io::Result<Self> {
+        use std::io::IsTerminal as _;
+        use std::os::fd::AsFd as _;
+        let stdin = io::stdin();
+        let reader = if stdin.is_terminal() {
+            ttyr::reader::Reader::from_fd(stdin.as_fd().try_clone_to_owned()?)?
+        } else {
+            ttyr::reader::Reader::open()?
         };
-        let millis = libc::c_int::try_from(left.as_millis() + 1).unwrap_or(libc::c_int::MAX);
-        // SAFETY: polls one live pollfd for at most `millis`.
-        let ready = unsafe { libc::poll(&mut pfd, 1, millis) };
-        if ready < 0 {
-            let e = io::Error::last_os_error();
-            if e.kind() == io::ErrorKind::Interrupted {
-                continue;
+        Ok(Self { reader, last: None })
+    }
+
+    /// Start crossterm's reader of the console, whose resize records are
+    /// read as events from now on.
+    #[cfg(windows)]
+    pub fn open() -> io::Result<Self> {
+        crossterm::event::poll(Duration::ZERO)?;
+        Ok(Self {
+            console_bytes: keys_from_console_bytes(),
+        })
+    }
+
+    /// A resize to tell the server about: the terminal's size now, where it
+    /// is not `size`, what the hello said. A resize before [`Keys::open`]
+    /// watched for them (a tiling window manager placing the new window) is
+    /// otherwise lost.
+    pub fn resized_since(&self, size: Option<(u16, u16)>) -> Option<Event> {
+        #[cfg(unix)]
+        let now = self.reader.size().ok()?;
+        #[cfg(windows)]
+        let now = crossterm::terminal::size().ok()?;
+        (size != Some(now)).then_some(Event::Resize(now.0, now.1))
+    }
+
+    /// Ask the terminal what [`Probe`] holds and read its answers, as tmux
+    /// asks at attach. Returns them with the events read meanwhile (keys
+    /// typed, a resize, a report not asked for), in the order they came,
+    /// which are input like any other.
+    #[cfg(unix)]
+    fn probe(&mut self, out: &mut impl Write) -> io::Result<(Probe, Vec<Event>)> {
+        use ttyr::terminal::{
+            RequestKeyboardEnhancementFlags, RequestMode, RequestPrimaryDeviceAttributes,
+            RequestTerminalColor, RequestTerminalVersion,
+        };
+        // DA1 last, as every terminal answers it, and in order.
+        ttyr::execute!(
+            out,
+            RequestMode {
+                mode: SYNC_MODE,
+                private: true,
+            },
+            RequestTerminalColor(ColorSlot::Foreground),
+            RequestTerminalColor(ColorSlot::Background),
+            RequestKeyboardEnhancementFlags,
+            RequestTerminalVersion,
+            RequestPrimaryDeviceAttributes,
+        )?;
+        // Read here rather than with ttyr's `collect_answers`, which keeps
+        // the reports apart from the other events and so loses which came
+        // first, a key or a report the probe did not ask for.
+        let deadline = Instant::now() + PROBE_WAIT;
+        let mut read = Vec::new();
+        let mut complete = false;
+        while self
+            .reader
+            .poll(deadline.saturating_duration_since(Instant::now()))?
+        {
+            match self.reader.read()? {
+                Event::Report(Report::PrimaryDeviceAttributes(_)) => {
+                    complete = true;
+                    break;
+                }
+                Event::Wake => {}
+                event => read.push(event),
             }
-            return Err(e);
         }
-        if ready == 0 {
-            return Ok(answers(&reply, false));
+        let (probe, events) = Probe::read(read, complete, self.last.as_ref());
+        self.last = Some(probe.clone());
+        Ok((probe, events))
+    }
+
+    /// The Windows console hands over input records, so it is not asked;
+    /// whether it speaks the kitty protocol is crossterm's answer.
+    #[cfg(windows)]
+    fn probe(&mut self, _out: &mut impl Write) -> io::Result<(Probe, Vec<Event>)> {
+        let kitty = crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false);
+        Ok((
+            Probe {
+                kitty,
+                ..Probe::default()
+            },
+            Vec::new(),
+        ))
+    }
+
+    /// The events the terminal sent together, as the server takes them (a
+    /// click's press and release): waiting for the first, then each one
+    /// already waiting. Empty when there was nothing but a wake, or (on
+    /// Windows) nothing within [`INPUT_POLL`].
+    #[cfg(unix)]
+    fn read_batch(&mut self) -> io::Result<Vec<Event>> {
+        let mut read = vec![self.reader.read()?];
+        while self.reader.poll(Duration::ZERO)? {
+            read.push(self.reader.read()?);
         }
-        let mut buf = [0u8; 256];
-        // SAFETY: reads into a live buffer of its own length; the terminal
-        // is readable, so this does not block.
-        let n = unsafe { libc::read(libc::STDIN_FILENO, buf.as_mut_ptr().cast(), buf.len()) };
-        let n = usize::try_from(n).map_err(|_| io::Error::last_os_error())?;
-        if n == 0 {
-            return Ok(answers(&reply, false));
+        read.retain(|ev| *ev != Event::Wake);
+        Ok(read)
+    }
+
+    /// As the Unix one; the console's reader cannot be woken, so it waits
+    /// no longer than [`INPUT_POLL`], for the thread to look for a pause.
+    #[cfg(windows)]
+    fn read_batch(&mut self) -> io::Result<Vec<Event>> {
+        if !crossterm::event::poll(INPUT_POLL)? {
+            return Ok(Vec::new());
         }
-        reply.extend_from_slice(&buf[..n]);
+        let mut read = vec![crossterm::event::read()?];
+        while crossterm::event::poll(Duration::ZERO)? {
+            read.push(crossterm::event::read()?);
+        }
+        let events = read.into_iter().map(crate::crossterm_bridge::ttyr_event);
+        Ok(if self.console_bytes {
+            events.map(console_key).collect()
+        } else {
+            events.collect()
+        })
     }
 }
 
 fn restore(kitty: bool) {
-    KITTY_KEYS.store(false, Ordering::Release);
     let mut out = io::stdout();
     if kitty {
         let _ = execute!(out, PopKeyboardEnhancementFlags);
@@ -163,40 +278,45 @@ fn restore(kitty: bool) {
 }
 
 impl Guard {
-    /// Take the terminal, asking it for the kitty keyboard `flags` where it
-    /// speaks the protocol: on attach tmxr's own, and on the way back from
-    /// a suspend or a lock the last the server sent.
-    pub fn enter(flags: u8) -> io::Result<Self> {
+    /// Take the terminal, asking it what it speaks through `keys` and for
+    /// the kitty keyboard `flags` where it speaks the protocol: on attach
+    /// tmxr's own, and on the way back from a suspend or a lock the last
+    /// the server sent. Returns the guard with the input read while the
+    /// terminal answered, for the server.
+    pub fn enter(flags: u8, keys: &mut Keys) -> io::Result<(Self, Vec<Event>)> {
         enable_raw_mode()?;
+        // From here an error, or a panic as it unwinds, drops the guard and
+        // so restores the terminal.
+        let mut guard = Self {
+            kitty: false,
+            probe: Probe::default(),
+        };
         let mut out = io::stdout();
         // Mouse capture and focus reports wait for the server's `Mouse` and
         // `FocusEvents` (the `mouse` and `focus-events` options).
         execute!(out, EnterAlternateScreen, EnableBracketedPaste)?;
-        // Before crossterm's keyboard probe below starts its reader. The
-        // Windows console hands over input records, so it is not asked.
-        #[cfg(unix)]
-        let probe = *PROBE.get_or_init(|| probe(&mut out).unwrap_or_default());
-        #[cfg(windows)]
-        let probe = *PROBE.get_or_init(Probe::default);
+        let (probe, early) = keys.probe(&mut out)?;
         // The terminal's color scheme now and on each change (mode 2031), as
         // tmux asks as its terminal starts.
         out.write_all(b"\x1b[?2031h\x1b[?996n")?;
         // Pushed even when none, so that restoring pops what this pushed
         // and leaves the terminal's own flags as they were.
-        let kitty = crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false);
-        if kitty {
+        if probe.kitty {
             execute!(
                 out,
                 PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::from_bits_truncate(flags))
             )?;
+            guard.kitty = true;
         }
-        KITTY_KEYS.store(kitty && flags != 0, Ordering::Release);
+        guard.probe = probe;
+        out.flush()?;
+        let kitty = guard.kitty;
         let prev = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |info| {
             restore(kitty);
             prev(info);
         }));
-        Ok(Self { kitty, probe })
+        Ok((guard, early))
     }
 
     /// Ask the terminal for kitty keyboard `flags` in place of those it has
@@ -208,9 +328,7 @@ impl Guard {
         }
         let mut out = io::stdout();
         write!(out, "\x1b[={flags};1u")?;
-        out.flush()?;
-        KITTY_KEYS.store(flags != 0, Ordering::Release);
-        Ok(())
+        out.flush()
     }
 
     /// The terminal's default foreground and background colours, as RGB,
@@ -263,18 +381,37 @@ pub fn set_focus_events(on: bool) -> io::Result<()> {
 const INPUT_POLL: Duration = Duration::from_millis(50);
 
 /// The input thread, which can be paused while another program (the lock
-/// command) owns the terminal, so that program gets the keys and not the
-/// panes.
+/// command, the shell a suspend returns to) owns the terminal, so that
+/// program gets the keys and not the panes, and while the terminal is asked
+/// again what it speaks.
 pub struct Input {
     paused: Arc<AtomicBool>,
-    /// Held by the thread while it reads the terminal.
-    gate: Arc<Mutex<()>>,
+    /// The terminal's input, held by the thread while it reads.
+    keys: Arc<Mutex<Keys>>,
+    /// Ends a read the thread is waiting in.
+    #[cfg(unix)]
+    waker: ttyr::reader::Waker,
 }
 
-/// While held, the input thread reads nothing.
+/// While held, the input thread reads nothing, and the terminal's input is
+/// lent here.
 pub struct Paused<'a> {
-    _gate: MutexGuard<'a, ()>,
+    keys: MutexGuard<'a, Keys>,
     paused: &'a AtomicBool,
+}
+
+impl Deref for Paused<'_> {
+    type Target = Keys;
+
+    fn deref(&self) -> &Keys {
+        &self.keys
+    }
+}
+
+impl DerefMut for Paused<'_> {
+    fn deref_mut(&mut self) -> &mut Keys {
+        &mut self.keys
+    }
 }
 
 impl Drop for Paused<'_> {
@@ -286,17 +423,17 @@ impl Drop for Paused<'_> {
 impl Input {
     /// Stop reading the terminal; returns once the thread has stopped.
     pub fn pause(&self) -> io::Result<Paused<'_>> {
-        // The flag keeps the thread from taking the gate again before this
-        // does; the gate waits out a read already under way.
+        // The flag keeps the thread from taking the input again before
+        // this does; the lock waits out a read already under way.
         self.paused.store(true, Ordering::Release);
         #[cfg(unix)]
-        wake_reader()?;
-        let gate = self
-            .gate
+        self.waker.wake()?;
+        let keys = self
+            .keys
             .lock()
             .map_err(|_| io::Error::other("input thread panicked"))?;
         Ok(Paused {
-            _gate: gate,
+            keys,
             paused: &self.paused,
         })
     }
@@ -305,16 +442,19 @@ impl Input {
 /// Whether keys reach this client as the bytes a terminal sends, which the
 /// Windows console turns into key events (ConPTY behind Alacritty, VS Code's
 /// terminal, …), rather than as key events from the terminal itself
-/// (Windows Terminal's win32-input-mode; it sets `WT_SESSION`). Unix reads
-/// the bytes itself.
+/// (Windows Terminal's win32-input-mode; it sets `WT_SESSION`).
+#[cfg(windows)]
 fn keys_from_console_bytes() -> bool {
-    cfg!(windows) && std::env::var_os("WT_SESSION").is_none()
+    std::env::var_os("WT_SESSION").is_none()
 }
 
-/// The key a terminal meant when the console turned its byte into another:
-/// it reports C-j (0x0a) as Ctrl+Enter and C-h (0x08) as Ctrl+Backspace, so
-/// binds for C-j and C-h never matched. Read them as tmux reads those bytes.
-/// A terminal sending bytes cannot send those two chords another way.
+/// The key a terminal meant when the Windows console turned its byte into
+/// another: it reports C-j (0x0a) as Ctrl+Enter and C-h (0x08) as
+/// Ctrl+Backspace, so binds for C-j and C-h never matched. Read them as
+/// tmux reads those bytes. A terminal sending bytes cannot send those two
+/// chords another way. Built for tests everywhere; only Windows reads keys
+/// through a console.
+#[cfg(any(windows, test))]
 fn console_key(ev: Event) -> Event {
     match ev {
         Event::Key(mut k) if k.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -329,121 +469,51 @@ fn console_key(ev: Event) -> Event {
     }
 }
 
-/// The key a kitty-protocol terminal meant by a Ctrl chord on an uppercase
-/// letter: reporting alternate keys, it sends Ctrl+Shift+h as `H` with Ctrl
-/// and no Shift. Read it as the letter's key with Shift, as the terminal
-/// reports it without alternate keys. Binds need it: they fold case under
-/// Ctrl for ASCII alone, so `É` with Ctrl would stay C-É and `bind C-é`
-/// never fire. So does a pane under modifyOtherKeys, which would get C-h
-/// for C-S-h. Mending the event here, where it enters, gives every reader
-/// of it the key the terminal meant, rather than each one guessing.
-///
-/// Other shifted characters keep the character (Ctrl+Shift+1 is C-!, as
-/// tmux names it). That is a known limit for a kitty-aware pane, which
-/// should get the unshifted key with Shift: crossterm drops the unshifted
-/// key the terminal sends beside the shifted one, so it is not known here.
-fn kitty_key(ev: Event) -> Event {
-    match ev {
-        Event::Key(mut k) if k.modifiers.contains(KeyModifiers::CONTROL) => {
-            if let KeyCode::Char(c) = k.key
-                && let Some(key) = tmxr_term::encode::unshifted_letter(c)
-            {
-                k.key = KeyCode::Char(key);
-                k.modifiers |= KeyModifiers::SHIFT;
-            }
-            Event::Key(k)
-        }
-        ev => ev,
-    }
-}
-
-/// Wake the input thread out of a read waiting for an event: crossterm's
-/// reader watches for SIGWINCH, so one raised here ends it with a `Resize`
-/// to the size the terminal already has, which the server takes as a
-/// redraw.
-#[cfg(unix)]
-fn wake_reader() -> io::Result<()> {
-    // SAFETY: `raise` only sends a signal to this thread; crossterm's handler
-    // for it (signal-hook's) writes to its reader's pipe, and before that
-    // handler exists the signal is ignored, SIGWINCH's default.
-    if unsafe { libc::raise(libc::SIGWINCH) } != 0 {
-        return Err(io::Error::last_os_error());
-    }
-    Ok(())
-}
-
 /// The connection to the server, shared by the threads that write to it,
 /// each frame written whole under the lock.
 pub type Sender = Arc<Mutex<Arc<Stream>>>;
 
-/// Forward terminal events to the server until either side goes away.
-/// `size` is the terminal's size as the hello gave it: crossterm watches
-/// for SIGWINCH only once its reader exists, and a resize before then (a
-/// tiling window manager placing the new window) is lost, so the reader is
-/// made first and the size sent again if it has changed since.
-pub fn spawn_input(send: Sender, size: Option<(u16, u16)>) -> Input {
+/// Forward terminal events to the server until either side goes away,
+/// `first` (what [`Keys::resized_since`] and [`Guard::enter`] read) ahead of
+/// the rest.
+pub fn spawn_input(send: Sender, keys: Keys, first: Vec<Event>) -> io::Result<Input> {
     let input = Input {
         paused: Arc::new(AtomicBool::new(false)),
-        gate: Arc::new(Mutex::new(())),
+        #[cfg(unix)]
+        waker: keys.reader.waker(),
+        keys: Arc::new(Mutex::new(keys)),
     };
-    let (paused, gate) = (Arc::clone(&input.paused), Arc::clone(&input.gate));
-    let console_bytes = keys_from_console_bytes();
-    let _ = std::thread::Builder::new()
+    let (paused, keys) = (Arc::clone(&input.paused), Arc::clone(&input.keys));
+    std::thread::Builder::new()
         .name("tmxr-input".into())
         .spawn(move || {
-            if crossterm::event::poll(Duration::ZERO).is_ok()
-                && let Ok((cols, rows)) = crossterm::terminal::size()
-                && size != Some((cols, rows))
-            {
-                let resized = vec![Event::Resize(cols, rows)];
-                let Ok(send) = send.lock() else { return };
-                if write_msg(&mut &**send, &ClientMsg::Input(resized)).is_err() {
-                    return;
-                }
+            if !first.is_empty() && forward(&send, first).is_err() {
+                return;
             }
             loop {
                 if paused.load(Ordering::Acquire) {
                     std::thread::sleep(INPUT_POLL);
                     continue;
                 }
-                let Ok(_reading) = gate.lock() else { break };
-                // On Unix the read below waits for an event, a pause waking
-                // it; the Windows console's reader cannot be woken, so it
-                // looks for a pause between short waits.
-                #[cfg(windows)]
-                match crossterm::event::poll(INPUT_POLL) {
-                    Ok(true) => {}
-                    Ok(false) => continue,
-                    Err(_) => break,
-                }
-                let Ok(ev) = crossterm::event::read() else {
+                let Ok(mut reading) = keys.lock() else { break };
+                let Ok(events) = reading.read_batch() else {
                     break;
                 };
-                // With the events read with it, as the server takes them
-                // together (a click's press and release).
-                let mut read = vec![ev];
-                while let Ok(true) = crossterm::event::poll(Duration::ZERO) {
-                    match crossterm::event::read() {
-                        Ok(ev) => read.push(ev),
-                        Err(_) => break,
-                    }
-                }
-                let kitty = KITTY_KEYS.load(Ordering::Acquire);
-                let mut events: Vec<Event> =
-                    read.into_iter().map(|ev| ttyr_event(ev, kitty)).collect();
-                if console_bytes {
-                    events = events.into_iter().map(console_key).collect();
-                }
-                if kitty {
-                    events = events.into_iter().map(kitty_key).collect();
-                }
-                let Ok(send) = send.lock() else { break };
-                if write_msg(&mut &**send, &ClientMsg::Input(events)).is_err() {
+                drop(reading);
+                if !events.is_empty() && forward(&send, events).is_err() {
                     break;
                 }
             }
-        });
-    input
+        })?;
+    Ok(input)
+}
+
+/// Send `events` to the server as input.
+pub fn forward(send: &Sender, events: Vec<Event>) -> io::Result<()> {
+    let send = send
+        .lock()
+        .map_err(|_| io::Error::other("a writer to the server panicked"))?;
+    write_msg(&mut &**send, &ClientMsg::Input(events)).map_err(|e| io::Error::other(e.to_string()))
 }
 
 /// Run the lock command in the terminal and wait for it (`lock-client`), as
@@ -568,7 +638,7 @@ pub fn suspend() -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ttyr::event::KeyEvent;
+    use ttyr::event::{ColorScheme, KeyEvent, KeyboardEnhancementFlags, TerminalColor};
 
     fn key(code: KeyCode, mods: KeyModifiers) -> Event {
         Event::Key(KeyEvent::new(code, mods))
@@ -601,52 +671,100 @@ mod tests {
         }
     }
 
-    #[test]
-    fn a_kitty_ctrl_chord_on_an_uppercase_letter_is_the_letter_with_shift() {
-        let ctrl = KeyModifiers::CONTROL;
-        let ctrl_shift = KeyModifiers::CONTROL | KeyModifiers::SHIFT;
-        let ctrl_alt = KeyModifiers::CONTROL | KeyModifiers::ALT;
-        let alt = KeyModifiers::ALT;
-        // The key and modifiers alone: ttyr's equality also compares
-        // `encoding` and the other fields, which are not under test.
-        let read = |ev| match kitty_key(ev) {
-            Event::Key(k) => (k.key, k.modifiers),
-            ev => panic!("not a key: {ev:?}"),
-        };
-        for (code, mods, want) in [
-            ('H', ctrl, ('h', ctrl_shift)),
-            ('H', ctrl_alt, ('h', ctrl_alt | KeyModifiers::SHIFT)),
-            ('É', ctrl, ('é', ctrl_shift)),
-            ('С', ctrl, ('с', ctrl_shift)),
-            // Shift with Alt alone keeps its character, as do other
-            // shifted characters and the unshifted letter.
-            ('A', alt, ('A', alt)),
-            ('!', ctrl, ('!', ctrl)),
-            ('h', ctrl, ('h', ctrl)),
-        ] {
-            let got = read(key(KeyCode::Char(code), mods));
-            assert_eq!(got, (KeyCode::Char(want.0), want.1), "{code:?} {mods:?}");
-        }
-        assert_eq!(kitty_key(Event::FocusGained), Event::FocusGained);
+    fn colour(slot: ColorSlot, rgb: (u16, u16, u16)) -> Event {
+        Event::Report(Report::TerminalColor(TerminalColor { slot, rgb }))
     }
 
-    #[cfg(unix)]
+    fn sync(setting: ModeSetting) -> Event {
+        Event::Report(Report::Mode {
+            mode: SYNC_MODE,
+            private: true,
+            setting,
+        })
+    }
+
+    fn kitty() -> Event {
+        Event::Report(Report::KeyboardEnhancementFlags(
+            KeyboardEnhancementFlags::empty(),
+        ))
+    }
+
+    /// What a foot-like terminal answers, all of it.
+    fn foot() -> Probe {
+        Probe {
+            sync: true,
+            fg: Some(0xc0caf5),
+            bg: Some(0x1a1b26),
+            kitty: true,
+            version: Some("foot(1.20.2)".into()),
+        }
+    }
+
     #[test]
-    fn the_sync_probe_reads_decrpm_once_da1_is_in() {
-        assert_eq!(sync_answer(b""), None);
-        // Colours, ended either way, before DA1.
-        let reply = b"\x1b]10;rgb:c0c0/caca/f5f5\x1b\\\x1b]11;rgb:1a1a/1b1b/2626\x07\x1b[?6c";
-        assert_eq!(colour_answer(reply, 10), Some(0xc0caf5));
-        assert_eq!(colour_answer(reply, 11), Some(0x1a1b26));
-        assert_eq!(colour_answer(b"\x1b[?6c", 11), None);
-        // DECRPM alone: DA1 is still to come.
-        assert_eq!(sync_answer(b"\x1b[?2026;2$y"), None);
-        assert_eq!(sync_answer(b"\x1b[?2026;2$y\x1b[?62;22c"), Some(true));
-        assert_eq!(sync_answer(b"\x1b[?2026;1$y\x1b[?1;2c"), Some(true));
-        // Not recognized, or permanently reset.
-        assert_eq!(sync_answer(b"\x1b[?2026;0$y\x1b[?62c"), Some(false));
-        assert_eq!(sync_answer(b"\x1b[?2026;4$y\x1b[?62c"), Some(false));
-        // A terminal that ignores DECRQM answers DA1 alone.
-        assert_eq!(sync_answer(b"\x1b[?62;22c"), Some(false));
+    fn the_probe_takes_its_answers_and_hands_on_the_rest_in_order() {
+        let scheme = Event::Report(Report::ColorScheme(ColorScheme::Dark));
+        let x = key(KeyCode::Char('x'), KeyModifiers::NONE);
+        let (probe, others) = Probe::read(
+            vec![
+                sync(ModeSetting::Reset),
+                x.clone(),
+                colour(ColorSlot::Foreground, (0xc0c0, 0xcaca, 0xf5f5)),
+                scheme.clone(),
+                colour(ColorSlot::Background, (0x1a1a, 0x1b1b, 0x2626)),
+                Event::Resize(80, 24),
+                kitty(),
+                Event::Report(Report::TerminalVersion("foot(1.20.2)".into())),
+            ],
+            true,
+            None,
+        );
+        assert_eq!(probe, foot());
+        // What the probe did not ask for, in the order it came.
+        assert_eq!(others, vec![x, scheme, Event::Resize(80, 24)]);
+    }
+
+    #[test]
+    fn a_probe_answered_too_late_keeps_what_the_terminal_said_before() {
+        // Asked again (after a suspend or a lock) over a slow link: only
+        // DECRPM came in time, and nothing is taken from it.
+        let late = vec![sync(ModeSetting::NotRecognized)];
+        assert_eq!(
+            Probe::read(late.clone(), false, Some(&foot())),
+            (foot(), Vec::new())
+        );
+        // Answered in time, the new answers stand.
+        assert_eq!(
+            Probe::read(late.clone(), true, Some(&foot())).0,
+            Probe::default()
+        );
+        // Asked for the first time, what came in time is all there is.
+        let (first, _) = Probe::read(vec![kitty()], false, None);
+        assert!(first.kitty && !first.sync);
+    }
+
+    #[test]
+    fn the_probe_says_no_to_what_the_terminal_did_not_answer() {
+        // A terminal that ignores every query but DA1.
+        assert_eq!(
+            Probe::read(Vec::new(), true, None),
+            (Probe::default(), Vec::new())
+        );
+        // Synchronized output not recognized, or permanently reset.
+        for setting in [ModeSetting::NotRecognized, ModeSetting::PermanentlyReset] {
+            assert!(
+                !Probe::read(vec![sync(setting)], true, None).0.sync,
+                "{setting:?}"
+            );
+        }
+        for setting in [
+            ModeSetting::Set,
+            ModeSetting::Reset,
+            ModeSetting::PermanentlySet,
+        ] {
+            assert!(
+                Probe::read(vec![sync(setting)], true, None).0.sync,
+                "{setting:?}"
+            );
+        }
     }
 }

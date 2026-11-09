@@ -281,6 +281,19 @@ it too, and gains the modified keys its tier reports:
      reads the console); moving every reader of a key to `ttyr`'s unshifted
      meaning (`Key::from_event`, `encode_key`, copy mode, the prompt, menus,
      popups, the picker) at the same time; and `TerminalInfo`'s keyboard field.
+   - 3b done: on Unix the client reads with `ttyr`'s `Reader`, which the input
+     thread holds behind its pause lock and lends to `Guard::enter` (attach,
+     suspend, lock) for the probe; the probe asks with `ttyr`'s queries,
+     XTVERSION included (kept in the client's `Probe` for step 5), and hands on
+     the input read with the answers. Every reader of a key takes `ttyr`'s
+     meaning: tmxr's own key handling through `tmxr-command`'s `Typed`, the
+     encoder from the event itself, so a kitty pane gets Alt+Shift+1 as
+     `CSI 49;4u`; `kitty_key` and `unshifted_letter` are gone. The client bridge
+     is Windows-only and makes `ttyr`'s meaning; the picker's bridge makes
+     crossterm's back. A real Ctrl+4 … Ctrl+7 is told from the legacy control
+     byte by `KeyEncoding`. Left: `TerminalInfo`'s keyboard field, and moving
+     the terminal modes (raw mode, the alternate screen, the kitty push and pop,
+     restore) from crossterm to `ttyr::terminal`'s guard.
 4. Done in `7b1dfa0`: `ServerMsg::KeyboardFlags` (protocol 14), the `kitty-keys`
    option, and `kitty::flags` in tmxr-server, the one place that decides each
    client's flags. It follows focus already, but asks only for tmxr's own 1|4

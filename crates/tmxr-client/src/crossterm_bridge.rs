@@ -1,16 +1,14 @@
-//! The temporary bridge from crossterm's events, which the client still
-//! reads its terminal with, to ttyr's, which the rest of tmxr and the wire
-//! use (plan 18, step 3).
+//! The bridge from crossterm's events, which the Windows client still reads
+//! the console with, to ttyr's, which the rest of tmxr and the wire use
+//! (plan 18, step 3). It goes once ttyr reads the Windows console (ttyr's
+//! phase 07); Unix reads with ttyr already.
 //!
-//! It goes when ttyr's reader replaces crossterm's: on Unix in the second
-//! half of that step, on Windows once ttyr reads the Windows console.
-//!
-//! The conversion is field for field and keeps crossterm's meaning, so the
-//! server sees exactly what it saw before: a character key is the character
-//! crossterm reported (`A` with Shift for a legacy Shift+a, the shifted
-//! character with Shift cleared under kitty flag 4), not ttyr's unshifted
-//! key with the shifted one beside it. crossterm reports no shifted key,
-//! base-layout key or associated text, so those are always `None`.
+//! A key comes out in ttyr's meaning, so the server sees one meaning from
+//! every platform: an upper-case letter crossterm reports (`A` for
+//! Shift+a) is its lower-case key with Shift, the letter kept as the
+//! shifted key, as ttyr's decoder reads the same byte. crossterm reports no
+//! base-layout key or associated text, so those are always `None`, and the
+//! console has no kitty protocol, so every key's encoding is `Legacy`.
 
 use crossterm::event as ct;
 use ttyr::event::{
@@ -19,16 +17,12 @@ use ttyr::event::{
     TerminalColor,
 };
 
-/// crossterm's event `ev` as ttyr's. `kitty` is whether the terminal has
-/// kitty keyboard flags on, which sets every key's [`KeyEncoding`]:
-/// crossterm does not say which form each key came in, so it is `Kitty`
-/// while the protocol is on and `Legacy` otherwise, per batch and not per
-/// key.
-pub fn ttyr_event(ev: ct::Event, kitty: bool) -> Event {
+/// crossterm's event `ev` as ttyr's.
+pub fn ttyr_event(ev: ct::Event) -> Event {
     match ev {
         ct::Event::FocusGained => Event::FocusGained,
         ct::Event::FocusLost => Event::FocusLost,
-        ct::Event::Key(k) => Event::Key(key_event(k, kitty)),
+        ct::Event::Key(k) => Event::Key(key_event(k)),
         ct::Event::Mouse(m) => Event::Mouse(mouse_event(m)),
         ct::Event::Paste(text) => Event::Paste(text),
         ct::Event::Resize(cols, rows) => Event::Resize(cols, rows),
@@ -48,7 +42,7 @@ pub fn ttyr_event(ev: ct::Event, kitty: bool) -> Event {
     }
 }
 
-fn key_event(k: ct::KeyEvent, kitty: bool) -> KeyEvent {
+fn key_event(k: ct::KeyEvent) -> KeyEvent {
     let kind = match k.kind {
         ct::KeyEventKind::Press => KeyEventKind::Press,
         ct::KeyEventKind::Repeat => KeyEventKind::Repeat,
@@ -62,15 +56,41 @@ fn key_event(k: ct::KeyEvent, kitty: bool) -> KeyEvent {
     ] {
         state.set(to, k.state.contains(from));
     }
-    let encoding = if kitty {
-        KeyEncoding::Kitty
-    } else {
-        KeyEncoding::Legacy
+    let mods = modifiers(k.modifiers);
+    let event = match k.code {
+        ct::KeyCode::Char(c) => char_key(c, mods),
+        code => KeyEvent::new(key_code(code), mods),
     };
-    KeyEvent::new(key_code(k.code), modifiers(k.modifiers))
+    event
         .with_kind(kind)
         .with_state(state)
-        .with_encoding(encoding)
+        .with_encoding(KeyEncoding::Legacy)
+}
+
+/// Character `c` as crossterm reports it, with `mods`, in ttyr's meaning.
+/// crossterm gives a letter the case Shift and Caps Lock make between them
+/// (`A` for Shift+a or Caps Lock and a), and the console reports no Caps
+/// Lock state with it, so where the case is not Shift's alone the letter
+/// typed rides along as the key's text: Caps Lock with Ctrl+a is Ctrl+a
+/// whose text is `A`, not Ctrl+Shift+a.
+fn char_key(c: char, mods: KeyModifiers) -> KeyEvent {
+    let shift = mods.contains(KeyModifiers::SHIFT);
+    let text = || Some(c.to_string());
+    match tmxr_command::keys::single_lower(c) {
+        // Shift+a: the key with Shift, `A` its shifted key.
+        Some(_) if shift => tmxr_command::Key {
+            code: KeyCode::Char(c),
+            mods,
+        }
+        .to_event(),
+        // Caps Lock and a.
+        Some(lower) => KeyEvent::new(KeyCode::Char(lower), mods).with_text(text()),
+        // Caps Lock and Shift+a.
+        None if shift && c.is_lowercase() => {
+            KeyEvent::new(KeyCode::Char(c), mods).with_text(text())
+        }
+        None => KeyEvent::new(KeyCode::Char(c), mods),
+    }
 }
 
 fn modifiers(m: ct::KeyModifiers) -> KeyModifiers {
@@ -205,7 +225,7 @@ mod tests {
             (CtKey::F(1), KeyCode::F(1)),
             (CtKey::F(24), KeyCode::F(24)),
             (CtKey::Char('a'), KeyCode::Char('a')),
-            (CtKey::Char('É'), KeyCode::Char('É')),
+            (CtKey::Char('é'), KeyCode::Char('é')),
         ]);
         keys.extend(
             pairs!(CtMedia => MediaKeyCode:
@@ -224,7 +244,7 @@ mod tests {
         );
         for (from, to) in keys {
             let ev = ct::Event::Key(ct::KeyEvent::new(from, ct::KeyModifiers::NONE));
-            let Event::Key(k) = ttyr_event(ev, false) else {
+            let Event::Key(k) = ttyr_event(ev) else {
                 panic!("not a key: {from:?}");
             };
             assert_eq!(k.key, to, "{from:?}");
@@ -253,34 +273,106 @@ mod tests {
                 row: 0,
                 modifiers: ct::KeyModifiers::NONE,
             });
-            let Event::Mouse(m) = ttyr_event(ev, false) else {
+            let Event::Mouse(m) = ttyr_event(ev) else {
                 panic!("not a mouse event: {from:?}");
             };
             assert_eq!(m.kind, to, "{from:?}");
         }
     }
 
+    /// The event ttyr's decoder reads from `bytes`, the whole of them.
+    fn decoded(bytes: &[u8]) -> Event {
+        let mut decoder = ttyr::event::Decoder::new();
+        decoder.feed(bytes);
+        let event = decoder.flush_event().expect("an event");
+        assert_eq!(decoder.flush_event(), None, "one event in {bytes:?}");
+        event
+    }
+
     #[test]
-    fn a_key_keeps_crossterms_meaning_field_for_field() {
-        // A legacy Shift+a, as crossterm reports it: the capital with Shift.
+    fn a_key_means_what_ttyrs_decoder_reads_from_the_same_bytes() {
+        let ct_key = |c, m| ct::Event::Key(ct::KeyEvent::new(ct::KeyCode::Char(c), m));
+        let (none, shift, alt) = (
+            ct::KeyModifiers::NONE,
+            ct::KeyModifiers::SHIFT,
+            ct::KeyModifiers::ALT,
+        );
+        // crossterm reports an upper-case letter with Shift; ttyr reads the
+        // letter's key with Shift, the letter its shifted key.
+        for (from, bytes) in [
+            (ct_key('A', shift), &b"A"[..]),
+            (ct_key('A', shift | alt), b"\x1bA"),
+            (ct_key('É', shift), "É".as_bytes()),
+            (ct_key('a', none), b"a"),
+            (ct_key('!', none), b"!"),
+            (ct_key('!', alt), b"\x1b!"),
+        ] {
+            assert_eq!(ttyr_event(from.clone()), decoded(bytes), "{from:?}");
+        }
+        let Event::Key(a) = ttyr_event(ct_key('A', shift)) else {
+            panic!("not a key");
+        };
+        assert_eq!(
+            (a.key, a.modifiers, a.shifted),
+            (KeyCode::Char('a'), KeyModifiers::SHIFT, Some('A'))
+        );
+    }
+
+    #[test]
+    fn caps_lock_changes_the_letter_typed_not_the_modifiers() {
+        let read = |c, m: ct::KeyModifiers| {
+            let Event::Key(k) =
+                ttyr_event(ct::Event::Key(ct::KeyEvent::new(ct::KeyCode::Char(c), m)))
+            else {
+                panic!("not a key");
+            };
+            let typed = tmxr_command::Typed::of(&k);
+            (k.key, k.modifiers, typed.key, typed.modifiers)
+        };
+        let (none, shift, ctrl) = (
+            ct::KeyModifiers::NONE,
+            ct::KeyModifiers::SHIFT,
+            ct::KeyModifiers::CONTROL,
+        );
+        let a = KeyCode::Char('a');
+        let upper_a = KeyCode::Char('A');
+        // Ctrl+a with Caps Lock, which crossterm reports as `A`: Ctrl+a,
+        // not Ctrl+Shift+a.
+        assert_eq!(
+            read('A', ctrl),
+            (a, KeyModifiers::CONTROL, a, KeyModifiers::CONTROL)
+        );
+        // Caps Lock and a types `A`; with Shift too, `a`.
+        assert_eq!(
+            read('A', none),
+            (a, KeyModifiers::NONE, upper_a, KeyModifiers::NONE)
+        );
+        let (key, mods, typed, _) = read('a', shift);
+        assert_eq!((key, mods, typed), (a, KeyModifiers::SHIFT, a));
+        // Shift+a alone is still the key with Shift, typing `A`.
+        assert_eq!(
+            read('A', shift),
+            (a, KeyModifiers::SHIFT, upper_a, KeyModifiers::NONE)
+        );
+    }
+
+    #[test]
+    fn a_key_keeps_its_other_fields() {
         let ev = ct::KeyEvent::new_with_kind_and_state(
             ct::KeyCode::Char('A'),
             ct::KeyModifiers::SHIFT | ct::KeyModifiers::META,
             ct::KeyEventKind::Release,
             ct::KeyEventState::CAPS_LOCK | ct::KeyEventState::KEYPAD,
         );
-        let want = KeyEvent::new(KeyCode::Char('A'), KeyModifiers::SHIFT | KeyModifiers::META)
+        let want = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::SHIFT | KeyModifiers::META)
+            .with_shifted(Some('A'))
             .with_kind(KeyEventKind::Release)
             .with_state(KeyEventState::CAPS_LOCK | KeyEventState::KEYPAD)
             .with_encoding(KeyEncoding::Legacy);
-        assert_eq!(ttyr_event(ct::Event::Key(ev), false), Event::Key(want));
-        let Event::Key(kitty) = ttyr_event(ct::Event::Key(ev), true) else {
-            panic!("not a key");
-        };
-        assert_eq!(kitty.encoding, KeyEncoding::Kitty);
+        assert_eq!(ttyr_event(ct::Event::Key(ev)), Event::Key(want));
         // BackTab stays BackTab, with the Shift crossterm gives it.
         let back = ct::KeyEvent::new(ct::KeyCode::BackTab, ct::KeyModifiers::SHIFT);
-        let Event::Key(back) = ttyr_event(ct::Event::Key(back), false) else {
+        let Event::Key(back) = ttyr_event(ct::Event::Key(back)) else {
             panic!("not a key");
         };
         assert_eq!(
@@ -309,7 +401,7 @@ mod tests {
             modifiers: ct::KeyModifiers::ALT,
         };
         assert_eq!(
-            ttyr_event(ct::Event::Mouse(mouse), false),
+            ttyr_event(ct::Event::Mouse(mouse)),
             Event::Mouse(MouseEvent {
                 kind: MouseEventKind::Drag(MouseButton::Right),
                 column: 3,
@@ -323,7 +415,7 @@ mod tests {
             (ct::Event::FocusLost, Event::FocusLost),
             (ct::Event::Resize(80, 24), Event::Resize(80, 24)),
         ] {
-            assert_eq!(ttyr_event(from.clone(), false), to, "{from:?}");
+            assert_eq!(ttyr_event(from.clone()), to, "{from:?}");
         }
     }
 
@@ -332,7 +424,7 @@ mod tests {
         use ct::{ColorScheme as CtScheme, ColorSlot as CtSlot};
         for (from, to) in pairs!(CtScheme => ColorScheme: Light, Dark) {
             assert_eq!(
-                ttyr_event(ct::Event::ColorScheme(from), false),
+                ttyr_event(ct::Event::ColorScheme(from)),
                 Event::Report(Report::ColorScheme(to)),
                 "{from:?}"
             );
@@ -348,7 +440,7 @@ mod tests {
                 rgb: (1, 0x8080, 0xffff),
             };
             assert_eq!(
-                ttyr_event(ct::Event::TerminalColor(colour), false),
+                ttyr_event(ct::Event::TerminalColor(colour)),
                 Event::Report(Report::TerminalColor(TerminalColor {
                     slot: to,
                     rgb: (1, 0x8080, 0xffff),

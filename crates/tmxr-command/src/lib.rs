@@ -25,7 +25,7 @@ mod x11_colours;
 
 pub use args::Args;
 pub use bind_key::{BindKey, MouseAction, MouseKey, MouseLocation};
-pub use keys::Key;
+pub use keys::{Key, Typed};
 pub use table::{
     CommandError, CommandSpec, Parsed, lookup, parse, parse_line, print_block, print_command_list,
     reads_stdin, split_arguments, split_line,

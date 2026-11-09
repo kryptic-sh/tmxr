@@ -1,6 +1,7 @@
 //! The command prompt's line editor: the input, its cursor, the template it
 //! fills, and history recall.
 
+use tmxr_command::Typed;
 use ttyr::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::OverlayAction;
@@ -251,7 +252,7 @@ enum Edit {
 }
 
 /// tmux's emacs keys (status_prompt_key).
-fn emacs(ev: &KeyEvent) -> Edit {
+fn emacs(ev: Typed) -> Edit {
     let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
     let alt = ev.modifiers.contains(KeyModifiers::ALT);
     match ev.key {
@@ -302,7 +303,7 @@ fn emacs(ev: &KeyEvent) -> Edit {
 
 /// The keys typing passes on as tmux's emacs keys in vi's insert mode
 /// (status_prompt_translate_key); others only type a character.
-fn vi_insert_passes(ev: &KeyEvent) -> bool {
+fn vi_insert_passes(ev: Typed) -> bool {
     let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
     match ev.key {
         KeyCode::Char(c) if ctrl => "aceghknptuvwyjm".contains(c),
@@ -322,7 +323,7 @@ fn vi_insert_passes(ev: &KeyEvent) -> bool {
 
 /// A key in vi's command mode, as tmux's status_prompt_translate_key: the
 /// edit it stands for, and whether it goes back to typing.
-fn vi_command(ev: &KeyEvent) -> (Edit, bool) {
+fn vi_command(ev: Typed) -> (Edit, bool) {
     let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
     let words = |separators| Edit::ForwardWord {
         vi: true,
@@ -401,8 +402,9 @@ impl Prompt {
         }
         // C-r / C-s search the other way, or on an empty input bring back
         // the starting one (emacs keys only: vi's insert mode types them).
-        let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
-        if let (KeyCode::Char(c @ ('r' | 's')), true, false) = (ev.key, ctrl, self.vi) {
+        let typed = Typed::of(ev);
+        let ctrl = typed.modifiers.contains(KeyModifiers::CONTROL);
+        if let (KeyCode::Char(c @ ('r' | 's')), true, false) = (typed.key, ctrl, self.vi) {
             let prefix = if self.input.is_empty() {
                 self.input = self.last.chars().collect();
                 self.cursor = self.input.len();
@@ -620,6 +622,7 @@ impl Prompt {
             let template = self.template.as_deref().unwrap_or("%%");
             return OverlayAction::Run(tmxr_command::fill_template(template, &[name]));
         }
+        let ev = Typed::of(ev);
         let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
         // -N: a digit is typed; anything else answers with what is there.
         if self.numeric {

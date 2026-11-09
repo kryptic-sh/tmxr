@@ -422,6 +422,7 @@ impl CopyMode {
     /// typed plain in vi mode and with Alt (`M-1`) in emacs mode, as tmux's
     /// tables have them. Returns whether the key was used.
     pub fn take_key(&mut self, ev: &KeyEvent, emacs: bool) -> bool {
+        let ev = tmxr_command::Typed::of(ev);
         let plain = !ev
             .modifiers
             .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);

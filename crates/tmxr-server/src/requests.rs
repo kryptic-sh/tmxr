@@ -193,8 +193,7 @@ impl Server {
 
     /// Client `id`'s terminal reported one of its colours.
     pub fn terminal_colour(&mut self, id: ClientId, colour: TerminalColor) {
-        let (r, g, b) = colour.rgb;
-        let rgb = u32::from(r >> 8) << 16 | u32::from(g >> 8) << 8 | u32::from(b >> 8);
+        let rgb = tmxr_command::colour::from_rgb16(colour.rgb);
         match colour.slot {
             ColorSlot::Palette(index) => {
                 let released = self.colour_requests.answered(id, index, rgb);

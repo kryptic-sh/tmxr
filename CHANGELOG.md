@@ -26,7 +26,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `popup::Popup::key` and `copy::CopyMode::take_key` take or hold `ttyr`'s
   types. `ttyr`'s `KeyEvent` names its key `key` where crossterm's named it
   `code` (`tmxr-command`'s `Key` keeps `code`), and it is not `Copy` (it can
-  carry text), so neither is `copyline::CopyLine`, which holds two.
+  carry text), so neither is `copyline::CopyLine`, which holds two. A key means
+  what `ttyr` says: the unshifted key with Shift held and the shifted character
+  beside it (`a` with Shift and `A` shifted, for Shift+a), which `encode_key`
+  and `Key::from_event` read as such; `tmxr-command`'s new `Typed` reads one as
+  tmux does, and `Key::to_event` makes one.
 - **`tmxr-config`'s `Config` has a `kitty_keys` field**, the `kitty-keys`
   option, and **`tmxr-server`'s `server::Attached` a `keyboard_flags` field**; a
   library caller building either with a struct literal sets it.
@@ -44,17 +48,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- **In terminals with the kitty keyboard protocol, a pane that pushed kitty
-  flags no longer always gets the terminal's own unshifted key for every shifted
-  key**, as the client now asks the terminal for the shifted character, which
-  the binds below need, and the unshifted key is lost on the way in. Alt+Shift
-  (or Ctrl+Shift) with a digit or symbol goes as the shifted character without
-  Shift: `CSI 33;3u` for Alt+Shift+1, where 0.15.0 sent `CSI 49;4u`, the
-  protocol's form. A letter goes as its lowercase form with Shift, a guess that
-  is wrong where the layout's keys do not match Unicode's case mapping: Turkish
-  Alt+Shift+ı now sends `CSI 105;4u` (Shift+i), and Alt+Shift+i (`İ`) sends
-  `CSI 304;3u`, where 0.15.0 sent the terminal's own key (`CSI 305;4u` and
-  `CSI 105;4u`). The client's own key parser (planned) restores both.
+- **The client also asks its terminal for its name and version** (XTVERSION,
+  `CSI > q`) when it attaches, and asks all its questions again on the way back
+  from `suspend-client` and `lock-client`, where it asked only for the kitty
+  keyboard protocol; a terminal too slow to answer in time keeps its earlier
+  answers, and new colours reach the server. Nothing acts on the version yet.
 
 ### Fixed
 
@@ -69,6 +67,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`CSI 27;3;65~` for M-A), as tmux encodes M-A; a pane that pushed kitty flags
   gets a letter as its key with Shift (`CSI 97;4u`), and so does
   `send-keys M-A`, which sent `CSI 97;3u`.
+- **Keys typed while an attaching client asks its terminal what it speaks are no
+  longer lost**: keys that arrived before the terminal had answered were thrown
+  away with the answers.
+- **A real Ctrl+4 to Ctrl+7 from a terminal that reports them apart (the kitty
+  keyboard protocol) reaches a pane at modifyOtherKeys level 2 as the digit**
+  (`CSI 27;5;52~` for Ctrl+4), as tmux sends it, not as the C-\ to C-\_ a legacy
+  terminal's control byte stands for. That byte (0x1c to 0x1f) now reaches a
+  pane that pushed kitty flags as C-\ to C-\_ (`CSI 92;5u`), not Ctrl+4
+  (`CSI 52;5u`).
 - **A pane's program asking for its kitty keyboard flags (`CSI ? u`) is told
   only the flags tmxr encodes**. A program that pushed flags tmxr does not
   implement was told they were on and then got legacy keys.

@@ -94,6 +94,13 @@ pub fn named(s: &str) -> Option<u32> {
         .map(|&(_, v)| v)
 }
 
+/// The RGB value of a colour a terminal reported with 16 bits a channel
+/// (ttyr's `TerminalColor`), each channel's high byte, as
+/// [`parse_x11`] takes `rgb:rrrr/gggg/bbbb`.
+pub fn from_rgb16((r, g, b): (u16, u16, u16)) -> u32 {
+    u32::from(r >> 8) << 16 | u32::from(g >> 8) << 8 | u32::from(b >> 8)
+}
+
 /// The RGB value of an X11 colour specification, as tmux's
 /// colour_parseX11 reads one (OSC 12 and the other OSC colours):
 /// `rgb:rr/gg/bb`, `#rrggbb`, `r,g,b`, `rgb:rrrr/gggg/bbbb`, `#rrrrggggbbbb`,

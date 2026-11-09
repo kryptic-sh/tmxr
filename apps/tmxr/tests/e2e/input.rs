@@ -182,10 +182,10 @@ fn alt_shift_from_a_kitty_terminal_keeps_its_shift() {
 }
 
 /// Ctrl+Shift+h from a kitty-protocol terminal reporting alternate keys
-/// (`CSI 104:72;6u`, which crossterm reads as `H` with Ctrl) reaches a pane
-/// as Ctrl+Shift+h: kitty's `CSI 104;6u` where the program pushed kitty
-/// flags, and tmux's `CSI 27;6;104~` where it asked for modifyOtherKeys
-/// level 2. ConPTY does not pass these.
+/// (`CSI 104:72;6u`, which ttyr reads as `h` with Ctrl and Shift, `H` its
+/// shifted key) reaches a pane as Ctrl+Shift+h: kitty's `CSI 104;6u` where
+/// the program pushed kitty flags, and tmux's `CSI 27;6;104~` where it asked
+/// for modifyOtherKeys level 2. ConPTY does not pass these.
 #[cfg(unix)]
 #[test]
 fn ctrl_shift_from_a_kitty_terminal_reaches_a_pane_with_its_shift() {
@@ -224,6 +224,68 @@ fn ctrl_shift_from_a_kitty_terminal_reaches_a_pane_with_its_shift() {
             std::thread::sleep(Duration::from_millis(50));
         }
     }
+}
+
+/// Alt+Shift+1 from a kitty-protocol terminal reporting alternate keys
+/// (`CSI 49:33;4u`) reaches a pane that pushed kitty flags as the protocol
+/// reports it, the unshifted key with Shift (`CSI 49;4u`), not as the
+/// shifted `!` (`CSI 33;3u`); a legacy pane gets `ESC !`. Unix only: ConPTY
+/// passes no kitty keys, either from the harness to the client or to a
+/// pane, and the Windows client's keys come from the console; the server's
+/// side is unit-tested on every platform (`tmxr-term`'s
+/// `kitty_sends_a_shifted_symbol_as_its_key_with_shift`).
+#[cfg(unix)]
+#[test]
+fn alt_shift_1_from_a_kitty_terminal_reaches_a_kitty_pane_unshifted() {
+    let t = Tmxr::new("altshift1");
+    t.run(&["new-session", "-d", "-s", "a1"]);
+    let s = t.attach(&["attach", "-t", "a1"]);
+    s.wait_for("status line", |text| text.contains("a1"));
+    let flags = s.emu.lock().unwrap().input_modes().kitty_flags;
+    assert_eq!(flags & 5, 5, "the client pushed flags 1 and 4: {flags}");
+    for (name, mode, want) in [
+        ("kittypane", r"\e[>1u", r"\x1b[49;4u"),
+        ("legacypane", "", r"\x1b!"),
+    ] {
+        let log = t.dir.path().join(format!("{name}.log"));
+        let argv = key_log_program(&t, name);
+        let env = format!("{KEY_LOG}={}", log.display());
+        let raw = format!("{KEY_LOG_RAW}={mode}");
+        let mut new = vec!["new-window", "-t", "a1", "-e", &env, "-e", &raw];
+        new.extend(argv.iter().map(String::as_str));
+        t.run(&new);
+        t.wait_run(&["capture-pane", "-p", "-t", "a1"], "the mode", |o| {
+            o.contains("raw-on")
+        });
+        s.send(b"\x1b[49:33;4u");
+        let deadline = Instant::now() + TIMEOUT;
+        loop {
+            let got = std::fs::read_to_string(&log).unwrap_or_default();
+            if let Some(key) = got.lines().find(|&l| l != "ready") {
+                assert_eq!(key, want, "{name}: {got:?}");
+                break;
+            }
+            assert!(Instant::now() < deadline, "{name}: no key in {got:?}");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+}
+
+/// Keys typed while the client asks its terminal what it speaks, before
+/// the terminal has answered, reach the pane: the probe reads them with the
+/// answers and hands them on. Unix only: the Windows client asks the
+/// console nothing (it hands over input records), so it has no probe.
+#[cfg(unix)]
+#[test]
+fn keys_typed_while_the_terminal_is_asked_reach_the_pane() {
+    let t = Tmxr::new("probekeys");
+    t.run(&["new-session", "-d", "-s", "pk"]);
+    t.wait_prompt("pk");
+    let s = t.attach_typing_in_probe(&["attach", "-t", "pk"], b"typed-in-probe");
+    s.wait_for("status line", |text| text.contains("pk"));
+    t.wait_run(&["capture-pane", "-p", "-t", "pk"], "the keys", |o| {
+        o.contains("typed-in-probe")
+    });
 }
 
 /// A program that pushed kitty flags on the alternate screen and left it

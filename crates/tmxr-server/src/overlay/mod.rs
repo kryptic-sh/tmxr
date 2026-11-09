@@ -661,24 +661,26 @@ impl Overlay {
 
     /// Feed a key. Returns what the server should do.
     pub fn key(&mut self, ev: &KeyEvent) -> OverlayAction {
-        let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
+        let typed = tmxr_command::Typed::of(ev);
         match self {
             Self::Prompt(p) => p.key(ev),
             Self::Menu(m) => m.key(ev),
             Self::Popup(p) => p.key(ev),
+            Self::Picker(p) => p.key(ev),
             Self::Confirm {
                 cmd,
                 key,
                 default_yes,
                 ..
-            } => match ev.key {
+            } => match typed.key {
                 KeyCode::Char(c) if c == *key => OverlayAction::Run(cmd.clone()),
                 KeyCode::Enter if *default_yes => OverlayAction::Run(cmd.clone()),
                 _ => OverlayAction::Close,
             },
             Self::Text { lines, top } => {
                 let max = lines.len().saturating_sub(1);
-                match ev.key {
+                let ctrl = typed.modifiers.contains(KeyModifiers::CONTROL);
+                match typed.key {
                     KeyCode::Char('q') | KeyCode::Esc => return OverlayAction::Close,
                     KeyCode::Char('c') if ctrl => return OverlayAction::Close,
                     KeyCode::Char('j') | KeyCode::Down => *top = (*top + 1).min(max),
@@ -693,7 +695,6 @@ impl Overlay {
                 }
                 OverlayAction::Keep
             }
-            Self::Picker(p) => p.key(ev),
             Self::Panes { keys: false, .. } => OverlayAction::Pass,
             // A pane's number (0 to 9, then a to z) runs the template for
             // it, as tmux's cmd_display_panes_key; any other key just
@@ -701,7 +702,7 @@ impl Overlay {
             Self::Panes {
                 labels, template, ..
             } => {
-                let pick = match ev.key {
+                let pick = match typed.key {
                     KeyCode::Char(c @ '0'..='9') => c.to_digit(10),
                     KeyCode::Char(c @ 'a'..='z') => Some(10 + u32::from(c) - u32::from('a')),
                     _ => None,
@@ -750,6 +751,13 @@ mod tests {
 
     fn k(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    /// Shift with letter `c`, as a terminal reports it: the key with
+    /// Shift, its capital the shifted key.
+    fn shifted(c: char) -> KeyEvent {
+        KeyEvent::new(KeyCode::Char(c), KeyModifiers::SHIFT)
+            .with_shifted(Some(c.to_ascii_uppercase()))
     }
 
     #[test]
@@ -814,6 +822,11 @@ mod tests {
             prompt("", true, false).key(&k(KeyCode::Left)),
             OverlayAction::Keep
         );
+        // A shifted letter is the capital typed.
+        assert_eq!(
+            prompt("", true, false).key(&shifted('y')),
+            OverlayAction::Run("set @k 'Y'".into())
+        );
         assert_eq!(
             prompt("x", true, false).key(&k(KeyCode::Char('y'))),
             OverlayAction::Close
@@ -863,11 +876,10 @@ mod tests {
             confirm('y', false).key(&k(KeyCode::Char('n'))),
             OverlayAction::Close
         );
-        // Exactly the key, as tmux's: not its capital.
-        assert_eq!(
-            confirm('y', false).key(&k(KeyCode::Char('Y'))),
-            OverlayAction::Close
-        );
+        // Exactly the key, as tmux's: not its capital, which a terminal
+        // reports as the key with Shift.
+        assert_eq!(confirm('y', false).key(&shifted('y')), OverlayAction::Close);
+        assert_eq!(confirm('Y', false).key(&shifted('y')), run());
         assert_eq!(confirm('x', false).key(&k(KeyCode::Char('x'))), run());
         assert_eq!(
             confirm('x', false).key(&k(KeyCode::Char('y'))),

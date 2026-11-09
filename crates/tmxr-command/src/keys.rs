@@ -25,8 +25,24 @@ impl Key {
         Self::normalise(code, mods & MODS)
     }
 
+    /// The key a terminal's event names, as tmux reads it (see [`Typed`]).
     pub fn from_event(ev: &KeyEvent) -> Self {
-        Self::new(ev.key, ev.modifiers)
+        let typed = Typed::of(ev);
+        Self::new(typed.key, typed.modifiers)
+    }
+
+    /// This key as a terminal reports it, in ttyr's meaning: an upper-case
+    /// letter is its lower-case key with Shift, the letter its shifted key,
+    /// as ttyr's decoder reads the letter's byte. For keys tmxr makes
+    /// itself (`send-keys`, `send-prefix`).
+    pub fn to_event(self) -> KeyEvent {
+        if let KeyCode::Char(c) = self.code
+            && let Some(lower) = single_lower(c)
+        {
+            return KeyEvent::new(KeyCode::Char(lower), self.mods | KeyModifiers::SHIFT)
+                .with_shifted(Some(c));
+        }
+        KeyEvent::new(self.code, self.mods)
     }
 
     fn normalise(code: KeyCode, mut mods: KeyModifiers) -> Self {
@@ -36,7 +52,7 @@ impl Key {
                 mods.remove(KeyModifiers::SHIFT);
                 let c = if mods.contains(KeyModifiers::CONTROL) {
                     // Legacy terminals deliver C-\ C-] C-^ C-_ as the bytes
-                    // 0x1c..0x1f, which crossterm reports as C-4 .. C-7, and
+                    // 0x1c..0x1f, which ttyr reads as C-4 .. C-7, and
                     // C-Space as 0x00, which Windows reports as C-2. tmux
                     // names 0x00 C-Space and accepts C-@ for it.
                     match c {
@@ -60,6 +76,47 @@ impl Key {
         };
         Self { code, mods }
     }
+}
+
+/// A key event as tmux reads a key: the character typed, with Shift only
+/// where the character does not already carry it (`A`, `!` and `M-A`
+/// rather than ttyr's unshifted key with Shift), except a letter with
+/// Ctrl, which stays the letter's key with Shift as reported (C-S-h, which
+/// a pane under modifyOtherKeys tells from C-h). Any other key is as
+/// reported. What tmxr's own key handling (binds, copy mode, the prompt,
+/// menus, pickers) reads; a pane's program gets the event itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Typed {
+    pub key: KeyCode,
+    pub modifiers: KeyModifiers,
+}
+
+impl Typed {
+    pub fn of(ev: &KeyEvent) -> Self {
+        let letter_chord = ev.modifiers.contains(KeyModifiers::CONTROL)
+            && matches!(ev.key, KeyCode::Char(c) if c.is_lowercase());
+        match ev.logical_char() {
+            Some(c) if !letter_chord => Self {
+                key: KeyCode::Char(c),
+                modifiers: ev.logical_modifiers(),
+            },
+            _ => Self {
+                key: ev.key,
+                modifiers: ev.modifiers,
+            },
+        }
+    }
+}
+
+/// `c`'s lower case, where `c` is upper case and its lower case is one
+/// other character, as ttyr's decoder takes a letter's key.
+pub fn single_lower(c: char) -> Option<char> {
+    if !c.is_uppercase() {
+        return None;
+    }
+    let mut lower = c.to_lowercase();
+    let l = lower.next()?;
+    (lower.next().is_none() && l != c).then_some(l)
 }
 
 /// Error for an unrecognised key name.
@@ -279,34 +336,91 @@ mod tests {
 
     #[test]
     fn terminal_variants_of_one_chord_are_equal() {
-        // C-\ as legacy byte 0x1c (crossterm: C-4) and as an explicit char.
+        // C-\ as legacy byte 0x1c (ttyr: C-4) and as an explicit char.
         let legacy = Key::from_event(&KeyEvent::new(KeyCode::Char('4'), KeyModifiers::CONTROL));
         assert_eq!(legacy, k("C-\\"));
         // C-Space as 0x00, which Windows reports as C-2.
         let nul = Key::from_event(&KeyEvent::new(KeyCode::Char('2'), KeyModifiers::CONTROL));
         assert_eq!(nul, k("C-Space"));
         assert_eq!(k("C-@"), k("C-Space"));
-        // Shifted characters carry their shift.
-        let pct = Key::from_event(&KeyEvent::new(KeyCode::Char('%'), KeyModifiers::SHIFT));
+        // Shifted characters carry their shift: a legacy `%`, a legacy
+        // `R` (ttyr's key `r` with Shift, `R` shifted), and kitty's Shift+5
+        // reporting alternate keys (`5` with Shift, `%` shifted).
+        let ev = |c, m| KeyEvent::new(KeyCode::Char(c), m);
+        let pct = Key::from_event(&ev('%', KeyModifiers::NONE));
         assert_eq!(pct, k("%"));
-        let upper = Key::from_event(&KeyEvent::new(KeyCode::Char('R'), KeyModifiers::SHIFT));
+        let upper = Key::from_event(&ev('r', KeyModifiers::SHIFT).with_shifted(Some('R')));
         assert_eq!(upper, k("R"));
-        // Ctrl letters ignore case.
-        let ch = Key::from_event(&KeyEvent::new(
-            KeyCode::Char('H'),
-            KeyModifiers::CONTROL | KeyModifiers::SHIFT,
-        ));
+        let five = Key::from_event(&ev('5', KeyModifiers::SHIFT).with_shifted(Some('%')));
+        assert_eq!(five, k("%"));
+        // Ctrl letters ignore case and Shift: C-S-h is C-h to binds.
+        let ctrl_shift = KeyModifiers::CONTROL | KeyModifiers::SHIFT;
+        let ch = Key::from_event(&ev('h', ctrl_shift).with_shifted(Some('H')));
         assert_eq!(ch, k("C-h"));
-        // Alt with a shifted letter, as a kitty terminal reporting
-        // alternate keys sends it, is M-A and not M-a.
-        let meta_upper = Key::from_event(&KeyEvent::new(KeyCode::Char('A'), KeyModifiers::ALT));
+        // Alt with a shifted letter, from a legacy `ESC A` or kitty's
+        // `CSI 97:65;4u` alike, is M-A and not M-a; without the shifted key
+        // (kitty's `CSI 97;4u`) too.
+        let alt_shift = KeyModifiers::ALT | KeyModifiers::SHIFT;
+        let meta_upper = Key::from_event(&ev('a', alt_shift).with_shifted(Some('A')));
         assert_eq!(meta_upper, k("M-A"));
         assert_ne!(meta_upper, k("M-a"));
+        assert_eq!(Key::from_event(&ev('a', alt_shift)), k("M-A"));
+        // Alt+Shift+1 reporting alternate keys is M-!, as tmux names it.
+        let bang = Key::from_event(&ev('1', alt_shift).with_shifted(Some('!')));
+        assert_eq!(bang, k("M-!"));
         // Super / Hyper never take part in matching.
         let sup = Key::from_event(&KeyEvent::new(
             KeyCode::Char('h'),
             KeyModifiers::ALT | KeyModifiers::SUPER,
         ));
         assert_eq!(sup, k("M-h"));
+    }
+
+    #[test]
+    fn a_key_made_by_tmxr_is_what_a_terminal_reports() {
+        // An upper-case letter as ttyr's decoder reads `ESC A`.
+        let mut decoder = ttyr::event::Decoder::new();
+        decoder.feed(b"\x1bA");
+        let Some(ttyr::event::Event::Key(alt_a)) = decoder.flush_event() else {
+            panic!("not a key");
+        };
+        let made = k("M-A").to_event();
+        assert_eq!(
+            (made.key, made.modifiers, made.shifted),
+            (alt_a.key, alt_a.modifiers, alt_a.shifted)
+        );
+        // And back again, as every other key.
+        for name in ["M-A", "C-b", "%", "Enter", "M-Up", "C-\\", "É"] {
+            assert_eq!(Key::from_event(&k(name).to_event()), k(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn typed_keeps_shift_on_a_ctrl_letter_only() {
+        let ev = |c, m| KeyEvent::new(KeyCode::Char(c), m);
+        let typed = |e: &KeyEvent| {
+            let t = Typed::of(e);
+            (t.key, t.modifiers)
+        };
+        let (c, s, a) = (
+            KeyModifiers::CONTROL,
+            KeyModifiers::SHIFT,
+            KeyModifiers::ALT,
+        );
+        assert_eq!(
+            typed(&ev('h', c | s).with_shifted(Some('H'))),
+            (KeyCode::Char('h'), c | s)
+        );
+        assert_eq!(
+            typed(&ev('a', a | s).with_shifted(Some('A'))),
+            (KeyCode::Char('A'), a)
+        );
+        assert_eq!(
+            typed(&ev('1', c | s).with_shifted(Some('!'))),
+            (KeyCode::Char('!'), c)
+        );
+        assert_eq!(typed(&ev('a', s)), (KeyCode::Char('A'), KeyModifiers::NONE));
+        let up = KeyEvent::new(KeyCode::Up, s);
+        assert_eq!(typed(&up), (KeyCode::Up, s));
     }
 }

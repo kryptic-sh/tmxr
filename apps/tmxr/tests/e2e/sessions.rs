@@ -830,6 +830,9 @@ fn suspend_client_stops_and_fg_resumes() {
     sh.wait_for("redrawn after fg", |text| {
         text.lines().last().is_some_and(|l| l.contains("sus"))
     });
+    // The client reads its terminal again: keys reach the pane.
+    sh.send(b"typed-after-fg");
+    sh.wait_for("the keys after fg", |text| text.contains("typed-after-fg"));
 }
 
 #[cfg(windows)]
@@ -948,6 +951,11 @@ fn lock_hands_the_keys_to_the_lock_command() {
         !pane.contains("secret"),
         "the pane got the lock's keys:\n{pane}"
     );
+    // The client reads its terminal again: keys reach the pane.
+    s.send(b"typed-after-lock");
+    t.wait_run(&["capture-pane", "-p", "-t", "lk"], "the keys", |o| {
+        o.contains("typed-after-lock")
+    });
 
     // A lock command that fails says so, and the client is back.
     t.run(&["set-option", "-g", "lock-command", "exit 3"]);

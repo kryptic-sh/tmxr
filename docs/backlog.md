@@ -258,10 +258,6 @@ named were checked by reading; the runs were not repeated.
     not win32 input events (older than this change).
   - A popup keeps the `extended-keys` / `extended-keys-format` it opened with;
     tmux's `input_key_extended` reads the option on every key.
-  - `tmux_key` sends a kitty-reported real Ctrl+4 … Ctrl+7 at level 2 as the
-    legacy control's key (`27;5;92` for C-4) where tmux sends the digit
-    (`27;5;52`): crossterm reports the legacy byte 0x1c and a real Ctrl+4 the
-    same way. Level 1 is unaffected.
   - `send-keys C-A` is folded to `C-a` before encoding, so at level 2 it sends
     97 where tmux sends 65.
 - **Query replies that still differ from tmux 3.8** (_reproduced_ by the slice-3
@@ -291,14 +287,33 @@ mouse-enabled pane.
 
 ## Plan 18's crossterm bridge (2026-11-10)
 
-- **The client bridge's `KeyEvent::encoding` cannot be trusted.**
-  `crossterm_bridge::ttyr_event` (`tmxr-client`) sets it per batch from
-  `KITTY_KEYS`, not per key, because crossterm does not say which form a key
-  came in. Under kitty flag 1 a plain character still arrives as legacy bytes
-  but is labelled `Kitty`. Nothing reads the field yet; whatever does must not
-  rely on it for keys that came through the bridge. On Unix the bridge goes with
-  the second half of plan 18 step 3; Windows keeps it until ttyr reads the
-  console (ttyr's phase 07), so the gap lasts longest there.
+- **The Windows client's bridge labels every key `Legacy`.**
+  `crossterm_bridge::ttyr_event` (`tmxr-client`, built on Windows only, and for
+  its tests) cannot tell which form a key came in, and the console has no kitty
+  protocol. So under Windows Terminal's win32-input-mode, which does tell a real
+  Ctrl+4 from Ctrl+`\`, a Ctrl+4 to Ctrl+7 is read as the legacy control byte
+  (`legacy_control` in `tmxr-term`'s `encode.rs`): `C-\` to `C-_` at
+  modifyOtherKeys level 2. Not checked on Windows. Goes with the bridge, once
+  ttyr reads the Windows console (ttyr's phase 07).
+- **A shifted symbol from the Windows bridge keeps crossterm's Shift** (`!` with
+  Alt+Shift for Alt+Shift+1, where ttyr's decoder reads `ESC !` as `!` with Alt
+  alone), as only letters are mapped to ttyr's meaning. Binds are unaffected
+  (`Key` drops Shift from a character), but panes are not: a modifyOtherKeys
+  level 2 pane gets `CSI 27;4;33~` where a Unix client's gives `CSI 27;3;33~`,
+  and a kitty pane `CSI 33;4u`. 0.15.0 behaved the same on Windows. The
+  unshifted key is not known from crossterm's event; goes with the bridge.
+- **`Key::normalise` still folds `C-4` into `C-\`** (`tmxr-command`'s
+  `keys.rs`), for names and events alike, so `send-keys C-4` sends 92 at
+  modifyOtherKeys level 2 and a `C-\` bind fires on a kitty terminal's real
+  Ctrl+4. tmux 3.8 keeps them apart (`send-keys C-4` sends 52). Older than plan
+  18; the encoder already tells them apart by `KeyEncoding` (`legacy_control`).
+- **Colour answers in forms other than `rgb:` are lost at attach until the ttyr
+  pin moves.** The client's probe takes OSC 10/11 answers from ttyr's decoder,
+  which at the pinned rev reads only `rgb:`, where the old probe read every form
+  `colour::parse_x11` does. ttyr's local commit b2b9b5e reads every Xlib numeric
+  form (not names or `cmyk:`) with 16 bits a channel; move the workspace pin to
+  it or later once it is pushed and CI-green. tmxr takes each channel's high
+  byte (`colour::from_rgb16`), which matches tmux for every form tmux reads.
 
 ## Decisions waiting on the owner
 

@@ -4,7 +4,6 @@ use std::fmt::Write as _;
 
 use ratatui::style::{Color, Modifier, Style};
 use tmxr_command::{Args, Key, Parsed};
-use ttyr::event::KeyEvent;
 
 use super::{Ctx, Outcome, Res, attached_client, cwd_arg, dir_flag, list_item};
 use crate::model::{PaneId, SessionId, WindowId};
@@ -554,7 +553,7 @@ pub(super) fn run(
                 srv.sent_key_depth += 1;
                 for _ in 0..repeat {
                     for key in &keys {
-                        srv.client_key(client, KeyEvent::new(key.code, key.mods), true);
+                        srv.client_key(client, key.to_event(), true);
                     }
                 }
                 srv.sent_key_depth -= 1;
@@ -637,7 +636,7 @@ pub(super) fn run(
                     match word.parse::<Key>() {
                         Ok(k) if !a.has('l') && word.chars().count() > 1 => {
                             if !srv.clock_takes_key(pid, from_client) {
-                                srv.send_key_to_pane(pid, &KeyEvent::new(k.code, k.mods));
+                                srv.send_key_to_pane(pid, &k.to_event());
                             }
                         }
                         _ => {
@@ -657,7 +656,7 @@ pub(super) fn run(
         "send-prefix" => {
             let (sid, _, pid) = target::pane(srv, ctx, a.value('t'))?;
             let k = srv.prefix_key(sid);
-            srv.send_key_to_pane(pid, &KeyEvent::new(k.code, k.mods));
+            srv.send_key_to_pane(pid, &k.to_event());
         }
 
         _ => return Ok(false),

@@ -6,6 +6,9 @@
 //! go up, output bytes come down, until the server detaches it.
 //! See `docs/plan/02-architecture.md`.
 
+// The Windows client reads the console with crossterm until ttyr does;
+// built for its tests everywhere.
+#[cfg(any(windows, test))]
 mod crossterm_bridge;
 mod spawn;
 mod terminal;
@@ -124,7 +127,7 @@ fn hello() -> Hello {
             term: std::env::var("TERM").unwrap_or_default(),
             job_control: cfg!(unix),
             tty: terminal::tty_name(),
-            // Read through crossterm's Unix parser; the Windows console hands
+            // Read through ttyr's Unix reader; the Windows console hands
             // over key records instead.
             colour_answers: cfg!(unix),
         });
@@ -195,13 +198,16 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                 }
             }
             ServerMsg::Attached => {
-                let guard = terminal::Guard::enter(keyboard_flags)?;
-                let (fg, bg) = guard.colours();
-                term = Some(guard);
                 if let Some(s) = send.take() {
+                    let mut keys = terminal::Keys::open()?;
+                    let mut first: Vec<_> = keys.resized_since(size).into_iter().collect();
+                    let (guard, early) = terminal::Guard::enter(keyboard_flags, &mut keys)?;
+                    first.extend(early);
+                    let (fg, bg) = guard.colours();
+                    term = Some(guard);
                     write_msg(&mut &*s, &ClientMsg::TerminalColours { fg, bg }).map_err(to_io)?;
                     let shared = Arc::new(Mutex::new(s));
-                    input = Some(terminal::spawn_input(Arc::clone(&shared), size));
+                    input = Some(terminal::spawn_input(Arc::clone(&shared), keys, first)?);
                     writer = Some(shared);
                 }
             }
@@ -242,34 +248,29 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
             }
             ServerMsg::Suspend => {
                 // Hand the terminal back to the shell while stopped.
-                drop(term.take());
-                terminal::suspend()?;
-                term = Some(terminal::Guard::enter(keyboard_flags)?);
-                if let Some(w) = &writer {
-                    let w = w
-                        .lock()
-                        .map_err(|_| io::Error::other("input thread panicked"))?;
-                    write_msg(&mut &**w, &ClientMsg::Resumed).map_err(to_io)?;
-                }
+                hand_over(
+                    &mut term,
+                    input.as_ref(),
+                    writer.as_ref(),
+                    keyboard_flags,
+                    || terminal::suspend().map(|()| ClientMsg::Resumed),
+                )?;
             }
             ServerMsg::Lock { command } => {
                 // The lock command reads the keys (a password), so the
                 // input thread must not.
-                let paused = input.as_ref().map(terminal::Input::pause).transpose()?;
-                drop(term.take());
-                let locked = terminal::run_lock(&command);
-                term = Some(terminal::Guard::enter(keyboard_flags)?);
-                drop(paused);
-                if let Some(w) = &writer {
-                    let w = w
-                        .lock()
-                        .map_err(|_| io::Error::other("input thread panicked"))?;
-                    let msg = match locked {
-                        Ok(()) => ClientMsg::Resumed,
-                        Err(why) => ClientMsg::LockFailed(why),
-                    };
-                    write_msg(&mut &**w, &msg).map_err(to_io)?;
-                }
+                hand_over(
+                    &mut term,
+                    input.as_ref(),
+                    writer.as_ref(),
+                    keyboard_flags,
+                    || {
+                        Ok(match terminal::run_lock(&command) {
+                            Ok(()) => ClientMsg::Resumed,
+                            Err(why) => ClientMsg::LockFailed(why),
+                        })
+                    },
+                )?;
             }
             ServerMsg::Mouse(on) => {
                 if term.is_some() {
@@ -289,6 +290,50 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
             }
         }
     }
+}
+
+/// Give the terminal to `run` (a suspend, the lock command) and take it
+/// back, asking it again what it speaks and for the kitty keyboard `flags`
+/// the server last sent; then tell the server its colours where they
+/// changed, that it is back with the message `run` returns, and the input
+/// read as the terminal answered. The
+/// input thread is paused throughout, so what is typed meanwhile goes to
+/// whatever `run` hands the terminal to, and nothing it reads after
+/// overtakes that input. Does nothing with no input thread (not attached).
+fn hand_over(
+    term: &mut Option<terminal::Guard>,
+    input: Option<&terminal::Input>,
+    writer: Option<&terminal::Sender>,
+    flags: u8,
+    run: impl FnOnce() -> io::Result<ClientMsg>,
+) -> io::Result<()> {
+    let (Some(input), Some(writer)) = (input, writer) else {
+        return Ok(());
+    };
+    let mut paused = input.pause()?;
+    let colours = term.as_ref().map(terminal::Guard::colours);
+    drop(term.take());
+    let back = run();
+    let (guard, early) = terminal::Guard::enter(flags, &mut paused)?;
+    // The server keeps the terminal's colours from attach: tell it of new
+    // ones, as attaching does.
+    let (fg, bg) = guard.colours();
+    let recoloured = colours != Some((fg, bg));
+    *term = Some(guard);
+    {
+        let mut w = &**writer
+            .lock()
+            .map_err(|_| io::Error::other("input thread panicked"))?;
+        let to_io = |e: tmxr_proto::ProtoError| io::Error::other(e.to_string());
+        if recoloured {
+            write_msg(&mut w, &ClientMsg::TerminalColours { fg, bg }).map_err(to_io)?;
+        }
+        write_msg(&mut w, &back?).map_err(to_io)?;
+    }
+    if early.is_empty() {
+        return Ok(());
+    }
+    terminal::forward(writer, early)
 }
 
 #[cfg(test)]

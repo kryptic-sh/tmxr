@@ -322,8 +322,9 @@ impl PickerOverlay {
     }
 
     pub(super) fn key(&mut self, ev: &KeyEvent) -> OverlayAction {
-        let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
-        match ev.key {
+        let typed = tmxr_command::Typed::of(ev);
+        let ctrl = typed.modifiers.contains(KeyModifiers::CONTROL);
+        match typed.key {
             KeyCode::Enter => return self.accept(),
             KeyCode::Char('x') if ctrl && self.is_sessions() => return self.session_action(true),
             KeyCode::Char('r') if ctrl && self.is_sessions() => return self.session_action(false),
@@ -334,7 +335,7 @@ impl PickerOverlay {
             _ => {}
         }
         if !self.typing {
-            return self.normal_key(ev, ctrl);
+            return self.normal_key(ev, typed);
         }
         if let PickerEvent::Select(_) | PickerEvent::Cancel =
             hjkl_picker_tui::handle_key(&mut self.picker, crossterm_key::crossterm_key(ev))
@@ -345,13 +346,14 @@ impl PickerOverlay {
         OverlayAction::Keep
     }
 
-    fn normal_key(&mut self, ev: &KeyEvent, ctrl: bool) -> OverlayAction {
+    fn normal_key(&mut self, ev: &KeyEvent, typed: tmxr_command::Typed) -> OverlayAction {
         // A row's key chooses it, as tmux's mode tree.
         let pressed = tmxr_command::Key::from_event(ev).to_string();
         if let Some((_, target)) = self.keys.iter().find(|(k, _)| *k == pressed) {
             return self.choose_target(target.clone());
         }
-        match ev.key {
+        let ctrl = typed.modifiers.contains(KeyModifiers::CONTROL);
+        match typed.key {
             KeyCode::Char('j') | KeyCode::Down => self.picker.select_next(),
             KeyCode::Char('k') | KeyCode::Up => self.picker.select_prev(),
             KeyCode::Char('n') if ctrl => self.picker.select_next(),

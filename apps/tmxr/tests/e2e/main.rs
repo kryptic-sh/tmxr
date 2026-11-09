@@ -230,6 +230,22 @@ impl Tmxr {
             &self.args(rest),
             &[],
             true,
+            None,
+        )
+    }
+
+    /// [`Tmxr::attach`] in a terminal where `keys` are typed while the
+    /// client asks what it speaks: written just ahead of the answer to the
+    /// first DA1 query (`CSI c`), which the client asks last.
+    #[cfg(unix)]
+    fn attach_typing_in_probe(&self, rest: &[&str], keys: &[u8]) -> Screen {
+        self.terminal(
+            self.dir.path(),
+            env!("CARGO_BIN_EXE_tmxr"),
+            &self.args(rest),
+            &[],
+            false,
+            Some(keys.to_vec()),
         )
     }
 
@@ -241,12 +257,14 @@ impl Tmxr {
         args: &[String],
         vars: &[(&str, Option<&str>)],
     ) -> Screen {
-        self.terminal(cwd, program, args, vars, false)
+        self.terminal(cwd, program, args, vars, false, None)
     }
 
     /// [`Tmxr::spawn_at`], the terminal answering DECRQM for mode 2026 as
     /// set, OSC 10 / 11 with its colours and `CSI ? 996 n` with its color
-    /// scheme when `sync` (else, as one that knows none of them, not at all).
+    /// scheme when `sync` (else, as one that knows none of them, not at all),
+    /// and with `typed_before_da1` typed just ahead of its answer to the
+    /// first DA1 query.
     fn terminal(
         &self,
         cwd: &Path,
@@ -254,6 +272,7 @@ impl Tmxr {
         args: &[String],
         vars: &[(&str, Option<&str>)],
         sync: bool,
+        mut typed_before_da1: Option<Vec<u8>>,
     ) -> Screen {
         let pair = native_pty_system()
             .openpty(PtySize {
@@ -318,6 +337,11 @@ impl Tmxr {
                         if sync && asked(query) {
                             let _ = writer.lock().unwrap().write_all(colour);
                         }
+                    }
+                    if asked(DA1_QUERY)
+                        && let Some(keys) = typed_before_da1.take()
+                    {
+                        let _ = writer.lock().unwrap().write_all(&keys);
                     }
                     // Answer terminal queries (ConPTY's cursor-position
                     // probe, crossterm's capability probes) like a terminal;
@@ -592,6 +616,10 @@ fn console_window_probe() {
 
 /// DECRQM for synchronized updates (mode 2026), which the client asks.
 const SYNC_QUERY: &[u8] = b"\x1b[?2026$p";
+
+/// The primary device attributes query (DA1), which the client asks last
+/// of its questions to the terminal.
+const DA1_QUERY: &[u8] = b"\x1b[c";
 
 /// `bytes` with each `cut` taken out.
 fn without(bytes: &[u8], cut: &[u8]) -> Vec<u8> {

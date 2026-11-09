@@ -3,12 +3,15 @@
 //! takes. It goes when hjkl's picker takes ttyr's keys, a version bump
 //! coordinated with hjkl (plan 18).
 //!
-//! Field for field, as the client's own bridge from crossterm made them:
-//! the key, its modifiers, kind and state. crossterm has no place for the
-//! shifted key, base-layout key, associated text or encoding, so they are
-//! dropped.
+//! The key in crossterm's meaning: the character typed, as tmxr reads it
+//! ([`Typed`]), an upper-case letter with Shift as crossterm's parser
+//! reports one (`A` with Shift, where ttyr has `a` with Shift and `A`
+//! shifted); the kind and state field for field. crossterm has no place for
+//! the shifted key, base-layout key, associated text or encoding, so they
+//! are dropped.
 
 use crossterm::event as ct;
+use tmxr_command::Typed;
 use ttyr::event::{
     KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers, MediaKeyCode, ModifierKeyCode,
 };
@@ -20,6 +23,13 @@ pub(super) fn crossterm_key(k: &KeyEvent) -> ct::KeyEvent {
         KeyEventKind::Repeat => ct::KeyEventKind::Repeat,
         KeyEventKind::Release => ct::KeyEventKind::Release,
     };
+    let typed = Typed::of(k);
+    let mut typed_mods = typed.modifiers;
+    if let KeyCode::Char(c) = typed.key
+        && c.is_uppercase()
+    {
+        typed_mods |= KeyModifiers::SHIFT;
+    }
     let mut modifiers = ct::KeyModifiers::NONE;
     for (from, to) in [
         (KeyModifiers::SHIFT, ct::KeyModifiers::SHIFT),
@@ -29,7 +39,7 @@ pub(super) fn crossterm_key(k: &KeyEvent) -> ct::KeyEvent {
         (KeyModifiers::HYPER, ct::KeyModifiers::HYPER),
         (KeyModifiers::META, ct::KeyModifiers::META),
     ] {
-        modifiers.set(to, k.modifiers.contains(from));
+        modifiers.set(to, typed_mods.contains(from));
     }
     let mut state = ct::KeyEventState::NONE;
     for (from, to) in [
@@ -39,7 +49,7 @@ pub(super) fn crossterm_key(k: &KeyEvent) -> ct::KeyEvent {
     ] {
         state.set(to, k.state.contains(from));
     }
-    ct::KeyEvent::new_with_kind_and_state(key_code(k.key), modifiers, kind, state)
+    ct::KeyEvent::new_with_kind_and_state(key_code(typed.key), modifiers, kind, state)
 }
 
 fn key_code(code: KeyCode) -> ct::KeyCode {
@@ -130,11 +140,13 @@ mod tests {
     }
 
     #[test]
-    fn a_key_crosses_field_for_field() {
+    fn a_key_crosses_in_crossterms_meaning() {
+        // ttyr's Shift+a is crossterm's `A` with Shift.
         let k = KeyEvent::new(
-            KeyCode::Char('A'),
+            KeyCode::Char('a'),
             KeyModifiers::SHIFT | KeyModifiers::HYPER,
         )
+        .with_shifted(Some('A'))
         .with_kind(KeyEventKind::Repeat)
         .with_state(KeyEventState::NUM_LOCK);
         assert_eq!(
@@ -156,6 +168,44 @@ mod tests {
                 ct::KeyEventState::NONE,
             )
         );
+    }
+
+    #[test]
+    fn hjkl_and_shifted_symbols_are_the_characters_typed() {
+        let alt_shift = KeyModifiers::ALT | KeyModifiers::SHIFT;
+        let ctrl_shift = KeyModifiers::CONTROL | KeyModifiers::SHIFT;
+        for (k, want) in [
+            (
+                KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE),
+                (ct::KeyCode::Char('j'), CtMods::NONE),
+            ),
+            (
+                KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL),
+                (ct::KeyCode::Char('k'), CtMods::CONTROL),
+            ),
+            // Kitty's Alt+Shift+1 reporting alternate keys is `!` with Alt.
+            (
+                KeyEvent::new(KeyCode::Char('1'), alt_shift).with_shifted(Some('!')),
+                (ct::KeyCode::Char('!'), CtMods::ALT),
+            ),
+            // Ctrl+Shift+h stays the letter with Shift.
+            (
+                KeyEvent::new(KeyCode::Char('h'), ctrl_shift).with_shifted(Some('H')),
+                (ct::KeyCode::Char('h'), CtMods::CONTROL | CtMods::SHIFT),
+            ),
+            // A shifted letter typed alone, and with Alt.
+            (
+                KeyEvent::new(KeyCode::Char('l'), KeyModifiers::SHIFT).with_shifted(Some('L')),
+                (ct::KeyCode::Char('L'), CtMods::SHIFT),
+            ),
+            (
+                KeyEvent::new(KeyCode::Char('l'), alt_shift).with_shifted(Some('L')),
+                (ct::KeyCode::Char('L'), CtMods::ALT | CtMods::SHIFT),
+            ),
+        ] {
+            let got = crossterm_key(&k);
+            assert_eq!((got.code, got.modifiers), want, "{k:?}");
+        }
     }
 
     /// The same variant name on both sides, for each name given.

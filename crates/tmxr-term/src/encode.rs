@@ -8,8 +8,10 @@
 //! level 2 every modified key. A program that pushed kitty keyboard flags
 //! gets kitty's `CSI <codepoint> ; <modifiers> u`.
 
+use tmxr_command::Typed;
 use ttyr::event::{
-    KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+    KeyCode, KeyEncoding, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent,
+    MouseEventKind,
 };
 use vt1k::{MouseProtocolEncoding, MouseProtocolMode};
 
@@ -146,21 +148,14 @@ fn extended(codepoint: u32, m: KeyModifiers, format: ExtendedKeysFormat) -> Vec<
 
 /// The key tmux's input_key would have for a key with no entry in its
 /// table of special keys (a character, Enter, Tab, Escape or a modified
-/// Backspace): its codepoint and modifiers. The terminal's legacy bytes
-/// 0x1c..0x1f come from crossterm as C-4 .. C-7 and are C-\ .. C-_ to tmux
-/// (0x00 comes as C-Space, as tmux has it, and C-2 is only ever C-2);
-/// a control letter is lower case, and an upper-case letter, or a printable
-/// character with Shift alone, drops Shift, as tmux's tty_keys_next and
-/// tty_keys_extended_key.
+/// Backspace), read as tmux reads a key ([`Typed`], with the legacy
+/// control bytes as [`legacy_control`] names them): its codepoint and
+/// modifiers. A control letter is lower case, and an upper-case letter, or
+/// a printable character with Shift alone, drops Shift, as tmux's
+/// tty_keys_next and tty_keys_extended_key.
 fn tmux_key(code: KeyCode, mut m: KeyModifiers) -> Option<(u32, KeyModifiers)> {
     let c = match code {
-        KeyCode::Char(c) if m.contains(KeyModifiers::CONTROL) => match c {
-            '4' => '\\',
-            '5' => ']',
-            '6' => '^',
-            '7' => '_',
-            c => c.to_ascii_lowercase(),
-        },
+        KeyCode::Char(c) if m.contains(KeyModifiers::CONTROL) => c.to_ascii_lowercase(),
         KeyCode::Char(c) => {
             let printable = c > ' ' && c != '\x7f';
             if c.is_uppercase() || (printable && m == KeyModifiers::SHIFT) {
@@ -177,6 +172,23 @@ fn tmux_key(code: KeyCode, mut m: KeyModifiers) -> Option<(u32, KeyModifiers)> {
     Some((u32::from(c), m))
 }
 
+/// The key a legacy terminal's control byte 0x1c to 0x1f is to tmux, C-\
+/// to C-_, which ttyr's decoder reads as Ctrl+4 to Ctrl+7, the keys that
+/// send those bytes too; `None` for any other key, a Ctrl+4 the kitty
+/// protocol or xterm's extended keys report among them.
+fn legacy_control(key: &KeyEvent) -> Option<char> {
+    if key.encoding != KeyEncoding::Legacy || !key.modifiers.contains(KeyModifiers::CONTROL) {
+        return None;
+    }
+    match key.key {
+        KeyCode::Char('4') => Some('\\'),
+        KeyCode::Char('5') => Some(']'),
+        KeyCode::Char('6') => Some('^'),
+        KeyCode::Char('7') => Some('_'),
+        _ => None,
+    }
+}
+
 /// Whether tmux's modifyOtherKeys level 1 sends a key as at level 0, as
 /// its input_key_mode1: a key with Meta and not Ctrl, and Ctrl with a key
 /// xterm's table gives a control byte; the rest go extended.
@@ -186,25 +198,6 @@ fn level_one_is_legacy(codepoint: u32, m: KeyModifiers) -> bool {
     }
     m.contains(KeyModifiers::CONTROL)
         && char::from_u32(codepoint).is_some_and(|c| matches!(c, ' ' | '/' | '2'..='8' | '@'..='~'))
-}
-
-/// The key an uppercase letter is typed on, with Shift: the letter's
-/// lowercase form, where it has exactly one (`é` for `É`, `с` for `С`), as
-/// the kitty keyboard protocol reports a key. `None` for anything else.
-///
-/// A guess from the character, as the keyboard's own unshifted key is not
-/// known here: on a layout whose keys do not match Unicode's case mapping
-/// it is wrong (Turkish Shift+ı types `I`, read as Shift+i), and a letter
-/// with no single lowercase form (`İ`) stays the shifted character.
-pub fn unshifted_letter(c: char) -> Option<char> {
-    if !c.is_uppercase() {
-        return None;
-    }
-    let mut lower = c.to_lowercase();
-    match (lower.next(), lower.next()) {
-        (Some(key), None) => Some(key),
-        _ => None,
-    }
 }
 
 /// The C0 control byte for `C-<c>`, where one exists.
@@ -235,7 +228,14 @@ pub fn encode_key(
     if key.kind == KeyEventKind::Release {
         return Vec::new();
     }
-    let m = key.modifiers & (KeyModifiers::SHIFT | KeyModifiers::ALT | KeyModifiers::CONTROL);
+    const MODS: KeyModifiers = KeyModifiers::SHIFT
+        .union(KeyModifiers::ALT)
+        .union(KeyModifiers::CONTROL);
+    // Every form but kitty's sends the key typed; kitty's sends the key
+    // itself, which differs only for a character.
+    let typed = Typed::of(key);
+    let code = legacy_control(key).map_or(typed.key, KeyCode::Char);
+    let m = typed.modifiers & MODS;
     let alt = m.contains(KeyModifiers::ALT);
     let ctrl = m.contains(KeyModifiers::CONTROL);
     let kitty = modes.kitty_flags & KITTY_DISAMBIGUATE != 0;
@@ -246,7 +246,7 @@ pub fn encode_key(
     // The kitty protocol, which tmux lacks, takes the keys it reports.
     let level = if kitty { 0 } else { modes.key_level(option) };
     if level > 0 {
-        let (code, mods) = match key.key {
+        let (code, mods) = match code {
             KeyCode::BackTab if level >= 2 => (KeyCode::Tab, m | KeyModifiers::SHIFT),
             code => (code, m),
         };
@@ -284,17 +284,16 @@ pub fn encode_key(
         }
     };
 
-    match key.key {
-        // kitty reports the unshifted key with the shift modifier: an
-        // uppercase letter (as a terminal reporting alternate keys, or
-        // send-keys M-A, hands it over) is its lowercase key with Shift.
-        // A shifted digit or symbol (`!` for Alt+Shift+1) goes as itself,
-        // without Shift, as the unshifted key it came from is not known
-        // here: the client's terminal reports it, but crossterm drops it.
-        KeyCode::Char(c) if kitty && (ctrl || alt) => match unshifted_letter(c) {
-            Some(key) => csi_u(u32::from(key), m | KeyModifiers::SHIFT),
-            None => csi_u(u32::from(c), m),
-        },
+    // kitty reports the unshifted key with the shift modifier, as ttyr
+    // holds a key: Alt+Shift+1 is `CSI 49;4u`, Alt+Shift+a `CSI 97;4u`.
+    if let KeyCode::Char(c) = key.key
+        && kitty
+        && (ctrl || alt)
+    {
+        let c = legacy_control(key).unwrap_or(c);
+        return csi_u(u32::from(c), key.modifiers & MODS);
+    }
+    match code {
         KeyCode::Char(c) if ctrl => ctrl_byte(c).map_or_else(Vec::new, |b| with_alt(vec![b])),
         KeyCode::Char(c) => {
             let mut buf = [0u8; 4];
@@ -506,6 +505,16 @@ mod tests {
     const S: KeyModifiers = KeyModifiers::SHIFT;
     const XTERM: ExtendedKeysFormat = ExtendedKeysFormat::Xterm;
 
+    /// Character `c` typed with `m`, as a terminal reports it: an
+    /// upper-case letter as its key with Shift, the letter its shifted key.
+    fn typed(c: char, m: KeyModifiers) -> KeyEvent {
+        tmxr_command::Key {
+            code: KeyCode::Char(c),
+            mods: m,
+        }
+        .to_event()
+    }
+
     fn enc(code: KeyCode, m: KeyModifiers) -> Vec<u8> {
         encode_key(
             &KeyEvent::new(code, m),
@@ -519,7 +528,7 @@ mod tests {
     fn legacy_table() {
         let cases: &[(KeyCode, KeyModifiers, &[u8])] = &[
             (KeyCode::Char('a'), NONE, b"a"),
-            (KeyCode::Char('A'), S, b"A"),
+            (KeyCode::Char('a'), S, b"A"),
             (KeyCode::Char('é'), NONE, "é".as_bytes()),
             (KeyCode::Char('h'), C, b"\x08"),
             (KeyCode::Char('l'), C, b"\x0c"),
@@ -601,12 +610,14 @@ mod tests {
             ..InputModes::default()
         };
         // A key's bytes at level 1, at level 2, and at level 2 under csi-u.
-        let check = |code, m, one: &str, two: &str, two_u: &str| {
-            let key = KeyEvent::new(code, m);
+        let check_key = |key: KeyEvent, one: &str, two: &str, two_u: &str| {
             let enc = |n, format| encode_key(&key, level(n), ExtendedKeys::On, format);
-            assert_eq!(enc(1, XTERM), one.as_bytes(), "{code:?} {m:?} level 1");
-            assert_eq!(enc(2, XTERM), two.as_bytes(), "{code:?} {m:?} level 2");
-            assert_eq!(enc(2, CSI_U), two_u.as_bytes(), "{code:?} {m:?} csi-u");
+            assert_eq!(enc(1, XTERM), one.as_bytes(), "{key:?} level 1");
+            assert_eq!(enc(2, XTERM), two.as_bytes(), "{key:?} level 2");
+            assert_eq!(enc(2, CSI_U), two_u.as_bytes(), "{key:?} csi-u");
+        };
+        let check = |code, m, one: &str, two: &str, two_u: &str| {
+            check_key(KeyEvent::new(code, m), one, two, two_u);
         };
         check(
             KeyCode::Char(';'),
@@ -671,8 +682,9 @@ mod tests {
         );
         // The shift an upper-case letter carries is no modifier, nor is
         // Shift alone on a printable character; on Space it is.
-        check(KeyCode::Char('A'), S, "A", "A", "A");
-        check(KeyCode::Char('a'), S, "a", "a", "a");
+        check_key(typed('A', NONE), "A", "A", "A");
+        // Shift+a from a kitty terminal that reports no shifted key.
+        check(KeyCode::Char('a'), S, "A", "A", "A");
         check(KeyCode::Char('%'), S, "%", "%", "%");
         check(
             KeyCode::Char(' '),
@@ -681,13 +693,7 @@ mod tests {
             "\x1b[27;2;32~",
             "\x1b[32;2u",
         );
-        check(
-            KeyCode::Char('A'),
-            A | S,
-            "\x1bA",
-            "\x1b[27;3;65~",
-            "\x1b[65;3u",
-        );
+        check_key(typed('A', A), "\x1bA", "\x1b[27;3;65~", "\x1b[65;3u");
         check(
             KeyCode::Char('h'),
             C | S,
@@ -698,8 +704,14 @@ mod tests {
         check(KeyCode::Char(' '), C, "\0", "\x1b[27;5;32~", "\x1b[32;5u");
         // C-2 is C-2, NUL's byte in the legacy form only.
         check(KeyCode::Char('2'), C, "\0", "\x1b[27;5;50~", "\x1b[50;5u");
-        // The terminal's C-\\ arrives as C-4.
-        check(KeyCode::Char('4'), C, "\x1c", "\x1b[27;5;92~", "\x1b[92;5u");
+        // A legacy terminal's C-\\ (0x1c) arrives as C-4, and is C-\\ to
+        // tmux; a real Ctrl+4, which only the kitty protocol or xterm's
+        // extended keys tell apart, is C-4.
+        let legacy_c4 = KeyEvent::new(KeyCode::Char('4'), C).with_encoding(KeyEncoding::Legacy);
+        check_key(legacy_c4, "\x1c", "\x1b[27;5;92~", "\x1b[92;5u");
+        check(KeyCode::Char('4'), C, "\x1c", "\x1b[27;5;52~", "\x1b[52;5u");
+        let xterm_c7 = KeyEvent::new(KeyCode::Char('7'), C).with_encoding(KeyEncoding::Xterm);
+        check_key(xterm_c7, "\x1f", "\x1b[27;5;55~", "\x1b[55;5u");
         check(
             KeyCode::Char('{'),
             C,
@@ -791,62 +803,73 @@ mod tests {
             kitty_flags: 1,
             ..InputModes::default()
         };
-        let k = |code, m| encode_key(&KeyEvent::new(code, m), kitty, ExtendedKeys::On, XTERM);
-        // M-A as a terminal reporting alternate keys hands it over, and as
-        // the same key with Shift still held.
-        assert_eq!(k(KeyCode::Char('A'), A), b"\x1b[97;4u");
-        assert_eq!(k(KeyCode::Char('A'), A | S), b"\x1b[97;4u");
-        assert_eq!(k(KeyCode::Char('a'), A | S), b"\x1b[97;4u");
-        assert_eq!(k(KeyCode::Char('H'), C), b"\x1b[104;6u");
-        // A legacy pane gets the character after an ESC.
-        let legacy = |code, m| {
-            encode_key(
-                &KeyEvent::new(code, m),
-                InputModes::default(),
-                ExtendedKeys::On,
-                XTERM,
-            )
-        };
-        assert_eq!(legacy(KeyCode::Char('A'), A), b"\x1bA");
+        let k = |key: KeyEvent| encode_key(&key, kitty, ExtendedKeys::On, XTERM);
+        let legacy =
+            |key: KeyEvent| encode_key(&key, InputModes::default(), ExtendedKeys::On, XTERM);
+        // M-A, as a terminal reports it (or send-keys M-A), and as a kitty
+        // terminal without alternate keys does, with no shifted key.
+        assert_eq!(k(typed('A', A)), b"\x1b[97;4u");
+        assert_eq!(k(KeyEvent::new(KeyCode::Char('a'), A | S)), b"\x1b[97;4u");
+        let ctrl_shift_h = KeyEvent::new(KeyCode::Char('h'), C | S).with_shifted(Some('H'));
+        assert_eq!(k(ctrl_shift_h.clone()), b"\x1b[104;6u");
+        // A legacy pane gets the character after an ESC, and C-S-h as C-h.
+        assert_eq!(legacy(typed('A', A)), b"\x1bA");
+        assert_eq!(legacy(ctrl_shift_h), b"\x08");
         // Beyond ASCII, a letter with one lowercase form is that key.
-        assert_eq!(k(KeyCode::Char('É'), A), b"\x1b[233;4u");
-        assert_eq!(k(KeyCode::Char('É'), C), b"\x1b[233;6u");
-        assert_eq!(k(KeyCode::Char('С'), A), b"\x1b[1089;4u");
-        assert_eq!(k(KeyCode::Char('с'), A), b"\x1b[1089;3u");
+        assert_eq!(k(typed('É', A)), b"\x1b[233;4u");
+        assert_eq!(k(typed('É', C)), b"\x1b[233;6u");
+        assert_eq!(k(typed('С', A)), b"\x1b[1089;4u");
+        assert_eq!(k(typed('с', A)), b"\x1b[1089;3u");
         // İ lowercases to two characters, so it is sent as itself.
-        assert_eq!(k(KeyCode::Char('İ'), A), b"\x1b[304;3u");
+        assert_eq!(k(typed('İ', A)), b"\x1b[304;3u");
         // Legacy and modifyOtherKeys panes get the uppercase letter, as a
         // legacy terminal sends it.
-        assert_eq!(legacy(KeyCode::Char('É'), A), "\x1bÉ".as_bytes());
+        assert_eq!(legacy(typed('É', A)), "\x1bÉ".as_bytes());
         let mok2 = InputModes {
             modify_other_keys: 2,
             ..InputModes::default()
         };
-        let enc = |m| {
-            encode_key(
-                &KeyEvent::new(KeyCode::Char('É'), A),
-                m,
-                ExtendedKeys::On,
-                XTERM,
-            )
-        };
-        assert_eq!(enc(mok2), b"\x1b[27;3;201~");
+        assert_eq!(
+            encode_key(&typed('É', A), mok2, ExtendedKeys::On, XTERM),
+            b"\x1b[27;3;201~"
+        );
     }
 
     #[test]
-    fn kitty_sends_a_shifted_symbol_as_itself_without_shift() {
-        // A known limit: the kitty protocol reports Alt+Shift+1 as the
-        // unshifted key with Shift (`CSI 49;4u`), but crossterm hands over
-        // only `!`, the shifted character. This pins what is sent today,
-        // so the client's own key parser has to change it on purpose.
+    fn kitty_sends_a_shifted_symbol_as_its_key_with_shift() {
+        // As the kitty protocol reports Alt+Shift+1 under alternate keys
+        // (`CSI 49:33;4u`): the unshifted key, Shift, and the shifted `!`.
         let kitty = InputModes {
             kitty_flags: 1,
             ..InputModes::default()
         };
-        let k = |code, m| encode_key(&KeyEvent::new(code, m), kitty, ExtendedKeys::On, XTERM);
-        assert_eq!(k(KeyCode::Char('!'), A), b"\x1b[33;3u");
-        assert_eq!(k(KeyCode::Char('!'), C), b"\x1b[33;5u");
-        assert_eq!(k(KeyCode::Char(':'), A), b"\x1b[58;3u");
+        let shifted =
+            |key, shifted, m| KeyEvent::new(KeyCode::Char(key), m).with_shifted(Some(shifted));
+        let k = |key: &KeyEvent| encode_key(key, kitty, ExtendedKeys::On, XTERM);
+        assert_eq!(k(&shifted('1', '!', A | S)), b"\x1b[49;4u");
+        assert_eq!(k(&shifted('1', '!', C | S)), b"\x1b[49;6u");
+        assert_eq!(k(&shifted(';', ':', A | S)), b"\x1b[59;4u");
+        // A legacy terminal's `ESC !` names no key but the character.
+        assert_eq!(k(&typed('!', A)), b"\x1b[33;3u");
+        // Every other pane gets the character typed, as tmux names it (M-!).
+        let legacy = InputModes::default();
+        let mok2 = InputModes {
+            modify_other_keys: 2,
+            ..InputModes::default()
+        };
+        let alt_bang = shifted('1', '!', A | S);
+        assert_eq!(
+            encode_key(&alt_bang, legacy, ExtendedKeys::On, XTERM),
+            b"\x1b!"
+        );
+        assert_eq!(
+            encode_key(&alt_bang, mok2, ExtendedKeys::On, XTERM),
+            b"\x1b[27;3;33~"
+        );
+        assert_eq!(
+            encode_key(&typed('!', A), mok2, ExtendedKeys::On, XTERM),
+            b"\x1b[27;3;33~"
+        );
     }
 
     #[test]
