@@ -142,6 +142,13 @@ pub fn accept_loop(
                                 Err(_) => break,
                             }
                         }
+                        // The server forgot the client, or the client is
+                        // gone. The reader thread still holds the stream,
+                        // blocked reading it, so the connection stays open
+                        // until it is hung up here.
+                        if let Err(e) = hang_up(&send) {
+                            debug!(client = id, error = %e, "could not hang up");
+                        }
                     })
             });
         match spawned {
@@ -189,6 +196,50 @@ fn wait_readable(recv: &interprocess::local_socket::Stream) {
 #[cfg(windows)]
 fn wait_readable(_: &interprocess::local_socket::Stream) {}
 
+/// End the connection both ways once nothing more will be written: the
+/// client reads what was sent and then the end of the stream. A Unix socket
+/// is shut down for reading and writing, which wakes this side's reader
+/// thread; frames the client sent that are already queued may still be
+/// read and delivered to the server before it reads the end of the stream
+/// and drops its share of the stream.
+#[cfg(unix)]
+fn hang_up(conn: &interprocess::local_socket::Stream) -> std::io::Result<()> {
+    use std::os::fd::{AsFd as _, AsRawFd as _};
+    let interprocess::local_socket::Stream::UdSocket(socket) = conn;
+    // SAFETY: shutdown takes no pointers, and names the socket `conn`
+    // keeps open for the call.
+    if unsafe { libc::shutdown(socket.as_fd().as_raw_fd(), libc::SHUT_RDWR) } == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+/// End the connection both ways once nothing more will be written. A named
+/// pipe is flushed first, which waits until the client has read everything
+/// sent, as `DisconnectNamedPipe` discards what it has not; disconnecting
+/// then fails the client's read and this side's, now and later, which
+/// interprocess reads as the end of the stream. Compiled, not run: no
+/// test here has run on Windows.
+#[cfg(windows)]
+fn hang_up(conn: &interprocess::local_socket::Stream) -> std::io::Result<()> {
+    use std::os::windows::io::{AsHandle as _, AsRawHandle as _};
+    use windows_sys::Win32::System::Pipes::DisconnectNamedPipe;
+    let interprocess::local_socket::Stream::NamedPipe(pipe) = conn;
+    if let Err(e) = pipe.inner().flush() {
+        // A client already gone has nothing left to read; disconnect still
+        // wakes the reader.
+        debug!(error = %e, "pipe not flushed");
+    }
+    // SAFETY: takes only the pipe's handle, which `conn` keeps open for the
+    // call.
+    if unsafe { DisconnectNamedPipe(pipe.as_handle().as_raw_handle()) } == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
 /// A reply too large for one frame (`size` bytes): its output in pieces
 /// the client writes as they come, then the reply without it; if that is
 /// still too large (its errors), an error saying so.
@@ -220,5 +271,75 @@ fn write_in_pieces<W: std::io::Write>(
             },
         ),
         other => other,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::mpsc::channel;
+
+    use tmxr_proto::socket::{Access, Endpoint};
+
+    use super::*;
+
+    /// Long past any hang-up, short of hanging the suite.
+    const WAIT: Duration = Duration::from_secs(10);
+
+    /// A client the server forgets, as `finish_command` forgets a command
+    /// client after its reply, reads what was queued and then the end of
+    /// the stream, though it never hangs up itself; and the reader thread
+    /// blocked on its connection ends too.
+    #[test]
+    fn a_connection_the_server_drops_is_closed() {
+        let tmp = tempfile::tempdir().unwrap();
+        #[cfg(unix)]
+        let path = tmp.path().join("conn");
+        #[cfg(windows)]
+        let path = {
+            let _ = &tmp;
+            std::path::PathBuf::from(format!(r"\\.\pipe\tmxr-test-conn-{}", std::process::id()))
+        };
+        let endpoint = Endpoint::resolve(Some(&path), None).unwrap();
+        let listener = endpoint.listen(Access::Owner).unwrap();
+        let (events_tx, events) = channel();
+        let owner = crate::access::current_user().unwrap();
+        std::thread::spawn(move || {
+            accept_loop(
+                listener,
+                events_tx,
+                &SharedAcl::default(),
+                &owner,
+                &Writers::default(),
+            );
+        });
+
+        let client = endpoint.connect().unwrap();
+        let Ok(Event::Connected { id, tx, .. }) = events.recv_timeout(WAIT) else {
+            panic!("the server did not see the client connect");
+        };
+        let last = ServerMsg::CommandResult {
+            status: 0,
+            stdout: "done\n".into(),
+            stderr: String::new(),
+        };
+        tx.send(last.clone()).unwrap();
+        // The server forgets the client: its queue goes.
+        drop(tx);
+
+        let (read_tx, read) = channel();
+        std::thread::spawn(move || {
+            let first = read_msg::<_, ServerMsg>(&mut &client).map_err(|e| e.to_string());
+            let second = read_msg::<_, ServerMsg>(&mut &client).map_err(|e| e.to_string());
+            let _ = read_tx.send((first, second));
+        });
+        let (first, second) = read
+            .recv_timeout(WAIT)
+            .expect("the client was left waiting on a connection nothing writes to");
+        assert_eq!(first, Ok(Some(last)));
+        assert_eq!(second, Ok(None), "the end of the stream after the reply");
+        match events.recv_timeout(WAIT) {
+            Ok(Event::Disconnected(gone)) => assert_eq!(gone, id),
+            _ => panic!("the reader thread did not end"),
+        }
     }
 }

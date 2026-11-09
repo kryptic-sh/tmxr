@@ -87,18 +87,22 @@ means as the reviewer said, not checked.
 
 ### Reported, not checked
 
-- **A connection the server drops is never closed** (_reproduced_ 2026-11-08):
-  when the server forgets a client its writer thread (`conn.rs`) ends, but the
-  reader thread holds the same stream and blocks reading, so the client sees no
-  end of file and waits forever. `detach_as` now delivers `Detached` even to a
-  full queue (`Server::send_last`), so a detached client exits; the server's
-  exit still sends it with `try_send`, which is safe only because the process
-  then ends and its sockets close. interprocess 2.4.7's `Stream` has no shutdown
-  to close the write side with; that would need the platforms' own sockets (Unix
-  stream, Windows named pipe). The fix was shown by a manual run only (client
-  stopped while the pane printed 4000 screens, then `detach-client`: the client
-  hung for 20 s and more without it, and exited saying
-  `[detached (from session s)]` with it), not by a test.
+- **Hanging up a dropped connection is not run on Windows** (2026-11-10):
+  `conn::hang_up` flushes the named pipe (interprocess's
+  `DuplexPipeStream::flush`) and then calls `DisconnectNamedPipe`, which should
+  fail the client's read and the server's blocked one alike; it was compiled for
+  `x86_64-pc-windows-gnu` only, and `a_connection_the_server_drops_is_closed`
+  has not run there. The flush blocks until the client has read everything sent,
+  not only while the pipe's buffer is full, so a detached client whose console
+  is paused keeps one more writer thread blocked while it is paused (its reader
+  thread was already left behind before this change). No e2e test covers the
+  hang-up: the tmxr client exits on its reply or `Detached` without waiting for
+  the end of the stream, so the unit test drives a raw connection.
+- **A connection whose writer thread cannot start stays open** (`conn.rs`,
+  `accept_loop`, 2026-11-10): when spawning the writer fails, the reader thread
+  is already running and holds the stream, and nothing hangs it up; the server
+  is sent `Disconnected` and forgets the client, which waits until it hangs up
+  itself.
 - **A job whose thread cannot start** (`jobs.rs`, 2026-11-10): the reply path is
   tested (`a_job_that_cannot_start_fails_its_waiting_client` calls
   `job_failed`), but nothing tests that `start_job` reaches it, because no test

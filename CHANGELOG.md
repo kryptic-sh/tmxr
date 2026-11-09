@@ -72,6 +72,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   When the server could not start the pipe's thread it reported the error but
   left the shell command it had started running and unreaped; it is now killed
   and reaped.
+- **A command client the server drops exits instead of waiting forever.** A
+  client that was not attached, such as one blocked in `wait-for`, and that
+  `server-access -d` removed, and a command client whose reply was dropped
+  because its queue was full, were forgotten by the server but kept their
+  connection open, so they hung. They now exit with
+  `server closed the connection`: the server hangs up once a client's last
+  message is sent (a Unix socket is shut down, a Windows named pipe is flushed
+  and disconnected).
 
 ## [0.15.0] - 2026-11-09
 
