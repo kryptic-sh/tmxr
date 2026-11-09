@@ -99,6 +99,12 @@ means as the reviewer said, not checked.
   stopped while the pane printed 4000 screens, then `detach-client`: the client
   hung for 20 s and more without it, and exited saying
   `[detached (from session s)]` with it), not by a test.
+- **A job whose thread cannot start** (`jobs.rs`, 2026-11-10): the reply path is
+  tested (`a_job_that_cannot_start_fails_its_waiting_client` calls
+  `job_failed`), but nothing tests that `start_job` reaches it, because no test
+  can make a thread spawn fail. For `run-shell -b` / `if-shell -b`, which have
+  no waiting client and no `ctx.client`, the error only reaches the server's log
+  (`tracing::warn!`), not `show-messages`.
 - A long `command-prompt` input runs off the screen's edge (`draw_ask`) where
   tmux scrolls it.
 - `backend::Links::carrier` searches a table that only grows.
@@ -136,6 +142,32 @@ arithmetic, the Windows half of `access.rs`, `copy/tests.rs`, the layout
 presets, most of `vars.rs`, and the Windows parts of `process.rs` (skimmed).
 
 ## The session picker's preview (2026-11-04)
+
+- **Restyle the picker after hjkl's file picker** (asked by the owner
+  2026-11-10: "the session picker looks kinda ugly"). Today `render.rs`
+  `draw_picker` draws one bordered box titled `{title} {matched}/{total}`, a
+  `> ` query row, the list and, for windows, a preview under a `─` rule, all
+  inside that one box. hjkl's (`apps/hjkl/src/render.rs`, `picker_overlay` and
+  `render_picker_input_and_list`) is a centred popup with:
+  - the query in its own bordered box, titled
+    `picker — {kind} — {matched}/{total}` in the active border colour, with a
+    `/ ` prompt;
+  - the list in a second bordered box in the plain border colour, the selection
+    a bold row on `picker_selection_bg`, matched characters bold in the
+    search-match colour;
+  - when the popup is wide enough, the preview beside the list (an even split)
+    through `hjkl_picker_tui::preview_pane`.
+
+  To decide before building:
+  - Does the session picker get a side preview? It previews today by drawing the
+    session in the whole client (`render::shown`).
+  - Which tmux options supply the colours, in place of hjkl's theme fields
+    (`pane-active-border-style`, `mode-style`, …)?
+  - Should the drawing be shared through `hjkl-picker-tui` instead of copied?
+    That is an hjkl change, coordinated with the hjkl session like the
+    `handle_key` bump.
+
+  Not compared side by side in a terminal yet.
 
 - **What it leaves out** (`render::shown`, `Session::seen`): the `+` marks are
   worked out when the picker opens, so output arriving while it is open adds
