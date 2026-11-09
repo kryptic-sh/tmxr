@@ -266,8 +266,8 @@ it too, and gains the modified keys its tier reports:
    wrong on layouts like Turkish. With the unshifted key from the terminal,
    `kitty_key` and `unshifted_letter` go, and the pinned test
    `kitty_sends_a_shifted_symbol_as_itself_without_shift` changes.
-   - First half done: tmxr's key, mouse and input event types are `ttyr`'s
-     (pinned by git rev) in every layer, and the wire carries
+   - First half done in `543610c`: tmxr's key, mouse and input event types are
+     `ttyr`'s (pinned by git rev) in every layer, and the wire carries
      `ttyr::event::Event` (protocol 15). The client still reads with crossterm
      and converts each event as it enters (`crossterm_bridge` in `tmxr-client`),
      keeping crossterm's meaning field for field: a character key is still the
