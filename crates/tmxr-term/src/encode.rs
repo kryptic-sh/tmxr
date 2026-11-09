@@ -14,12 +14,23 @@ use crossterm::event::{
 use vt1k::{MouseProtocolEncoding, MouseProtocolMode};
 
 /// The kitty keyboard flag for disambiguated escape codes.
-const KITTY_DISAMBIGUATE: u8 = 1;
+pub const KITTY_DISAMBIGUATE: u8 = 1;
+
+/// The kitty keyboard flag for reporting a key's shifted and base-layout
+/// keys beside it.
+pub const KITTY_REPORT_ALTERNATE: u8 = 4;
+
+/// The kitty keyboard flags tmxr asks a client's terminal for on its own
+/// behalf, whatever the focused program wants: disambiguated keys tell C-h
+/// from Backspace and Escape from Alt, and alternate keys keep Shift on a
+/// chord (M-A, not M-a).
+pub const TMXR_KITTY_FLAGS: u8 = KITTY_DISAMBIGUATE | KITTY_REPORT_ALTERNATE;
 
 /// The kitty keyboard flags [`encode_key`] acts on. A program asking which
 /// flags are on is told only these, so it does not wait for reports it will
-/// never get; each flag joins here as the encoder learns it.
-pub(crate) const KITTY_FLAGS_ENCODED: u8 = KITTY_DISAMBIGUATE;
+/// never get, and a client's terminal is asked for no more of a program's
+/// flags than these; each flag joins here as the encoder learns it.
+pub const KITTY_FLAGS_ENCODED: u8 = KITTY_DISAMBIGUATE;
 
 /// The pane state key encoding depends on.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

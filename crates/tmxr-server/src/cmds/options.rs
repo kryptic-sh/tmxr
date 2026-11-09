@@ -205,6 +205,7 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed) -> Res {
                 ));
             }
         },
+        "kitty-keys" => c.kitty_keys = super::on_off(value, c.kitty_keys)?,
         "set-clipboard" => need()?.clone_into(&mut c.set_clipboard),
         "rgb-colour" => match need()? {
             v @ ("on" | "off" | "16" | "auto") => v.clone_into(&mut c.rgb_colour),
@@ -224,15 +225,17 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed) -> Res {
         }
         _ => return Err(format!("invalid option: {name}")),
     }
-    if name == "rgb-colour" {
-        srv.apply_rgb_colour();
+    match name {
+        "rgb-colour" => srv.apply_rgb_colour(),
+        "kitty-keys" => srv.apply_kitty_keys(),
+        _ => {}
     }
     srv.mark_all_dirty();
     Ok(())
 }
 
 /// The server options `set-option` takes, as tmux's server table holds
-/// them (and tmxr's `rgb-colour` and `socket-access`).
+/// them (and tmxr's `kitty-keys`, `rgb-colour` and `socket-access`).
 pub const SERVER_OPTIONS: &[&str] = &[
     "buffer-limit",
     "client-away-time",
@@ -246,6 +249,7 @@ pub const SERVER_OPTIONS: &[&str] = &[
     "extended-keys-format",
     "focus-events",
     "history-file",
+    "kitty-keys",
     "message-limit",
     "prefix-timeout",
     "prompt-history-limit",
@@ -334,6 +338,7 @@ fn config_option(c: &tmxr_config::Config, name: &str) -> Option<String> {
         "extended-keys-format" => c.extended_keys_format.clone(),
         "focus-events" => on_off(c.focus_events).to_owned(),
         "history-file" => c.history_file.clone(),
+        "kitty-keys" => on_off(c.kitty_keys).to_owned(),
         "message-limit" => c.message_limit.to_string(),
         "prefix-timeout" => c.prefix_timeout.to_string(),
         "prompt-history-limit" => c.prompt_history_limit.to_string(),
@@ -382,4 +387,18 @@ pub fn option_lines(srv: &Server) -> Vec<String> {
             .map(|(k, v)| format!("{k} {}", scoped::shown(k, v.clone()))),
     );
     all
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kitty_keys_is_a_server_option_shown_on_or_off() {
+        assert!(SERVER_OPTIONS.contains(&"kitty-keys"));
+        let mut c = tmxr_config::defaults();
+        assert_eq!(config_option(&c, "kitty-keys").as_deref(), Some("on"));
+        c.kitty_keys = false;
+        assert_eq!(config_option(&c, "kitty-keys").as_deref(), Some("off"));
+    }
 }

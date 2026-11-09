@@ -149,6 +149,9 @@ pub struct Attached {
     pub mouse: bool,
     /// Whether this client was last told to ask for focus reports.
     pub focus_events: bool,
+    /// The kitty keyboard flags this client was last told to ask for
+    /// (`crate::kitty::flags`); `None` when that went astray.
+    pub keyboard_flags: Option<u8>,
     /// When this client's status timer last fired (`status-interval`).
     pub status_at: Instant,
     /// Focused: from attaching until the terminal reports focus out, then
@@ -754,6 +757,7 @@ impl Server {
                     match msg {
                         ServerMsg::Mouse(on) => a.mouse = !on,
                         ServerMsg::FocusEvents(on) => a.focus_events = !on,
+                        ServerMsg::KeyboardFlags(_) => a.keyboard_flags = None,
                         ServerMsg::Output(_) => a.resend_cursor_and_title = true,
                         _ => {}
                     }
@@ -1356,6 +1360,9 @@ impl Server {
             // or with it off, the active pane or its program's mouse modes.
             let mouse = crate::mouse::capture(self, id);
             let focus = self.cfg.focus_events;
+            // Likewise the kitty keyboard flags, as focus moves or the
+            // focused program changes its own.
+            let keyboard = crate::kitty::flags(self, id);
             let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
                 continue;
             };
@@ -1369,6 +1376,7 @@ impl Server {
             att.content_dirty = false;
             let tell_mouse = std::mem::replace(&mut att.mouse, mouse) != mouse;
             let tell_focus = std::mem::replace(&mut att.focus_events, focus) != focus;
+            let tell_keyboard = att.keyboard_flags.replace(keyboard) != Some(keyboard);
             let full = std::mem::take(&mut att.full_redraw);
             let Some(mut term) = att.term.take() else {
                 continue;
@@ -1418,6 +1426,9 @@ impl Server {
             }
             if tell_focus {
                 self.send(id, ServerMsg::FocusEvents(focus));
+            }
+            if tell_keyboard {
+                self.send(id, ServerMsg::KeyboardFlags(keyboard));
             }
         }
     }
@@ -1491,6 +1502,7 @@ impl Server {
             self.cfg.resurrect = file.resurrect;
         }
         self.apply_rgb_colour();
+        self.apply_kitty_keys();
         self.mark_all_dirty();
         if errors.is_empty() {
             Ok(())

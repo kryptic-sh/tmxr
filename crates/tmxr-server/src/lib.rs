@@ -20,6 +20,7 @@ pub mod groups;
 pub mod hooks;
 pub mod jobs;
 pub mod keys;
+pub mod kitty;
 pub mod layout;
 pub mod menu;
 pub mod model;

@@ -62,6 +62,10 @@ pub struct Hooks {
     /// screen, so a program that leaves the alternate screen without
     /// popping leaves the main screen's keys as they were.
     kitty_flags: [Vec<u8>; 2],
+    /// `kitty-keys off`: kitty flag pushes, pops and sets are ignored, and
+    /// both stacks stay empty, so keys go legacy and the query answers no
+    /// flags.
+    kitty_off: bool,
     /// The queries the server answers, from the last [`Emulator::process`],
     /// each with where in `replies` its answer goes.
     queries: Vec<(usize, Query)>,
@@ -175,6 +179,9 @@ impl vt1k::Callbacks for Hooks {
                 self.asked_keys = 0;
                 self.modify_other_keys = u8::from(self.extended_keys == ExtendedKeys::Always);
             }
+            // Under `kitty-keys off` nothing changes a stack, so a program
+            // asking for the protocol finds it off and falls back.
+            (Some(b'>' | b'<' | b'='), 'u') if self.kitty_off => {}
             (Some(b'>'), 'u') => {
                 let stack = self.kitty_stack(screen);
                 if stack.len() >= KITTY_STACK_LIMIT {
@@ -657,6 +664,19 @@ impl Emulator {
     /// ignores a program's request for extended keys, as tmux's.
     pub fn set_extended_keys(&mut self, option: ExtendedKeys) {
         self.parser.callbacks_mut().extended_keys = option;
+    }
+
+    /// The `kitty-keys` option: `off` drops the flags the program pushed,
+    /// on both screens, and ignores its pushes, pops and sets from now on.
+    /// Dropped rather than kept for `on` again: with its pops ignored, a
+    /// program could no longer take back what it pushed, and the next one
+    /// in the pane (the shell it exits to) would get keys it cannot read.
+    pub fn set_kitty_keys(&mut self, on: bool) {
+        let hooks = self.parser.callbacks_mut();
+        hooks.kitty_off = !on;
+        if !on {
+            hooks.kitty_flags = Default::default();
+        }
     }
 
     /// The `cursor-style` option as DECSCUSR's `Ps`, for the output that
@@ -1736,6 +1756,30 @@ mod tests {
         assert!(e.screen().alternate_screen(), "the reset keeps the screen");
         e.process(b"\x1b[?1049l");
         assert_eq!(e.input_modes().kitty_flags, 0, "reset, main");
+    }
+
+    /// `kitty-keys off` drops what both screens pushed and ignores every
+    /// push and set after it, so the query answers no flags (a pop then has
+    /// nothing to take either way); `on` again takes them from then on,
+    /// with nothing of before brought back.
+    #[test]
+    fn kitty_keys_off_drops_and_ignores_the_flags() {
+        let mut e = Emulator::new(24, 80, 0);
+        e.process(b"\x1b[>1u\x1b[?1049h\x1b[>1u");
+        e.set_kitty_keys(false);
+        assert_eq!(e.input_modes().kitty_flags, 0, "dropped, alternate");
+        for seq in [&b"\x1b[>1u"[..], b"\x1b[=1u", b"\x1b[=1;2u"] {
+            e.process(seq);
+            assert_eq!(e.input_modes().kitty_flags, 0, "{}", seq.escape_ascii());
+            assert_eq!(e.process(b"\x1b[?u"), b"\x1b[?0u");
+        }
+        e.process(b"\x1b[?1049l");
+        assert_eq!(e.input_modes().kitty_flags, 0, "dropped, main");
+        e.set_kitty_keys(true);
+        assert_eq!(e.input_modes().kitty_flags, 0, "not brought back");
+        assert_eq!(e.process(b"\x1b[?u"), b"\x1b[?0u");
+        e.process(b"\x1b[>1u");
+        assert_eq!(e.process(b"\x1b[?u"), b"\x1b[?1u");
     }
 
     /// The queries the server answers are named in order, each with where

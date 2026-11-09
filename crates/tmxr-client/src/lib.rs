@@ -168,6 +168,9 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
     let mut writer: Option<terminal::Sender> = None;
     let mut input: Option<terminal::Input> = None;
     let mut term: Option<terminal::Guard> = None;
+    // The kitty keyboard flags the server last asked for, which the
+    // terminal is asked for again after a suspend or a lock.
+    let mut keyboard_flags = tmxr_term::encode::TMXR_KITTY_FLAGS;
     let mut stdout = io::stdout().lock();
     loop {
         let Ok(Some(msg)) = read_msg::<_, ServerMsg>(&mut recv) else {
@@ -191,7 +194,7 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                 }
             }
             ServerMsg::Attached => {
-                let guard = terminal::Guard::enter()?;
+                let guard = terminal::Guard::enter(keyboard_flags)?;
                 let (fg, bg) = guard.colours();
                 term = Some(guard);
                 if let Some(s) = send.take() {
@@ -240,7 +243,7 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                 // Hand the terminal back to the shell while stopped.
                 drop(term.take());
                 terminal::suspend()?;
-                term = Some(terminal::Guard::enter()?);
+                term = Some(terminal::Guard::enter(keyboard_flags)?);
                 if let Some(w) = &writer {
                     let w = w
                         .lock()
@@ -254,7 +257,7 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                 let paused = input.as_ref().map(terminal::Input::pause).transpose()?;
                 drop(term.take());
                 let locked = terminal::run_lock(&command);
-                term = Some(terminal::Guard::enter()?);
+                term = Some(terminal::Guard::enter(keyboard_flags)?);
                 drop(paused);
                 if let Some(w) = &writer {
                     let w = w
@@ -275,6 +278,12 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
             ServerMsg::FocusEvents(on) => {
                 if term.is_some() {
                     terminal::set_focus_events(on)?;
+                }
+            }
+            ServerMsg::KeyboardFlags(flags) => {
+                keyboard_flags = flags;
+                if let Some(t) = &term {
+                    t.set_keyboard_flags(flags)?;
                 }
             }
         }

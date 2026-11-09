@@ -1,4 +1,5 @@
 use super::*;
+use tmxr_term::encode::TMXR_KITTY_FLAGS;
 
 #[test]
 fn prefix_timeout_gives_a_late_key_to_the_root_table() {
@@ -258,6 +259,195 @@ fn kitty_flags_pushed_on_the_alternate_screen_stay_there() {
         assert!(Instant::now() < deadline, "no key in {got:?}");
         std::thread::sleep(Duration::from_millis(50));
     }
+}
+
+/// `kitty-keys off` asks the client's kitty terminal for no flags, and a
+/// pane's program that pushes flags and asks for them is told none and gets
+/// legacy keys: Ctrl+Shift+h as C-h. `on` again asks the terminal for
+/// tmxr's own flags. ConPTY does not pass these.
+#[cfg(unix)]
+#[test]
+fn kitty_keys_off_asks_for_no_flags_and_panes_get_legacy_keys() {
+    let t = Tmxr::new("kittyoff");
+    t.run(&["new-session", "-d", "-s", "ko"]);
+    // To binds it is C-h, which the root table would take.
+    t.run(&["unbind", "-n", "C-h"]);
+    let s = t.attach(&["attach", "-t", "ko"]);
+    s.wait_for("status line", |text| text.contains("ko"));
+    let terminal_flags = |want: u8| {
+        let deadline = Instant::now() + TIMEOUT;
+        loop {
+            let flags = s.emu.lock().unwrap().input_modes().kitty_flags;
+            if flags == want {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "terminal flags {flags}, not {want}"
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    };
+    terminal_flags(TMXR_KITTY_FLAGS);
+    t.run(&["set", "-g", "kitty-keys", "off"]);
+    assert_eq!(t.run(&["show", "-sv", "kitty-keys"]).trim(), "off");
+    terminal_flags(0);
+    let log = t.dir.path().join("keys.log");
+    let argv = key_log_program(&t, "kittyoffpane");
+    let env = format!("{KEY_LOG}={}", log.display());
+    let raw = format!(r"{KEY_LOG_RAW}=\e[>1u\e[?u");
+    let mut new = vec!["new-window", "-t", "ko", "-e", &env, "-e", &raw];
+    new.extend(argv.iter().map(String::as_str));
+    t.run(&new);
+    t.wait_run(&["capture-pane", "-p", "-t", "ko"], "the mode", |o| {
+        o.contains("raw-on")
+    });
+    // The log once it has `want`.
+    let logged = |want: &str| {
+        let deadline = Instant::now() + TIMEOUT;
+        loop {
+            let got = std::fs::read_to_string(&log).unwrap_or_default();
+            if got.lines().any(|l| l == want) {
+                return got;
+            }
+            assert!(Instant::now() < deadline, "no {want} in {got:?}");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    };
+    assert_eq!(logged(r"\x1b[?0u"), "ready\n\\x1b[?0u\n");
+    s.send(b"\x1b[104:72;6u");
+    assert_eq!(logged(r"\x08"), "ready\n\\x1b[?0u\n\\x08\n");
+    t.run(&["set", "-g", "kitty-keys", "on"]);
+    terminal_flags(TMXR_KITTY_FLAGS);
+}
+
+/// With `kitty-keys` off before a client attaches, its kitty terminal is
+/// never asked for a flag, not even for a frame as it attaches.
+#[cfg(unix)]
+#[test]
+fn kitty_keys_off_at_attach_asks_for_no_flags_at_all() {
+    let t = Tmxr::new("kittyattach");
+    let config = std::fs::read_to_string(&t.config).unwrap();
+    std::fs::write(
+        &t.config,
+        config.replace("[resurrect]", "kitty-keys = false\n[resurrect]"),
+    )
+    .unwrap();
+    let s = t.attach(&["new", "-s", "ka"]);
+    s.wait_for("status line", |text| text.contains("ka"));
+    // A frame drawn after the attach is sent after anything the attach
+    // told the client, so the requests so far are all it will make.
+    t.run(&["display-message", "-d", "0", "drawn"]);
+    s.wait_for("the message", |text| text.contains("drawn"));
+    let requests = s.kitty_requests();
+    assert!(!requests.is_empty(), "the terminal speaks the protocol");
+    assert!(requests.iter().all(|&f| f == 0), "{requests:?}");
+}
+
+/// A pane's program that pushed kitty flags (`CSI > 1 u`) loses them when
+/// `kitty-keys` goes off by `turn_off`: it is told none (`CSI ? u`, which
+/// the program asks after each key it reads) and gets Ctrl+Shift+h as C-h.
+/// `on` again leaves them dropped until it pushes again.
+#[cfg(unix)]
+fn kitty_keys_off_drops_a_panes_flags(name: &str, turn_off: impl Fn(&Tmxr)) {
+    let t = Tmxr::new(name);
+    t.run(&["new-session", "-d", "-s", "kd"]);
+    // To binds it is C-h, which the root table would take.
+    t.run(&["unbind", "-n", "C-h"]);
+    let s = t.attach(&["attach", "-t", "kd"]);
+    s.wait_for("status line", |text| text.contains("kd"));
+    let log = t.dir.path().join("keys.log");
+    let argv = key_log_program(&t, "kittydroppane");
+    let env = format!("{KEY_LOG}={}", log.display());
+    let raw = format!(r"{KEY_LOG_RAW}=\e[>1u");
+    let after = format!(r"{KEY_LOG_AFTER_READ}=\e[?u");
+    let mut new = vec![
+        "new-window",
+        "-t",
+        "kd",
+        "-e",
+        &env,
+        "-e",
+        &raw,
+        "-e",
+        &after,
+    ];
+    new.extend(argv.iter().map(String::as_str));
+    t.run(&new);
+    t.wait_run(&["capture-pane", "-p", "-t", "kd"], "the mode", |o| {
+        o.contains("raw-on")
+    });
+    // The log's whole lines: the fixture writes a line in pieces, and a
+    // read can land between them.
+    let whole = || {
+        let mut got = std::fs::read_to_string(&log).unwrap_or_default();
+        got.truncate(got.rfind('\n').map_or(0, |i| i + 1));
+        got
+    };
+    // The fixture logs `ready` after it shows `raw-on`.
+    let deadline = Instant::now() + TIMEOUT;
+    while !whole().lines().any(|l| l == "ready") {
+        assert!(Instant::now() < deadline, "no ready in {:?}", whole());
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    // Ctrl+Shift+h, then what the pane logged for it and for its query.
+    let key = |want: [&str; 2]| {
+        let before = whole();
+        s.send(b"\x1b[104:72;6u");
+        let deadline = Instant::now() + TIMEOUT;
+        loop {
+            let got = whole();
+            let new: Vec<&str> = got[before.len()..].lines().collect();
+            if new.len() >= want.len() {
+                assert_eq!(new, want, "{got:?}");
+                break;
+            }
+            assert!(Instant::now() < deadline, "no {want:?} in {got:?}");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    };
+    key([r"\x1b[104;6u", r"\x1b[?1u"]);
+    turn_off(&t);
+    key([r"\x08", r"\x1b[?0u"]);
+    t.run(&["set", "-s", "kitty-keys", "on"]);
+    key([r"\x08", r"\x1b[?0u"]);
+}
+
+#[cfg(unix)]
+#[test]
+fn kitty_keys_off_drops_a_panes_flags_at_once() {
+    kitty_keys_off_drops_a_panes_flags("kittydrop", |t| {
+        t.run(&["set", "-s", "kitty-keys", "off"]);
+    });
+}
+
+/// The same from a config file `source-file` reads.
+#[cfg(unix)]
+#[test]
+fn kitty_keys_off_from_source_file_drops_a_panes_flags() {
+    kitty_keys_off_drops_a_panes_flags("kittysource", |t| {
+        let file = t.dir.path().join("off.toml");
+        std::fs::write(&file, "kitty-keys = false\n").unwrap();
+        t.run(&["source-file", file.to_str().unwrap()]);
+        assert_eq!(t.run(&["show", "-sv", "kitty-keys"]).trim(), "off");
+    });
+}
+
+/// `kitty-keys` takes `on` and `off` only, and toggles with no value.
+#[test]
+fn kitty_keys_takes_on_or_off() {
+    let t = Tmxr::new("kittyopt");
+    t.run(&["new-session", "-d", "-s", "kk"]);
+    assert_eq!(t.run(&["show", "-sv", "kitty-keys"]).trim(), "on");
+    assert!(
+        !t.output(&["set", "-s", "kitty-keys", "maybe"])
+            .status
+            .success()
+    );
+    t.run(&["set", "-s", "kitty-keys"]);
+    assert_eq!(t.run(&["show", "-sv", "kitty-keys"]).trim(), "off");
+    t.run(&["set", "-su", "kitty-keys"]);
+    assert_eq!(t.run(&["show", "-s", "kitty-keys"]).trim(), "kitty-keys on");
 }
 
 /// Windows Terminal sends keys as win32-input-mode events, not bytes, and

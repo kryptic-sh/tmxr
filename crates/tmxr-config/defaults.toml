@@ -58,6 +58,10 @@ default-size = "80x24"
 extended-keys = "always"
 # tmux's default: extended keys in xterm's CSI 27;<modifiers>;<key>~ form.
 extended-keys-format = "xterm"
+# tmxr's: clients ask their terminals for the kitty keyboard protocol, and
+# panes' programs may push kitty flags. false does neither: programs that ask
+# find it off and fall back. extended-keys covers xterm-style keys alone.
+kitty-keys = true
 set-clipboard = "on"
 # 24-bit colour on every terminal, as the tmux config's `terminal-overrides
 # ",*:RGB"`; "off" sends the 256, "16" the 16 ANSI colours, and "auto" asks

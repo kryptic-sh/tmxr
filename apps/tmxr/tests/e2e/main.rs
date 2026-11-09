@@ -541,6 +541,23 @@ impl Screen {
         String::from_utf8_lossy(&self.raw.lock().unwrap()).into_owned()
     }
 
+    /// The kitty keyboard flags the terminal was asked for, in order: each
+    /// push (`CSI > flags u`) and set (`CSI = flags ; mode u`) as its
+    /// `flags`.
+    #[cfg(unix)]
+    fn kitty_requests(&self) -> Vec<u8> {
+        let raw = self.raw_text();
+        raw.split("\x1b[")
+            .skip(1)
+            .filter_map(|seq| {
+                let rest = seq.strip_prefix(['>', '='])?;
+                let end = rest.find(|c: char| !(c.is_ascii_digit() || c == ';'))?;
+                rest[end..].starts_with('u').then_some(())?;
+                rest[..end].split(';').next()?.parse().ok()
+            })
+            .collect()
+    }
+
     /// Wait until what the terminal was sent satisfies `pred`.
     #[cfg(unix)]
     fn wait_for_raw(&self, what: &str, pred: impl Fn(&str) -> bool) {
@@ -612,6 +629,10 @@ const KEY_LOG_FOCUS: &str = "TMXR_E2E_KEY_LOG_FOCUS";
 /// ESC), as a program asking for a key mode does, then `raw-on`, and logs
 /// the bytes it reads, escaped, one read a line, rather than keys.
 const KEY_LOG_RAW: &str = "TMXR_E2E_KEY_LOG_RAW";
+/// Set with [`KEY_LOG_RAW`], [`key_log_fixture`] writes its value to the
+/// terminal, as [`KEY_LOG_RAW`]'s, after logging each read but an answer
+/// (`CSI ?`): a query asked again whenever the test sends a key.
+const KEY_LOG_AFTER_READ: &str = "TMXR_E2E_KEY_LOG_AFTER_READ";
 
 /// This test binary, copied as `name` into the test's directory, made to run
 /// [`key_log_fixture`]: a program the navigator sees by that name that
@@ -736,6 +757,12 @@ fn key_log_fixture() {
                 return;
             }
             writeln!(log, "{}", buf[..n].escape_ascii()).unwrap();
+            if let Some(after) = std::env::var_os(KEY_LOG_AFTER_READ)
+                && !buf[..n].starts_with(b"\x1b[?")
+            {
+                print!("{}", after.to_str().unwrap().replace(r"\e", "\x1b"));
+                std::io::stdout().flush().unwrap();
+            }
         }
     }
     // On Windows the fixture read a focus event it never asked for (in the

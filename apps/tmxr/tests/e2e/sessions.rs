@@ -957,6 +957,30 @@ fn lock_hands_the_keys_to_the_lock_command() {
     assert!(!t.output(&["lock-server"]).status.success());
 }
 
+/// A client back from a lock asks its kitty terminal for the flags the
+/// server last said, none under `kitty-keys off`, not for tmxr's own.
+#[cfg(unix)]
+#[test]
+fn a_client_back_from_a_lock_keeps_its_kitty_flags() {
+    let t = Tmxr::new("lockkitty");
+    let s = t.attach(&["new", "-s", "lf"]);
+    s.wait_for("status line", |text| text.contains("lf"));
+    t.run(&["set", "-s", "kitty-keys", "off"]);
+    s.wait_for_raw("flags set to none", |_| {
+        s.kitty_requests().last() == Some(&0)
+    });
+    let before = s.kitty_requests().len();
+    t.run(&["set-option", "-g", "lock-command", "exit 0"]);
+    t.run(&["lock-client"]);
+    // Asked again as the client takes its terminal back.
+    s.wait_for_raw("the flags asked for again", |_| {
+        s.kitty_requests().len() > before
+    });
+    let requests = s.kitty_requests();
+    assert!(requests[before..].iter().all(|&f| f == 0), "{requests:?}");
+    assert_eq!(s.emu.lock().unwrap().input_modes().kitty_flags, 0);
+}
+
 #[test]
 fn kill_session_c_clears_alerts_and_unbind_q_is_quiet() {
     let t = Tmxr::new("killc");

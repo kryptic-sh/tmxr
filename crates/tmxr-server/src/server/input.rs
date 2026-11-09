@@ -762,12 +762,31 @@ impl Server {
     }
 
     /// A terminal for a new pane or popup, under the `extended-keys`
-    /// option as tmux's new screen.
+    /// option as tmux's new screen, and `kitty-keys`.
     pub fn new_emulator(&self, rows: u16, cols: u16, history: usize) -> tmxr_term::Emulator {
         let mut emu = tmxr_term::Emulator::new(rows, cols, history);
         emu.set_extended_keys(self.extended_keys());
         emu.reset_keys();
+        emu.set_kitty_keys(self.cfg.kitty_keys);
         emu
+    }
+
+    /// Give every pane's and popup's terminal the `kitty-keys` option at
+    /// once: turned off, the flags programs pushed go now, not with their
+    /// next output.
+    pub fn apply_kitty_keys(&mut self) {
+        let on = self.cfg.kitty_keys;
+        for p in self.panes.values_mut() {
+            p.emu.set_kitty_keys(on);
+        }
+        for c in self.clients.values_mut() {
+            if let Some(a) = c.att.as_mut() {
+                if let Some(Overlay::Popup(p)) = a.overlay.as_mut() {
+                    p.emu.set_kitty_keys(on);
+                }
+                a.dirty = true;
+            }
+        }
     }
 
     /// Encode a key for a pane (and, with synchronize-panes, its siblings).

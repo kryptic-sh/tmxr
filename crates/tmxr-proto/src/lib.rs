@@ -15,7 +15,7 @@ pub use codec::{ProtoError, read_msg, write_msg};
 
 /// Bumped on any change to a type in this module. Client and server refuse to
 /// talk across a mismatch rather than mis-decode each other.
-pub const PROTOCOL_VERSION: u32 = 13;
+pub const PROTOCOL_VERSION: u32 = 14;
 
 /// How long a client waits for a server it started to accept connections.
 pub const SPAWN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
@@ -124,6 +124,12 @@ pub enum ServerMsg {
     /// Ask the attached client's terminal for focus reports or stop (the
     /// `focus-events` option), as tmux's tty_start_tty asks.
     FocusEvents(bool),
+    /// The kitty keyboard flags the attached client's terminal should
+    /// report keys under now: tmxr's own and those of the program its keys
+    /// go to, or none under `kitty-keys off`. The client sets them (`CSI =
+    /// flags ; 1 u`) where its terminal speaks the protocol and ignores
+    /// them elsewhere.
+    KeyboardFlags(u8),
     /// Stop the client process (`suspend-client`), as `C-z` stops a program.
     Suspend,
     /// Lock the client (`lock-client`): hand the terminal to this shell

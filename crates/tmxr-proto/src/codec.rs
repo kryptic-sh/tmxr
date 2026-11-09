@@ -127,6 +127,7 @@ mod tests {
             },
             ServerMsg::Mouse(true),
             ServerMsg::FocusEvents(true),
+            ServerMsg::KeyboardFlags(5),
             ServerMsg::Suspend,
             ServerMsg::Lock {
                 command: "lock -np".into(),
@@ -169,7 +170,7 @@ mod tests {
         for m in sample_server() {
             write_msg(&mut buf, &m).unwrap();
         }
-        assert_eq!(PROTOCOL_VERSION, 13, "update the golden digest below too");
+        assert_eq!(PROTOCOL_VERSION, 14, "update the golden digest below too");
         assert_eq!(
             fnv1a(&buf),
             GOLDEN,
@@ -177,7 +178,7 @@ mod tests {
         );
     }
 
-    const GOLDEN: u64 = 13_649_262_094_318_095_819;
+    const GOLDEN: u64 = 725_935_194_280_414_969;
 
     /// FNV-1a 64-bit (http://www.isthe.com/chongo/tech/comp/fnv/), used only to
     /// pin the golden bytes in a readable constant.

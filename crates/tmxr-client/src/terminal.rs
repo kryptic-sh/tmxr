@@ -39,8 +39,10 @@ struct Probe {
 static PROBE: OnceLock<Probe> = OnceLock::new();
 
 /// Whether the terminal reports keys in the kitty protocol now: set by each
-/// [`Guard::enter`], which asks again after a suspend or a lock, and cleared
-/// as the terminal is restored, for the input thread to read per batch.
+/// [`Guard::enter`], which asks again after a suspend or a lock, and by
+/// [`Guard::set_keyboard_flags`], and cleared as the terminal is restored,
+/// for the input thread to read per batch. With no flags set the terminal
+/// sends legacy keys, so it is clear then too.
 static KITTY_KEYS: AtomicBool = AtomicBool::new(false);
 
 /// How long the synchronized-update probe waits for the terminal's answers.
@@ -158,7 +160,10 @@ fn restore(kitty: bool) {
 }
 
 impl Guard {
-    pub fn enter() -> io::Result<Self> {
+    /// Take the terminal, asking it for the kitty keyboard `flags` where it
+    /// speaks the protocol: on attach tmxr's own, and on the way back from
+    /// a suspend or a lock the last the server sent.
+    pub fn enter(flags: u8) -> io::Result<Self> {
         enable_raw_mode()?;
         let mut out = io::stdout();
         // Mouse capture and focus reports wait for the server's `Mouse` and
@@ -173,27 +178,36 @@ impl Guard {
         // The terminal's color scheme now and on each change (mode 2031), as
         // tmux asks as its terminal starts.
         out.write_all(b"\x1b[?2031h\x1b[?996n")?;
-        // Unambiguous key reports (C-h vs Backspace, C-i vs Tab, Escape vs
-        // Alt) where the terminal supports the kitty protocol, with the
-        // shifted character of a key held with Shift, which crossterm
-        // otherwise drops for the unshifted one (M-A would arrive as M-a).
+        // Pushed even when none, so that restoring pops what this pushed
+        // and leaves the terminal's own flags as they were.
         let kitty = crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false);
         if kitty {
             execute!(
                 out,
-                PushKeyboardEnhancementFlags(
-                    KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-                        | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
-                )
+                PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::from_bits_truncate(flags))
             )?;
         }
-        KITTY_KEYS.store(kitty, Ordering::Release);
+        KITTY_KEYS.store(kitty && flags != 0, Ordering::Release);
         let prev = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |info| {
             restore(kitty);
             prev(info);
         }));
         Ok(Self { kitty, probe })
+    }
+
+    /// Ask the terminal for kitty keyboard `flags` in place of those it has
+    /// (the protocol's set, `CSI = flags ; 1 u`), as the server says; a
+    /// terminal without the protocol is left alone.
+    pub fn set_keyboard_flags(&self, flags: u8) -> io::Result<()> {
+        if !self.kitty {
+            return Ok(());
+        }
+        let mut out = io::stdout();
+        write!(out, "\x1b[={flags};1u")?;
+        out.flush()?;
+        KITTY_KEYS.store(flags != 0, Ordering::Release);
+        Ok(())
     }
 
     /// The terminal's default foreground and background colours, as RGB,

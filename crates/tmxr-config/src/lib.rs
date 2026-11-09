@@ -59,6 +59,9 @@ pub struct Config {
     /// `extended-keys-format`: `xterm` or `csi-u`, the form a pane's
     /// extended keys go out in, as tmux's.
     pub extended_keys_format: String,
+    /// `kitty-keys`: whether clients ask their terminals for the kitty
+    /// keyboard protocol and panes' programs may push kitty flags.
+    pub kitty_keys: bool,
     pub set_clipboard: String,
     /// `on`, `off`, `16` or `auto`: whether clients get 24-bit colour, or
     /// colours mapped to the 256 (`off`) or the 16 ANSI ones.
@@ -133,6 +136,7 @@ struct File {
     default_shell: Option<String>,
     extended_keys: String,
     extended_keys_format: String,
+    kitty_keys: bool,
     set_clipboard: String,
     rgb_colour: String,
     allow_passthrough: bool,
@@ -327,6 +331,7 @@ impl From<File> for Config {
             default_terminal: f.default_terminal,
             extended_keys: f.extended_keys,
             extended_keys_format: f.extended_keys_format,
+            kitty_keys: f.kitty_keys,
             set_clipboard: f.set_clipboard,
             rgb_colour: f.rgb_colour,
             copy_command: f.copy_command,
@@ -872,6 +877,7 @@ impl Config {
             "extended-keys-format" => self
                 .extended_keys_format
                 .clone_from(&from.extended_keys_format),
+            "kitty-keys" => self.kitty_keys = from.kitty_keys,
             "set-clipboard" => self.set_clipboard.clone_from(&from.set_clipboard),
             "rgb-colour" => self.rgb_colour.clone_from(&from.rgb_colour),
             "copy-command" => self.copy_command.clone_from(&from.copy_command),
@@ -1236,6 +1242,23 @@ mod tests {
         for name in &names {
             assert!(to.copy_option(&from, name), "{name} cannot be copied");
         }
+    }
+
+    /// `kitty-keys` is on unless a file turns it off, and copies as one
+    /// option.
+    #[test]
+    fn a_file_turns_kitty_keys_off() {
+        assert!(defaults().kitty_keys);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "kitty-keys = false\n").unwrap();
+        let (file, sets, errors) = load_file(&path).unwrap();
+        assert!(errors.is_empty(), "{errors:?}");
+        assert!(!file.kitty_keys);
+        assert_eq!(sets.options, ["kitty-keys"]);
+        let mut to = defaults();
+        assert!(to.copy_option(&file, "kitty-keys"));
+        assert!(!to.kitty_keys);
     }
 
     #[test]

@@ -6,6 +6,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Breaking
+
+- **The client-server protocol is now 14** (the server tells the client which
+  kitty keyboard flags to ask its terminal for): after upgrading, a running
+  server must be restarted (`tmxr kill-server`); the client says so if it meets
+  one.
+- **`tmxr-config`'s `Config` has a `kitty_keys` field**, the `kitty-keys`
+  option, and **`tmxr-server`'s `server::Attached` a `keyboard_flags` field**; a
+  library caller building either with a struct literal sets it.
+
+### Added
+
+- **The `kitty-keys` server option**, tmxr's own: `on` (the default) or `off`.
+  `off` turns the kitty keyboard protocol off both ways: no client asks its
+  terminal for it (nor again after `suspend-client` or `lock-client`), and a
+  pane's program that pushes, pops or sets kitty flags is ignored and is told no
+  flags are on (`CSI ? u`), so it falls back to legacy keys by itself. Turning
+  it off drops the flags programs had pushed; turning it on again does not bring
+  them back. `extended-keys` stays tmux's and covers xterm-style extended keys
+  only.
+
 ### Changed
 
 - **In terminals with the kitty keyboard protocol, a pane that pushed kitty

@@ -219,7 +219,7 @@ fn pass_through(srv: &mut Server, id: ClientId, m: MouseEvent) {
 
 /// Whether `pane` shows a mode (copy mode or the clock) over its program,
 /// which then gets no mouse: tmux's window_pane_key gives the mode the key.
-fn in_mode(srv: &Server, pane: PaneId) -> bool {
+pub(crate) fn in_mode(srv: &Server, pane: PaneId) -> bool {
     srv.panes
         .get(&pane)
         .is_some_and(|p| p.copy.is_some() || p.clock)
