@@ -71,7 +71,8 @@ impl PanePipe {
                                 break;
                             }
                         }
-                    })?;
+                    })
+                    .map_err(|e| abandon(&mut child, e))?;
                 Some(tx)
             }
             None => None,
@@ -95,7 +96,8 @@ impl PanePipe {
                             break;
                         }
                     }
-                })?;
+                })
+                .map_err(|e| abandon(&mut child, e))?;
         }
         Ok(Self {
             id,
@@ -113,6 +115,20 @@ impl PanePipe {
             let _ = tx.try_send(bytes.to_vec());
         }
     }
+}
+
+/// A thread for `child`'s pipe could not be started: stop and reap the
+/// command, so no pipe is left running unseen, and hand back `e`. It is
+/// reaped here, on the server's thread, rather than off it as its drop does:
+/// a thread just failed to start, so a reaping thread likely would too.
+fn abandon(child: &mut Child, e: std::io::Error) -> std::io::Error {
+    if let Err(k) = child.kill() {
+        tracing::debug!("pipe-pane: could not stop the command: {k}");
+    }
+    if let Err(w) = child.wait() {
+        tracing::warn!("pipe-pane: could not reap the command: {w}");
+    }
+    e
 }
 
 impl Drop for PanePipe {
@@ -135,5 +151,30 @@ impl Drop for PanePipe {
                 tracing::warn!("pipe-pane: could not reap the command: {e}");
             }
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::os::unix::process::ExitStatusExt as _;
+
+    #[test]
+    fn an_abandoned_command_is_killed_and_reaped() {
+        let mut child = tmxr_term::child::command("sleep").arg("3").spawn().unwrap();
+        let pid = child.id().to_string();
+        let e = abandon(&mut child, std::io::Error::other("no thread"));
+        assert_eq!(e.to_string(), "no thread", "the error is handed back");
+        // Reaped already: a zombie, or a running command, would still
+        // answer a signal.
+        let alive = tmxr_term::child::command("kill")
+            .args(["-0", &pid])
+            .stderr(Stdio::null())
+            .status()
+            .unwrap();
+        assert!(!alive.success(), "pid {pid} is still there");
+        // The status `abandon` collected: killed, not run to its end.
+        let status = child.wait().unwrap();
+        assert_eq!(status.signal(), Some(libc::SIGKILL), "killed: {status}");
     }
 }

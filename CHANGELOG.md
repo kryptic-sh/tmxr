@@ -63,6 +63,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   keys it could not read, such as `CSI 104;6u` for Ctrl+Shift+h. The main and
   alternate screens now keep a flags stack each, as the protocol has them, and a
   full reset (`ESC c`, `send-keys -R`) empties both.
+- **A `run-shell` or `if-shell` whose job cannot start fails instead of
+  hanging.** When the server could not start a thread for the job, the command
+  client waiting on it never got a reply; it now gets
+  `run-shell: could not start the job: …` (or `if-shell: …`) with status 1, and
+  a job run from a bind shows that error in the status line.
+- **A `pipe-pane` that fails to start no longer leaves its command running.**
+  When the server could not start the pipe's thread it reported the error but
+  left the shell command it had started running and unreaped; it is now killed
+  and reaped.
 
 ## [0.15.0] - 2026-11-09
 

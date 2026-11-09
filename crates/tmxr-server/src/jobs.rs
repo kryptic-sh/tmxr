@@ -80,27 +80,38 @@ impl Server {
     /// Start `job` off the server thread, or for `wait-for` queue it on its
     /// channel; [`Server::job_done`] takes it up when it finishes.
     pub fn start_job(&mut self, job: Job, then: Then) {
-        if let Work::Channel(wait) = &job.work {
-            let wait = wait.clone();
-            let done = Done {
-                job,
-                output: String::new(),
-                ok: true,
-                status: 0,
-                then,
-            };
-            self.waits.enqueue(done, &wait);
-            return;
-        }
+        // The command that made the job, for an error starting it.
+        let name = match &job.work {
+            Work::Channel(wait) => {
+                let wait = wait.clone();
+                let done = Done {
+                    job,
+                    output: String::new(),
+                    ok: true,
+                    status: 0,
+                    then,
+                };
+                self.waits.enqueue(done, &wait);
+                return;
+            }
+            Work::If { .. } => "if-shell",
+            Work::Shell { .. } | Work::Command(_) | Work::Wait => "run-shell",
+        };
         let events = self.events.clone();
         let shell = self
             .pane_session_options(then.ctx.pane)
             .default_shell
             .clone();
         let env = self.child_env(job.session);
+        // The job is handed over once its thread has started, so a thread
+        // that cannot start leaves it here to fail.
+        let (hand, take) = std::sync::mpsc::channel::<(Job, Then)>();
         let started = std::thread::Builder::new()
             .name("tmxr-run-shell".into())
             .spawn(move || {
+                let Ok((job, then)) = take.recv() else {
+                    return;
+                };
                 std::thread::sleep(job.delay);
                 let (output, ok, status) = match &job.work {
                     Work::Shell {
@@ -131,8 +142,35 @@ impl Server {
                 };
                 let _ = events.send(Event::JobDone(Box::new(done)));
             });
-        if let Err(e) = started {
-            tracing::warn!("run-shell: could not start a thread for the job: {e}");
+        let failed = match started {
+            Ok(_) => hand.send((job, then)).err().map(|e| {
+                let (_, then) = e.0;
+                (then, "the job's thread has gone".to_owned())
+            }),
+            Err(e) => Some((then, e.to_string())),
+        };
+        if let Some((then, e)) = failed {
+            let msg = format!("{name}: could not start the job: {e}");
+            tracing::warn!("{msg}");
+            self.job_failed(then, msg);
+        }
+    }
+
+    /// A job could not be started: its list stops there with `msg`, as at a
+    /// command's error, replied to the client waiting on it or shown on
+    /// `ctx.client`.
+    fn job_failed(&mut self, Then { ctx, reply }: Then, msg: String) {
+        let err = Outcome::error(msg);
+        match reply {
+            Some((id, mut out)) => {
+                append(&mut out, err);
+                self.conclude_command(id, &ctx, out);
+            }
+            None => {
+                if let Some(c) = ctx.client {
+                    self.report(c, &err);
+                }
+            }
         }
     }
 
@@ -247,5 +285,64 @@ fn append(out: &mut Outcome, more: Outcome) {
     }
     if more.attach.is_some() {
         out.attach = more.attach;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::mpsc;
+
+    use tmxr_proto::ServerMsg;
+
+    use super::*;
+    use crate::server::Client;
+
+    #[test]
+    fn a_job_that_cannot_start_fails_its_waiting_client() {
+        let (events, _) = mpsc::channel();
+        let endpoint =
+            tmxr_proto::socket::Endpoint::resolve(Some(std::path::Path::new("test")), None)
+                .unwrap();
+        let mut srv = Server::new(endpoint, tmxr_config::defaults(), None, events);
+        let (tx, rx) = mpsc::sync_channel(4);
+        srv.clients.insert(
+            1,
+            Client {
+                id: 1,
+                tx,
+                hello: None,
+                att: None,
+                user: String::new(),
+                user_read_only: false,
+                attach_read_only: false,
+                ignore_size: false,
+                no_detach_on_destroy: false,
+                stdin: None,
+                created: std::time::SystemTime::now(),
+                terminal_colours: (None, None),
+                theme: None,
+                colours_asked: None,
+            },
+        );
+        let earlier = Outcome {
+            stdout: "x".into(),
+            ..Outcome::default()
+        };
+        let then = Then {
+            ctx: Ctx::default(),
+            reply: Some((1, earlier)),
+        };
+        srv.job_failed(then, "if-shell: could not start the job: no thread".into());
+        let Ok(ServerMsg::CommandResult {
+            status,
+            stdout,
+            stderr,
+        }) = rx.try_recv()
+        else {
+            panic!("the waiting client got no reply");
+        };
+        assert_eq!(status, 1);
+        assert_eq!(stdout, "x", "what ran before the job is kept");
+        assert_eq!(stderr, "if-shell: could not start the job: no thread");
     }
 }

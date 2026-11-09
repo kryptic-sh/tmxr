@@ -87,8 +87,6 @@ means as the reviewer said, not checked.
 
 ### Reported, not checked
 
-- `PanePipe::open` leaks the child it started when its thread fails to spawn;
-  `jobs.rs` `start_job` then drops the reply and the waiting client hangs.
 - **A connection the server drops is never closed** (_reproduced_ 2026-11-08):
   when the server forgets a client its writer thread (`conn.rs`) ends, but the
   reader thread holds the same stream and blocks reading, so the client sees no
