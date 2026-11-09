@@ -105,3 +105,49 @@ checks = [
   { command = "capture-pane -p -t o.1", expect = "^A^[[27;5;59~" },
   { format = "#{pane_key_mode}", expect = "Ext 1" },
 ]
+
+# The client's terminal and modifyOtherKeys (plan 18 step 5). tmux asks a
+# terminal for it (`CSI > 4 ; 2 m`, its `Eneks`) once the terminal's
+# XTVERSION answer names one it gives `extkeys` (XTerm, foot, mintty, iTerm2)
+# and `extended-keys` is not off; tmxr does the same for a terminal without
+# the kitty protocol, as the oracle's is.
+
+[[cases]]
+name = "an_xterm_terminal_is_asked_for_modify_other_keys"
+windows = "never"
+attach = true
+terminal = "XTerm(390)"
+steps = [{ sleep = 0.5 }]
+checks = [{ terminal_received = "\u001b[>4;2m", expect = true }]
+
+[[cases]]
+name = "a_terminal_named_as_neither_is_not_asked_for_modify_other_keys"
+windows = "never"
+attach = true
+terminal = "WezTerm 20240203"
+steps = [{ sleep = 0.5 }]
+checks = [{ terminal_received = "\u001b[>4;2m", expect = false }]
+
+[[cases]]
+# Keys such a terminal sends under modifyOtherKeys reach a pane that asked
+# for level 2 in xterm's form: Ctrl+i (apart from Tab), Ctrl+;, and Alt+a
+# with no bare Escape. (Not a legacy Ctrl+h, which tmxr's default root
+# table binds, nor Tab, which tmxr's capture-pane expands.)
+name = "an_xterm_terminals_keys_reach_a_pane"
+windows = "never"
+attach = true
+terminal = "XTerm(390)"
+pane = ["raw", { print = "\u001b[>4;2m" }, "cat"]
+steps = [
+  { sleep = 0.5 },
+  { keys = "\u001b[27;5;105~" },
+  { sleep = 0.2 },
+  { keys = "\u001b[27;5;59~" },
+  { sleep = 0.2 },
+  { keys = "\u001b[27;3;97~" },
+  { sleep = 0.5 },
+]
+checks = [
+  { terminal_received = "\u001b[>4;2m", expect = true },
+  { command = "capture-pane -p -t o", expect = "^[[27;5;105~^[[27;5;59~^[[27;3;97~" },
+]

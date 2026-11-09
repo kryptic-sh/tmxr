@@ -15,17 +15,17 @@ use super::Keys;
 
 /// What the terminal said when asked: whether it takes synchronized
 /// updates (DEC mode 2026), its default foreground and background colours
-/// (OSC 10 / 11) as RGB, whether it speaks the kitty keyboard protocol, and
-/// its name and version (XTVERSION).
+/// (OSC 10 / 11) as RGB, whether it speaks the kitty keyboard protocol, its
+/// name and version (XTVERSION), and its terminal type (DA2's first
+/// parameter). The server tells modifyOtherKeys by the last two, as tmux.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct Probe {
     pub(super) sync: bool,
     pub(super) fg: Option<u32>,
     pub(super) bg: Option<u32>,
     pub(super) kitty: bool,
-    /// Kept for plan 18 step 5, whose xterm tier goes by the terminal's
-    /// name; nothing reads it yet.
-    version: Option<String>,
+    pub(super) version: Option<String>,
+    pub(super) secondary: Option<u16>,
 }
 
 // Only Unix asks; built for its tests everywhere.
@@ -65,6 +65,9 @@ impl Probe {
                 }
                 Event::Report(Report::KeyboardEnhancementFlags(_)) => probe.kitty = true,
                 Event::Report(Report::TerminalVersion(version)) => probe.version = Some(version),
+                Event::Report(Report::SecondaryDeviceAttributes(params)) => {
+                    probe.secondary = params.first().copied();
+                }
                 Event::Report(Report::PrimaryDeviceAttributes(_)) | Event::Wake => {}
                 Event::Unknown(bytes) => match unread_colour(&bytes) {
                     Some((ColorSlot::Foreground, rgb)) => probe.fg = Some(rgb),
@@ -115,7 +118,7 @@ impl Keys {
     pub(super) fn probe(&mut self, out: &mut impl Write) -> io::Result<(Probe, Vec<Event>)> {
         use ttyr::terminal::{
             RequestKeyboardEnhancementFlags, RequestMode, RequestPrimaryDeviceAttributes,
-            RequestTerminalColor, RequestTerminalVersion,
+            RequestSecondaryDeviceAttributes, RequestTerminalColor, RequestTerminalVersion,
         };
         // DA1 last, as every terminal answers it, and in order.
         ttyr::execute!(
@@ -127,6 +130,7 @@ impl Keys {
             RequestTerminalColor(ColorSlot::Foreground),
             RequestTerminalColor(ColorSlot::Background),
             RequestKeyboardEnhancementFlags,
+            RequestSecondaryDeviceAttributes,
             RequestTerminalVersion,
             RequestPrimaryDeviceAttributes,
         )?;
@@ -198,6 +202,7 @@ mod tests {
             bg: Some(0x1a1b26),
             kitty: true,
             version: Some("foot(1.20.2)".into()),
+            secondary: Some(1),
         }
     }
 
@@ -216,6 +221,7 @@ mod tests {
                     colour(ColorSlot::Background, (0x1a1a, 0x1b1b, 0x2626)),
                     Event::Resize(80, 24),
                     kitty(),
+                    Event::Report(Report::SecondaryDeviceAttributes(vec![1, 12002, 0])),
                     Event::Report(Report::TerminalVersion("foot(1.20.2)".into())),
                     da1(),
                 ],
@@ -296,6 +302,18 @@ mod tests {
             assert_eq!((probe.fg, probe.bg), (want, want), "{spec}");
             assert_eq!(others, Vec::new(), "{spec}");
         }
+    }
+
+    /// XTVERSION's and DA2's answers as xterm writes them give the name
+    /// and type the server tells modifyOtherKeys by.
+    #[test]
+    fn the_terminals_name_and_type_are_kept() {
+        let bytes = b"\x1b[>41;390;0c\x1bP>|XTerm(390)\x1b\\\x1b[?64;1;2c";
+        let (probe, others) = Probe::read(answers(decode(bytes), true), None);
+        assert_eq!(probe.version.as_deref(), Some("XTerm(390)"));
+        assert_eq!(probe.secondary, Some(41));
+        assert!(!probe.kitty);
+        assert_eq!(others, Vec::new());
     }
 
     #[test]

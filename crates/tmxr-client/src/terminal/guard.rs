@@ -6,7 +6,7 @@
 
 use std::io::{self, Write};
 
-use tmxr_proto::Keyboard;
+use tmxr_proto::KeyboardReport;
 use ttyr::cursor::{ResetCursorColor, SetCursorStyle};
 use ttyr::style::{Attribute, SetAttribute};
 
@@ -16,6 +16,11 @@ use super::probe::Probe;
 mod unix;
 #[cfg(windows)]
 mod windows;
+
+#[cfg(unix)]
+use unix::MODIFY_OTHER_KEYS;
+#[cfg(windows)]
+use windows::MODIFY_OTHER_KEYS;
 
 /// The terminal, taken by [`Guard::enter`]; dropped, it is given back as it
 /// was: on detach, on error, and (through a panic hook installed once) on
@@ -28,14 +33,14 @@ pub struct Guard {
 }
 
 impl Guard {
-    /// The keyboard tier the terminal has, for the server. Never
-    /// [`Keyboard::Xterm`]: telling modifyOtherKeys apart takes the
-    /// terminal's name (plan 18 step 5), so such a terminal is legacy here.
-    pub fn keyboard(&self) -> Keyboard {
-        if self.kitty {
-            Keyboard::Kitty
-        } else {
-            Keyboard::Legacy
+    /// What the terminal said of its keyboard when last asked, for the
+    /// server, which decides from it what the terminal is asked for.
+    pub fn keyboard(&self) -> KeyboardReport {
+        KeyboardReport {
+            kitty: self.kitty,
+            version: self.probe.version.clone(),
+            secondary: self.probe.secondary,
+            modify_other_keys: MODIFY_OTHER_KEYS,
         }
     }
 

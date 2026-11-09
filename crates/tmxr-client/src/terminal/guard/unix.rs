@@ -78,6 +78,11 @@ fn give_back(out: &mut impl Write, mouse: bool, taken: bool) -> io::Result<()> {
     out.flush()
 }
 
+/// Whether this client can turn xterm's modifyOtherKeys on and read the
+/// keys it sends: `ttyr`'s guard records the mode, and its reader decodes
+/// `CSI 27 ; mods ; key ~`.
+pub(super) const MODIFY_OTHER_KEYS: bool = true;
+
 /// The kitty keyboard `flags` as `ttyr` takes them.
 fn keyboard_flags(flags: u8) -> Mode {
     Mode::KeyboardFlags(KeyboardEnhancementFlags::from_bits_truncate(flags))
@@ -126,8 +131,10 @@ impl Guard {
     /// speaks through `keys`. A terminal that still speaks the kitty
     /// protocol keeps the `flags` the server last sent, if any; one that no
     /// longer does is asked for none, and one that newly does waits for the
-    /// server. Returns what `run` returned and the input read as the
-    /// terminal answered.
+    /// server. modifyOtherKeys, on again with the rest, stays on where the
+    /// terminal said the same as before, and goes off where it said
+    /// otherwise, until the server, told, says again. Returns what `run`
+    /// returned and the input read as the terminal answered.
     pub fn hand_over<T>(
         &mut self,
         keys: &mut Keys,
@@ -144,6 +151,7 @@ impl Guard {
         // Raw mode and every recorded mode are on again, the kitty flags
         // among them; the resets are owed again.
         TAKEN.store(true, Ordering::Release);
+        let before = self.keyboard();
         let (probe, early) = keys.probe(&mut out)?;
         ttyr::queue!(out, RequestColorScheme)?;
         let kept = self.kitty && probe.kitty;
@@ -153,6 +161,9 @@ impl Guard {
             None => tty::disable(&mut out, keyboard_flags(0))?,
         }
         self.probe = probe;
+        if self.keyboard() != before {
+            tty::disable(&mut out, Mode::ModifyOtherKeys)?;
+        }
         out.flush()?;
         Ok((back, early))
     }
@@ -167,6 +178,20 @@ impl Guard {
         }
         let mut out = io::stdout();
         tty::enable(&mut out, keyboard_flags(flags))?;
+        out.flush()
+    }
+
+    /// Turn xterm's modifyOtherKeys (level 2) on or off, as the server says
+    /// (`ServerMsg::ExtendedKeys`), through `ttyr`'s guard, which turns it
+    /// off on the way out and around a suspend or a lock, and on again
+    /// after.
+    pub fn set_extended_keys(&self, on: bool) -> io::Result<()> {
+        let mut out = io::stdout();
+        if on {
+            tty::enable(&mut out, Mode::ModifyOtherKeys)?;
+        } else {
+            tty::disable(&mut out, Mode::ModifyOtherKeys)?;
+        }
         out.flush()
     }
 

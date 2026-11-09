@@ -40,7 +40,7 @@ pub(super) fn handles(name: &str) -> bool {
 /// An option argument as tmux's `options_parse` reads it: `name`, or
 /// `name[index]` for an item of an array option; an index that is not a
 /// number is tmux's `ambiguous option`.
-fn split_index(arg: &str) -> Result<(&str, Option<u32>), String> {
+pub(super) fn split_index(arg: &str) -> Result<(&str, Option<u32>), String> {
     match arg.strip_suffix(']').and_then(|s| s.split_once('[')) {
         Some((name, i)) => i
             .parse()

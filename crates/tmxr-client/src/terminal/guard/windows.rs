@@ -21,6 +21,13 @@ use ttyr::terminal::{DisableColorSchemeReports, EnableColorSchemeReports, Reques
 use super::{Guard, write_resets};
 use crate::terminal::Keys;
 
+/// Whether this client can turn xterm's modifyOtherKeys on and read the
+/// keys it sends: no. It reads the console's key records through crossterm,
+/// not the bytes a terminal sends, so `CSI 27 ; mods ; key ~` never reaches
+/// it (until plan 18 step 8 reads VT input through `ttyr`). It tells the
+/// server so, which then never asks ([`Guard::set_extended_keys`]).
+pub(super) const MODIFY_OTHER_KEYS: bool = false;
+
 /// Whether raw mode is on.
 static RAW: AtomicBool = AtomicBool::new(false);
 
@@ -123,6 +130,17 @@ impl Guard {
     /// The console has no kitty keyboard protocol: nothing to ask for.
     pub fn set_keyboard_flags(&self, _flags: u8) -> io::Result<()> {
         Ok(())
+    }
+
+    /// modifyOtherKeys is not supported on Windows ([`MODIFY_OTHER_KEYS`]),
+    /// and the server, told so, never asks for it. A server that did anyway
+    /// is refused with an `Unsupported` error, which the client reports and
+    /// stays attached through, rather than ignored.
+    pub fn set_extended_keys(&self, _on: bool) -> io::Result<()> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "modifyOtherKeys: the Windows client reads console key records, not a terminal's keys",
+        ))
     }
 
     /// Capture the mouse, or hand it back to the console.

@@ -43,6 +43,11 @@ pub struct Case {
     /// Attach a client (needed for keys, the mouse and screen checks).
     #[serde(default)]
     pub attach: bool,
+    /// What the client's terminal answers XTVERSION with, its name and
+    /// version (`XTerm(390)`), which both take terminal features from;
+    /// none, it answers no XTVERSION.
+    #[serde(default)]
+    pub terminal: Option<String>,
     #[serde(default)]
     pub steps: Vec<Step>,
     pub checks: Vec<Check>,
@@ -204,6 +209,13 @@ pub enum Check {
         #[serde(default)]
         expect: Option<String>,
     },
+    /// Whether the client's terminal has been written these bytes since
+    /// the client started: a mode it was asked for.
+    Received {
+        terminal_received: String,
+        #[serde(default)]
+        expect: Option<bool>,
+    },
 }
 
 impl Check {
@@ -218,6 +230,9 @@ impl Check {
             Self::Background {
                 screen_background, ..
             } => format!("screen cells on colour {screen_background}"),
+            Self::Received {
+                terminal_received, ..
+            } => format!("terminal received {terminal_received:?}"),
         }
     }
 
@@ -227,7 +242,9 @@ impl Check {
             | Self::Command { expect, .. }
             | Self::Find { expect, .. }
             | Self::Background { expect, .. } => expect.clone(),
-            Self::Screen { expect, .. } => expect.map(|e| e.to_string()),
+            Self::Screen { expect, .. } | Self::Received { expect, .. } => {
+                expect.map(|e| e.to_string())
+            }
         }
     }
 }

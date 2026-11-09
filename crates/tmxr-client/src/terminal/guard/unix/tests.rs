@@ -33,6 +33,9 @@ const DA1_QUERY: &[u8] = b"\x1b[c";
 const DA1_ANSWER: &[u8] = b"\x1b[?62c";
 /// The kitty pop `ttyr` writes.
 const POP: &str = "\x1b[<1u";
+/// modifyOtherKeys level 2 on, and off.
+const MOK_ON: &str = "\x1b[>4;2m";
+const MOK_OFF: &str = "\x1b[>4m";
 
 /// What the fixture prints once it has written everything, before it
 /// waits for a line from the test.
@@ -42,7 +45,8 @@ const DONE: &str = "fixture-done";
 const HAND_OVERS: usize = 2;
 
 /// Takes the terminal as an attached client does, asks for the kitty
-/// flags as a kitty client is told to, captures the mouse, gives the
+/// flags as a kitty client is told to and for modifyOtherKeys as an xterm
+/// one is (the guard takes both), captures the mouse, gives the
 /// terminal away and back [`HAND_OVERS`] times (as locks do, each taking
 /// the terminal again), captures the mouse again, then panics. Then waits
 /// for the test to have read it all: a pty may drop output its program's
@@ -56,8 +60,9 @@ fn panic_fixture() {
     let panicked = std::panic::catch_unwind(|| {
         let mut keys = Keys::open().unwrap();
         let (mut guard, _) = Guard::enter(&mut keys).unwrap();
-        assert_eq!(guard.keyboard(), tmxr_proto::Keyboard::Kitty);
+        assert!(guard.keyboard().kitty);
         guard.set_keyboard_flags(TMXR_KITTY_FLAGS).unwrap();
+        guard.set_extended_keys(true).unwrap();
         guard.set_mouse(true).unwrap();
         for _ in 0..HAND_OVERS {
             guard
@@ -247,10 +252,14 @@ fn gives_the_terminal_back_once(Run { text, local_modes }: Run) {
     let pushed = pushes(&text);
     assert_eq!(pushed.len(), HAND_OVERS + 1, "{text:?}");
     assert_eq!(text.matches(POP).count(), pushed.len(), "{text:?}");
+    // modifyOtherKeys likewise, on as often as off.
+    assert_eq!(text.matches(MOK_ON).count(), HAND_OVERS + 1, "{text:?}");
+    assert_eq!(text.matches(MOK_OFF).count(), HAND_OVERS + 1, "{text:?}");
     // After the last push, the panic gives everything back once.
     let after = &text[pushed[pushed.len() - 1]..];
     for (what, sequence) in [
         ("kitty pop", POP),
+        ("modifyOtherKeys off", MOK_OFF),
         ("mouse off", "\x1b[?1000l"),
         ("cursor shape reset", "\x1b[0 q"),
         ("alternate screen left", "\x1b[?1049l"),

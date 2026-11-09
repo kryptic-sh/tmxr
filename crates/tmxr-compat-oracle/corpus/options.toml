@@ -228,6 +228,23 @@ checks = [
 ]
 
 [[cases]]
+# terminal-features is tmux's server array: its default, a whole value split
+# at commas alone (`-a` adds to it), items set by index (`-a` appends to
+# one) and removed with -u, an unset item shown empty.
+name = "terminal_features_is_tmuxs_array"
+steps = [
+  { run = "set -as terminal-features ',foo*:extkeys,a b:title'" },
+  { run = "set -s terminal-features[7] x:RGB" },
+  { run = "set -as terminal-features[7] :sync" },
+  { run = "set -su terminal-features[1]" },
+]
+checks = [
+  { command = "show -s terminal-features", expect = "terminal-features[0] xterm*:clipboard:ccolour:cstyle:focus:title\nterminal-features[2] rxvt*:ignorefkeys\nterminal-features[3] foo*:extkeys\nterminal-features[4] \"a b:title\"\nterminal-features[7] x:RGB:sync" },
+  { command = "show -sv terminal-features[4]", expect = "a b:title" },
+  { command = "show -s terminal-features[5]", expect = "terminal-features[5] ''" },
+]
+
+[[cases]]
 name = "prefix2_and_key_table_default_as_tmuxs"
 steps = []
 checks = [

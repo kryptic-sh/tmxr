@@ -156,9 +156,16 @@ pub struct Attached {
     /// client not told any, whose terminal has not said it speaks the
     /// protocol.
     pub keyboard_flags: Option<u8>,
-    /// The keyboard tier the client said its terminal has
-    /// (`ClientMsg::Keyboard`); `Legacy` until it says.
-    pub keyboard: tmxr_proto::Keyboard,
+    /// What the client said of its terminal's keyboard
+    /// (`ClientMsg::Keyboard`); a terminal that speaks neither protocol
+    /// until it says.
+    pub keyboard_report: tmxr_proto::KeyboardReport,
+    /// The keyboard tier decided from it and the options
+    /// (`crate::keyboard::tier`).
+    pub keyboard: crate::keyboard::Keyboard,
+    /// Whether this client was last told to turn modifyOtherKeys on
+    /// (`crate::keyboard::extended_keys`).
+    pub extended_keys: bool,
     /// When this client's status timer last fired (`status-interval`).
     pub status_at: Instant,
     /// Focused: from attaching until the terminal reports focus out, then
@@ -765,6 +772,7 @@ impl Server {
                         ServerMsg::Mouse(on) => a.mouse = !on,
                         ServerMsg::FocusEvents(on) => a.focus_events = !on,
                         ServerMsg::KeyboardFlags(_) => a.keyboard_flags = None,
+                        ServerMsg::ExtendedKeys(on) => a.extended_keys = !on,
                         ServerMsg::Output(_) => a.resend_cursor_and_title = true,
                         _ => {}
                     }
@@ -883,26 +891,40 @@ impl Server {
         }
     }
 
-    /// Client `id` says its terminal's keyboard tier: a kitty terminal is
-    /// told its flags at once, without waiting for them to change, and any
-    /// other is told none from now on.
-    fn client_keyboard(&mut self, id: ClientId, keyboard: tmxr_proto::Keyboard) {
+    /// Client `id` says what its terminal's keyboard speaks: its tier is
+    /// decided afresh, and it is told at once what that asks for, without
+    /// waiting for it to change: a kitty terminal its flags, an xterm-tier
+    /// one modifyOtherKeys where `extended-keys` wants it. Any other is told
+    /// no flags from now on. modifyOtherKeys is taken as off: a client whose
+    /// report changed as it asked again ([`tmxr_proto::ClientMsg::Keyboard`]
+    /// after a suspend or a lock) has turned it off, and one whose report did
+    /// not is told to turn it on again, which does no harm. Kitty flags go first: a terminal told
+    /// both is told none of them (`kitty-keys off`), so nothing turns on
+    /// before the other is off.
+    fn client_keyboard(&mut self, id: ClientId, report: tmxr_proto::KeyboardReport) {
         let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
             return;
         };
-        att.keyboard = keyboard;
+        att.keyboard_report = report;
         att.keyboard_flags = None;
-        if !crate::kitty::speaks(self, id) {
-            return;
+        att.extended_keys = false;
+        self.decide_keyboard(id);
+        if crate::kitty::speaks(self, id) {
+            let flags = crate::kitty::flags(self, id);
+            if let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
+                att.keyboard_flags = Some(flags);
+            }
+            self.send(id, ServerMsg::KeyboardFlags(flags));
         }
-        let flags = crate::kitty::flags(self, id);
-        if let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
-            att.keyboard_flags = Some(flags);
+        if crate::keyboard::extended_keys(self, id) {
+            if let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
+                att.extended_keys = true;
+            }
+            self.send(id, ServerMsg::ExtendedKeys(true));
         }
-        self.send(id, ServerMsg::KeyboardFlags(flags));
     }
 
-    fn client_terminal(&self, id: ClientId) -> Option<&tmxr_proto::TerminalInfo> {
+    pub(crate) fn client_terminal(&self, id: ClientId) -> Option<&tmxr_proto::TerminalInfo> {
         self.clients
             .get(&id)
             .and_then(|c| c.hello.as_ref())
@@ -1391,6 +1413,8 @@ impl Server {
             // focused program changes its own, where the terminal speaks
             // the protocol.
             let keyboard = crate::kitty::speaks(self, id).then(|| crate::kitty::flags(self, id));
+            // And modifyOtherKeys, as `extended-keys` or the tier changes.
+            let extended_keys = crate::keyboard::extended_keys(self, id);
             let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
                 continue;
             };
@@ -1405,6 +1429,8 @@ impl Server {
             let tell_mouse = std::mem::replace(&mut att.mouse, mouse) != mouse;
             let tell_focus = std::mem::replace(&mut att.focus_events, focus) != focus;
             let tell_keyboard = keyboard.filter(|&k| att.keyboard_flags.replace(k) != Some(k));
+            let tell_extended_keys =
+                std::mem::replace(&mut att.extended_keys, extended_keys) != extended_keys;
             let full = std::mem::take(&mut att.full_redraw);
             let Some(mut term) = att.term.take() else {
                 continue;
@@ -1455,8 +1481,17 @@ impl Server {
             if tell_focus {
                 self.send(id, ServerMsg::FocusEvents(focus));
             }
+            // A keyboard mode turned off goes before one turned on, so the
+            // terminal never has both (kitty flags and modifyOtherKeys) on
+            // as a client moves between the tiers.
+            if tell_extended_keys && !extended_keys {
+                self.send(id, ServerMsg::ExtendedKeys(false));
+            }
             if let Some(keyboard) = tell_keyboard {
                 self.send(id, ServerMsg::KeyboardFlags(keyboard));
+            }
+            if tell_extended_keys && extended_keys {
+                self.send(id, ServerMsg::ExtendedKeys(true));
             }
         }
     }
@@ -1531,6 +1566,8 @@ impl Server {
         }
         self.apply_rgb_colour();
         self.apply_kitty_keys();
+        // `kitty-keys` and `terminal-features` decide keyboard tiers.
+        self.decide_keyboards();
         self.mark_all_dirty();
         if errors.is_empty() {
             Ok(())
@@ -1574,33 +1611,8 @@ pub(crate) fn config_file(source: tmxr_config::ConfigSource) -> Option<PathBuf> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tmxr_proto::{Keyboard, TerminalInfo};
+    use testing::{attached, report};
     use tmxr_term::encode::TMXR_KITTY_FLAGS;
-
-    /// A server with client 1, in a terminal, attached to session 0 (which
-    /// does not exist), with `kitty-keys` as `kitty_keys`; and what the
-    /// server sends the client.
-    fn attached(kitty_keys: bool) -> (Server, std::sync::mpsc::Receiver<ServerMsg>) {
-        let hello = Hello {
-            protocol: PROTOCOL_VERSION,
-            version: String::new(),
-            cwd: String::new(),
-            pid: 0,
-            env: Vec::new(),
-            terminal: Some(TerminalInfo {
-                cols: 80,
-                rows: 24,
-                term: "xterm-256color".into(),
-                job_control: false,
-                tty: String::new(),
-                colour_answers: false,
-            }),
-        };
-        let (mut srv, rx) = testing::with_client(Some(hello));
-        srv.cfg.kitty_keys = kitty_keys;
-        srv.attach(1, 0);
-        (srv, rx)
-    }
 
     /// The kitty flags the server has told the client so far.
     fn flags_told(rx: &std::sync::mpsc::Receiver<ServerMsg>) -> Vec<u8> {
@@ -1621,13 +1633,13 @@ mod tests {
             srv.render_all();
             assert_eq!(flags_told(&rx), Vec::<u8>::new(), "{kitty_keys}");
             // Neither once it says legacy or xterm.
-            for keyboard in [Keyboard::Legacy, Keyboard::Xterm] {
-                srv.client_msg(1, ClientMsg::Keyboard(keyboard));
+            for report in [report(false, None), report(false, Some("XTerm(390)"))] {
+                srv.client_msg(1, ClientMsg::Keyboard(report.clone()));
                 srv.render_all();
-                assert_eq!(flags_told(&rx), Vec::<u8>::new(), "{keyboard:?}");
+                assert_eq!(flags_told(&rx), Vec::<u8>::new(), "{report:?}");
             }
             // Kitty: its flags at once, none under `kitty-keys off`.
-            srv.client_msg(1, ClientMsg::Keyboard(Keyboard::Kitty));
+            srv.client_msg(1, ClientMsg::Keyboard(report(true, None)));
             assert_eq!(flags_told(&rx), vec![wanted], "{kitty_keys}");
             // And again as they change.
             srv.cfg.kitty_keys = !kitty_keys;
@@ -1636,7 +1648,7 @@ mod tests {
             let now = if kitty_keys { 0 } else { TMXR_KITTY_FLAGS };
             assert_eq!(flags_told(&rx), vec![now], "{kitty_keys}");
             // Back to legacy (a terminal asked again after a suspend): no more.
-            srv.client_msg(1, ClientMsg::Keyboard(Keyboard::Legacy));
+            srv.client_msg(1, ClientMsg::Keyboard(report(false, None)));
             srv.cfg.kitty_keys = kitty_keys;
             srv.clients.get_mut(&1).unwrap().att.as_mut().unwrap().dirty = true;
             srv.render_all();

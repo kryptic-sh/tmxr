@@ -63,7 +63,10 @@ impl Server {
             focus_events: false,
             // Told none until it says its terminal speaks the protocol.
             keyboard_flags: None,
-            keyboard: tmxr_proto::Keyboard::Legacy,
+            keyboard_report: tmxr_proto::KeyboardReport::default(),
+            keyboard: crate::keyboard::Keyboard::Legacy,
+            // Off until it says its terminal has modifyOtherKeys.
+            extended_keys: false,
             // As tmux's: focused until its terminal reports otherwise.
             focused: true,
             away: false,

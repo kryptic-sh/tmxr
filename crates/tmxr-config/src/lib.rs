@@ -28,6 +28,11 @@ mod window;
 /// The embedded defaults.
 pub const DEFAULTS: &str = include_str!("../defaults.toml");
 
+/// Where a string set on `terminal-features` splits into items: at commas
+/// alone, as its entry in tmux's options table says, so a pattern may hold
+/// a space.
+pub const TERMINAL_FEATURES_SEPARATORS: &[char] = &[','];
+
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(from = "File")]
 pub struct Config {
@@ -62,6 +67,10 @@ pub struct Config {
     /// `kitty-keys`: whether clients ask their terminals for the kitty
     /// keyboard protocol and panes' programs may push kitty flags.
     pub kitty_keys: bool,
+    /// `terminal-features`: `pattern:feature:…` entries, each giving the
+    /// terminal features after it to a client whose `TERM` matches the
+    /// pattern, as tmux's. Items by index, as tmux's arrays keep them.
+    pub terminal_features: Array,
     pub set_clipboard: String,
     /// `on`, `off`, `16` or `auto`: whether clients get 24-bit colour, or
     /// colours mapped to the 256 (`off`) or the 16 ANSI ones.
@@ -137,6 +146,7 @@ struct File {
     extended_keys: String,
     extended_keys_format: String,
     kitty_keys: bool,
+    terminal_features: Vec<String>,
     set_clipboard: String,
     rgb_colour: String,
     allow_passthrough: bool,
@@ -332,6 +342,7 @@ impl From<File> for Config {
             extended_keys: f.extended_keys,
             extended_keys_format: f.extended_keys_format,
             kitty_keys: f.kitty_keys,
+            terminal_features: f.terminal_features.into_iter().collect(),
             set_clipboard: f.set_clipboard,
             rgb_colour: f.rgb_colour,
             copy_command: f.copy_command,
@@ -878,6 +889,7 @@ impl Config {
                 .extended_keys_format
                 .clone_from(&from.extended_keys_format),
             "kitty-keys" => self.kitty_keys = from.kitty_keys,
+            "terminal-features" => self.terminal_features.clone_from(&from.terminal_features),
             "set-clipboard" => self.set_clipboard.clone_from(&from.set_clipboard),
             "rgb-colour" => self.rgb_colour.clone_from(&from.rgb_colour),
             "copy-command" => self.copy_command.clone_from(&from.copy_command),
@@ -1259,6 +1271,40 @@ mod tests {
         let mut to = defaults();
         assert!(to.copy_option(&file, "kitty-keys"));
         assert!(!to.kitty_keys);
+    }
+
+    /// `terminal-features` defaults to tmux's three entries, a file's list
+    /// replaces them, and it copies as one option.
+    #[test]
+    fn a_file_sets_terminal_features() {
+        let tmux = [
+            "xterm*:clipboard:ccolour:cstyle:focus:title",
+            "screen*:title",
+            "rxvt*:ignorefkeys",
+        ];
+        assert!(defaults().terminal_features.values().eq(tmux));
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "terminal-features = [\"foo*:extkeys\"]\n").unwrap();
+        let (file, sets, errors) = load_file(&path).unwrap();
+        assert!(errors.is_empty(), "{errors:?}");
+        assert!(file.terminal_features.values().eq(["foo*:extkeys"]));
+        assert_eq!(sets.options, ["terminal-features"]);
+        let mut to = defaults();
+        assert!(to.copy_option(&file, "terminal-features"));
+        assert_eq!(to.terminal_features, file.terminal_features);
+    }
+
+    /// tmux's `options_array_assign` with the separators an option's entry
+    /// names: `terminal-features` splits at commas only, so a space stays
+    /// in its entry; the default splits at both.
+    #[test]
+    fn an_array_splits_at_its_options_separators() {
+        let mut a = Array::default();
+        a.assign_split("a b,,c:d", &[',']);
+        assert!(a.values().eq(["a b", "c:d"]));
+        a.assign_split("e f", &[' ', ',']);
+        assert!(a.values().eq(["a b", "c:d", "e", "f"]));
     }
 
     #[test]

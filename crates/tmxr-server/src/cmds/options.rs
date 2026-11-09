@@ -4,7 +4,7 @@ use std::fmt::Write as _;
 use std::path::PathBuf;
 
 use tmxr_command::Parsed;
-use tmxr_config::{SessionOptions, WindowOptions};
+use tmxr_config::{OptionValue, SessionOptions, WindowOptions};
 
 use super::{Ctx, Outcome, Res, attached_client, expand_for, scoped};
 use crate::server::Server;
@@ -31,22 +31,29 @@ pub(super) fn run(
                 return scoped::show(srv, ctx, a, window_cmd, name, out).map(|()| true);
             }
             // The rest are server options: one table, as tmux's.
-            let mut found = false;
-            for l in server_option_lines(srv) {
-                if name.is_none_or(|n| l.split(' ').next() == Some(n)) {
-                    found = true;
-                    let l = if a.has('v') {
-                        l.split_once(' ')
-                            .map_or_else(|| l.clone(), |(_, v)| v.to_owned())
-                    } else {
-                        l
-                    };
-                    out.stdout.push_str(&l);
-                    out.stdout.push('\n');
+            let (name, index) = match name {
+                // A malformed index went to `scoped`, which refuses it.
+                Some(arg) => {
+                    scoped::split_index(arg).map_or((Some(arg), None), |(n, i)| (Some(n), i))
                 }
-            }
-            if let Some(n) = name.filter(|_| !found && !a.has('q')) {
+                None => (None, None),
+            };
+            let lines = server_option_lines(srv, name, index);
+            if let Some(n) = pos.first().filter(|_| lines.is_empty() && !a.has('q')) {
                 return Err(format!("invalid option: {n}"));
+            }
+            for line in lines {
+                let text = if a.has('v') {
+                    // An empty array's bare name has no value to print.
+                    let Some(value) = line.value else {
+                        continue;
+                    };
+                    value
+                } else {
+                    line.text()
+                };
+                out.stdout.push_str(&text);
+                out.stdout.push('\n');
             }
         }
         "source-file" => {
@@ -153,13 +160,22 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed) -> Res {
     if scoped::handles(name) {
         return scoped::set(srv, ctx, a, p.name() == "set-window-option", name, value);
     }
+    let arg = name;
+    // A malformed index went to `scoped`, which refuses it.
+    let (name, index) = scoped::split_index(arg).unwrap_or((arg, None));
     if !SERVER_OPTIONS.contains(&name) {
         // -q: an unknown option is no error, as tmux's.
         return if a.has('q') {
             Ok(())
         } else {
-            Err(format!("invalid option: {name}"))
+            Err(format!("invalid option: {arg}"))
         };
+    }
+    if name == "terminal-features" {
+        return set_terminal_features(srv, a, (arg, index), value);
+    }
+    if index.is_some() {
+        return Err(format!("not an array: {arg}"));
     }
     // A server option always has a value, so -o refuses every one.
     if a.has('o') {
@@ -227,9 +243,54 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed) -> Res {
     }
     match name {
         "rgb-colour" => srv.apply_rgb_colour(),
-        "kitty-keys" => srv.apply_kitty_keys(),
+        "kitty-keys" => {
+            srv.apply_kitty_keys();
+            srv.decide_keyboards();
+        }
         _ => {}
     }
+    srv.mark_all_dirty();
+    Ok(())
+}
+
+/// `set-option` for `terminal-features` (`arg` as given, with its
+/// `index`), as tmux's for an array: whole, the value split at commas
+/// replaces it (`-a` adds to it) and `-u` gives back the default; an item,
+/// the value sets it (`-a` appends to it) and `-u` removes it. Each
+/// attached client's keyboard tier follows at once.
+fn set_terminal_features(
+    srv: &mut Server,
+    a: &tmxr_command::Args,
+    (arg, index): (&str, Option<u32>),
+    value: Option<&str>,
+) -> Res {
+    let features = &mut srv.cfg.terminal_features;
+    // As tmux's: an option is always set as a whole, an item where it is.
+    let set = index.is_none_or(|i| features.items().is_some_and(|items| items.contains_key(&i)));
+    if !a.has('u') && a.has('o') && set {
+        return Err(format!("already set: {arg}"));
+    }
+    let append = a.has('a');
+    *features = match (index, a.has('u')) {
+        (None, true) => tmxr_config::defaults().terminal_features,
+        (Some(i), true) => features.set_item(i, None, false)?,
+        (index, false) => {
+            let value = value.ok_or("empty value")?;
+            match index {
+                Some(i) => features.set_item(i, Some(value), append)?,
+                None => {
+                    let mut array = if append {
+                        features.clone()
+                    } else {
+                        tmxr_config::Array::default()
+                    };
+                    array.assign_split(value, tmxr_config::TERMINAL_FEATURES_SEPARATORS);
+                    array
+                }
+            }
+        }
+    };
+    srv.decide_keyboards();
     srv.mark_all_dirty();
     Ok(())
 }
@@ -256,6 +317,7 @@ pub const SERVER_OPTIONS: &[&str] = &[
     "rgb-colour",
     "set-clipboard",
     "socket-access",
+    "terminal-features",
 ];
 
 /// A flag as `show-options` prints it.
@@ -272,9 +334,21 @@ fn applied(srv: &Server, path: &std::path::Path) -> Vec<String> {
     };
     let mut lines = Vec::new();
     for name in sets.options.iter().chain(&sets.user_options) {
-        let value = server_option_lines(srv)
-            .into_iter()
-            .find_map(|l| l.strip_prefix(&format!("{name} ")).map(str::to_owned))
+        // An array as a whole, its items joined at the commas a whole
+        // value splits at.
+        let array = (name == "terminal-features").then(|| {
+            let items: Vec<&str> = srv.cfg.terminal_features.values().collect();
+            tmxr_command::escape_arg(&items.join(","))
+        });
+        let value = array
+            .or_else(|| {
+                let mut lines = server_option_lines(srv, Some(name), None);
+                lines
+                    .pop()
+                    .map(Line::text)?
+                    .strip_prefix(&format!("{name} "))
+                    .map(str::to_owned)
+            })
             .or_else(|| {
                 let value = srv
                     .cfg
@@ -318,10 +392,16 @@ pub fn server_option(srv: &Server, name: &str) -> Option<String> {
     config_option(&srv.cfg, name)
 }
 
-/// The server options tmux types as strings: `-a` appends to them, and
-/// `show-options` quotes them.
-const STRING_SERVER_OPTIONS: &[&str] =
-    &["copy-command", "default-terminal", "editor", "history-file"];
+/// The server options tmux types as strings: `-a` appends to them (an
+/// array's own `-a` is [`set_terminal_features`]'s), and `show-options`
+/// quotes them.
+const STRING_SERVER_OPTIONS: &[&str] = &[
+    "copy-command",
+    "default-terminal",
+    "editor",
+    "history-file",
+    "terminal-features",
+];
 
 /// Server option `name`'s value in `c`, unquoted.
 fn config_option(c: &tmxr_config::Config, name: &str) -> Option<String> {
@@ -345,32 +425,87 @@ fn config_option(c: &tmxr_config::Config, name: &str) -> Option<String> {
         "rgb-colour" => c.rgb_colour.clone(),
         "set-clipboard" => c.set_clipboard.clone(),
         "socket-access" => c.socket_access.clone(),
+        // The items joined by spaces, as tmux's `options_to_string`.
+        "terminal-features" => c.terminal_features.show(),
         _ => return None,
     })
 }
 
-/// Each server option as `show-options -s` prints it: `name value`, the
-/// ones tmux types as strings quoted as its.
-fn server_option_lines(srv: &Server) -> Vec<String> {
-    SERVER_OPTIONS
-        .iter()
-        .map(|&name| {
-            let value = server_option(srv, name).unwrap_or_default();
-            let value = if STRING_SERVER_OPTIONS.contains(&name) {
-                tmxr_command::escape_arg(&value)
-            } else {
-                value
-            };
-            format!("{name} {value}")
-        })
-        .collect()
+/// One line `show-options -s` prints: its label, a name or an array's
+/// `name[index]`, and its value, unquoted; `None` for an empty array,
+/// printed as its bare name.
+struct Line {
+    label: String,
+    name: &'static str,
+    value: Option<String>,
+}
+
+impl Line {
+    /// The line as printed: the value quoted as tmux's where tmux types the
+    /// option a string.
+    fn text(self) -> String {
+        let Some(value) = self.value else {
+            return self.label;
+        };
+        let value = if STRING_SERVER_OPTIONS.contains(&self.name) {
+            tmxr_command::escape_arg(&value)
+        } else {
+            value
+        };
+        format!("{} {value}", self.label)
+    }
+}
+
+/// The lines `show-options -s` prints, as tmux's `cmd_show_options_print`:
+/// every server option's, or `name`'s alone (none for a name that is no
+/// server option). An array's are one per item, `name[index] value`, or its
+/// bare name when it has none; with `index`, that item's alone, empty where
+/// it is not set. An index on an option that is not an array is shown and
+/// ignored, as tmux's.
+fn server_option_lines(srv: &Server, name: Option<&str>, index: Option<u32>) -> Vec<Line> {
+    let mut lines = Vec::new();
+    for &option in SERVER_OPTIONS {
+        if name.is_some_and(|n| n != option) {
+            continue;
+        }
+        let label = |i: u32| format!("{option}[{i}]");
+        let line = |label, value| Line {
+            label,
+            name: option,
+            value,
+        };
+        match (option, index) {
+            ("terminal-features", Some(i)) => {
+                let items = srv.cfg.terminal_features.items();
+                let value = items.and_then(|items| items.get(&i)).cloned();
+                lines.push(line(label(i), Some(value.unwrap_or_default())));
+            }
+            ("terminal-features", None) => {
+                let items = srv.cfg.terminal_features.items().into_iter().flatten();
+                let before = lines.len();
+                lines.extend(items.map(|(&i, v)| line(label(i), Some(v.clone()))));
+                if lines.len() == before {
+                    lines.push(line(option.to_owned(), None));
+                }
+            }
+            (_, index) => {
+                let value = server_option(srv, option).unwrap_or_default();
+                let label = index.map_or_else(|| option.to_owned(), label);
+                lines.push(line(label, Some(value)));
+            }
+        }
+    }
+    lines
 }
 
 /// Every global option as `show-options` prints it, `name value`: the
 /// server's, the sessions' and the windows', then the user options.
 pub fn option_lines(srv: &Server) -> Vec<String> {
     let c = &srv.cfg;
-    let mut all = server_option_lines(srv);
+    let mut all: Vec<String> = server_option_lines(srv, None, None)
+        .into_iter()
+        .map(Line::text)
+        .collect();
     all.extend(
         SessionOptions::NAMES
             .iter()
@@ -400,5 +535,83 @@ mod tests {
         assert_eq!(config_option(&c, "kitty-keys").as_deref(), Some("on"));
         c.kitty_keys = false;
         assert_eq!(config_option(&c, "kitty-keys").as_deref(), Some("off"));
+    }
+
+    /// `line`'s output on `srv`, or its error.
+    fn run(srv: &mut Server, line: &str) -> Result<String, String> {
+        let out = super::super::run_line(srv, &Ctx::default(), line);
+        if out.status == 0 {
+            Ok(out.stdout)
+        } else {
+            Err(out.stderr.trim_end().to_owned())
+        }
+    }
+
+    /// `terminal-features` sets and shows as tmux's array: whole values
+    /// split at commas, items by index, `-a`, `-u`, `-o` and `-v`.
+    #[test]
+    fn terminal_features_set_and_show_as_tmuxs_array() {
+        let (mut srv, _rx) = crate::server::testing::with_client(None);
+        let tmux = "terminal-features[0] xterm*:clipboard:ccolour:cstyle:focus:title\n\
+                    terminal-features[1] screen*:title\n\
+                    terminal-features[2] rxvt*:ignorefkeys\n";
+        assert_eq!(run(&mut srv, "show -s terminal-features").unwrap(), tmux);
+        assert!(run(&mut srv, "show -s").unwrap().contains(tmux));
+        assert_eq!(
+            run(&mut srv, "show -s terminal-features[1]").unwrap(),
+            "terminal-features[1] screen*:title\n"
+        );
+        assert_eq!(
+            run(&mut srv, "show -s terminal-features[7]").unwrap(),
+            "terminal-features[7] ''\n"
+        );
+        run(
+            &mut srv,
+            "set -as terminal-features ',foo*:extkeys,a b:title'",
+        )
+        .unwrap();
+        assert_eq!(
+            run(&mut srv, "show -sv terminal-features").unwrap(),
+            "xterm*:clipboard:ccolour:cstyle:focus:title\nscreen*:title\n\
+             rxvt*:ignorefkeys\nfoo*:extkeys\na b:title\n"
+        );
+        assert_eq!(
+            run(&mut srv, "show -s terminal-features[4]").unwrap(),
+            "terminal-features[4] \"a b:title\"\n"
+        );
+        run(&mut srv, "set -s terminal-features 'x:extkeys,,y:RGB'").unwrap();
+        run(&mut srv, "set -s terminal-features[5] z:title").unwrap();
+        run(&mut srv, "set -as terminal-features[5] :focus").unwrap();
+        run(&mut srv, "set -su terminal-features[0]").unwrap();
+        assert_eq!(
+            run(&mut srv, "show -s terminal-features").unwrap(),
+            "terminal-features[1] y:RGB\nterminal-features[5] z:title:focus\n"
+        );
+        assert_eq!(
+            run(&mut srv, "set -so terminal-features[5] w").unwrap_err(),
+            "already set: terminal-features[5]"
+        );
+        run(&mut srv, "set -so terminal-features[6] w:title").unwrap();
+        assert_eq!(
+            run(&mut srv, "set -so terminal-features w").unwrap_err(),
+            "already set: terminal-features"
+        );
+        assert_eq!(
+            run(&mut srv, "set -s terminal-features").unwrap_err(),
+            "empty value"
+        );
+        assert_eq!(
+            run(&mut srv, "set -s buffer-limit[0] 5").unwrap_err(),
+            "not an array: buffer-limit[0]"
+        );
+        // Emptied, it shows as its bare name, and nothing with -v.
+        run(&mut srv, "set -s terminal-features ''").unwrap();
+        assert_eq!(
+            run(&mut srv, "show -s terminal-features").unwrap(),
+            "terminal-features\n"
+        );
+        assert_eq!(run(&mut srv, "show -sv terminal-features").unwrap(), "");
+        run(&mut srv, "set -su terminal-features").unwrap();
+        assert_eq!(run(&mut srv, "show -s terminal-features").unwrap(), tmux);
     }
 }

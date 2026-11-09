@@ -136,7 +136,11 @@ impl Out {
         }
         .unwrap_or(default)
         .clone();
-        let new = typed(&current, value, a.has('a'))?;
+        // tmux splits most array options at spaces and commas, and
+        // `terminal-features` at commas alone.
+        let separators =
+            (name == "terminal-features").then_some(crate::TERMINAL_FEATURES_SEPARATORS);
+        let new = typed(&current, value, a.has('a'), separators)?;
         let place = match section {
             Some(s) => table(&mut self.file, s),
             None => &mut self.file,
@@ -253,8 +257,13 @@ fn file_key<'d>(defaults: &'d Table, name: &str) -> Option<(Option<&'static str>
 
 /// `value` for an option now `current` (the default when unset), typed as
 /// it: a flag (no value toggles), a number, a string (`-a` appends), or a
-/// list (words; `-a` adds them).
-fn typed(current: &Value, value: Option<&str>, append: bool) -> Result<Value, String> {
+/// list (words, or the pieces between `separators`; `-a` adds them).
+fn typed(
+    current: &Value,
+    value: Option<&str>,
+    append: bool,
+    separators: Option<&[char]>,
+) -> Result<Value, String> {
     match current {
         Value::Boolean(b) => Ok(Value::Boolean(match value {
             None | Some("toggle") => !b,
@@ -271,7 +280,11 @@ fn typed(current: &Value, value: Option<&str>, append: bool) -> Result<Value, St
         Value::Array(old) => {
             let v = value.ok_or("needs a value")?;
             let mut list = if append { old.clone() } else { Vec::new() };
-            list.extend(v.split_whitespace().map(|w| Value::String(w.into())));
+            let items: Vec<&str> = match separators {
+                Some(separators) => v.split(separators).filter(|w| !w.is_empty()).collect(),
+                None => v.split_whitespace().collect(),
+            };
+            list.extend(items.into_iter().map(|w| Value::String(w.into())));
             Ok(Value::Array(list))
         }
         other => {
@@ -327,6 +340,23 @@ mod tests {
         let env: Vec<&str> = cfg.session.update_environment.values().collect();
         assert!(env.contains(&"DISPLAY"), "{env:?}");
         assert_eq!(env.last(), Some(&"EXTRA"));
+    }
+
+    /// `terminal-features` items split at commas, as tmux's, so tmux's
+    /// usual `set -as terminal-features ',pattern:feature'` adds one item.
+    #[test]
+    fn terminal_features_import_split_at_commas() {
+        let (cfg, skipped) = import("set -as terminal-features ',foo*:extkeys,bar baz:title'\n");
+        assert!(skipped.is_empty(), "{skipped:?}");
+        let items: Vec<&str> = cfg.terminal_features.values().collect();
+        assert_eq!(
+            items[..3],
+            *crate::defaults()
+                .terminal_features
+                .values()
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(items[3..], ["foo*:extkeys", "bar baz:title"]);
     }
 
     #[test]

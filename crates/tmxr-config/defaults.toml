@@ -62,6 +62,14 @@ extended-keys-format = "xterm"
 # panes' programs may push kitty flags. false does neither: programs that ask
 # find it off and fall back. extended-keys covers xterm-style keys alone.
 kitty-keys = true
+# tmux's default: features a terminal is given by its TERM, `pattern:feature:…`
+# (tmux's `terminal-features`). tmxr acts on `extkeys` (xterm's
+# modifyOtherKeys, under extended-keys) and reads the rest.
+terminal-features = [
+  "xterm*:clipboard:ccolour:cstyle:focus:title",
+  "screen*:title",
+  "rxvt*:ignorefkeys",
+]
 set-clipboard = "on"
 # 24-bit colour on every terminal, as the tmux config's `terminal-overrides
 # ",*:RGB"`; "off" sends the 256, "16" the 16 ANSI colours, and "auto" asks

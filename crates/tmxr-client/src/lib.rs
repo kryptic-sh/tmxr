@@ -298,6 +298,20 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
                     t.set_keyboard_flags(flags)?;
                 }
             }
+            ServerMsg::ExtendedKeys(on) => {
+                // The server asks only a client that said it can
+                // (`KeyboardReport::modify_other_keys`); the Windows client
+                // says not, and refuses the mode if asked anyway, which is
+                // reported and leaves it attached. A failed write is an error.
+                if let Some(t) = &term
+                    && let Err(e) = t.set_extended_keys(on)
+                {
+                    if e.kind() != io::ErrorKind::Unsupported {
+                        return Err(e);
+                    }
+                    eprintln!("[{e}]");
+                }
+            }
         }
     }
 }
@@ -305,10 +319,11 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
 /// Give the terminal to `run` (a suspend, the lock command) and take it
 /// back, asking it again what it speaks and for the kitty keyboard `flags`
 /// the server last sent ([`terminal::Guard::hand_over`]); then tell the
-/// server its colours and its keyboard tier where they changed (forgetting
-/// `flags` where the tier did: the server says them again for a kitty
-/// terminal), that it is back with the message `run` returns, and the input
-/// read as the terminal answered. The input
+/// server its colours and what its keyboard speaks where they changed
+/// (forgetting `flags` where the keyboard did: the server says them, and
+/// modifyOtherKeys, again from what it decides), that it is back with the
+/// message `run` returns, and the input read as the terminal answered. The
+/// input
 /// thread is paused throughout, so what is typed meanwhile goes to
 /// whatever `run` hands the terminal to, and nothing it reads after
 /// overtakes that input. Does nothing with no input thread (not attached).
@@ -325,11 +340,11 @@ fn hand_over(
     let mut paused = input.pause()?;
     let (colours, keyboard) = (guard.colours(), guard.keyboard());
     let (back, early) = guard.hand_over(&mut paused, *flags, run)?;
-    // The server keeps the terminal's colours and keyboard tier from
-    // attach: tell it of new ones, as attaching does.
+    // The server keeps the terminal's colours and keyboard from attach:
+    // tell it of new ones, as attaching does.
     let (fg, bg) = guard.colours();
     let recoloured = colours != (fg, bg);
-    let rekeyed = (keyboard != guard.keyboard()).then(|| guard.keyboard());
+    let rekeyed = Some(guard.keyboard()).filter(|now| *now != keyboard);
     if rekeyed.is_some() {
         *flags = None;
     }

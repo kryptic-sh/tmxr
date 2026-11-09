@@ -9,7 +9,6 @@
 //! flags also marks the client for a redraw. A client whose terminal does
 //! not speak the protocol ([`speaks`]) is never told any.
 
-use tmxr_proto::Keyboard;
 use tmxr_term::encode::{KITTY_FLAGS_ENCODED, TMXR_KITTY_FLAGS};
 
 use crate::model::ClientId;
@@ -23,7 +22,7 @@ pub fn speaks(srv: &Server, id: ClientId) -> bool {
     srv.clients
         .get(&id)
         .and_then(|c| c.att.as_ref())
-        .is_some_and(|att| att.keyboard == Keyboard::Kitty)
+        .is_some_and(|att| att.keyboard_report.kitty)
 }
 
 /// The kitty keyboard flags client `id`'s terminal should report keys

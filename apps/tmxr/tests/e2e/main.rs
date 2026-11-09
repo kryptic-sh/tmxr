@@ -8,6 +8,7 @@
 mod buffers_and_shell;
 mod copy_mode;
 mod input;
+mod keyboard;
 mod overlays;
 mod panes;
 mod resurrect;
@@ -269,6 +270,24 @@ impl Tmxr {
         )
     }
 
+    /// [`Tmxr::attach`] in a terminal that answers XTVERSION as xterm does,
+    /// `XTerm(390)`, which tmux gives modifyOtherKeys; with the kitty
+    /// keyboard protocol too where `kitty`, as no xterm has.
+    #[cfg(unix)]
+    fn attach_xterm(&self, rest: &[&str], kitty: bool) -> Screen {
+        self.terminal(
+            self.dir.path(),
+            env!("CARGO_BIN_EXE_tmxr"),
+            &self.args(rest),
+            &[],
+            Answers {
+                kitty,
+                version: Some(XTERM_VERSION),
+                ..Answers::default()
+            },
+        )
+    }
+
     /// [`Tmxr::attach`] in a session with no controlling terminal: the pty
     /// is the client's standard streams only, as under a launcher that
     /// calls `setsid` and hands on its terminal (some service managers and
@@ -311,6 +330,7 @@ impl Tmxr {
         let Answers {
             sync,
             kitty,
+            version,
             mut typed_before_da1,
             controlling,
         } = answers;
@@ -379,6 +399,10 @@ impl Tmxr {
                             let _ = writer.lock().unwrap().write_all(colour);
                         }
                     }
+                    if let Some(version) = version.filter(|_| asked(XTVERSION_QUERY)) {
+                        let answer = format!("\x1bP>|{version}\x1b\\");
+                        let _ = writer.lock().unwrap().write_all(answer.as_bytes());
+                    }
                     if asked(DA1_QUERY)
                         && let Some(keys) = typed_before_da1.take()
                     {
@@ -392,6 +416,9 @@ impl Tmxr {
                     let mut fed = without(&buf[..n], SYNC_QUERY);
                     if !kitty {
                         fed = without(&fed, KITTY_QUERY);
+                    }
+                    if version.is_some() {
+                        fed = without(&fed, XTVERSION_QUERY);
                     }
                     let replies = emu.lock().unwrap().process(&fed);
                     if !replies.is_empty() {
@@ -424,6 +451,9 @@ struct Answers {
     sync: bool,
     /// The kitty keyboard query (`CSI ? u`), through the emulator.
     kitty: bool,
+    /// XTVERSION (`CSI > q`) with this name and version; else, through the
+    /// emulator, as tmxr (which tmux gives no modifyOtherKeys).
+    version: Option<&'static str>,
     /// Typed just ahead of its answer to the first DA1 query.
     typed_before_da1: Option<Vec<u8>>,
     /// Whether the pty is the program's controlling terminal, as a shell
@@ -437,6 +467,7 @@ impl Default for Answers {
         Self {
             sync: false,
             kitty: true,
+            version: None,
             typed_before_da1: None,
             controlling: true,
         }
@@ -727,6 +758,20 @@ const KITTY_QUERY: &[u8] = b"\x1b[?u";
 /// The primary device attributes query (DA1), which the client asks last
 /// of its questions to the terminal.
 const DA1_QUERY: &[u8] = b"\x1b[c";
+
+/// XTVERSION, the query for the terminal's name and version.
+const XTVERSION_QUERY: &[u8] = b"\x1b[>q";
+
+/// What [`Tmxr::attach_xterm`]'s terminal answers XTVERSION with, as xterm
+/// 390 does.
+#[cfg(unix)]
+const XTERM_VERSION: &str = "XTerm(390)";
+
+/// modifyOtherKeys level 2 on (tmux's `Eneks`), and off (`Dseks`).
+#[cfg(unix)]
+const MODIFY_OTHER_KEYS_ON: &str = "\x1b[>4;2m";
+#[cfg(unix)]
+const MODIFY_OTHER_KEYS_OFF: &str = "\x1b[>4m";
 
 /// `bytes` with each `cut` taken out.
 fn without(bytes: &[u8], cut: &[u8]) -> Vec<u8> {

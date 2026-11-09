@@ -8,17 +8,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Breaking
 
-- **The client-server protocol is now 15** (once attached the client says which
-  keyboard protocol its terminal speaks, the server tells a client whose
-  terminal speaks the kitty protocol which flags to ask it for, and the client
-  sends its terminal's input as `ttyr`'s events rather than crossterm's): after
-  upgrading, a running server must be restarted (`tmxr kill-server`); the client
-  says so if it meets one.
+- **The client-server protocol is now 15** (once attached the client says what
+  its terminal said of its keyboard, the server tells a client whose terminal
+  speaks the kitty protocol which flags to ask it for and one in the xterm tier
+  to turn modifyOtherKeys on or off, and the client sends its terminal's input
+  as `ttyr`'s events rather than crossterm's): after upgrading, a running server
+  must be restarted (`tmxr kill-server`); the client says so if it meets one.
 - **`tmxr-proto`'s `ClientMsg` has a `Keyboard` variant**, carrying the new
-  `Keyboard` enum (`Legacy`, `Xterm`, `Kitty`): the best keyboard protocol the
-  attached client's terminal speaks. No client reports `Xterm` yet.
-  **`tmxr-server`'s `server::Attached` has a `keyboard` field** holding it; a
-  library caller building one with a struct literal sets it.
+  `KeyboardReport` (`kitty`, `version`, `secondary`, `modify_other_keys`): what
+  the attached client's terminal said of its keyboard (whether it answered the
+  kitty query, its XTVERSION name, its DA2 type) and whether the client can read
+  modifyOtherKeys keys; **`ServerMsg` has an `ExtendedKeys(bool)` variant**.
+  **`tmxr-server`'s `server::Attached` has `keyboard_report`, `keyboard` (the
+  new `keyboard::Keyboard` tier: `Legacy`, `Xterm`, `Kitty`) and `extended_keys`
+  fields**; a library caller building one with a struct literal sets them.
 - **The library crates take `ttyr`'s key, mouse and input event types in place
   of crossterm's**: `tmxr-proto`'s `ClientMsg::Input` carries
   `ttyr::event::Event`; `tmxr-term`'s `encode_key`, `conpty_key` and
@@ -37,12 +40,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   beside it (`a` with Shift and `A` shifted, for Shift+a), which `encode_key`
   and `Key::from_event` read as such; `tmxr-command`'s new `Typed` reads one as
   tmux does, and `Key::to_event` makes one.
-- **`tmxr-config`'s `Config` has a `kitty_keys` field**, the `kitty-keys`
-  option, and **`tmxr-server`'s `server::Attached` a `keyboard_flags` field**; a
-  library caller building either with a struct literal sets it.
+- **`tmxr-config`'s `Config` has `kitty_keys` and `terminal_features` fields**,
+  the `kitty-keys` and `terminal-features` options, and **`tmxr-server`'s
+  `server::Attached` a `keyboard_flags` field**; a library caller building
+  either with a struct literal sets it.
 
 ### Added
 
+- **Terminals with xterm's modifyOtherKeys get it, as in tmux**: a client whose
+  terminal answers XTVERSION as xterm, foot, mintty or iTerm2 (or DA2 as
+  mintty), or that `terminal-features` gives `extkeys`, and that does not get
+  the kitty keyboard protocol, has its terminal asked for modifyOtherKeys level
+  2 (`CSI > 4 ; 2 m`) while `extended-keys` is not `off`, and turned off again
+  (`CSI > 4 m`) when it goes `off`, on detach and around `suspend-client` and
+  `lock-client`. The keys it then sends (`CSI 27 ; mods ; key ~`) reach binds
+  and panes with their modifiers: C-i apart from Tab, M-a without a bare Escape.
+  A terminal with both protocols gets kitty's, unless `kitty-keys` is `off`.
+  Unlike tmux, `extended-keys` and `terminal-features` take effect on attached
+  clients at once. The Windows client, which reads console key records, tells
+  the server it cannot read these keys and is never asked.
+- **The `terminal-features` server option**, tmux's: an array of
+  `pattern:feature:feature` entries giving a client whose `TERM` matches the
+  pattern those terminal features, set and shown as tmux's (a whole value splits
+  at commas, `-a` adds to it, `name[index]` sets or with `-u` removes an item),
+  with tmux's default. tmxr acts on `extkeys` alone and reads tmux's other
+  feature names; `--import-tmux-conf` takes `set -as terminal-features ',…'`.
+- **`tmxr-server`'s `keyboard` and `features` modules**: each attached client's
+  keyboard tier (`keyboard::tier`, `keyboard::extended_keys`) and tmux's
+  `extkeys` by name or `terminal-features` (`features::extkeys`).
+  **`tmxr-config`'s `Array::assign_split`** and `TERMINAL_FEATURES_SEPARATORS`.
 - **`tmxr-server`'s `kitty::speaks`**: whether an attached client said its
   terminal speaks the kitty keyboard protocol.
 - **The `kitty-keys` server option**, tmxr's own: `on` (the default) or `off`.
@@ -74,10 +100,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The cursor colour reset the client writes as it gives its terminal back
   (`OSC 112`) ends with ST (`ESC \`) rather than BEL**, on every platform.
 - **The client also asks its terminal for its name and version** (XTVERSION,
-  `CSI > q`) when it attaches, and asks all its questions again on the way back
-  from `suspend-client` and `lock-client`, where it asked only for the kitty
-  keyboard protocol; a terminal too slow to answer in time keeps its earlier
-  answers, and new colours reach the server. Nothing acts on the version yet.
+  `CSI > q`) and its type (DA2, `CSI > c`) when it attaches, as tmux does, and
+  asks all its questions again on the way back from `suspend-client` and
+  `lock-client`, where it asked only for the kitty keyboard protocol; a terminal
+  too slow to answer in time keeps its earlier answers, and new colours reach
+  the server.
 - **The terminal's colour answers (OSC 10 and 11) are read in more forms**:
   besides every form 0.15.0 read (tmux's), `#rgb`, `#rrrgggbbb`, `rgbi:` and
   `rgb:` with one or three hex digits a channel, each of Xlib's numeric forms.

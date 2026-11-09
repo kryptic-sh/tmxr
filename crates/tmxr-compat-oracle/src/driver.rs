@@ -103,7 +103,11 @@ impl Server {
         }
         server.run_args(&new)?;
         if case.attach {
-            server.client = Some(Client::attach(&server, case.size)?);
+            server.client = Some(Client::attach(
+                &server,
+                case.size,
+                case.terminal.as_deref(),
+            )?);
         }
         Ok(server)
     }
@@ -294,6 +298,9 @@ impl Server {
             Check::Background {
                 screen_background, ..
             } => Ok(self.client()?.background_runs(*screen_background)),
+            Check::Received {
+                terminal_received, ..
+            } => Ok(self.client()?.received(terminal_received).to_string()),
             Check::Find { screen_find, .. } => {
                 let at = At::Text {
                     text: screen_find.clone(),
@@ -323,13 +330,21 @@ impl Drop for Server {
 pub struct Client {
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
     parser: Arc<Mutex<vt1k::Parser>>,
+    /// Everything the client has written to its terminal.
+    raw: Arc<Mutex<Vec<u8>>>,
     _master: Box<dyn MasterPty + Send>,
     _child: Box<dyn portable_pty::Child + Send + Sync>,
     rows: u16,
 }
 
 impl Client {
-    fn attach(server: &Server, (cols, rows): (u16, u16)) -> Result<Self, String> {
+    /// Attach a client to `server`'s session in a terminal of `cols` and
+    /// `rows` that answers XTVERSION with `version`, if any.
+    fn attach(
+        server: &Server,
+        (cols, rows): (u16, u16),
+        version: Option<&str>,
+    ) -> Result<Self, String> {
         let pair = native_pty_system()
             .openpty(PtySize {
                 rows,
@@ -360,6 +375,9 @@ impl Client {
         let parser = Arc::new(Mutex::new(vt1k::Parser::new(size(rows)?, size(cols)?, 0)));
         let feed = Arc::clone(&parser);
         let answer = Arc::clone(&writer);
+        let raw = Arc::new(Mutex::new(Vec::new()));
+        let log = Arc::clone(&raw);
+        let version = version.map(|v| format!("\x1bP>|{v}\x1b\\").into_bytes());
         std::thread::spawn(move || {
             let mut buf = [0u8; 8192];
             while let Ok(n) = reader.read(&mut buf) {
@@ -369,14 +387,22 @@ impl Client {
                 feed.lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .process(&buf[..n]);
+                log.lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .extend_from_slice(&buf[..n]);
                 // A device-attributes query and a cursor position report
                 // answered as a terminal would, so nothing waits on one:
                 // Windows' own ConPTY asks where the cursor is before it
-                // draws anything.
-                for (query, reply) in [
-                    (&b"\x1b[c"[..], &b"\x1b[?62;22c"[..]),
-                    (b"\x1b[6n", b"\x1b[1;1R"),
-                ] {
+                // draws anything. XTVERSION ahead of DA1, as the case says.
+                let answers = [
+                    (&b"\x1b[>q"[..], version.as_deref()),
+                    (b"\x1b[c", Some(&b"\x1b[?62;22c"[..])),
+                    (b"\x1b[6n", Some(b"\x1b[1;1R")),
+                ];
+                for (query, reply) in answers {
+                    let Some(reply) = reply else {
+                        continue;
+                    };
                     if buf[..n].windows(query.len()).any(|w| w == query) {
                         let mut w = answer
                             .lock()
@@ -389,6 +415,7 @@ impl Client {
         let client = Self {
             writer,
             parser,
+            raw,
             _master: pair.master,
             _child: child,
             rows,
@@ -438,6 +465,15 @@ impl Client {
     fn sgr(&self, b: u32, (col, row): (u16, u16), press: bool) -> Result<(), String> {
         let end = if press { 'M' } else { 'm' };
         self.send(format!("\x1b[<{b};{};{}{end}", col + 1, row + 1).as_bytes())
+    }
+
+    /// Whether the client has written `bytes` to its terminal.
+    fn received(&self, bytes: &str) -> bool {
+        let raw = self
+            .raw
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        bytes.is_empty() || raw.windows(bytes.len()).any(|w| w == bytes.as_bytes())
     }
 
     /// The screen's text, row by row.

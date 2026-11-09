@@ -128,3 +128,16 @@ steps = [
   { sleep = 1.0 },
 ]
 checks = [{ format = "#{@seen}", expect = "DUDU" }]
+
+[[cases]]
+name = "ctrl_shift_letter_from_an_xterm_terminal_reaches_a_pane_unshifted"
+# xterm under modifyOtherKeys reports Ctrl+Shift+a as CSI 27;6;65~, the
+# shifted A. tmux passes the A on to a pane at level 2 (65); tmxr reads the
+# key as ttyr does, a with Shift, and sends the unshifted a (97), as it does
+# for a kitty terminal's Ctrl+Shift+a.
+windows = "never"
+attach = true
+terminal = "XTerm(390)"
+pane = ["raw", { print = "\u001b[>4;2m" }, "cat"]
+steps = [{ sleep = 0.5 }, { keys = "\u001b[27;6;65~" }, { sleep = 0.5 }]
+checks = [{ command = "capture-pane -p -t o" }]

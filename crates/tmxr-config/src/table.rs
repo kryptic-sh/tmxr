@@ -178,7 +178,14 @@ impl Array {
     /// Each word of `s` into the first free index, as tmux's
     /// `options_array_assign` with its default separators.
     fn assign(&mut self, s: &str) {
-        for word in s.split([' ', ',']).filter(|w| !w.is_empty()) {
+        self.assign_split(s, &[' ', ',']);
+    }
+
+    /// Each piece of `s` split at any of `separators`, empty ones left out,
+    /// into the first free index, as tmux's `options_array_assign` for an
+    /// option whose table entry names those separators.
+    pub fn assign_split(&mut self, s: &str, separators: &[char]) {
+        for word in s.split(separators).filter(|w| !w.is_empty()) {
             let free = (0..).find(|i| !self.0.contains_key(i)).unwrap_or(u32::MAX);
             self.0.insert(free, word.to_owned());
         }

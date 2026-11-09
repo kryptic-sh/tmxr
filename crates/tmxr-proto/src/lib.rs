@@ -58,20 +58,23 @@ pub struct TerminalInfo {
     pub colour_answers: bool,
 }
 
-/// A terminal's keyboard tier: how it can report keys beyond the bytes a
-/// VT sends ([`ClientMsg::Keyboard`]).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Keyboard {
-    /// Bytes as a VT sends them: ASCII control bytes and escape sequences,
-    /// typed text as UTF-8.
-    #[default]
-    Legacy,
-    /// xterm's modifyOtherKeys (tmux's `extkeys` feature). No client reports
-    /// it yet: telling it apart takes the terminal's name (plan 18 step 5).
-    Xterm,
-    /// The kitty keyboard protocol: the terminal answered its query before
-    /// DA1.
-    Kitty,
+/// What the attached client's terminal said of its keyboard when asked
+/// ([`ClientMsg::Keyboard`]). The server decides from it, with its options,
+/// which keyboard protocol the terminal is asked for.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KeyboardReport {
+    /// It speaks the kitty keyboard protocol: it answered the protocol's
+    /// query before DA1.
+    pub kitty: bool,
+    /// Its name and version, as it answered XTVERSION (`XTerm(390)`,
+    /// `foot(1.20.2)`), as tmux reads it to tell its features.
+    pub version: Option<String>,
+    /// Its terminal type, the first parameter of its secondary device
+    /// attributes (DA2: 77 for mintty), as tmux also reads it.
+    pub secondary: Option<u16>,
+    /// The client can turn xterm's modifyOtherKeys on in its terminal and
+    /// read the keys it then sends (`ServerMsg::ExtendedKeys`).
+    pub modify_other_keys: bool,
 }
 
 /// Messages from a client to the server.
@@ -93,11 +96,12 @@ pub enum ClientMsg {
         fg: Option<u32>,
         bg: Option<u32>,
     },
-    /// The best keyboard protocol the attached client's terminal speaks, as
-    /// it answered when asked: sent after attaching, and again when asked
-    /// after a suspend or a lock, if it changed. Until it comes the server
-    /// takes the terminal as [`Keyboard::Legacy`].
-    Keyboard(Keyboard),
+    /// What the attached client's terminal said of its keyboard when
+    /// asked: sent after attaching, and again when asked after a suspend
+    /// or a lock, if it changed. Until it comes the server takes the
+    /// terminal as one that speaks neither the kitty protocol nor
+    /// modifyOtherKeys.
+    Keyboard(KeyboardReport),
     /// The client wants to detach (sent on terminal hangup).
     Detach,
     /// The client is back from `suspend-client` or a lock; its terminal was
@@ -149,10 +153,19 @@ pub enum ServerMsg {
     /// The kitty keyboard flags the attached client's terminal should
     /// report keys under now: tmxr's own and those of the program its keys
     /// go to, or none under `kitty-keys off`. Sent only to a client that
-    /// said its terminal speaks the protocol ([`Keyboard::Kitty`]), at once
+    /// said its terminal speaks the protocol ([`KeyboardReport::kitty`]), at once
     /// when it says so and on each change after; it asks its terminal for
     /// them in place of those it asked for before, and for none until told.
     KeyboardFlags(u8),
+    /// Turn xterm's modifyOtherKeys (level 2, `CSI > 4 ; 2 m`) on in the
+    /// attached client's terminal, or off (`CSI > 4 m`), as tmux's `Eneks`
+    /// and `Dseks`: on where its terminal has tmux's `extkeys` feature,
+    /// does not get the kitty protocol, and `extended-keys` is not `off`.
+    /// Sent only to a client that said it can
+    /// ([`KeyboardReport::modify_other_keys`]); one mode for the whole
+    /// attach, which the client turns off on detach and around a suspend
+    /// or a lock, and on again after.
+    ExtendedKeys(bool),
     /// Stop the client process (`suspend-client`), as `C-z` stops a program.
     Suspend,
     /// Lock the client (`lock-client`): hand the terminal to this shell

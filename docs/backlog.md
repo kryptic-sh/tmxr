@@ -338,20 +338,21 @@ mouse-enabled pane.
   tier.** The outer pane's emulator still answers the kitty query (`CSI ? u`,
   the `(Some(b'?'), 'u')` arm of `tmxr-term`'s `emulator.rs`) with `CSI ? 0 u`
   while it ignores every push, pop and set, so the inner client's probe sees a
-  flags report before DA1, says `Keyboard::Kitty`, and pushes flags the outer
-  server drops. Keys still work (the outer pane encodes legacy), but the tier is
-  wrong, which step 7's `list-keys` marks will read. Options: (a) a pane under
-  `kitty-keys off` does not answer the query at all, as a terminal without the
-  protocol does, so programs time out to DA1 as they do on xterm; costs nothing
-  for programs that send DA1 behind it (as the protocol's spec advises) and a
-  wait for those that do not. (b) It answers in a form the inner client reads as
-  legacy, which no form of `CSI ? flags u` is: the protocol has no "unsupported"
-  answer, so this needs tmxr's own signal (say, the inner client trusting
-  `kitty-keys` from `TMXR`), and helps only tmxr's own client. Found by reading;
-  not tested.
+  flags report before DA1, reports it (`KeyboardReport::kitty`), and pushes
+  flags the outer server drops. Keys still work (the outer pane encodes legacy),
+  but the tier is wrong, which step 7's `list-keys` marks will read. Options:
+  (a) a pane under `kitty-keys off` does not answer the query at all, as a
+  terminal without the protocol does, so programs time out to DA1 as they do on
+  xterm; costs nothing for programs that send DA1 behind it (as the protocol's
+  spec advises) and a wait for those that do not. (b) It answers in a form the
+  inner client reads as legacy, which no form of `CSI ? flags u` is: the
+  protocol has no "unsupported" answer, so this needs tmxr's own signal (say,
+  the inner client trusting `kitty-keys` from `TMXR`), and helps only tmxr's own
+  client. Found by reading; not tested.
 - **`docs/plan/03-protocol.md`'s `TerminalInfo` is stale**: it lists
   `{ cols, rows, term, job_control }`, without `tty` or `colour_answers`, and
-  its `ClientMsg` list lacks `Keyboard`.
+  its `ClientMsg` list lacks `Keyboard`, and its `ServerMsg` list
+  `KeyboardFlags` and `ExtendedKeys`.
 - **Unix client tests run on Linux only so far; their macOS run is CI's first.**
   The panic-restore tests in `tmxr-client`'s `terminal/guard/unix/tests.rs`:
   `a_panic_gives_the_terminal_back_once`, whose pty fixture is made the
@@ -377,6 +378,46 @@ mouse-enabled pane.
   AltGr character such as Polish `ł` sends nothing (`encode.rs` `ctrl_byte`
   returns `None`). As in 0.15.0; found by reading, not run on Windows. ttyr's
   Windows reader reads AltGr typing without Ctrl+Alt; goes with the bridge.
+
+## Plan 18's xterm tier (2026-11-10)
+
+- **Ctrl+Shift with a letter from an xterm terminal reaches a pane unshifted.**
+  xterm reports Ctrl+Shift+a as `CSI 27;6;65~`; tmux passes the `A` (65) on to a
+  modifyOtherKeys level 2 pane, tmxr the unshifted `a` (97), as it does for a
+  kitty terminal's (`encode_key` takes ttyr's unshifted key). Binds still take
+  C-S-h as C-h (`Key::normalise`). Both are plan 18 step 7's; the oracle reports
+  the first (`corpus/known_divergences.toml`,
+  `ctrl_shift_letter_from_an_xterm_terminal_reaches_a_pane_unshifted`).
+- **`terminal-features` and `extended-keys` take effect at once, unlike
+  tmux's.** tmux reads `terminal-features` only as a client's terminal is set up
+  (`tty_term_create`), and sends `Dseks` only as a client leaves, not when
+  `extended-keys` goes `off`. tmxr decides each client's tier again whenever
+  `terminal-features` or `kitty-keys` changes (`Server::decide_keyboards`), as
+  the plan's options section asks for `extended-keys` and `kitty-keys`.
+  Deliberate; the oracle checks neither change on an attached client.
+- **tmux 3.8 asks a terminal it does not know by name for modifyOtherKeys too**:
+  run by hand against tmux 3.8 (the local one, 2026-11-10), the oracle's
+  terminal answering XTVERSION as `WezTerm 20240203` was sent `CSI > 4 ; 2 m`;
+  tmux 3.6, which the oracle pins, sends it only to the names in
+  `features::named_by_version` and `named_by_secondary`. Not read in 3.8's
+  source; check when the oracle moves to a newer tmux.
+- **tmux reads DA2's terminal type as a `char`; tmxr reads the number.**
+  `tty_keys_device_attributes2` keeps each parameter in a `char` (`p[32]`), so a
+  type past 255 wraps (333, say, is read as 77, mintty) where
+  `features::named_by_secondary` takes only 77, 84 and 85 themselves. Not copied
+  on purpose: no terminal is known to answer such a type, and the wrap is an
+  accident of tmux's storage. Found by reading tmux 3.6's `tty-keys.c`.
+- **Considered and declined: `usstyle` under `terminal-features`.**
+  `Server::client_underline_styles` keys on `TERM` against its own list of
+  terminals, standing in for terminfo's `Smulx`, which tmxr does not read;
+  tmux's default `terminal-features` gives no terminal `usstyle`, so moving the
+  list there would change what `show -s terminal-features` prints from tmux's,
+  and the oracle compares it. tmxr reads every tmux feature name in an entry
+  (`features::FEATURES`) and acts on `extkeys` alone.
+- **Not verified by hand in a real terminal.** The xterm tier is tested against
+  the e2e harness's terminal answering XTVERSION and against tmux 3.6 through
+  the oracle; not yet in xterm, foot (which speaks kitty's protocol, so is xterm
+  tier only under `kitty-keys off`), mintty or iTerm2.
 
 ## Decisions waiting on the owner
 
@@ -537,16 +578,22 @@ mouse-enabled pane.
     (`cmds::options::SERVER_OPTIONS`).
   - **Array options** (`tmxr_config::Array`, checked against tmux 3.6 by
     `corpus/options.toml`): `update-environment` and `status-format`; tmux's
-    others (`command-alias`, `terminal-features`, `user-keys`, `pane-colours`,
-    `codepoint-widths`) are options tmxr does not have. The config file keeps it
-    as a list, so `--import-tmux-conf` leaves out a
-    `set -g update-environment[3] X` line (an unknown key there), and
-    `customize-mode` shows it as one value, all items joined, whose Enter sets
-    the whole array. `set -g x[i] value` on an option that is not an array
-    errors as tmux's (`not an array`), and an index that is not a number as
-    tmux's `ambiguous option`, whatever the name (`-q` silences it); tmux also
-    takes `[ 1]` as item 1 and wraps an index past `u_int` (its `%u` parse),
-    where tmxr refuses both.
+    others (`command-alias`, `user-keys`, `pane-colours`, `codepoint-widths`)
+    are options tmxr does not have. `terminal-features`, a server array, is kept
+    apart (`Config::terminal_features`, set and shown by
+    `cmds::options::set_terminal_features` and `server_option_lines`); an
+    emptied one shows in `customize-mode` as its bare name, whose Enter
+    (`set-option -g terminal-features`) is refused as tmux refuses it
+    (`empty value`). The config file keeps it as a list, so `--import-tmux-conf`
+    leaves out a `set -g update-environment[3] X` line (an unknown key there),
+    and a `set -s terminal-features[N] X` line likewise (`file_key` in
+    `tmxr-config`'s `import.rs` knows no indexed name; a whole or `-a` value
+    imports), and `customize-mode` shows it as one value, all items joined,
+    whose Enter sets the whole array. `set -g x[i] value` on an option that is
+    not an array errors as tmux's (`not an array`), and an index that is not a
+    number as tmux's `ambiguous option`, whatever the name (`-q` silences it);
+    tmux also takes `[ 1]` as item 1 and wraps an index past `u_int` (its `%u`
+    parse), where tmxr refuses both.
   - **Pane commands refresh on one timer**: each client's status line redraws at
     its session's `status-interval`, as tmux's, but the foreground commands
     behind `#{pane_current_command}` and automatic window names refresh at the

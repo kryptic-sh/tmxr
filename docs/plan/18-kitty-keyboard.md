@@ -50,17 +50,21 @@ Read in the tree on 2026-11-09, after step 1 (`bde1ed4`):
 ### Capabilities, both ways
 
 - **A client says what its terminal speaks.** Once attached, after its probe, it
-  sends `ClientMsg::Keyboard` with one of three tiers, the best the terminal
-  has, and sends it again after a suspend or a lock if the probe then says
-  otherwise. Not in the hello: the probe runs at `Attached`, so a command
-  client's terminal is never put in raw mode or kept waiting, and an attach from
-  any command list is probed the same way. Until it says, the server takes the
-  client as `Legacy`:
+  sends `ClientMsg::Keyboard` with what the terminal said (`KeyboardReport`:
+  whether it answered the kitty query, its XTVERSION name, its DA2 type, and
+  whether the client can read modifyOtherKeys at all), and sends it again after
+  a suspend or a lock if the probe then says otherwise. Not in the hello: the
+  probe runs at `Attached`, so a command client's terminal is never put in raw
+  mode or kept waiting, and an attach from any command list is probed the same
+  way. The server decides the client's tier from it, its `TERM` and the options
+  (`keyboard::tier` in tmxr-server), one of three; until it says, the client is
+  `Legacy`:
   - `Kitty`: the probe found the kitty protocol. The protocol's query reports
     the current flags, not the supported ones, so the client assumes every flag;
     a terminal that ignores one just never sends what it adds.
   - `Xterm`: the terminal has xterm's modifyOtherKeys (tmux's `extkeys`
-    feature).
+    feature), and does not get the kitty protocol (it lacks it, or `kitty-keys`
+    is off).
   - `Legacy`: bytes as a VT sends them (ASCII control bytes and escape
     sequences, typed text as UTF-8).
 
@@ -234,17 +238,22 @@ it too, and gains the modified keys its tier reports:
   alternate keys, the base-layout key, Super and Hyper.
 - Clients of both kinds on one session each work: the server never assumes a
   client's keyboard from another's.
-- A legacy client is never sent `ServerMsg::KeyboardFlags`, so nothing new is
-  written to its terminal: the server sends it only to a client that said
-  `Keyboard::Kitty` (`kitty::speaks`).
+- A legacy client is never sent `ServerMsg::KeyboardFlags` or
+  `ServerMsg::ExtendedKeys`, so nothing new is written to its terminal: the
+  server sends the first only to a client whose terminal answered the kitty
+  query (`kitty::speaks`), the second only to one in the xterm tier
+  (`keyboard::extended_keys`).
 
 ### Lifecycle
 
 - Detach, suspend (`ServerMsg::Suspend`), lock and a client panic pop the flags,
-  once (`ttyr`'s guard records the push). Resume and unlock push the flags the
-  server last sent again (`suspend_with`), if the terminal still answers the
-  kitty query; if its tier changed, the client says so and the server sends a
-  kitty terminal its flags afresh.
+  and turn modifyOtherKeys off, once (`ttyr`'s guard records both). Resume and
+  unlock turn modifyOtherKeys on again with the rest; where the terminal then
+  says something else of itself, the client turns it off and the server, told,
+  decides again. Resume and unlock push the flags the server last sent again
+  (`suspend_with`), if the terminal still answers the kitty query; if its tier
+  changed, the client says so and the server sends a kitty terminal its flags
+  afresh.
 - Keys typed while a change of flags is in flight arrive in the old encoding.
   The parser reads every encoding whatever was asked, so only releases can go
   missing; the synthesised releases above cover a key held across the change.
@@ -288,10 +297,24 @@ it too, and gains the modified keys its tier reports:
    client's flags. It follows focus already, but asks only for tmxr's own 1|4
    until step 6 widens `KITTY_FLAGS_ENCODED`; step 6's tests must then show
    focus changing what a client is asked for.
-5. The xterm tier: XTVERSION in the client's probe, `terminal-features`,
-   `CSI > 4 ; 2 m` under `extended-keys`. Until then no client reports
-   `Keyboard::Xterm` (`Guard::keyboard` in `tmxr-client`): a terminal without
-   the kitty protocol reports `Legacy`.
+5. Done: the xterm tier, as tmux. The client asks DA2 as well as XTVERSION and
+   reports both (`KeyboardReport`); the server gives a terminal tmux's `extkeys`
+   by that name (`XTerm(`, `foot(`, `mintty `, `iTerm2 `, DA2 77) or by the new
+   `terminal-features` server option (tmux's array, matched against `TERM`; tmxr
+   reads every tmux feature name and acts on `extkeys` alone), in `features` in
+   tmxr-server; `keyboard::tier` decides the tier there, kitty first while
+   `kitty-keys` is on. `ServerMsg::ExtendedKeys(bool)` (protocol 15) tells an
+   xterm-tier client to turn modifyOtherKeys level 2 on while `extended-keys` is
+   not `off`, as one mode for the attach; the Unix client sets it through
+   `ttyr`'s guard (`Mode::ModifyOtherKeys`), the Windows client says it cannot
+   (`modify_other_keys: false`) and refuses the message. What binds later steps:
+   - Unlike tmux, `terminal-features` and `extended-keys` take effect on
+     attached clients at once; tmux reads the first only as a client attaches,
+     and sends `Dseks` only as a client leaves.
+   - Ctrl+Shift with a letter from an xterm terminal (`CSI 27;6;72~`) reaches a
+     level-2 pane with the unshifted letter (`CSI 27;6;104~`), where tmux passes
+     the `H` on; binds still take it as C-h. Both are step 7's
+     (`corpus/known_divergences.toml`).
 6. `encode_key` for flags 2, 4, 8 and 16, with the fallback and the synthesised
    releases.
 7. Kitty-style key names and the extended tmux names, in every place a key is
@@ -306,8 +329,9 @@ it too, and gains the modified keys its tier reports:
   `CSI … u` keys; assert what a pane's program reads (a small reader that pushes
   flags and echoes its input) under each flag, and what the client is told to
   ask for as focus moves.
-- The xterm tier is tmux's behaviour, so where the oracle can drive a client's
-  terminal input it compares tmxr with tmux; whether it can is to be checked.
+- The xterm tier is tmux's behaviour, and the oracle compares it with tmux: a
+  case's `terminal` answers XTVERSION, and `terminal_received` checks what the
+  client's terminal was written (`corpus/extended_keys.toml`).
 - e2e for the xterm tier: a harness terminal answering XTVERSION as `XTerm(…)`
   must receive `CSI > 4 ; 2 m`, and its `CSI 27 ;…~` keys must reach binds and
   panes.
