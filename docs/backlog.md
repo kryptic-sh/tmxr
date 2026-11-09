@@ -173,6 +173,27 @@ presets, most of `vars.rs`, and the Windows parts of `process.rs` (skimmed).
 
   Not compared side by side in a terminal yet.
 
+- **A previewed session with no client keeps its last client's size** (asked by
+  the owner 2026-11-10: the preview "should render at the current viewport size
+  when it's the last client connected"). A window takes its size from the
+  clients attached to sessions that hold it (`window_client_size` in
+  `server/attach.rs`); with none it keeps the size it had (`None` there), as
+  tmux's does. So when the smaller client of a session leaves, the session stays
+  that small, and `render::shown` draws it inside the larger previewing client
+  cropped or padded. Wanted: while the picker previews a session no client is
+  attached to, the previewing client counts as its client, so its windows take
+  that client's size.
+  - Checked against the live server (2026-11-10): one client attached, and
+    sessions with no client still at 112×27 and 112×57. So the client did go
+    when its terminal closed, and a lingering client is not the cause. Whether
+    an abandoned client could linger was not tested by closing a terminal on
+    purpose.
+  - To decide: resize the real windows while previewing (programs get SIGWINCH
+    and redraw at the client's size; switching to the session then needs no
+    resize), or only draw at the client's size without resizing (programs do not
+    redraw, so the preview stays cropped or padded). The owner's wording reads
+    as the first.
+
 - **What it leaves out** (`render::shown`, `Session::seen`): the `+` marks are
   worked out when the picker opens, so output arriving while it is open adds
   none until it opens again. The preview is drawn, not switched to: mouse clicks
@@ -314,6 +335,29 @@ mouse-enabled pane.
   form (not names or `cmyk:`) with 16 bits a channel; move the workspace pin to
   it or later once it is pushed and CI-green. tmxr takes each channel's high
   byte (`colour::from_rgb16`), which matches tmux for every form tmux reads.
+- **The probe reads until DA1 by hand** (`Keys::probe` in `tmxr-client`'s
+  `terminal.rs`) rather than through ttyr's `collect_answers`, which at the
+  pinned rev splits reports from keys and loses their order. ttyr's local commit
+  c35cf6e keeps one ordered `Answers::events`; once it is pushed and CI-green,
+  move the pin and go back to `collect_answers`, filtering out DA1 and `Wake`.
+  The loop's timeout, partial-answer and `Wake` paths are not tested; a test can
+  drive `Reader::from_fd` over a `UnixStream::pair()` with no pty.
+- **A late answer from one probe can end the next one early** (`terminal.rs`'s
+  probe loop): after a probe times out, a server-initiated `lock-client`,
+  `suspend-client` or lock-after-time can start a new probe before the late
+  answers arrive, and the stale DA1 ends it with partial answers. Keys the user
+  types come after the late answers, so their own prefix+C-z cannot trigger it.
+  Found by reading.
+- **Every `Guard::enter` wraps the panic hook again**, each with its own
+  `kitty`, so a panic after several suspends or locks pops the kitty flags once
+  per hook plus once in `Drop`, possibly popping the terminal's own. As in
+  0.15.0. ttyr's `restore_on_panic` installs one hook; plan 18 step 3's move to
+  ttyr's guard fixes it.
+- **Windows AltGr arrives as Ctrl+Alt** through crossterm, so AltGr+q (`@` on a
+  German layout) is read as Ctrl+Alt+`@` and sent as `ESC NUL`, and a non-ASCII
+  AltGr character such as Polish `ł` sends nothing (`encode.rs` `ctrl_byte`
+  returns `None`). As in 0.15.0; found by reading, not run on Windows. ttyr's
+  Windows reader reads AltGr typing without Ctrl+Alt; goes with the bridge.
 
 ## Decisions waiting on the owner
 
