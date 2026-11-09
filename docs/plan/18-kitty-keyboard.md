@@ -19,12 +19,15 @@ oracle cannot check it. The other two are tmux's behaviour.
 
 ## Where it stands
 
-Read in the tree on 2026-11-09:
+Read in the tree on 2026-11-09, after step 1 (`bde1ed4`):
 
 - **Client → terminal.** `Guard::enter` (`tmxr-client/src/terminal.rs`) pushes
-  `DISAMBIGUATE_ESCAPE_CODES` (flag 1) once, where crossterm's
-  `supports_keyboard_enhancement` probe says the terminal speaks the protocol,
-  and pops it on exit. Nothing changes it while attached.
+  flags 1 and 4 (`DISAMBIGUATE_ESCAPE_CODES | REPORT_ALTERNATE_KEYS`) once,
+  where crossterm's `supports_keyboard_enhancement` probe says the terminal
+  speaks the protocol, records that in `KITTY_KEYS` for the input thread, and
+  pops them on exit. Nothing changes them while attached. The input thread's
+  `kitty_key` reads Ctrl with an uppercase letter as the letter with Shift,
+  undoing crossterm's swap for letters (`unshifted_letter`, in `encode.rs`).
 - **Client → server.** Keys travel as crossterm's own events,
   `ClientMsg::Input(Vec<crossterm::event::Event>)` (`tmxr-proto`), so the server
   sees only what crossterm keeps. crossterm 0.29 parses flag 4 by swapping in
@@ -36,30 +39,11 @@ Read in the tree on 2026-11-09:
 - **Panes.** The emulator (`tmxr-term/src/emulator.rs`) keeps one stack of kitty
   flags per pane (`CSI > u` push, `CSI < u` pop, `CSI = u` set, `CSI ? u` query;
   cleared by `ESC c`). `encode_key` (`tmxr-term/src/encode.rs`) acts on flag 1
-  only (`modes.kitty_flags & 1`).
+  only, and the `CSI ? u` reply is masked to `KITTY_FLAGS_ENCODED`, which each
+  later step widens.
 - **Binds.** `Key::normalise` (`tmxr-command/src/keys.rs`) folds Shift into a
   character and lowercases a character held with Ctrl, so key tables know only
   tmux's `C-` / `M-` / `S-` model.
-
-## Known bugs this plan fixes first
-
-- **Alt+Shift loses its Shift under a kitty-protocol terminal.** The terminal
-  sends Alt+Shift+a as `CSI 97;4u` (the unshifted key plus Shift, as flag 1
-  says); crossterm reports `'a'` with Shift and Alt, and `normalise` and
-  `encode_key` drop the Shift. In Alacritty, kitty, foot, Ghostty and WezTerm,
-  M-A reaches a program as M-a and `bind -n M-H` never fires (`M-h` runs
-  instead). _Reproduced_ by the 2026-11-02 reviewer. Fix: also push flag 4
-  (alternate keys), so the terminal sends the layout's shifted character, and,
-  since crossterm then reports Ctrl+Shift+h as `'H'` with Ctrl (which
-  `normalise` lowercases to C-h), read an uppercase ASCII letter held with Ctrl
-  as the lowercase letter plus Shift. Ctrl+Shift+1 arrives as `C-!`, the same
-  key tmux names. Superseded by phase 3's own parser, but small enough to ship
-  first.
-- **The query reply claims flags tmxr ignores.** `CSI ? u` answers the top of
-  the stack as pushed, so a program pushing flag 8 is told it is on and then
-  gets legacy keys. Reply with the pushed flags masked to those tmxr encodes,
-  widening the mask as each flag lands. Whether kitty itself masks this way is
-  to be confirmed against the spec.
 
 ## Design
 
@@ -268,13 +252,20 @@ it too, and gains the modified keys its tier reports:
 
 ## Order
 
-1. The Alt+Shift fix and the honest query reply (above). Shippable alone.
+1. Done in `bde1ed4` (the Alt+Shift fix and the honest query reply); the line
+   stays so later steps keep the numbers ttyr's and hjkl's plans cite.
 2. The emulator's per-screen stacks.
 3. Adopt `ttyr`'s key type and parser (blocked on ttyr's input half); the
    protocol bump; `TerminalInfo`'s keyboard field. No behaviour change yet
    beyond what the parser fixes, which includes the backlog's real Ctrl+4 …
    Ctrl+7 that crossterm reports as the legacy control byte (`tmux_key` at level
-   2).
+   2), and what step 1 left (in the CHANGELOG's Changed entry): a kitty-aware
+   pane gets Alt/Ctrl+Shift with a digit or symbol as the shifted character
+   (`CSI 33;3u` for Alt+Shift+1, where the protocol says `CSI 49;4u`), and a
+   letter's unshifted key is guessed from Unicode case (`unshifted_letter`),
+   wrong on layouts like Turkish. With the unshifted key from the terminal,
+   `kitty_key` and `unshifted_letter` go, and the pinned test
+   `kitty_sends_a_shifted_symbol_as_itself_without_shift` changes.
 4. `ServerMsg::KeyboardFlags`, the choke point that follows focus, and the
    `kitty-keys` option.
 5. The xterm tier: XTVERSION in the client's probe, `terminal-features`,
