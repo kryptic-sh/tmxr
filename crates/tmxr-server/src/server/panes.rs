@@ -606,8 +606,8 @@ impl Server {
                 }
                 Query::Theme => {
                     let report: &[u8] = match self.pane_theme(pid) {
-                        Some(crossterm::event::ColorScheme::Dark) => b"\x1b[?997;1n",
-                        Some(crossterm::event::ColorScheme::Light) => b"\x1b[?997;2n",
+                        Some(ttyr::event::ColorScheme::Dark) => b"\x1b[?997;1n",
+                        Some(ttyr::event::ColorScheme::Light) => b"\x1b[?997;2n",
                         None => b"",
                     };
                     self.reply_to_pane(pid, report.to_vec());
@@ -677,8 +677,8 @@ impl Server {
     /// background's (light where its red, green and blue add up to more
     /// than half their most, as colour_totheme), else the one theme its
     /// clients have, if they agree.
-    fn pane_theme(&self, pid: PaneId) -> Option<crossterm::event::ColorScheme> {
-        use crossterm::event::ColorScheme;
+    fn pane_theme(&self, pid: PaneId) -> Option<ttyr::event::ColorScheme> {
+        use ttyr::event::ColorScheme;
         if let Some(bg) = self.pane_colour(pid, false) {
             let [_, r, g, b] = bg.to_be_bytes();
             let brightness = u32::from(r) + u32::from(g) + u32::from(b);

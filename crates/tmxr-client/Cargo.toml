@@ -16,6 +16,7 @@ interprocess = "2.4.7"
 tmxr-command.workspace = true
 tmxr-proto.workspace = true
 tmxr-term.workspace = true
+ttyr.workspace = true
 
 [lints]
 workspace = true

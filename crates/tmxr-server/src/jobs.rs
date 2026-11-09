@@ -290,40 +290,13 @@ fn append(out: &mut Outcome, more: Outcome) {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::mpsc;
-
     use tmxr_proto::ServerMsg;
 
     use super::*;
-    use crate::server::Client;
 
     #[test]
     fn a_job_that_cannot_start_fails_its_waiting_client() {
-        let (events, _) = mpsc::channel();
-        let endpoint =
-            tmxr_proto::socket::Endpoint::resolve(Some(std::path::Path::new("test")), None)
-                .unwrap();
-        let mut srv = Server::new(endpoint, tmxr_config::defaults(), None, events);
-        let (tx, rx) = mpsc::sync_channel(4);
-        srv.clients.insert(
-            1,
-            Client {
-                id: 1,
-                tx,
-                hello: None,
-                att: None,
-                user: String::new(),
-                user_read_only: false,
-                attach_read_only: false,
-                ignore_size: false,
-                no_detach_on_destroy: false,
-                stdin: None,
-                created: std::time::SystemTime::now(),
-                terminal_colours: (None, None),
-                theme: None,
-                colours_asked: None,
-            },
-        );
+        let (mut srv, rx) = crate::server::testing::with_client(None);
         let earlier = Outcome {
             stdout: "x".into(),
             ..Outcome::default()

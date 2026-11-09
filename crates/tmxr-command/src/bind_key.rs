@@ -4,7 +4,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use crossterm::event::KeyModifiers;
+use ttyr::event::KeyModifiers;
 
 use crate::keys::{Key, UnknownKey, split_mods, write_mods};
 
@@ -271,7 +271,7 @@ impl MouseKey {
 
 impl Key {
     fn tmux_code(&self) -> u64 {
-        use crossterm::event::KeyCode;
+        use ttyr::event::KeyCode;
         let special = |n: u64| KEYC_BASE + BSPACE + n;
         let code = match self.code {
             KeyCode::Char(c) => u64::from(c),

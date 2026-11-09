@@ -10,7 +10,7 @@ mod model;
 mod search;
 mod words;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ttyr::event::{KeyCode, KeyEvent, KeyModifiers};
 
 pub use commands::{add_to_view, command, enter, enter_from, refuses_args};
 pub use model::{
@@ -432,7 +432,7 @@ impl CopyMode {
             plain
         };
         if let Some(jump) = self.pending_jump.take() {
-            if let (KeyCode::Char(c), true) = (ev.code, plain) {
+            if let (KeyCode::Char(c), true) = (ev.key, plain) {
                 let times = std::mem::take(&mut self.count).max(1);
                 self.apply(jump.command(), Some(&c.to_string()));
                 for _ in 1..times {
@@ -442,7 +442,7 @@ impl CopyMode {
             self.count = 0;
             return true;
         }
-        match (ev.code, digit_mods) {
+        match (ev.key, digit_mods) {
             // `0` is start-of-line unless it continues a count.
             (KeyCode::Char(d @ '0'..='9'), true) if d != '0' || self.count > 0 => {
                 let digit = d as usize - '0' as usize;

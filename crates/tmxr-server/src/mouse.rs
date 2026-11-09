@@ -17,8 +17,8 @@
 
 use std::time::{Duration, Instant};
 
-use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use tmxr_command::{MouseAction, MouseKey, MouseLocation};
+use ttyr::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::cmds::Ctx;
 use crate::layout::Dir;
@@ -125,6 +125,7 @@ pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
     let here = (m.column, m.row);
     let (action, at) = match m.kind {
         MouseEventKind::Down(b) => {
+            let Some(b) = button(b) else { return };
             set_press(
                 srv,
                 id,
@@ -134,23 +135,25 @@ pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
                     dragged: false,
                 }),
             );
-            (MouseAction::Down(button(b)), here)
+            (MouseAction::Down(b), here)
         }
         MouseEventKind::Up(b) => {
+            let Some(b) = button(b) else { return };
             set_press(srv, id, None);
             match press {
-                Some(p) if p.dragged => (MouseAction::DragEnd(button(b)), (p.col, p.row)),
-                _ => (MouseAction::Up(button(b)), here),
+                Some(p) if p.dragged => (MouseAction::DragEnd(b), (p.col, p.row)),
+                _ => (MouseAction::Up(b), here),
             }
         }
         MouseEventKind::Drag(b) => {
+            let Some(b) = button(b) else { return };
             let p = press.unwrap_or(Press {
                 col: m.column,
                 row: m.row,
                 dragged: false,
             });
             set_press(srv, id, Some(Press { dragged: true, ..p }));
-            (MouseAction::Drag(button(b)), (p.col, p.row))
+            (MouseAction::Drag(b), (p.col, p.row))
         }
         MouseEventKind::ScrollUp => (MouseAction::WheelUp, here),
         MouseEventKind::ScrollDown => (MouseAction::WheelDown, here),
@@ -334,12 +337,26 @@ pub fn fire_double_clicks(srv: &mut Server) {
     }
 }
 
-/// tmux's button numbers: 1 left, 2 middle, 3 right.
-fn button(b: MouseButton) -> u8 {
+/// Whether `m` is the wheel, a motion, or a button tmxr has a number for
+/// ([`button`]). The server drops any other before it counts as input.
+pub(crate) fn numbered(m: &MouseEvent) -> bool {
+    match m.kind {
+        MouseEventKind::Down(b) | MouseEventKind::Up(b) | MouseEventKind::Drag(b) => {
+            button(b).is_some()
+        }
+        _ => true,
+    }
+}
+
+/// tmux's button numbers: 1 left, 2 middle, 3 right. `None` for the back
+/// and forward buttons, which the client's reader does not report yet: an
+/// event with one goes nowhere.
+fn button(b: MouseButton) -> Option<u8> {
     match b {
-        MouseButton::Left => 1,
-        MouseButton::Middle => 2,
-        MouseButton::Right => 3,
+        MouseButton::Left => Some(1),
+        MouseButton::Middle => Some(2),
+        MouseButton::Right => Some(3),
+        _ => None,
     }
 }
 
@@ -532,6 +549,7 @@ fn follow_drag(srv: &mut Server, id: ClientId, m: MouseEvent) -> bool {
             }
         }
         (drag, MouseEventKind::Up(b)) => {
+            let Some(b) = button(b) else { return false };
             set_drag(srv, id, None);
             set_press(srv, id, None);
             // tmux ends every drag with a MouseDragEnd key where the button
@@ -543,7 +561,7 @@ fn follow_drag(srv: &mut Server, id: ClientId, m: MouseEvent) -> bool {
                 _ => locate(srv, id, m, (m.column, m.row)),
             };
             if let Some(target) = target {
-                dispatch(srv, id, MouseAction::DragEnd(button(b)), target);
+                dispatch(srv, id, MouseAction::DragEnd(b), target);
             }
         }
         // Another button or the wheel during a drag: handled as usual.

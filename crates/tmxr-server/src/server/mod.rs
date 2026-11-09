@@ -7,6 +7,8 @@ mod options;
 mod panes;
 mod shell;
 pub mod signals;
+#[cfg(test)]
+pub(crate) mod testing;
 mod windows;
 
 pub use shell::{ChildEnv, pipe_to_shell, shell_succeeds, shell_text};
@@ -85,7 +87,7 @@ pub struct Client {
     /// it has, as RGB, for programs' colour queries.
     pub terminal_colours: (Option<u32>, Option<u32>),
     /// Its terminal's color scheme, as last reported (`#{client_theme}`).
-    pub theme: Option<crossterm::event::ColorScheme>,
+    pub theme: Option<ttyr::event::ColorScheme>,
     /// When its terminal was last asked for its colours, as tmux's
     /// `last_requests`.
     pub colours_asked: Option<Instant>,
@@ -492,7 +494,7 @@ impl Server {
         let secs = Duration::from_secs;
         let mut due: Vec<Instant> = crate::mouse::next_double_click(self)
             .into_iter()
-            .chain(self.copy_line.map(|c| c.due()))
+            .chain(self.copy_line.as_ref().map(crate::copyline::CopyLine::due))
             .chain(self.colour_requests.next_due())
             .chain(self.next_dead_line())
             .chain(self.next_sync_end())

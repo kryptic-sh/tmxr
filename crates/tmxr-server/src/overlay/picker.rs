@@ -5,8 +5,10 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::thread::JoinHandle;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+mod crossterm_key;
+
 use hjkl_picker::{Picker, PickerAction, PickerEvent, PickerLogic};
+use ttyr::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::OverlayAction;
 use crate::cmds::join_args;
@@ -321,7 +323,7 @@ impl PickerOverlay {
 
     pub(super) fn key(&mut self, ev: &KeyEvent) -> OverlayAction {
         let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
-        match ev.code {
+        match ev.key {
             KeyCode::Enter => return self.accept(),
             KeyCode::Char('x') if ctrl && self.is_sessions() => return self.session_action(true),
             KeyCode::Char('r') if ctrl && self.is_sessions() => return self.session_action(false),
@@ -335,7 +337,7 @@ impl PickerOverlay {
             return self.normal_key(ev, ctrl);
         }
         if let PickerEvent::Select(_) | PickerEvent::Cancel =
-            hjkl_picker_tui::handle_key(&mut self.picker, *ev)
+            hjkl_picker_tui::handle_key(&mut self.picker, crossterm_key::crossterm_key(ev))
         {
             return OverlayAction::Close;
         }
@@ -349,7 +351,7 @@ impl PickerOverlay {
         if let Some((_, target)) = self.keys.iter().find(|(k, _)| *k == pressed) {
             return self.choose_target(target.clone());
         }
-        match ev.code {
+        match ev.key {
             KeyCode::Char('j') | KeyCode::Down => self.picker.select_next(),
             KeyCode::Char('k') | KeyCode::Up => self.picker.select_prev(),
             KeyCode::Char('n') if ctrl => self.picker.select_next(),

@@ -6,9 +6,9 @@
 //! PTY's events carry an id from the pane id space and are routed here when
 //! no pane has that id.
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Rect;
 use tmxr_term::{Emulator, Pty, encode_key, encode_paste};
+use ttyr::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::model::{ClientId, PaneId};
 use crate::output::OutputHandle;
@@ -134,8 +134,8 @@ impl Popup {
     /// (no `-E`); with `-k` any key closes it once the command has exited.
     /// The rest go to the command while it runs.
     pub fn key(&mut self, ev: &KeyEvent) -> OverlayAction {
-        let escape = (ev.code == KeyCode::Esc && ev.modifiers.is_empty())
-            || (ev.code == KeyCode::Char('c') && ev.modifiers == KeyModifiers::CONTROL);
+        let escape = (ev.key == KeyCode::Esc && ev.modifiers.is_empty())
+            || (ev.key == KeyCode::Char('c') && ev.modifiers == KeyModifiers::CONTROL);
         if escape && (self.exited || self.close_on_exit == 0) {
             return OverlayAction::Close;
         }

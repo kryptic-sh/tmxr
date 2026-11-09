@@ -3,7 +3,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ttyr::event::{KeyCode, KeyEvent, KeyModifiers};
 
 /// A key as bound in a key table: a key code plus Ctrl / Alt (Meta) / Shift.
 ///
@@ -26,7 +26,7 @@ impl Key {
     }
 
     pub fn from_event(ev: &KeyEvent) -> Self {
-        Self::new(ev.code, ev.modifiers)
+        Self::new(ev.key, ev.modifiers)
     }
 
     fn normalise(code: KeyCode, mut mods: KeyModifiers) -> Self {

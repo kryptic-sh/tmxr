@@ -62,7 +62,9 @@ pub fn read_msg<R: Read, T: DeserializeOwned>(r: &mut R) -> Result<Option<T>, Pr
 mod tests {
     use super::*;
     use crate::{ClientMsg, Hello, PROTOCOL_VERSION, ServerMsg, TerminalInfo};
-    use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    use ttyr::event::{
+        ColorScheme, ColorSlot, Event, KeyCode, KeyEvent, KeyModifiers, Report, TerminalColor,
+    };
 
     fn sample_client() -> Vec<ClientMsg> {
         vec![
@@ -85,11 +87,11 @@ mod tests {
             ClientMsg::Input(vec![
                 Event::Key(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::CONTROL)),
                 Event::Resize(120, 40),
-                Event::ColorScheme(crossterm::event::ColorScheme::Light),
-                Event::TerminalColor(crossterm::event::TerminalColor {
-                    slot: crossterm::event::ColorSlot::Palette(1),
+                Event::Report(Report::ColorScheme(ColorScheme::Light)),
+                Event::Report(Report::TerminalColor(TerminalColor {
+                    slot: ColorSlot::Palette(1),
                     rgb: (0xcdcd, 0, 0),
-                }),
+                })),
             ]),
             ClientMsg::TerminalColours {
                 fg: Some(0xc0caf5),
@@ -170,7 +172,7 @@ mod tests {
         for m in sample_server() {
             write_msg(&mut buf, &m).unwrap();
         }
-        assert_eq!(PROTOCOL_VERSION, 14, "update the golden digest below too");
+        assert_eq!(PROTOCOL_VERSION, 15, "update the golden digest below too");
         assert_eq!(
             fnv1a(&buf),
             GOLDEN,
@@ -178,7 +180,7 @@ mod tests {
         );
     }
 
-    const GOLDEN: u64 = 725_935_194_280_414_969;
+    const GOLDEN: u64 = 18_204_916_481_309_410_369;
 
     /// FNV-1a 64-bit (http://www.isthe.com/chongo/tech/comp/fnv/), used only to
     /// pin the golden bytes in a readable constant.

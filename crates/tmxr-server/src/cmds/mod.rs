@@ -22,9 +22,9 @@ pub use tmxr_command::join_args;
 
 use std::path::PathBuf;
 
-use crossterm::event::KeyEvent;
 use tmxr_command::format::expand;
 use tmxr_command::{Args, Parsed};
+use ttyr::event::KeyEvent;
 
 use crate::layout::Dir;
 use crate::model::{ClientId, PaneId, SessionId};

@@ -1,7 +1,7 @@
 //! The command prompt's line editor: the input, its cursor, the template it
 //! fills, and history recall.
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ttyr::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::OverlayAction;
 use crate::cmds::join_args;
@@ -254,7 +254,7 @@ enum Edit {
 fn emacs(ev: &KeyEvent) -> Edit {
     let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
     let alt = ev.modifiers.contains(KeyModifiers::ALT);
-    match ev.code {
+    match ev.key {
         KeyCode::Left if ctrl => Edit::BackwardWord { separators: true },
         KeyCode::Right if ctrl => Edit::ForwardWord {
             vi: false,
@@ -304,7 +304,7 @@ fn emacs(ev: &KeyEvent) -> Edit {
 /// (status_prompt_translate_key); others only type a character.
 fn vi_insert_passes(ev: &KeyEvent) -> bool {
     let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
-    match ev.code {
+    match ev.key {
         KeyCode::Char(c) if ctrl => "aceghknptuvwyjm".contains(c),
         KeyCode::Left
         | KeyCode::Right
@@ -328,7 +328,7 @@ fn vi_command(ev: &KeyEvent) -> (Edit, bool) {
         vi: true,
         separators,
     };
-    match ev.code {
+    match ev.key {
         KeyCode::Char('h') if ctrl => (Edit::Backspace, false),
         KeyCode::Char('c') if ctrl => (Edit::Cancel, false),
         KeyCode::Char(_) if ctrl => (Edit::Ignore, false),
@@ -402,7 +402,7 @@ impl Prompt {
         // C-r / C-s search the other way, or on an empty input bring back
         // the starting one (emacs keys only: vi's insert mode types them).
         let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
-        if let (KeyCode::Char(c @ ('r' | 's')), true, false) = (ev.code, ctrl, self.vi) {
+        if let (KeyCode::Char(c @ ('r' | 's')), true, false) = (ev.key, ctrl, self.vi) {
             let prefix = if self.input.is_empty() {
                 self.input = self.last.chars().collect();
                 self.cursor = self.input.len();
@@ -590,10 +590,10 @@ impl Prompt {
         let Some(open) = self.menu.as_mut() else {
             return OverlayAction::Keep;
         };
-        let ev = if ev.code == KeyCode::Tab {
+        let ev = if ev.key == KeyCode::Tab {
             KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)
         } else {
-            *ev
+            ev.clone()
         };
         match open.menu.key(&ev) {
             OverlayAction::Run(name) => {
@@ -623,7 +623,7 @@ impl Prompt {
         let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
         // -N: a digit is typed; anything else answers with what is there.
         if self.numeric {
-            return match ev.code {
+            return match ev.key {
                 KeyCode::Char(c @ '0'..='9') if !ctrl => {
                     self.input.insert(self.cursor, c);
                     self.cursor += 1;
@@ -636,7 +636,7 @@ impl Prompt {
         // goes in as it is; with -1 it is the whole answer, and with
         // something there already the prompt goes, as tmux's.
         if self.single || self.quote_next {
-            let typed = match ev.code {
+            let typed = match ev.key {
                 KeyCode::Char(c) if ctrl && c.is_ascii() => char::from(c as u8 & 0x1f),
                 KeyCode::Char(c) => c,
                 KeyCode::Backspace => '\x7f',
@@ -662,13 +662,13 @@ impl Prompt {
                 self.command_mode = false;
             }
             edit
-        } else if ev.code == KeyCode::Esc {
+        } else if ev.key == KeyCode::Esc {
             self.command_mode = true;
             Edit::Ignore
         } else if vi_insert_passes(ev) {
             emacs(ev)
         } else {
-            match ev.code {
+            match ev.key {
                 KeyCode::Char(c) if !ctrl && !ev.modifiers.contains(KeyModifiers::ALT) => {
                     Edit::Type(c)
                 }

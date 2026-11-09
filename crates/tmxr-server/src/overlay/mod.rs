@@ -8,7 +8,7 @@ mod prompt;
 
 use std::time::{Duration, Instant};
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ttyr::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::model::{ClientId, PaneId, SessionId, WindowId};
 use crate::server::Server;
@@ -671,14 +671,14 @@ impl Overlay {
                 key,
                 default_yes,
                 ..
-            } => match ev.code {
+            } => match ev.key {
                 KeyCode::Char(c) if c == *key => OverlayAction::Run(cmd.clone()),
                 KeyCode::Enter if *default_yes => OverlayAction::Run(cmd.clone()),
                 _ => OverlayAction::Close,
             },
             Self::Text { lines, top } => {
                 let max = lines.len().saturating_sub(1);
-                match ev.code {
+                match ev.key {
                     KeyCode::Char('q') | KeyCode::Esc => return OverlayAction::Close,
                     KeyCode::Char('c') if ctrl => return OverlayAction::Close,
                     KeyCode::Char('j') | KeyCode::Down => *top = (*top + 1).min(max),
@@ -701,7 +701,7 @@ impl Overlay {
             Self::Panes {
                 labels, template, ..
             } => {
-                let pick = match ev.code {
+                let pick = match ev.key {
                     KeyCode::Char(c @ '0'..='9') => c.to_digit(10),
                     KeyCode::Char(c @ 'a'..='z') => Some(10 + u32::from(c) - u32::from('a')),
                     _ => None,

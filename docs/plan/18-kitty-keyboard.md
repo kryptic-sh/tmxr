@@ -266,6 +266,21 @@ it too, and gains the modified keys its tier reports:
    wrong on layouts like Turkish. With the unshifted key from the terminal,
    `kitty_key` and `unshifted_letter` go, and the pinned test
    `kitty_sends_a_shifted_symbol_as_itself_without_shift` changes.
+   - First half done: tmxr's key, mouse and input event types are `ttyr`'s
+     (pinned by git rev) in every layer, and the wire carries
+     `ttyr::event::Event` (protocol 15). The client still reads with crossterm
+     and converts each event as it enters (`crossterm_bridge` in `tmxr-client`),
+     keeping crossterm's meaning field for field: a character key is still the
+     character crossterm reported, not `ttyr`'s unshifted key with the shifted
+     one beside it, so the server's readers of `KeyEvent::key` still assume
+     crossterm's meaning. The session picker converts back to crossterm's key
+     for `hjkl_picker_tui::handle_key` (`overlay/picker/crossterm_key.rs`),
+     until hjkl takes `ttyr`'s keys.
+   - Left for the second half: `ttyr`'s reader in place of crossterm's on Unix,
+     which deletes the client's bridge there (Windows keeps it until `ttyr`
+     reads the console); moving every reader of a key to `ttyr`'s unshifted
+     meaning (`Key::from_event`, `encode_key`, copy mode, the prompt, menus,
+     popups, the picker) at the same time; and `TerminalInfo`'s keyboard field.
 4. Done in `7b1dfa0`: `ServerMsg::KeyboardFlags` (protocol 14), the `kitty-keys`
    option, and `kitty::flags` in tmxr-server, the one place that decides each
    client's flags. It follows focus already, but asks only for tmxr's own 1|4

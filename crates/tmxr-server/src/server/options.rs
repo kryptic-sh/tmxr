@@ -148,8 +148,8 @@ impl Server {
             .parse()
             .unwrap_or_else(|_| {
                 Key::new(
-                    crossterm::event::KeyCode::Char('b'),
-                    crossterm::event::KeyModifiers::CONTROL,
+                    ttyr::event::KeyCode::Char('b'),
+                    ttyr::event::KeyModifiers::CONTROL,
                 )
             })
     }

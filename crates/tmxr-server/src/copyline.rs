@@ -10,7 +10,7 @@
 
 use std::time::{Duration, Instant};
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ttyr::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::model::PaneId;
 use crate::server::Server;
@@ -21,7 +21,7 @@ const SETTLE: Duration = Duration::from_millis(60);
 const STEP_LIMIT: Duration = Duration::from_secs(1);
 
 /// A copy under way.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CopyLine {
     pane: PaneId,
     /// Where the line starts, once the first key has settled.
@@ -89,6 +89,7 @@ impl Server {
         }
         let program = crate::resurrect::foreground(self, pane).unwrap_or_default();
         let keys = keys_for(&program);
+        let first = keys.0.clone();
         let now = Instant::now();
         self.copy_line = Some(CopyLine {
             pane,
@@ -97,7 +98,7 @@ impl Server {
             give_up: now + STEP_LIMIT,
             keys,
         });
-        self.key_to_one_pane(pane, &keys.0)
+        self.key_to_one_pane(pane, &first)
     }
 
     /// The pane printed: a copy waiting on it waits a little longer.
@@ -109,7 +110,7 @@ impl Server {
 
     /// Take the next step of a copy whose pane has settled.
     pub fn advance_copy_line(&mut self) {
-        let Some(mut c) = self.copy_line.filter(|c| c.due() <= Instant::now()) else {
+        let Some(mut c) = self.copy_line.take_if(|c| c.due() <= Instant::now()) else {
             return;
         };
         let Some(cursor) = self
@@ -117,7 +118,7 @@ impl Server {
             .get(&c.pane)
             .map(|p| p.emu.screen().cursor_position())
         else {
-            self.copy_line = None;
+            // The pane has gone, and the copy, taken above, with it.
             return;
         };
         match c.start {
@@ -126,14 +127,14 @@ impl Server {
                 c.start = Some(cursor);
                 c.quiet_until = now + SETTLE;
                 c.give_up = now + STEP_LIMIT;
+                let (pane, end) = (c.pane, c.keys.1.clone());
                 self.copy_line = Some(c);
-                if let Err(e) = self.key_to_one_pane(c.pane, &c.keys.1) {
+                if let Err(e) = self.key_to_one_pane(pane, &end) {
                     self.log_message(format!("copy-command-line: {e}"));
                     self.copy_line = None;
                 }
             }
             Some(start) => {
-                self.copy_line = None;
                 let text = self.panes.get(&c.pane).map(|p| {
                     p.emu
                         .screen()
@@ -188,12 +189,12 @@ mod tests {
     #[test]
     fn windows_shells_get_home_and_end() {
         for shell in ["pwsh", "PowerShell.exe", "cmd.exe", "CMD"] {
-            assert_eq!(keys_for(shell).0.code, KeyCode::Home, "{shell}");
+            assert_eq!(keys_for(shell).0.key, KeyCode::Home, "{shell}");
         }
         for shell in ["bash", "zsh", "fish", ""] {
             let (start, end) = keys_for(shell);
-            assert_eq!(start.code, KeyCode::Char('a'), "{shell}");
-            assert_eq!(end.code, KeyCode::Char('e'), "{shell}");
+            assert_eq!(start.key, KeyCode::Char('a'), "{shell}");
+            assert_eq!(end.key, KeyCode::Char('e'), "{shell}");
             assert_eq!(start.modifiers, KeyModifiers::CONTROL);
         }
     }

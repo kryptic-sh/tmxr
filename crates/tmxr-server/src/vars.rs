@@ -633,8 +633,8 @@ impl<'a> Context for Vars<'a> {
             "client_height" => att?.rows.to_string(),
             "client_session" => srv.sessions.get(&att?.session)?.name.clone(),
             "client_theme" => match srv.clients.get(&self.client?)?.theme? {
-                crossterm::event::ColorScheme::Dark => "dark".to_owned(),
-                crossterm::event::ColorScheme::Light => "light".to_owned(),
+                ttyr::event::ColorScheme::Dark => "dark".to_owned(),
+                ttyr::event::ColorScheme::Light => "light".to_owned(),
             },
             "client_termname" => srv
                 .clients

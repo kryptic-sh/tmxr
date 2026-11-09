@@ -7,8 +7,8 @@ use std::time::Duration;
 
 use crossterm::event::{
     DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
-    EnableFocusChange, EnableMouseCapture, Event, KeyCode, KeyModifiers, KeyboardEnhancementFlags,
-    PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+    EnableFocusChange, EnableMouseCapture, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
+    PushKeyboardEnhancementFlags,
 };
 use crossterm::execute;
 use crossterm::terminal::{
@@ -16,6 +16,9 @@ use crossterm::terminal::{
 };
 use interprocess::local_socket::Stream;
 use tmxr_proto::{ClientMsg, write_msg};
+use ttyr::event::{Event, KeyCode, KeyModifiers};
+
+use crate::crossterm_bridge::ttyr_event;
 
 /// Restores the terminal when dropped — on detach, on error, and (through
 /// the panic hook installed in [`Guard::enter`]) on panic.
@@ -315,9 +318,9 @@ fn keys_from_console_bytes() -> bool {
 fn console_key(ev: Event) -> Event {
     match ev {
         Event::Key(mut k) if k.modifiers.contains(KeyModifiers::CONTROL) => {
-            match k.code {
-                KeyCode::Enter => k.code = KeyCode::Char('j'),
-                KeyCode::Backspace => k.code = KeyCode::Char('h'),
+            match k.key {
+                KeyCode::Enter => k.key = KeyCode::Char('j'),
+                KeyCode::Backspace => k.key = KeyCode::Char('h'),
                 _ => {}
             }
             Event::Key(k)
@@ -342,10 +345,10 @@ fn console_key(ev: Event) -> Event {
 fn kitty_key(ev: Event) -> Event {
     match ev {
         Event::Key(mut k) if k.modifiers.contains(KeyModifiers::CONTROL) => {
-            if let KeyCode::Char(c) = k.code
+            if let KeyCode::Char(c) = k.key
                 && let Some(key) = tmxr_term::encode::unshifted_letter(c)
             {
-                k.code = KeyCode::Char(key);
+                k.key = KeyCode::Char(key);
                 k.modifiers |= KeyModifiers::SHIFT;
             }
             Event::Key(k)
@@ -392,7 +395,7 @@ pub fn spawn_input(send: Sender, size: Option<(u16, u16)>) -> Input {
                 && let Ok((cols, rows)) = crossterm::terminal::size()
                 && size != Some((cols, rows))
             {
-                let resized = vec![crossterm::event::Event::Resize(cols, rows)];
+                let resized = vec![Event::Resize(cols, rows)];
                 let Ok(send) = send.lock() else { return };
                 if write_msg(&mut &**send, &ClientMsg::Input(resized)).is_err() {
                     return;
@@ -418,17 +421,20 @@ pub fn spawn_input(send: Sender, size: Option<(u16, u16)>) -> Input {
                 };
                 // With the events read with it, as the server takes them
                 // together (a click's press and release).
-                let mut events = vec![ev];
+                let mut read = vec![ev];
                 while let Ok(true) = crossterm::event::poll(Duration::ZERO) {
                     match crossterm::event::read() {
-                        Ok(ev) => events.push(ev),
+                        Ok(ev) => read.push(ev),
                         Err(_) => break,
                     }
                 }
+                let kitty = KITTY_KEYS.load(Ordering::Acquire);
+                let mut events: Vec<Event> =
+                    read.into_iter().map(|ev| ttyr_event(ev, kitty)).collect();
                 if console_bytes {
                     events = events.into_iter().map(console_key).collect();
                 }
-                if KITTY_KEYS.load(Ordering::Acquire) {
+                if kitty {
                     events = events.into_iter().map(kitty_key).collect();
                 }
                 let Ok(send) = send.lock() else { break };
@@ -562,7 +568,7 @@ pub fn suspend() -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crossterm::event::KeyEvent;
+    use ttyr::event::KeyEvent;
 
     fn key(code: KeyCode, mods: KeyModifiers) -> Event {
         Event::Key(KeyEvent::new(code, mods))
@@ -601,10 +607,10 @@ mod tests {
         let ctrl_shift = KeyModifiers::CONTROL | KeyModifiers::SHIFT;
         let ctrl_alt = KeyModifiers::CONTROL | KeyModifiers::ALT;
         let alt = KeyModifiers::ALT;
-        // Field by field: crossterm's own equality takes `H` for `h` with
-        // Shift, which is the difference under test.
+        // The key and modifiers alone: ttyr's equality also compares
+        // `encoding` and the other fields, which are not under test.
         let read = |ev| match kitty_key(ev) {
-            Event::Key(k) => (k.code, k.modifiers),
+            Event::Key(k) => (k.key, k.modifiers),
             ev => panic!("not a key: {ev:?}"),
         };
         for (code, mods, want) in [

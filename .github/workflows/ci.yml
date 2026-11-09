@@ -777,7 +777,8 @@ jobs:
   # Off until crates.io's vt100 and crossterm have what tmxr uses from its
   # forks: a [patch] does not reach a published package, so tmxr-server
   # failed `cargo publish`'s verify build at v0.10.0, stranding the crates
-  # after it.
+  # after it. Also until ttyr is on crates.io: a git dependency cannot be
+  # published.
   # Turn it back on (and return it to release-status's needs) then.
   publish-crates:
     name: Publish to crates.io

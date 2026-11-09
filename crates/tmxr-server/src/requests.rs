@@ -6,7 +6,7 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::time::{Duration, Instant};
 
-use crossterm::event::{ColorSlot, TerminalColor};
+use ttyr::event::{ColorSlot, TerminalColor};
 
 use crate::model::{ClientId, PaneId};
 use crate::server::Server;

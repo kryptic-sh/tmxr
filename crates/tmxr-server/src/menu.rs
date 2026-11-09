@@ -2,12 +2,12 @@
 //! or by its own key, as tmux draws them, placed by `-x` / `-y` as a popup
 //! is.
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::widgets::{Block, Borders, Clear, Widget};
 use tmxr_command::Key;
+use ttyr::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::overlay::{Lines, OverlayAction};
 
@@ -156,7 +156,7 @@ impl Menu {
             return self.run(i);
         }
         let ctrl = ev.modifiers.contains(KeyModifiers::CONTROL);
-        match ev.code {
+        match ev.key {
             KeyCode::Esc | KeyCode::Char('q') => return OverlayAction::Close,
             KeyCode::Char('c') if ctrl => return OverlayAction::Close,
             // As tmux's: a disabled item the mouse left selected runs

@@ -2,10 +2,12 @@
 
 use std::time::{Duration, Instant};
 
-use crossterm::event::{Event as TermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::layout::Rect;
 use tmxr_command::Key;
 use tmxr_term::{conpty_key, encode_key, encode_paste};
+use ttyr::event::{
+    ColorScheme, Event as TermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, Report,
+};
 
 use super::Server;
 use crate::cmds::{Ctx, Outcome};
@@ -63,10 +65,24 @@ impl Server {
     }
 
     fn input(&mut self, id: ClientId, ev: TermEvent) {
-        // The terminal answering a query is not the client's activity.
-        if let TermEvent::TerminalColor(colour) = ev {
-            self.terminal_colour(id, colour);
-            return;
+        match ev {
+            // The terminal answering a query is not the client's activity.
+            TermEvent::Report(Report::TerminalColor(colour)) => {
+                self.terminal_colour(id, colour);
+                return;
+            }
+            // A mouse button tmxr has no number for (back, forward).
+            TermEvent::Mouse(m) if !crate::mouse::numbered(&m) => return,
+            TermEvent::Key(_)
+            | TermEvent::Mouse(_)
+            | TermEvent::Paste(_)
+            | TermEvent::Resize(..)
+            | TermEvent::FocusGained
+            | TermEvent::FocusLost
+            | TermEvent::Report(Report::ColorScheme(_)) => {}
+            // An allow-list, so an event ttyr adds later is no activity and
+            // flushes no held Escape until tmxr reads it.
+            _ => return,
         }
         let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
             return;
@@ -96,13 +112,13 @@ impl Server {
             // The terminal's color scheme, as tmux's
             // server_client_report_theme: kept, and its hook run on every
             // report.
-            TermEvent::ColorScheme(scheme) => {
+            TermEvent::Report(Report::ColorScheme(scheme)) => {
                 if let Some(c) = self.clients.get_mut(&id) {
                     c.theme = Some(scheme);
                 }
                 let hook = match scheme {
-                    crossterm::event::ColorScheme::Dark => "client-dark-theme",
-                    crossterm::event::ColorScheme::Light => "client-light-theme",
+                    ColorScheme::Dark => "client-dark-theme",
+                    ColorScheme::Light => "client-light-theme",
                 };
                 // Its colours have likely changed with it.
                 self.ask_terminal_colours(id, true);
@@ -142,7 +158,6 @@ impl Server {
                 self.ask_terminal_colours(id, false);
             }
             TermEvent::Mouse(m) => crate::mouse::handle(self, id, m),
-            TermEvent::TerminalColor(_) => unreachable!("handled above"),
             TermEvent::FocusGained | TermEvent::FocusLost => {
                 let gained = matches!(ev, TermEvent::FocusGained);
                 if let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
@@ -159,6 +174,8 @@ impl Server {
                 };
                 self.queue_hook(hook, ctx, crate::hooks::HookScope::default());
             }
+            // Turned away at the top.
+            _ => {}
         }
         if latest {
             self.update_latest(id);
@@ -331,7 +348,7 @@ impl Server {
     /// A mouse event on client `id`'s open menu: tmux's rules in
     /// [`crate::menu::Menu::mouse`], an item it chooses run against the
     /// menu's target.
-    pub fn menu_mouse(&mut self, id: ClientId, m: crossterm::event::MouseEvent) {
+    pub fn menu_mouse(&mut self, id: ClientId, m: ttyr::event::MouseEvent) {
         let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
             return;
         };
@@ -370,8 +387,7 @@ impl Server {
             s.activity = std::time::SystemTime::now();
         }
         // What a prompt's Tab completes from, gathered for a Tab alone.
-        let completions =
-            (ev.code == crossterm::event::KeyCode::Tab).then(|| self.prompt_completions(id));
+        let completions = (ev.key == KeyCode::Tab).then(|| self.prompt_completions(id));
         // A prompt's keys, word separators and newest buffer as they are
         // now, as tmux reads them for each key.
         let prompt_env = self
@@ -699,7 +715,7 @@ impl Server {
         let att = self.clients.get_mut(&id)?.att.as_mut()?;
         let press = match &ev {
             TermEvent::Key(k) if k.kind == KeyEventKind::Release => return Some(ev),
-            TermEvent::Key(k) => Some(*k),
+            TermEvent::Key(k) => Some(k.clone()),
             _ => None,
         };
         let now = Instant::now();
@@ -712,7 +728,7 @@ impl Server {
                 _ => self.client_key(id, escape_key(), false),
             }
         }
-        let lone = press.is_some_and(|k| k.code == KeyCode::Esc && k.modifiers.is_empty());
+        let lone = press.is_some_and(|k| k.key == KeyCode::Esc && k.modifiers.is_empty());
         if lone && !wait.is_zero() {
             let att = self.clients.get_mut(&id)?.att.as_mut()?;
             att.pending_escape = Some(now + wait);
@@ -875,4 +891,67 @@ impl Server {
 /// An Escape key press.
 fn escape_key() -> KeyEvent {
     KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)
+}
+
+#[cfg(test)]
+mod tests {
+    use tmxr_proto::{Hello, TerminalInfo};
+    use ttyr::event::{MouseButton, MouseEvent, MouseEventKind};
+
+    use super::*;
+
+    /// A server with client 1 attached to session 0, which does not exist:
+    /// enough for input to reach the client's bookkeeping.
+    fn attached() -> Server {
+        let hello = Hello {
+            protocol: tmxr_proto::PROTOCOL_VERSION,
+            version: String::new(),
+            cwd: String::new(),
+            pid: 0,
+            env: Vec::new(),
+            terminal: Some(TerminalInfo {
+                cols: 80,
+                rows: 24,
+                term: "xterm-256color".into(),
+                job_control: false,
+                tty: String::new(),
+                colour_answers: false,
+            }),
+        };
+        let (mut srv, _rx) = crate::server::testing::with_client(Some(hello));
+        srv.attach(1, 0);
+        srv
+    }
+
+    #[test]
+    fn a_button_tmxr_does_not_number_is_no_input() {
+        let press = |button| {
+            TermEvent::Mouse(MouseEvent {
+                kind: MouseEventKind::Down(button),
+                column: 1,
+                row: 1,
+                modifiers: KeyModifiers::NONE,
+            })
+        };
+        let mut srv = attached();
+        let long_ago = Instant::now().checked_sub(Duration::from_secs(60)).unwrap();
+        let reset = |srv: &mut Server| {
+            let att = srv.clients.get_mut(&1).unwrap().att.as_mut().unwrap();
+            att.last_input = long_ago;
+            att.away = true;
+        };
+        let seen = |srv: &Server| {
+            let att = srv.clients[&1].att.as_ref().unwrap();
+            (att.last_input != long_ago, !att.away)
+        };
+        for button in [MouseButton::Back, MouseButton::Forward] {
+            reset(&mut srv);
+            srv.inputs(1, vec![press(button)]);
+            assert_eq!(seen(&srv), (false, false), "{button:?}");
+        }
+        // A left press is input, so the check above can tell.
+        reset(&mut srv);
+        srv.inputs(1, vec![press(MouseButton::Left)]);
+        assert_eq!(seen(&srv), (true, true));
+    }
 }

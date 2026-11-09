@@ -2,9 +2,9 @@
 
 use std::fmt::Write as _;
 
-use crossterm::event::KeyEvent;
 use ratatui::style::{Color, Modifier, Style};
 use tmxr_command::{Args, Key, Parsed};
+use ttyr::event::KeyEvent;
 
 use super::{Ctx, Outcome, Res, attached_client, cwd_arg, dir_flag, list_item};
 use crate::model::{PaneId, SessionId, WindowId};
@@ -894,7 +894,7 @@ fn split_size(a: &Args) -> Result<Option<SplitSize>, String> {
 fn navigate(srv: &mut Server, ctx: &Ctx, a: &Args) -> Res {
     let (_, wid, pid) = target::pane(srv, ctx, a.value('t'))?;
     let zoomed = srv.windows.get(&wid).is_some_and(|w| w.zoomed);
-    if let Some(key) = ctx.key {
+    if let Some(key) = &ctx.key {
         let cmd = srv
             .panes
             .get(&pid)
@@ -902,7 +902,7 @@ fn navigate(srv: &mut Server, ctx: &Ctx, a: &Args) -> Res {
             .unwrap_or_default();
         let is_editor = srv.navigator.as_ref().is_some_and(|re| re.is_match(&cmd));
         if is_editor || (zoomed && srv.cfg.navigator.disable_when_zoomed) {
-            srv.send_key_to_pane(pid, &key);
+            srv.send_key_to_pane(pid, key);
             return Ok(());
         }
     }

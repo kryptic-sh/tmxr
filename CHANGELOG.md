@@ -8,10 +8,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Breaking
 
-- **The client-server protocol is now 14** (the server tells the client which
-  kitty keyboard flags to ask its terminal for): after upgrading, a running
-  server must be restarted (`tmxr kill-server`); the client says so if it meets
-  one.
+- **The client-server protocol is now 15** (the server tells the client which
+  kitty keyboard flags to ask its terminal for, and the client sends its
+  terminal's input as `ttyr`'s events rather than crossterm's): after upgrading,
+  a running server must be restarted (`tmxr kill-server`); the client says so if
+  it meets one.
+- **The library crates take `ttyr`'s key, mouse and input event types in place
+  of crossterm's**: `tmxr-proto`'s `ClientMsg::Input` carries
+  `ttyr::event::Event`; `tmxr-term`'s `encode_key`, `conpty_key` and
+  `encode_mouse` take `ttyr`'s `KeyEvent` and `MouseEvent`; `tmxr-command`'s
+  `Key` and `MouseKey::mods` hold `ttyr`'s `KeyCode` and `KeyModifiers`, and
+  `Key::from_event` takes `ttyr`'s `&KeyEvent`. In `tmxr-server`,
+  `cmds::Ctx::key`, `server::Client::theme`, `mouse::MouseTarget::event`,
+  `mouse::Click::mods`, `mouse::handle`, `Server::menu_mouse`,
+  `Server::run_bind`, `Server::send_key_to_pane`, `Server::terminal_colour`,
+  `menu::Menu::key` and `Menu::mouse`, `overlay::Overlay::key`,
+  `popup::Popup::key` and `copy::CopyMode::take_key` take or hold `ttyr`'s
+  types. `ttyr`'s `KeyEvent` names its key `key` where crossterm's named it
+  `code` (`tmxr-command`'s `Key` keeps `code`), and it is not `Copy` (it can
+  carry text), so neither is `copyline::CopyLine`, which holds two.
 - **`tmxr-config`'s `Config` has a `kitty_keys` field**, the `kitty-keys`
   option, and **`tmxr-server`'s `server::Attached` a `keyboard_flags` field**; a
   library caller building either with a struct literal sets it.

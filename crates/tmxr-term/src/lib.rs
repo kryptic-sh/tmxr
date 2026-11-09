@@ -13,7 +13,7 @@
 //!   queries, extended-key modes, tmux passthrough via [`dcs`]).
 //! - [`sync`]: what a pane shows while its program holds the redraw
 //!   (synchronized output, mode 2026).
-//! - [`encode`]: turn crossterm key and paste events into the bytes the
+//! - [`encode`]: turn key, mouse and paste events into the bytes the
 //!   program in the pane expects, given the modes it has set.
 //!
 //! See `docs/plan/04-panes-and-terminal.md`.

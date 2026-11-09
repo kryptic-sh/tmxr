@@ -486,8 +486,7 @@ dependencies = [
  "mio",
  "parking_lot",
  "rustix",
- "serde",
- "signal-hook",
+ "signal-hook 0.3.18",
  "signal-hook-mio",
  "winapi",
 ]
@@ -2157,6 +2156,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "signal-hook"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49f7447afd772ca79ad17ae0a3972a6b0df0cb4b80990fd82707593e9e012a74"
+dependencies = [
+ "libc",
+ "signal-hook-registry",
+]
+
+[[package]]
 name = "signal-hook-mio"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2164,7 +2173,7 @@ checksum = "b75a19a7a740b25bc7944bdee6172368f988763b744e3d4dfe753f6b4ece40cc"
 dependencies = [
  "libc",
  "mio",
- "signal-hook",
+ "signal-hook 0.3.18",
 ]
 
 [[package]]
@@ -2308,7 +2317,7 @@ dependencies = [
  "bitflags 2.13.2",
  "parking_lot",
  "rustix",
- "signal-hook",
+ "signal-hook 0.3.18",
  "windows-sys",
 ]
 
@@ -2359,7 +2368,7 @@ dependencies = [
  "pest_derive",
  "phf",
  "sha2",
- "signal-hook",
+ "signal-hook 0.3.18",
  "siphasher",
  "terminfo",
  "termios",
@@ -2478,6 +2487,7 @@ dependencies = [
  "tmxr-command",
  "tmxr-proto",
  "tmxr-term",
+ "ttyr",
  "windows-sys",
 ]
 
@@ -2485,11 +2495,11 @@ dependencies = [
 name = "tmxr-command"
 version = "0.15.0"
 dependencies = [
- "crossterm",
  "libc",
  "proptest",
  "regex",
  "thiserror 2.0.21",
+ "ttyr",
  "unicode-width",
  "windows-sys",
 ]
@@ -2523,7 +2533,6 @@ dependencies = [
 name = "tmxr-proto"
 version = "0.15.0"
 dependencies = [
- "crossterm",
  "interprocess",
  "libc",
  "postcard",
@@ -2531,6 +2540,7 @@ dependencies = [
  "serde",
  "tempfile",
  "thiserror 2.0.21",
+ "ttyr",
  "widestring",
 ]
 
@@ -2557,6 +2567,7 @@ dependencies = [
  "tmxr-proto",
  "tmxr-term",
  "tracing",
+ "ttyr",
  "vt1k",
  "windows-sys",
 ]
@@ -2565,10 +2576,10 @@ dependencies = [
 name = "tmxr-term"
 version = "0.15.0"
 dependencies = [
- "crossterm",
  "libc",
  "portable-pty",
  "tmxr-command",
+ "ttyr",
  "vt1k",
  "windows-sys",
 ]
@@ -2704,6 +2715,17 @@ name = "tree-sitter-language"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0af592be68c579aa78a16846bd19422978c3c52e438523d45ff5d1bff1f9d4a"
+
+[[package]]
+name = "ttyr"
+version = "0.1.0"
+source = "git+https://github.com/kryptic-sh/ttyr?rev=0583ed9#0583ed93a10821fff41bc2a19097c53bfd0cc272"
+dependencies = [
+ "bitflags 2.13.2",
+ "rustix",
+ "serde",
+ "signal-hook 0.4.6",
+]
 
 [[package]]
 name = "typenum"

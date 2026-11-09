@@ -6,6 +6,7 @@
 //! go up, output bytes come down, until the server detaches it.
 //! See `docs/plan/02-architecture.md`.
 
+mod crossterm_bridge;
 mod spawn;
 mod terminal;
 

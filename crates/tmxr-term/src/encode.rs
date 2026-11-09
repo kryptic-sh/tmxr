@@ -8,7 +8,7 @@
 //! level 2 every modified key. A program that pushed kitty keyboard flags
 //! gets kitty's `CSI <codepoint> ; <modifiers> u`.
 
-use crossterm::event::{
+use ttyr::event::{
     KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 use vt1k::{MouseProtocolEncoding, MouseProtocolMode};
@@ -246,7 +246,7 @@ pub fn encode_key(
     // The kitty protocol, which tmux lacks, takes the keys it reports.
     let level = if kitty { 0 } else { modes.key_level(option) };
     if level > 0 {
-        let (code, mods) = match key.code {
+        let (code, mods) = match key.key {
             KeyCode::BackTab if level >= 2 => (KeyCode::Tab, m | KeyModifiers::SHIFT),
             code => (code, m),
         };
@@ -284,7 +284,7 @@ pub fn encode_key(
         }
     };
 
-    match key.code {
+    match key.key {
         // kitty reports the unshifted key with the shift modifier: an
         // uppercase letter (as a terminal reporting alternate keys, or
         // send-keys M-A, hands it over) is its lowercase key with Shift.
@@ -345,7 +345,7 @@ pub fn conpty_key(key: &KeyEvent, bytes: &[u8]) -> Option<Vec<u8>> {
     const LEFT_ALT: u8 = 0x02;
     const LEFT_CTRL: u8 = 0x08;
     const SHIFT: u8 = 0x10;
-    let KeyCode::Char(c) = key.code else {
+    let KeyCode::Char(c) = key.key else {
         return None;
     };
     let c = c.to_ascii_lowercase();
@@ -392,10 +392,13 @@ pub fn encode_mouse(
     mode: MouseProtocolMode,
     encoding: MouseProtocolEncoding,
 ) -> Vec<u8> {
+    // xterm's buttons 8 and 9 (back and forward) are not encoded: the
+    // client's reader does not report them yet.
     let button = |b: MouseButton| match b {
-        MouseButton::Left => 0u32,
-        MouseButton::Middle => 1,
-        MouseButton::Right => 2,
+        MouseButton::Left => Some(0u32),
+        MouseButton::Middle => Some(1),
+        MouseButton::Right => Some(2),
+        _ => None,
     };
     let (code, release, reported) = match ev.kind {
         MouseEventKind::Down(b) => (button(b), false, mode != MouseProtocolMode::None),
@@ -405,22 +408,22 @@ pub fn encode_mouse(
             !matches!(mode, MouseProtocolMode::None | MouseProtocolMode::Press),
         ),
         MouseEventKind::Drag(b) => (
-            button(b) + 32,
+            button(b).map(|b| b + 32),
             false,
             matches!(
                 mode,
                 MouseProtocolMode::ButtonMotion | MouseProtocolMode::AnyMotion
             ),
         ),
-        MouseEventKind::Moved => (3 + 32, false, mode == MouseProtocolMode::AnyMotion),
-        MouseEventKind::ScrollUp => (64, false, mode != MouseProtocolMode::None),
-        MouseEventKind::ScrollDown => (65, false, mode != MouseProtocolMode::None),
-        MouseEventKind::ScrollLeft => (66, false, mode != MouseProtocolMode::None),
-        MouseEventKind::ScrollRight => (67, false, mode != MouseProtocolMode::None),
+        MouseEventKind::Moved => (Some(3 + 32), false, mode == MouseProtocolMode::AnyMotion),
+        MouseEventKind::ScrollUp => (Some(64), false, mode != MouseProtocolMode::None),
+        MouseEventKind::ScrollDown => (Some(65), false, mode != MouseProtocolMode::None),
+        MouseEventKind::ScrollLeft => (Some(66), false, mode != MouseProtocolMode::None),
+        MouseEventKind::ScrollRight => (Some(67), false, mode != MouseProtocolMode::None),
     };
-    if !reported {
+    let Some(code) = code.filter(|_| reported) else {
         return Vec::new();
-    }
+    };
     let m = ev.modifiers;
     let code = code
         + 4 * u32::from(m.contains(KeyModifiers::SHIFT))
@@ -866,7 +869,6 @@ mod tests {
 
     #[test]
     fn mouse_encodings() {
-        use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
         let ev = |kind| MouseEvent {
             kind,
             column: 0,

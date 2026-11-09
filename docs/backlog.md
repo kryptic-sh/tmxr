@@ -289,6 +289,17 @@ the one-byte form keeps Shift on a release. Lower impact, not filed separately:
 compared: OSC 52, titles, zoomed or panned windows, copy-mode clicks on a
 mouse-enabled pane.
 
+## Plan 18's crossterm bridge (2026-11-10)
+
+- **The client bridge's `KeyEvent::encoding` cannot be trusted.**
+  `crossterm_bridge::ttyr_event` (`tmxr-client`) sets it per batch from
+  `KITTY_KEYS`, not per key, because crossterm does not say which form a key
+  came in. Under kitty flag 1 a plain character still arrives as legacy bytes
+  but is labelled `Kitty`. Nothing reads the field yet; whatever does must not
+  rely on it for keys that came through the bridge. On Unix the bridge goes with
+  the second half of plan 18 step 3; Windows keeps it until ttyr reads the
+  console (ttyr's phase 07), so the gap lasts longest there.
+
 ## Decisions waiting on the owner
 
 - **tmxr sets no `TERM_PROGRAM`** (_read_ by the slice-3 reviewer): tmux sets

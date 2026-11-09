@@ -28,6 +28,7 @@ tmxr-config.workspace = true
 tmxr-proto.workspace = true
 tmxr-term.workspace = true
 tracing = "0.1.44"
+ttyr.workspace = true
 vt1k.workspace = true
 
 [lints]

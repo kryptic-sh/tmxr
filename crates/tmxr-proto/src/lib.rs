@@ -15,7 +15,7 @@ pub use codec::{ProtoError, read_msg, write_msg};
 
 /// Bumped on any change to a type in this module. Client and server refuse to
 /// talk across a mismatch rather than mis-decode each other.
-pub const PROTOCOL_VERSION: u32 = 14;
+pub const PROTOCOL_VERSION: u32 = 15;
 
 /// How long a client waits for a server it started to accept connections.
 pub const SPAWN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
@@ -66,9 +66,10 @@ pub enum ClientMsg {
     /// (`["split-window", "-h"]`). Empty means the default command.
     Command(Vec<String>),
     /// Input events from the attached client's terminal (keys, mouse,
-    /// paste, focus, resize), decoded by crossterm on the client: those it
-    /// read together, in order, as tmux takes one read of its terminal.
-    Input(Vec<crossterm::event::Event>),
+    /// paste, focus, resize, its colour reports) as ttyr's events: those
+    /// the client read together, in order, as tmux takes one read of its
+    /// terminal.
+    Input(Vec<ttyr::event::Event>),
     /// The default foreground and background colours its terminal said it
     /// has when asked (OSC 10 / 11) at attach, as RGB, each `None` if it did
     /// not say; for programs' colour queries.
