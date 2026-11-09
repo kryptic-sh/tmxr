@@ -127,12 +127,18 @@ Read in tmux 3.6's source (`tty-features.c`, `tty-keys.c`, `tty.c`) on
   else, so the loss in crossterm stops at the client.
 - This changes the client–server protocol: bump `Hello.protocol`, and say so
   under Breaking.
-- **hjkl needs the same decoder** (its plan `docs/plan/01-kitty-keyboard.md`,
-  phase 3, 2026-11-09): hjkl reads keys through crossterm 0.29 too and has the
-  same Alt+Shift bug. hjkl's owner-facing options are its own input reader,
-  upstreaming to crossterm, or a pre-parser; one shared house crate for both (as
-  `hjkl-kitty` is already shared with gpur) is the obvious shape. Which is the
-  owner's call, before step 3 starts.
+- **The decoder and key type come from `ttyr`** (decided by the owner,
+  2026-11-09): a new kryptic-sh crate replacing crossterm entirely in tmxr, hjkl
+  and the other house projects, since crossterm is the bottleneck for both
+  (hjkl's plan `docs/plan/01-kitty-keyboard.md`, phase 3, needs the same
+  decoder, and hjkl has the same Alt+Shift bug). ttyr owns input (its own event
+  types, the full kitty, xterm `CSI 27 ;…~`, legacy, SGR mouse, paste, focus and
+  terminal-report decoder, a Unix tty and Windows console reader, blocking and
+  async), raw mode, size, output commands, and a ratatui backend for the
+  projects that draw with ratatui. It takes over every fix in tmxr's crossterm
+  fork (`[patch.crates-io]` in `Cargo.toml`), which goes once nothing uses
+  crossterm. ttyr keeps its own plan in its own repo; this step waits on its
+  input half.
 - hjkl's phase 6 (Super/Meta, F13–F35, keypad and media keys) changes
   `hjkl-picker-tui::handle_key`, which tmxr's session picker calls; the version
   bump is coordinated with hjkl.
@@ -264,10 +270,11 @@ it too, and gains the modified keys its tier reports:
 
 1. The Alt+Shift fix and the honest query reply (above). Shippable alone.
 2. The emulator's per-screen stacks.
-3. tmxr's own key type and parser; the protocol bump; `TerminalInfo`'s keyboard
-   field. No behaviour change yet beyond what the parser fixes, which includes
-   the backlog's real Ctrl+4 … Ctrl+7 that crossterm reports as the legacy
-   control byte (`tmux_key` at level 2).
+3. Adopt `ttyr`'s key type and parser (blocked on ttyr's input half); the
+   protocol bump; `TerminalInfo`'s keyboard field. No behaviour change yet
+   beyond what the parser fixes, which includes the backlog's real Ctrl+4 …
+   Ctrl+7 that crossterm reports as the legacy control byte (`tmux_key` at level
+   2).
 4. `ServerMsg::KeyboardFlags`, the choke point that follows focus, and the
    `kitty-keys` option.
 5. The xterm tier: XTVERSION in the client's probe, `terminal-features`,
