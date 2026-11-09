@@ -44,9 +44,38 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the `kitty-keys` and `terminal-features` options, and **`tmxr-server`'s
   `server::Attached` a `keyboard_flags` field**; a library caller building
   either with a struct literal sets it.
+- **`tmxr-server`'s `server::Attached` has a `held` field**, the keys its
+  terminal pressed into programs and has not released; a library caller building
+  one with a struct literal sets it (`Vec::new()`).
 
 ### Added
 
+- **Full kitty keyboard protocol support for panes.** A program that pushes
+  kitty flags gets keys under every flag the spec has, not only flag 1: under
+  flag 2 repeats and releases (`CSI 97;5:3u`), under flag 4 a key's shifted and
+  base-layout keys (`CSI 1089:1057:99;6u`), under flag 8 every key as an escape
+  code (plain letters, Enter, Tab, Backspace and the modifier keys themselves
+  among them), and under flag 16 with 8 the text a key types (`CSI 97;2;65u`).
+  `CSI ? u` answers every flag pushed. A key that types text is typed unless
+  flag 8 is on, and its release is still reported under flag 2, as kitty's own
+  encoder does (which programs are written against), where the spec's prose says
+  it has no release. A release goes to the program its press reached, and
+  nowhere when the press ran a bind or went to a prompt, menu or mode: a release
+  never runs a bind, ends a key table, counts for `escape-time` or
+  `assume-paste-time`, nor marks the session active; only an Escape held for
+  `escape-time` is sent at once when its release comes from a terminal asked for
+  releases. A program that asked for releases gets one made right after each
+  press from a client whose terminal reports none (a legacy or xterm-tier
+  terminal, or the Windows client), and one for each key still held when the
+  client's terminal stops reporting them (focus moving to a program that did not
+  ask for them, a key table held, a detach), so no key is left down. Keys from
+  such a client still reach a flag-8 pane encoded from what it reported: its
+  typed characters, with their shifted key and text, as escape codes.
+  `send-keys` keys have no release.
+- **`tmxr-server`'s `kitty::keys_to` and `kitty::KeyTarget`**: the pane or popup
+  an attached client's keys go to when they run no bind. **`tmxr-term`'s
+  `encode::is_modifier_key`** and the flag constants `KITTY_REPORT_EVENTS`,
+  `KITTY_REPORT_ALL_KEYS` and `KITTY_REPORT_TEXT`.
 - **Terminals with xterm's modifyOtherKeys get it, as in tmux**: a client whose
   terminal answers XTVERSION as xterm, foot, mintty or iTerm2 (or DA2 as
   mintty), or that `terminal-features` gives `extkeys`, and that does not get
@@ -88,6 +117,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The flags a kitty terminal is asked for now follow the focused pane**:
+  tmxr's own (1 and 4) and every flag the program the client's keys go to
+  pushed, as focus moves between panes and windows, a popup opens or closes, and
+  copy mode, a prompt, a menu or a held key table takes the keys (tmxr's own
+  alone then). 0.15.0 asked for tmxr's own flags whatever the focused program
+  wanted.
+- **A pane under kitty flag 1 gets the protocol's own encoding of more keys**,
+  as kitty sends them: Alt+Enter, Shift+Tab and Ctrl+Backspace as `CSI 13;3u`,
+  `CSI 9;2u` and `CSI 127;5u` (were `ESC CR`, `CSI Z` and `0x08`), F1, F2 and F4
+  as `CSI P`, `CSI Q` and `CSI S`, F3 as `CSI 13~` (were `SS3 P` to `SS3 S`), a
+  cursor key `CSI A` in application cursor mode too (was `SS3 A`), a keypad key
+  that types no text as its own number (`CSI 57421u` for the keypad's Page Up),
+  and the Caps Lock and Num Lock state on every key not sent as text
+  (`CSI 1;129A` for Up with Num Lock on).
 - **On Unix the client takes and gives back its terminal through `ttyr`, not
   crossterm**: raw mode, the alternate screen, bracketed paste, focus and colour
   scheme reports, the kitty flags, and their restore on detach, on a panic and

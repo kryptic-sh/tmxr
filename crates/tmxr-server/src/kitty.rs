@@ -11,7 +11,7 @@
 
 use tmxr_term::encode::{KITTY_FLAGS_ENCODED, TMXR_KITTY_FLAGS};
 
-use crate::model::ClientId;
+use crate::model::{ClientId, PaneId};
 use crate::overlay::Overlay;
 use crate::server::Server;
 
@@ -25,43 +25,52 @@ pub fn speaks(srv: &Server, id: ClientId) -> bool {
         .is_some_and(|att| att.keyboard_report.kitty)
 }
 
+/// Where a key client `id` types goes when it runs no bind: the program
+/// keys go to past its overlay ([`target`]), the active pane's when no
+/// mode in it reads keys, no key table is held and the client is not
+/// read-only. `None` where tmxr reads the keys itself.
+pub fn keys_to(srv: &Server, id: ClientId) -> Option<KeyTarget> {
+    let att = srv.clients.get(&id)?.att.as_ref()?;
+    target(att.overlay.as_ref(), || {
+        let pane = srv
+            .active_pane_of_session(att.session)
+            .filter(|&p| !crate::mouse::in_mode(srv, p))?;
+        let held = att.table != srv.default_key_table(att.session) || srv.client_read_only(id);
+        (!held).then_some(pane)
+    })
+}
+
 /// The kitty keyboard flags client `id`'s terminal should report keys
 /// under now.
 pub fn flags(srv: &Server, id: ClientId) -> u8 {
-    let program = srv
-        .clients
-        .get(&id)
-        .and_then(|c| c.att.as_ref())
-        .and_then(|att| {
-            program_flags(att.overlay.as_ref(), || {
-                // A mode in the pane reads keys itself.
-                let pane = srv
-                    .active_pane_of_session(att.session)
-                    .filter(|&p| !crate::mouse::in_mode(srv, p))?;
-                let flags = srv.panes.get(&pane)?.emu.input_modes().kitty_flags;
-                // So does a held key table, and a read-only client's keys
-                // reach no program. Asked only of flags that would add to
-                // tmxr's own, as the table's name is built afresh.
-                let adds = flags & KITTY_FLAGS_ENCODED & !TMXR_KITTY_FLAGS != 0;
-                let held = adds
-                    && (att.table != srv.default_key_table(att.session)
-                        || srv.client_read_only(id));
-                (!held).then_some(flags)
-            })
-        });
+    let program = keys_to(srv, id).and_then(|to| match to {
+        KeyTarget::Pane(pane) => Some(srv.panes.get(&pane)?.emu.input_modes().kitty_flags),
+        KeyTarget::Popup(_) => match srv.clients.get(&id)?.att.as_ref()?.overlay.as_ref()? {
+            Overlay::Popup(p) => Some(p.emu.input_modes().kitty_flags),
+            _ => None,
+        },
+    });
     wanted(srv.cfg.kitty_keys, program, KITTY_FLAGS_ENCODED)
 }
 
-/// The flags of the program keys go to past `overlay`: a popup's own
-/// program while it runs, or with no overlay that takes keys, what `pane`
-/// says of the active pane. `None` where tmxr reads the keys itself (a
-/// prompt, menu, picker or other overlay, or a popup whose program has
-/// exited).
-fn program_flags(overlay: Option<&Overlay>, pane: impl FnOnce() -> Option<u8>) -> Option<u8> {
+/// A program a client's keys go to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyTarget {
+    /// A pane's (and, under synchronize-panes, its siblings').
+    Pane(PaneId),
+    /// The popup with this id, open over the client.
+    Popup(PaneId),
+}
+
+/// The program keys go to past `overlay`: a popup's own while it runs, or
+/// with no overlay that takes keys, the pane `pane` gives. `None` where
+/// tmxr reads the keys itself (a prompt, menu, picker or other overlay, or
+/// a popup whose program has exited).
+fn target(overlay: Option<&Overlay>, pane: impl FnOnce() -> Option<PaneId>) -> Option<KeyTarget> {
     match overlay {
-        Some(Overlay::Popup(p)) => (!p.exited).then(|| p.emu.input_modes().kitty_flags),
+        Some(Overlay::Popup(p)) => (!p.exited).then_some(KeyTarget::Popup(p.id)),
         // display-panes -N lets keys go on as if it were not there.
-        None | Some(Overlay::Panes { keys: false, .. }) => pane(),
+        None | Some(Overlay::Panes { keys: false, .. }) => pane().map(KeyTarget::Pane),
         Some(_) => None,
     }
 }
@@ -107,17 +116,17 @@ mod tests {
     }
 
     #[test]
-    fn only_keys_that_reach_a_program_take_its_flags() {
-        let pane = || Some(ALL_KEYS);
-        assert_eq!(program_flags(None, pane), Some(ALL_KEYS));
-        assert_eq!(program_flags(None, || None), None);
+    fn only_keys_that_reach_a_program_go_to_it() {
+        let pane = || Some(3);
+        assert_eq!(target(None, pane), Some(KeyTarget::Pane(3)));
+        assert_eq!(target(None, || None), None);
         let passing = Overlay::Panes {
             labels: Vec::new(),
             until: None,
             template: String::new(),
             keys: false,
         };
-        assert_eq!(program_flags(Some(&passing), pane), Some(ALL_KEYS));
+        assert_eq!(target(Some(&passing), pane), Some(KeyTarget::Pane(3)));
         for overlay in [
             Overlay::Panes {
                 labels: Vec::new(),
@@ -129,7 +138,7 @@ mod tests {
             Overlay::confirm("kill?".into(), "kill-pane".into(), 'y', false),
             Overlay::text(vec!["list".into()]),
         ] {
-            assert_eq!(program_flags(Some(&overlay), pane), None);
+            assert_eq!(target(Some(&overlay), pane), None);
         }
     }
 }

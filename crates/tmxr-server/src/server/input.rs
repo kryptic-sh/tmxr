@@ -4,10 +4,9 @@ use std::time::{Duration, Instant};
 
 use ratatui::layout::Rect;
 use tmxr_command::Key;
+use tmxr_term::encode::is_modifier_key;
 use tmxr_term::{conpty_key, encode_key, encode_paste};
-use ttyr::event::{
-    ColorScheme, Event as TermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, Report,
-};
+use ttyr::event::{ColorScheme, Event as TermEvent, KeyCode, KeyEvent, KeyEventKind, Report};
 
 use super::Server;
 use crate::cmds::{Ctx, Outcome};
@@ -92,23 +91,25 @@ impl Server {
         let came_back = std::mem::take(&mut att.away);
         let focused = att.focused;
         let session = att.session;
-        // Everything but a key's release and losing focus makes the client
-        // its window's latest, as tmux's server_client_key_callback and
-        // its resize do.
-        let latest = !matches!(
-            ev,
-            TermEvent::FocusLost
-                | TermEvent::Key(KeyEvent {
-                    kind: KeyEventKind::Release,
-                    ..
-                })
-        );
+        // Everything but a key's release, a modifier key and losing focus
+        // makes the client its window's latest, as tmux's
+        // server_client_key_callback and its resize do (tmux sees neither
+        // of those keys).
+        let latest = match &ev {
+            TermEvent::FocusLost => false,
+            TermEvent::Key(k) => !not_typed(k),
+            _ => true,
+        };
+        if let TermEvent::Key(k) = &ev {
+            self.pressed_again(id, k);
+        }
         let Some(ev) = self.escape_time(id, ev) else {
             return;
         };
         match ev {
-            TermEvent::Key(k) if k.kind != KeyEventKind::Release => self.client_key(id, k, false),
-            TermEvent::Key(_) => {}
+            TermEvent::Key(k) if k.kind == KeyEventKind::Release => self.client_release(id, &k),
+            TermEvent::Key(k) if is_modifier_key(k.key) => self.client_modifier_key(id, &k),
+            TermEvent::Key(k) => self.client_key(id, k, false),
             // The terminal's color scheme, as tmux's
             // server_client_report_theme: kept, and its hook run on every
             // report.
@@ -418,6 +419,11 @@ impl Server {
             }
             let peeked = ov.peeked();
             let action = ov.key(&ev);
+            // A popup keeps a key its running program took.
+            let popup = match &ov {
+                Overlay::Popup(p) if !p.exited && action == OverlayAction::Keep => Some(p.id),
+                _ => None,
+            };
             // display-panes -N: the overlay stays and the key goes on.
             if action == OverlayAction::Pass {
                 att.overlay = Some(ov);
@@ -476,6 +482,11 @@ impl Server {
                         self.switch_client(id, sid);
                         let _ = self.select_window(sid, idx);
                     }
+                }
+                if let Some(popup) = popup
+                    && !sent
+                {
+                    self.key_reached(id, &ev, super::releases::Reached::Popup(popup));
                 }
                 // A session the picker showed has been seen once it moves
                 // on or closes.
@@ -600,7 +611,27 @@ impl Server {
             && !self.clock_takes_key(p, true)
             && !self.client_read_only(id)
         {
-            self.send_key_to_pane(p, &ev);
+            self.client_key_to_pane(id, p, &ev, sent);
+        }
+    }
+
+    /// A key from client `id` (`sent` by `send-keys -K`) to `pane` and its
+    /// synchronized siblings, as [`Server::send_key_to_pane`]; one from
+    /// the client's terminal is then held for its release
+    /// ([`Server::key_reached`]).
+    pub(super) fn client_key_to_pane(
+        &mut self,
+        id: ClientId,
+        pane: PaneId,
+        ev: &KeyEvent,
+        sent: bool,
+    ) {
+        let targets = self.input_targets(pane);
+        for &t in &targets {
+            self.write_key(t, ev);
+        }
+        if !sent {
+            self.key_reached(id, ev, super::releases::Reached::Panes(targets));
         }
     }
 
@@ -665,26 +696,6 @@ impl Server {
         self.mark_client_dirty(id);
     }
 
-    /// Whether a key `since` the last one is pasted text, as tmux's
-    /// server_client_is_assume_paste: the first key within
-    /// `assume-paste-time` of the one before starts assuming a paste and is
-    /// still a key, each one after it is pasted, and a slower key ends it.
-    fn assume_paste(&mut self, session: SessionId, since: Option<Duration>) -> bool {
-        let t = self.session_options(session).assume_paste_time;
-        let Some(s) = self.sessions.get_mut(&session) else {
-            return false;
-        };
-        if t == 0 {
-            return false;
-        }
-        if since.is_some_and(|d| d < Duration::from_millis(t)) {
-            std::mem::replace(&mut s.pasting, true)
-        } else {
-            s.pasting = false;
-            false
-        }
-    }
-
     /// A key taken as pasted text, as tmux's paste_key: to the session's
     /// active pane (and its synchronized siblings) as it is, unless the
     /// client is read-only or the pane is in a mode or takes no input.
@@ -702,69 +713,7 @@ impl Server {
         {
             return;
         }
-        self.send_key_to_pane(pane, ev);
-    }
-
-    /// `escape-time`, as tmux's: a lone Escape is held that long, and a key
-    /// pressed before it is up goes as Meta and that key; anything else
-    /// sends the Escape first. Returns the event to handle, none while one
-    /// is held. (A key's release, which the kitty protocol and Windows
-    /// send, changes nothing.)
-    fn escape_time(&mut self, id: ClientId, ev: TermEvent) -> Option<TermEvent> {
-        let wait = Duration::from_millis(self.cfg.escape_time);
-        let att = self.clients.get_mut(&id)?.att.as_mut()?;
-        let press = match &ev {
-            TermEvent::Key(k) if k.kind == KeyEventKind::Release => return Some(ev),
-            TermEvent::Key(k) => Some(k.clone()),
-            _ => None,
-        };
-        let now = Instant::now();
-        if let Some(deadline) = att.pending_escape.take() {
-            match press {
-                Some(mut k) if now < deadline && !k.modifiers.contains(KeyModifiers::ALT) => {
-                    k.modifiers |= KeyModifiers::ALT;
-                    return Some(TermEvent::Key(k));
-                }
-                _ => self.client_key(id, escape_key(), false),
-            }
-        }
-        let lone = press.is_some_and(|k| k.key == KeyCode::Esc && k.modifiers.is_empty());
-        if lone && !wait.is_zero() {
-            let att = self.clients.get_mut(&id)?.att.as_mut()?;
-            att.pending_escape = Some(now + wait);
-            return None;
-        }
-        Some(ev)
-    }
-
-    /// Escapes whose `escape-time` is up, sent as Escape.
-    pub(super) fn flush_escapes(&mut self) {
-        let now = Instant::now();
-        let due: Vec<ClientId> = self
-            .clients
-            .values()
-            .filter(|c| {
-                c.att
-                    .as_ref()
-                    .and_then(|a| a.pending_escape)
-                    .is_some_and(|d| d <= now)
-            })
-            .map(|c| c.id)
-            .collect();
-        for id in due {
-            if let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
-                att.pending_escape = None;
-            }
-            self.client_key(id, escape_key(), false);
-        }
-    }
-
-    /// The soonest a held Escape is due, for the server loop to wake.
-    pub(super) fn next_escape(&self) -> Option<Instant> {
-        self.clients
-            .values()
-            .filter_map(|c| c.att.as_ref()?.pending_escape)
-            .min()
+        self.client_key_to_pane(id, pane, ev, false);
     }
 
     /// The `extended-keys` option.
@@ -807,19 +756,23 @@ impl Server {
 
     /// Encode a key for a pane (and, with synchronize-panes, its siblings).
     pub fn send_key_to_pane(&mut self, pane: PaneId, ev: &KeyEvent) {
+        for t in self.input_targets(pane) {
+            self.write_key(t, ev);
+        }
+    }
+
+    /// Encode a key for `pane` alone, as its program's modes ask.
+    pub(super) fn write_key(&mut self, pane: PaneId, ev: &KeyEvent) {
         let (option, format) = (self.extended_keys(), self.extended_keys_format());
-        let targets = self.input_targets(pane);
-        for t in targets {
-            if let Some(p) = self.panes.get_mut(&t) {
-                let mut bytes = encode_key(ev, p.emu.input_modes(), option, format);
-                if tmxr_term::pty::CONPTY
-                    && let Some(win32) = conpty_key(ev, &bytes)
-                {
-                    bytes = win32;
-                }
-                if !bytes.is_empty() {
-                    let _ = p.pty.write(&bytes);
-                }
+        if let Some(p) = self.panes.get_mut(&pane) {
+            let mut bytes = encode_key(ev, p.emu.input_modes(), option, format);
+            if tmxr_term::pty::CONPTY
+                && let Some(win32) = conpty_key(ev, &bytes)
+            {
+                bytes = win32;
+            }
+            if !bytes.is_empty() {
+                let _ = p.pty.write(&bytes);
             }
         }
     }
@@ -888,15 +841,15 @@ impl Server {
     }
 }
 
-/// An Escape key press.
-fn escape_key() -> KeyEvent {
-    KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)
+/// Whether `key` is not a key typed: a release, or a modifier key itself.
+pub(super) fn not_typed(key: &KeyEvent) -> bool {
+    key.kind == KeyEventKind::Release || is_modifier_key(key.key)
 }
 
 #[cfg(test)]
 mod tests {
     use tmxr_proto::{Hello, TerminalInfo};
-    use ttyr::event::{MouseButton, MouseEvent, MouseEventKind};
+    use ttyr::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
     use super::*;
 

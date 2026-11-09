@@ -67,6 +67,7 @@ impl Server {
             keyboard: crate::keyboard::Keyboard::Legacy,
             // Off until it says its terminal has modifyOtherKeys.
             extended_keys: false,
+            held: Vec::new(),
             // As tmux's: focused until its terminal reports otherwise.
             focused: true,
             away: false,
@@ -115,6 +116,7 @@ impl Server {
     }
 
     fn detach_as(&mut self, id: ClientId, reason: &str, hangup: bool, exec: Option<Vec<String>>) {
+        self.release_held(id);
         let Some(c) = self.clients.get_mut(&id) else {
             return;
         };

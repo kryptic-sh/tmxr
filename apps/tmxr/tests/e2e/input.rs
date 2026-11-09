@@ -569,9 +569,11 @@ fn a_legacy_terminal_is_sent_no_kitty_flags() {
 
 /// A kitty terminal is asked for tmxr's flags at attach, on the alternate
 /// screen, asked again in their place as they change (here by `kitty-keys`:
-/// focus does not change them until the encoder takes more flags than
-/// tmxr's own), and popped as often as pushed by detach, the last on the
-/// alternate screen before it is left. Unix only, as above.
+/// focus does not change them, as the pane's flag 1 is among tmxr's own;
+/// `kitty_keys::focus_changes_what_the_terminal_is_asked_for` moves it
+/// between programs that want more), and popped as often as pushed by
+/// detach, the last on the alternate screen before it is left. Unix only,
+/// as above.
 #[cfg(unix)]
 #[test]
 fn a_kitty_terminal_gets_its_flags_pushed_replaced_and_popped() {

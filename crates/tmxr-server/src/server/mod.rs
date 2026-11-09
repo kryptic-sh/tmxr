@@ -3,8 +3,10 @@
 mod attach;
 mod history;
 mod input;
+mod key_timing;
 mod options;
 mod panes;
+mod releases;
 mod shell;
 pub mod signals;
 #[cfg(test)]
@@ -166,6 +168,9 @@ pub struct Attached {
     /// Whether this client was last told to turn modifyOtherKeys on
     /// (`crate::keyboard::extended_keys`).
     pub extended_keys: bool,
+    /// The keys its terminal pressed into programs and has not released,
+    /// while it reports releases (`releases`).
+    pub held: Vec<releases::Held>,
     /// When this client's status timer last fired (`status-interval`).
     pub status_at: Instant,
     /// Focused: from attaching until the terminal reports focus out, then
@@ -705,6 +710,7 @@ impl Server {
                 self.waits
                     .forget(|d| d.then.reply.as_ref().is_some_and(|r| r.0 == id));
                 self.forget_format_jobs(id);
+                self.release_held(id);
                 if let Some(c) = self.clients.remove(&id)
                     && let Some(att) = c.att
                 {
@@ -902,6 +908,9 @@ impl Server {
     /// both is told none of them (`kitty-keys off`), so nothing turns on
     /// before the other is off.
     fn client_keyboard(&mut self, id: ClientId, report: tmxr_proto::KeyboardReport) {
+        // Its terminal said what it speaks afresh, its flags popped: it
+        // reports no release of a key it held before.
+        self.release_held(id);
         let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
             return;
         };
@@ -1489,6 +1498,10 @@ impl Server {
             }
             if let Some(keyboard) = tell_keyboard {
                 self.send(id, ServerMsg::KeyboardFlags(keyboard));
+                // Its terminal reports no more releases.
+                if keyboard & tmxr_term::encode::KITTY_REPORT_EVENTS == 0 {
+                    self.release_held(id);
+                }
             }
             if tell_extended_keys && extended_keys {
                 self.send(id, ServerMsg::ExtendedKeys(true));

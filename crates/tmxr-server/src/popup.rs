@@ -146,6 +146,13 @@ impl Popup {
                 OverlayAction::Keep
             };
         }
+        self.send_key(ev);
+        OverlayAction::Keep
+    }
+
+    /// Send `ev` to the command, encoded as its terminal modes ask: a key
+    /// [`Popup::key`] passed on, or that key's release.
+    pub fn send_key(&mut self, ev: &KeyEvent) {
         let bytes = encode_key(
             ev,
             self.emu.input_modes(),
@@ -155,7 +162,6 @@ impl Popup {
         if !bytes.is_empty() {
             let _ = self.pty.write(&bytes);
         }
-        OverlayAction::Keep
     }
 
     pub fn paste(&mut self, text: &str) {

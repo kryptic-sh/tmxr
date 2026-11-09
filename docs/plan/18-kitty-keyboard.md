@@ -171,12 +171,16 @@ Decided by the owner (2026-11-09):
 - `encode_key` honours flags 1, 2, 4, 8 and 16 per the spec, from the pane's
   stack.
 - **Fallback.** Keys from a legacy client carry no releases, no alternate keys
-  and no base-layout key; the encoder sends what it can (a press, the key as
-  typed) and nothing invented. A pane that asked for releases from a legacy
-  client gets none, as from a terminal that ignores flag 2.
-- **Keys tmxr synthesises:** a release for every key held when focus moves away
-  from a pane that asked for releases, so no program sees a key stuck down;
-  `send-keys` keys, which have no release.
+  and no base-layout key; the encoder sends what it knows (the key as typed, and
+  the shifted key and text a typed character carries) and nothing else.
+- **Keys tmxr synthesises:** a release right after each press from a client
+  whose terminal reports none (a legacy or xterm-tier one, a kitty one not asked
+  for flag 2, the Windows client) to a pane that asked for releases, since its
+  `CSI ? u` says flag 2 is on and a press with no release is a key stuck down
+  (decided 2026-11-10, in place of sending none); a release for every key held
+  when the client's terminal stops reporting them (its flags lose flag 2, it
+  says what it speaks afresh, it detaches or goes); `send-keys` keys, which have
+  no release.
 
 ### Binds
 
@@ -234,8 +238,8 @@ it too, and gains the modified keys its tier reports:
   protocol.
 - A pane that asked for kitty flags still gets kitty encoding of the keys a
   legacy client sends (the encoder works from tmxr's key type, not from the
-  client's terminal), minus what a legacy terminal never reports: releases,
-  alternate keys, the base-layout key, Super and Hyper.
+  client's terminal), minus what a legacy terminal never reports: real releases
+  (each press is released at once for it), the base-layout key, Super and Hyper.
 - Clients of both kinds on one session each work: the server never assumes a
   client's keyboard from another's.
 - A legacy client is never sent `ServerMsg::KeyboardFlags` or
@@ -315,8 +319,26 @@ it too, and gains the modified keys its tier reports:
      level-2 pane with the unshifted letter (`CSI 27;6;104~`), where tmux passes
      the `H` on; binds still take it as C-h. Both are step 7's
      (`corpus/known_divergences.toml`).
-6. `encode_key` for flags 2, 4, 8 and 16, with the fallback and the synthesised
-   releases.
+6. Done: `encode_key` for flags 2, 4, 8 and 16 (`tmxr-term`'s `encode::kitty`,
+   tested against the spec's examples and kitty's own test cases), with the
+   fallback and the synthesised releases (`tmxr-server`'s `server::releases`);
+   `KITTY_FLAGS_ENCODED` is every flag, so `kitty::flags` asks a client's
+   terminal for what the program its keys go to wants (`kitty::keys_to`), and
+   the query reply says every flag pushed. What binds later steps:
+   - Where the spec's prose is silent or kitty departs from it, the encoder
+     follows kitty's `key_encoding.c`: a key that types text is typed without
+     flag 8, yet its release is reported under flag 2 (the prose says none);
+     lock modifiers ride on every key not sent as text. One departure: kitty
+     sends Escape's release under flag 2 alone as a second Escape, tmxr sends
+     nothing.
+   - A release goes to what its press reached and nowhere else; a modifier key
+     (flag 8) goes only to the program keys go to now. Neither runs a bind, ends
+     a key table, or counts for `escape-time` or `assume-paste-time`.
+   - A held key's release goes to every program its press and repeats reached (a
+     repeat after focus moved adds its program); a new press of a key still held
+     releases the held one first.
+   - A popup's program gets releases as a pane's does, but no e2e test covers
+     it.
 7. Kitty-style key names and the extended tmux names, in every place a key is
    named; `list-keys` marking the binds the client cannot use.
 8. Windows.

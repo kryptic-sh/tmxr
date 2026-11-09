@@ -6,7 +6,7 @@
 //! input_key sends extended in the `extended-keys-format` option's form:
 //! at level 1 the modified keys with no legacy form (`C-;`, `C-Enter`), at
 //! level 2 every modified key. A program that pushed kitty keyboard flags
-//! gets kitty's `CSI <codepoint> ; <modifiers> u`.
+//! gets keys as the kitty keyboard protocol has them ([`kitty`]).
 
 use tmxr_command::Typed;
 use ttyr::event::{
@@ -15,12 +15,26 @@ use ttyr::event::{
 };
 use vt1k::{MouseProtocolEncoding, MouseProtocolMode};
 
+mod kitty;
+
 /// The kitty keyboard flag for disambiguated escape codes.
 pub const KITTY_DISAMBIGUATE: u8 = 1;
+
+/// The kitty keyboard flag for reporting repeats and releases beside
+/// presses.
+pub const KITTY_REPORT_EVENTS: u8 = 2;
 
 /// The kitty keyboard flag for reporting a key's shifted and base-layout
 /// keys beside it.
 pub const KITTY_REPORT_ALTERNATE: u8 = 4;
+
+/// The kitty keyboard flag for reporting every key as an escape code, text
+/// keys, Enter, Tab, Backspace and the modifier keys among them.
+pub const KITTY_REPORT_ALL_KEYS: u8 = 8;
+
+/// The kitty keyboard flag for reporting the text a key produces inside
+/// its escape code; defined only with [`KITTY_REPORT_ALL_KEYS`].
+pub const KITTY_REPORT_TEXT: u8 = 16;
 
 /// The kitty keyboard flags tmxr asks a client's terminal for on its own
 /// behalf, whatever the focused program wants: disambiguated keys tell C-h
@@ -28,11 +42,15 @@ pub const KITTY_REPORT_ALTERNATE: u8 = 4;
 /// chord (M-A, not M-a).
 pub const TMXR_KITTY_FLAGS: u8 = KITTY_DISAMBIGUATE | KITTY_REPORT_ALTERNATE;
 
-/// The kitty keyboard flags [`encode_key`] acts on. A program asking which
-/// flags are on is told only these, so it does not wait for reports it will
-/// never get, and a client's terminal is asked for no more of a program's
-/// flags than these; each flag joins here as the encoder learns it.
-pub const KITTY_FLAGS_ENCODED: u8 = KITTY_DISAMBIGUATE;
+/// The kitty keyboard flags [`encode_key`] acts on: every flag the
+/// protocol has. A program asking which flags are on is told only these,
+/// and a client's terminal is asked for no more of a program's flags than
+/// these.
+pub const KITTY_FLAGS_ENCODED: u8 = KITTY_DISAMBIGUATE
+    | KITTY_REPORT_EVENTS
+    | KITTY_REPORT_ALTERNATE
+    | KITTY_REPORT_ALL_KEYS
+    | KITTY_REPORT_TEXT;
 
 /// The pane state key encoding depends on.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -129,13 +147,6 @@ fn modifier_param(m: KeyModifiers) -> u8 {
         + 4 * u8::from(m.contains(KeyModifiers::CONTROL))
 }
 
-fn csi_u(codepoint: u32, m: KeyModifiers) -> Vec<u8> {
-    match modifier_param(m) {
-        1 => format!("\x1b[{codepoint}u").into_bytes(),
-        p => format!("\x1b[{codepoint};{p}u").into_bytes(),
-    }
-}
-
 /// A modified key in the extended form `format` names, as tmux's
 /// input_key_extended; an unmodified one has none.
 fn extended(codepoint: u32, m: KeyModifiers, format: ExtendedKeysFormat) -> Vec<u8> {
@@ -189,6 +200,16 @@ fn legacy_control(key: &KeyEvent) -> Option<char> {
     }
 }
 
+/// Whether `key` is a modifier or lock key itself, which only a terminal
+/// under kitty flag 8 reports, and only a program under it is sent: a key
+/// held with others, never one typed on its own.
+pub fn is_modifier_key(key: KeyCode) -> bool {
+    matches!(
+        key,
+        KeyCode::Modifier(_) | KeyCode::CapsLock | KeyCode::NumLock | KeyCode::ScrollLock
+    )
+}
+
 /// Whether tmux's modifyOtherKeys level 1 sends a key as at level 0, as
 /// its input_key_mode1: a key with Meta and not Ctrl, and Ctrl with a key
 /// xterm's table gives a control byte; the rest go extended.
@@ -217,34 +238,43 @@ fn ctrl_byte(c: char) -> Option<u8> {
 }
 
 /// Encode a key for a pane under the `extended-keys` and
-/// `extended-keys-format` options. Release events and keys with no
-/// encoding produce nothing.
+/// `extended-keys-format` options. A program that pushed kitty flags gets
+/// the kitty protocol's encoding ([`kitty::encode`]); every other gets a
+/// press or repeat as a legacy terminal or tmux sends it, and no release.
+/// Keys with no encoding produce nothing.
 pub fn encode_key(
     key: &KeyEvent,
     modes: InputModes,
     option: ExtendedKeys,
     format: ExtendedKeysFormat,
 ) -> Vec<u8> {
+    let flags = modes.kitty_flags & KITTY_FLAGS_ENCODED;
+    // Flags 4 and 16 alone change no key's form: alternate keys and text
+    // ride only on keys another flag makes escape codes.
+    if flags & (KITTY_DISAMBIGUATE | KITTY_REPORT_EVENTS | KITTY_REPORT_ALL_KEYS) != 0 {
+        return kitty::encode(key, flags);
+    }
     if key.kind == KeyEventKind::Release {
         return Vec::new();
     }
+    legacy_key(key, modes, modes.key_level(option), format)
+}
+
+/// A key as a legacy terminal sends it, or extended at modifyOtherKeys
+/// `level` in `format`, as tmux's input_key.
+fn legacy_key(key: &KeyEvent, modes: InputModes, level: u8, format: ExtendedKeysFormat) -> Vec<u8> {
     const MODS: KeyModifiers = KeyModifiers::SHIFT
         .union(KeyModifiers::ALT)
         .union(KeyModifiers::CONTROL);
-    // Every form but kitty's sends the key typed; kitty's sends the key
-    // itself, which differs only for a character.
     let typed = Typed::of(key);
     let code = legacy_control(key).map_or(typed.key, KeyCode::Char);
     let m = typed.modifiers & MODS;
     let alt = m.contains(KeyModifiers::ALT);
     let ctrl = m.contains(KeyModifiers::CONTROL);
-    let kitty = modes.kitty_flags & KITTY_DISAMBIGUATE != 0;
 
     // A key tmux's table has no entry for goes extended at modifyOtherKeys
     // level 2 if it is modified, and at level 1 if xterm's legacy form
     // cannot carry it, as tmux's input_key; level 2 sends BTab as S-Tab.
-    // The kitty protocol, which tmux lacks, takes the keys it reports.
-    let level = if kitty { 0 } else { modes.key_level(option) };
     if level > 0 {
         let (code, mods) = match code {
             KeyCode::BackTab if level >= 2 => (KeyCode::Tab, m | KeyModifiers::SHIFT),
@@ -284,30 +314,18 @@ pub fn encode_key(
         }
     };
 
-    // kitty reports the unshifted key with the shift modifier, as ttyr
-    // holds a key: Alt+Shift+1 is `CSI 49;4u`, Alt+Shift+a `CSI 97;4u`.
-    if let KeyCode::Char(c) = key.key
-        && kitty
-        && (ctrl || alt)
-    {
-        let c = legacy_control(key).unwrap_or(c);
-        return csi_u(u32::from(c), key.modifiers & MODS);
-    }
     match code {
         KeyCode::Char(c) if ctrl => ctrl_byte(c).map_or_else(Vec::new, |b| with_alt(vec![b])),
         KeyCode::Char(c) => {
             let mut buf = [0u8; 4];
             with_alt(c.encode_utf8(&mut buf).as_bytes().to_vec())
         }
-        KeyCode::Enter if kitty && (ctrl || m.contains(KeyModifiers::SHIFT)) => csi_u(13, m),
         KeyCode::Enter => with_alt(b"\r".to_vec()),
-        KeyCode::Tab if kitty && ctrl => csi_u(9, m),
         KeyCode::Tab if m.contains(KeyModifiers::SHIFT) => b"\x1b[Z".to_vec(),
         KeyCode::Tab => with_alt(b"\t".to_vec()),
         KeyCode::BackTab => b"\x1b[Z".to_vec(),
         KeyCode::Backspace if ctrl => with_alt(vec![0x08]),
         KeyCode::Backspace => with_alt(vec![0x7f]),
-        KeyCode::Esc if kitty => csi_u(27, m),
         KeyCode::Esc => with_alt(vec![0x1b]),
         KeyCode::Up => cursor('A'),
         KeyCode::Down => cursor('B'),
@@ -315,9 +333,8 @@ pub fn encode_key(
         KeyCode::Left => cursor('D'),
         // As tmux's table, the `tmux-256color` terminfo's khome and kend
         // whatever the cursor key mode; only a modified one is `CSI 1;m H`.
-        // The kitty protocol, which tmux lacks, keeps kitty's `CSI H`.
-        KeyCode::Home if modifier_param(m) == 1 && !kitty => tilde(1),
-        KeyCode::End if modifier_param(m) == 1 && !kitty => tilde(4),
+        KeyCode::Home if modifier_param(m) == 1 => tilde(1),
+        KeyCode::End if modifier_param(m) == 1 => tilde(4),
         KeyCode::Home => cursor('H'),
         KeyCode::End => cursor('F'),
         KeyCode::Insert => tilde(2),

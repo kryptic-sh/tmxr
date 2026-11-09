@@ -419,6 +419,46 @@ mouse-enabled pane.
   the oracle; not yet in xterm, foot (which speaks kitty's protocol, so is xterm
   tier only under `kitty-keys off`), mintty or iTerm2.
 
+## Plan 18's kitty encoder (2026-11-10)
+
+- **A text key's release under flag 2 follows kitty, not the spec's prose.** The
+  spec says a key that types text has no event types without flag 8; kitty's own
+  encoder (`key_encoding.c`, `encode_key`) still reports its release
+  (`CSI 97;1:3u`) under flag 2, and `tmxr-term`'s `encode::kitty` does as kitty
+  does, so a game under flags 1 and 2 does not see `w` stuck down. Kitty's
+  Escape release under flag 2 alone, which it sends as a second Escape, is not
+  copied: tmxr sends nothing. Decided while building step 6; the owner may
+  prefer the spec's letter.
+- **A legacy client's press is released at once for a flag-2 pane**, where the
+  plan first said it got no release (`server::releases`, `key_reached`). The
+  pane's `CSI ? u` reports flag 2 whichever client types, so a release never
+  sent is a key stuck down; the brief for step 6 asked for the made release.
+  Plan 18's fallback text now says so.
+- **No e2e test sends a release to a popup.** A popup's program gets releases as
+  a pane's does (`Reached::Popup`, `Popup::send_key`); `kitty_keys.rs` covers
+  panes only. A test needs `display-popup` running the key-log fixture.
+- **The Windows client's releases are thrown away and made again.** The console
+  reports key-up events and the bridge passes them on, but the Windows client is
+  `Legacy` tier, so the server releases each press at once and drops the
+  console's own release (nothing is held for it). Under Windows Terminal's
+  win32-input-mode those releases are real and could be held instead; plan 18
+  step 8's.
+- **A kitty-encoded Escape is still held for `escape-time`.** A terminal under
+  flag 1 sends Escape as `CSI 27u`, which cannot be the start of an Alt chord,
+  yet `escape_time` (`server/input.rs`) holds any lone Escape, so a key typed
+  within `escape-time` after it still gets Alt. Older than step 6, as tmux holds
+  its own Escape. Step 6 made only the held Escape's own release (flag 2) send
+  it at once, so a program never gets the release before the press.
+- **Toggling synchronize-panes while a key is held doubles a release.** A press
+  reaches `[1]`, a repeat after synchronize-panes goes on reaches `[1, 2]`, and
+  `key_reached` keeps both `Reached::Panes` entries as they differ, so pane 1
+  gets the release twice. Merging pane lists would fix it. Found by review; not
+  tested.
+- **Under flag 2 a held Escape's repeats become fresh presses.** `escape_time`
+  (`server/key_timing.rs`) holds a Repeat of a lone Escape as it holds a press,
+  so each repeat goes out as a new Escape press, and the program sees several
+  presses and one release. Found by review; not tested.
+
 ## Decisions waiting on the owner
 
 - **tmxr sets no `TERM_PROGRAM`** (_read_ by the slice-3 reviewer): tmux sets

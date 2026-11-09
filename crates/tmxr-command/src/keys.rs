@@ -295,6 +295,45 @@ mod tests {
         s.parse().unwrap()
     }
 
+    /// A terminal asked for kitty flag 8 (and 16, and the lock keys it
+    /// then reports) sends what it typed as escape codes; through ttyr's
+    /// decoder each is the key its legacy bytes are, so binds and key
+    /// tables see no difference.
+    #[test]
+    fn keys_reported_as_escape_codes_are_the_keys_typed() {
+        let decode = |bytes: &[u8]| {
+            let mut decoder = ttyr::event::Decoder::new();
+            decoder.feed(bytes);
+            match decoder.next_event().or_else(|| decoder.flush_event()) {
+                Some(ttyr::event::Event::Key(ev)) => Key::from_event(&ev),
+                other => panic!("{bytes:?}: {other:?}"),
+            }
+        };
+        for (legacy, escaped) in [
+            (
+                &b"a"[..],
+                &[&b"\x1b[97u"[..], b"\x1b[97;;97u", b"\x1b[97;129u"][..],
+            ),
+            (
+                b"A",
+                &[b"\x1b[97:65;2u", b"\x1b[97:65;2;65u", b"\x1b[97;65u"],
+            ),
+            (b"!", &[b"\x1b[49:33;2u", b"\x1b[49:33;2;33u"]),
+            (b" ", &[b"\x1b[32u", b"\x1b[32;;32u"]),
+            ("é".as_bytes(), &[b"\x1b[233u", b"\x1b[233;;233u"]),
+            (b"\r", &[b"\x1b[13u"]),
+            (b"\t", &[b"\x1b[9u"]),
+            (b"\x7f", &[b"\x1b[127u"]),
+            (b"\x01", &[b"\x1b[97;5u"]),
+            (b"1", &[b"\x1b[57400;129;49u"]),
+        ] {
+            let want = decode(legacy);
+            for bytes in escaped {
+                assert_eq!(decode(bytes), want, "{bytes:?}");
+            }
+        }
+    }
+
     #[test]
     fn names_parse_and_print_back() {
         for name in [

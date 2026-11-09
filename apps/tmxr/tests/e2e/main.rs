@@ -9,6 +9,7 @@ mod buffers_and_shell;
 mod copy_mode;
 mod input;
 mod keyboard;
+mod kitty_keys;
 mod overlays;
 mod panes;
 mod resurrect;

@@ -1643,16 +1643,16 @@ mod tests {
         assert_eq!(e.process(b"\x1b[?u"), b"\x1b[?1u");
         e.process(b"\x1b[<u");
         assert_eq!(e.input_modes().kitty_flags, 0);
-        // The query answers only the flags tmxr encodes; the stack keeps
-        // what was pushed.
+        // The query answers the flags tmxr encodes, every one; the stack
+        // keeps what was pushed.
         e.process(b"\x1b[>31u");
-        assert_eq!(e.process(b"\x1b[?u"), b"\x1b[?1u");
+        assert_eq!(e.process(b"\x1b[?u"), b"\x1b[?31u");
         assert_eq!(e.input_modes().kitty_flags, 31);
         e.process(b"\x1b[=8u");
-        assert_eq!(e.process(b"\x1b[?u"), b"\x1b[?0u");
+        assert_eq!(e.process(b"\x1b[?u"), b"\x1b[?8u");
         e.process(b"\x1b[=1;2u");
         assert_eq!(e.input_modes().kitty_flags, 9);
-        assert_eq!(e.process(b"\x1b[?u"), b"\x1b[?1u");
+        assert_eq!(e.process(b"\x1b[?u"), b"\x1b[?9u");
         e.process(b"\x1b[<u");
         assert_eq!(e.input_modes().kitty_flags, 0);
         // A full stack drops its oldest entry: after 20 pushes, popping the
@@ -1721,6 +1721,18 @@ mod tests {
         assert_eq!(e.process(b"\x1b[?u"), b"\x1b[?0u");
         e.process(b"\x1b[?1049h");
         assert_eq!(e.process(b"\x1b[?u"), b"\x1b[?1u");
+    }
+
+    /// `CSI ? u` answers every flag the program pushed, as the encoder acts
+    /// on them all.
+    #[test]
+    fn the_kitty_query_answers_every_flag() {
+        let mut e = Emulator::new(24, 80, 0);
+        for flags in [2, 4, 8, 16, 11, 31] {
+            e.process(format!("\x1b[={flags}u").as_bytes());
+            let want = format!("\x1b[?{flags}u");
+            assert_eq!(e.process(b"\x1b[?u"), want.as_bytes());
+        }
     }
 
     /// Each screen's stack holds the limit on its own: filling one drops
