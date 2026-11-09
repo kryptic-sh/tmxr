@@ -84,9 +84,6 @@ means as the reviewer said, not checked.
   program and the command fails with `could not start pane: …`. The id is used
   up either way (`a_failed_split_spends_its_pane_id`). Matching tmux means
   making a pane with no program, dead from the start.
-- _Reported_: the kitty keyboard flags are one stack for both screens, so
-  leaving the alternate screen keeps a program's flags; the protocol keeps one
-  per screen.
 
 ### Reported, not checked
 
@@ -269,19 +266,6 @@ mouse-enabled pane.
   `TERM_PROGRAM=tmxr` (consistent with XTVERSION; programs know no "tmxr"),
   `TERM_PROGRAM=tmux` (programs treat it as tmux, as `TMXR` deliberately
   avoids), or leave it inherited.
-- **Alt+Shift keys lose their Shift under a kitty-protocol terminal.**
-  `Guard::enter` in `tmxr-client/src/terminal.rs` pushes kitty's
-  `DISAMBIGUATE_ESCAPE_CODES`, which tmux never asks for; the terminal then
-  sends Alt+Shift+a as `CSI 97;4u`, crossterm reads `'a'` with Shift and Alt,
-  and `encode_key` and `Key::normalise` (`keys.rs`) drop the Shift. In
-  Alacritty, kitty, foot, Ghostty and WezTerm, M-A reaches a program as M-a, and
-  `bind -n M-H` never fires (`M-h` runs instead). _Reproduced_ by the 2026-11-02
-  reviewer. Options: also push `REPORT_ALTERNATE_KEYS`, so crossterm swaps in
-  the shifted character (the reviewer's suggestion; costs tmxr's own C-S-h as a
-  key apart from C-h); fold Shift into the character in `encode_key` /
-  `normalise` for Alt chords only (keeps C-S-h, but must know the layout's
-  shifted character, which only the terminal does); or stop asking for the kitty
-  protocol, as tmux (loses every key it disambiguates).
 - **Synchronized updates are asked for, not configured**
   (`terminal::probe_sync`): at its first attach a client sends DECRQM for mode
   2026 and DA1 and reads the answers straight from the terminal (up to
