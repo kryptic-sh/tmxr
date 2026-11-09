@@ -116,14 +116,34 @@ Read in the tree on 2026-11-09:
 
 ### Binds
 
-- tmux's names keep matching. Both encodings of a key normalise to the same
+Decided by the owner (2026-11-09): tmux-style and kitty-style key names are both
+accepted, anywhere a key is named, and either can be used.
+
+- **tmux's names keep matching.** Both encodings of a key normalise to the same
   `Key`: `M-A` from `ESC A` and from `CSI 97;4u`, `C-h` from `0x08` and from
   `CSI 104;5u`.
-- Kitty-style binds are added for what tmux cannot name: Super, Hyper, Meta,
-  keypad keys apart from the main keys, the lock-state modifiers, Shift on a
-  letter held with Ctrl. A release or repeat never runs a bind; a repeat runs it
-  as a press, as an auto-repeating legacy terminal already does.
-- `send-keys`, `list-keys` and the hjkl `<…>` names learn the new names.
+- **tmux's names grow** to cover what the protocol reports and tmux cannot name:
+  `Super-`, `Hyper-` and `Meta-` prefixes, `C-S-h` kept apart from `C-h`, keypad
+  keys apart from the main keys (tmux's own `KP*` names), the lock-state
+  modifiers.
+- **kitty's names are accepted as written in kitty's docs**: `+`-joined
+  modifiers (`ctrl`, `shift`, `alt`/`opt`/`option`, `super`/`cmd`/`command`,
+  `hyper`, `meta`, `caps_lock`, `num_lock`) and kitty's key names (`f1`,
+  `enter`, `kp_enter`, `left`, `page_up`, …), so `ctrl+shift+h` and `super+k`
+  bind. The exact list is transcribed from the spec's key table, with a test per
+  name.
+- **One key, two spellings.** `M-H` and `alt+shift+h` parse to the same `Key`:
+  binding one replaces a bind on the other, and `unbind` takes either.
+- **Printing.** `list-keys` and `#{key}`-style formats print a key in tmux's
+  form where tmux has a name for it, so output the oracle compares stays tmux's,
+  and in the extended tmux form otherwise (`Super-k`). Not printing in the
+  spelling the bind was written in is deliberate: a `Key` holds no spelling.
+- **Sequences stay tmux's.** kitty's `ctrl+a>x` multi-key maps are not key
+  names; tmux's key tables (`bind -T`, `switch-client -T`) already do that.
+- A release never runs a bind; a repeat runs it as a press, as an auto-repeating
+  legacy terminal already does.
+- `send-keys`, `list-keys`, `bind`, `unbind`, the config and the hjkl `<…>`
+  names all take both forms.
 - A bind on a key a legacy terminal cannot send (C-S-h, Super) just never fires
   there; `list-keys` could mark it.
 
@@ -165,15 +185,11 @@ What a legacy client keeps, each one a test:
 
 ## Decisions for the owner
 
-1. **Kitty-style bind syntax.** Options: extend tmux's prefixes (`Super-k`,
-   `Hyper-k`, `C-S-h` kept apart from `C-h`, `KP_Enter`); or take kitty's own
-   (`ctrl+shift+h`, `super+k`); or both, normalised to one `Key`. The first
-   keeps one syntax in a config; the second matches kitty's docs.
-2. **modifyOtherKeys as a middle tier** for xterm and terminals like it: ask the
+1. **modifyOtherKeys as a middle tier** for xterm and terminals like it: ask the
    outer terminal for it, as tmux does, or leave those terminals legacy.
-3. **`extended-keys off`**: whether it also stops the kitty protocol for panes
+2. **`extended-keys off`**: whether it also stops the kitty protocol for panes
    (today the kitty path bypasses the option).
-4. **Bind on a key the client cannot send**: silent, or marked in `list-keys`.
+3. **Bind on a key the client cannot send**: silent, or marked in `list-keys`.
 
 ## Order
 
@@ -186,7 +202,8 @@ What a legacy client keeps, each one a test:
 4. `ServerMsg::KeyboardFlags` and the choke point that follows focus.
 5. `encode_key` for flags 2, 4, 8 and 16, with the fallback and the synthesised
    releases.
-6. Kitty-style binds, `send-keys` and `list-keys`, after decision 1.
+6. Kitty-style key names and the extended tmux names, in every place a key is
+   named.
 7. Windows.
 
 ## Testing
