@@ -2719,12 +2719,13 @@ checksum = "d0af592be68c579aa78a16846bd19422978c3c52e438523d45ff5d1bff1f9d4a"
 [[package]]
 name = "ttyr"
 version = "0.1.0"
-source = "git+https://github.com/kryptic-sh/ttyr?rev=35b22a9#35b22a964dc0de9d4b825b29f7bbd483cf74d5fa"
+source = "git+https://github.com/kryptic-sh/ttyr?rev=ea44d70#ea44d706a788633b2a039411e8e2c434052d08ed"
 dependencies = [
  "bitflags 2.13.2",
  "rustix",
  "serde",
  "signal-hook 0.4.6",
+ "windows-sys",
 ]
 
 [[package]]

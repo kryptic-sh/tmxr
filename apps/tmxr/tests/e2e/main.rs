@@ -269,6 +269,25 @@ impl Tmxr {
         )
     }
 
+    /// [`Tmxr::attach`] in a session with no controlling terminal: the pty
+    /// is the client's standard streams only, as under a launcher that
+    /// calls `setsid` and hands on its terminal (some service managers and
+    /// test harnesses). Unix only: a Windows console has no controlling
+    /// terminal to lack.
+    #[cfg(unix)]
+    fn attach_without_controlling_terminal(&self, rest: &[&str]) -> Screen {
+        self.terminal(
+            self.dir.path(),
+            env!("CARGO_BIN_EXE_tmxr"),
+            &self.args(rest),
+            &[],
+            Answers {
+                controlling: false,
+                ..Answers::default()
+            },
+        )
+    }
+
     /// [`Tmxr::spawn_env`] in directory `cwd`.
     fn spawn_at(
         &self,
@@ -293,6 +312,7 @@ impl Tmxr {
             sync,
             kitty,
             mut typed_before_da1,
+            controlling,
         } = answers;
         let pair = native_pty_system()
             .openpty(PtySize {
@@ -314,6 +334,7 @@ impl Tmxr {
             }
         }
         cmd.cwd(cwd);
+        cmd.set_controlling_tty(controlling);
         let child = pair.slave.spawn_command(cmd).unwrap();
         drop(pair.slave);
         let mut reader = pair.master.try_clone_reader().unwrap();
@@ -405,6 +426,9 @@ struct Answers {
     kitty: bool,
     /// Typed just ahead of its answer to the first DA1 query.
     typed_before_da1: Option<Vec<u8>>,
+    /// Whether the pty is the program's controlling terminal, as a shell
+    /// would make it, or only its standard streams.
+    controlling: bool,
 }
 
 impl Default for Answers {
@@ -414,6 +438,7 @@ impl Default for Answers {
             sync: false,
             kitty: true,
             typed_before_da1: None,
+            controlling: true,
         }
     }
 }

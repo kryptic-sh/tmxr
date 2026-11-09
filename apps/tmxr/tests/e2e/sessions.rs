@@ -2003,3 +2003,35 @@ fn a_resize_while_the_client_attaches_is_seen() {
         |o| o.trim() == want,
     );
 }
+
+/// A client whose terminal is its standard streams but not its controlling
+/// terminal (a `setsid` launcher's) attaches as from a shell: raw mode and
+/// the size are taken on the terminal it reads, not on `/dev/tty`, which it
+/// has none of. Unix only: a Windows console has no controlling terminal.
+#[cfg(unix)]
+#[test]
+fn a_client_without_a_controlling_terminal_attaches() {
+    use std::os::fd::RawFd;
+    let t = Tmxr::new("noctty");
+    let s = t.attach_without_controlling_terminal(&["new", "-s", "nc"]);
+    s.wait_for("status line", |text| text.contains("nc"));
+    assert_eq!(
+        t.run(&["list-clients", "-F", "#{client_width}x#{client_height}"])
+            .trim(),
+        format!("{COLS}x{ROWS}")
+    );
+    // Raw mode is on that terminal: no line editing, no echo.
+    let fd: RawFd = s.master.as_raw_fd().unwrap();
+    // SAFETY: `termios` is plain data that `tcgetattr` fills in, from `fd`,
+    // the pty's side the test holds open.
+    let local = unsafe {
+        let mut termios = std::mem::zeroed::<libc::termios>();
+        assert_eq!(libc::tcgetattr(fd, &mut termios), 0);
+        termios.c_lflag
+    };
+    assert_eq!(local & (libc::ICANON | libc::ECHO), 0, "{local:#x}");
+    s.send(b"echo no-ctty-marker\r");
+    s.wait_for("echoed marker", |text| {
+        text.matches("no-ctty-marker").count() >= 2
+    });
+}

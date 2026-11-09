@@ -1,6 +1,8 @@
 //! The terminal's input: ttyr's reader on Unix, crossterm's on Windows.
 
 use std::io;
+#[cfg(unix)]
+use std::os::fd::OwnedFd;
 use std::time::Duration;
 
 use ttyr::event::Event;
@@ -20,6 +22,9 @@ use super::probe::Probe;
 pub struct Keys {
     #[cfg(unix)]
     pub(super) reader: ttyr::reader::Reader,
+    /// The terminal the reader reads, for raw mode to be set on.
+    #[cfg(unix)]
+    pub(super) tty: OwnedFd,
     /// What the terminal said when last asked, kept where it does not
     /// answer in time when asked again.
     #[cfg(unix)]
@@ -30,13 +35,34 @@ pub struct Keys {
     console_bytes: bool,
 }
 
-/// The terminal's size, columns then rows: the controlling terminal's on
-/// Unix, the console's on Windows.
+/// The terminal's size, columns then rows: on Unix, that of the terminal
+/// [`Keys::open`] reads; on Windows, the console's.
 pub fn size() -> io::Result<(u16, u16)> {
     #[cfg(unix)]
-    return ttyr::terminal::size();
+    return ttyr::terminal::size_of(tty()?);
     #[cfg(windows)]
     return crossterm::terminal::size();
+}
+
+/// The client's terminal: standard input where it is one, as crossterm took
+/// it, else the controlling terminal. A client under a launcher that leaves
+/// it no controlling terminal (`setsid`) still has its terminal on standard
+/// input.
+#[cfg(unix)]
+fn tty() -> io::Result<OwnedFd> {
+    use std::io::IsTerminal as _;
+    use std::os::fd::AsFd as _;
+    use std::os::unix::fs::OpenOptionsExt as _;
+    let stdin = io::stdin();
+    if stdin.is_terminal() {
+        return stdin.as_fd().try_clone_to_owned();
+    }
+    let tty = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .custom_flags(libc::O_NOCTTY)
+        .open("/dev/tty")?;
+    Ok(tty.into())
 }
 
 impl Keys {
@@ -47,15 +73,13 @@ impl Keys {
     /// to compare a size from before with.
     #[cfg(unix)]
     pub fn open() -> io::Result<Self> {
-        use std::io::IsTerminal as _;
-        use std::os::fd::AsFd as _;
-        let stdin = io::stdin();
-        let reader = if stdin.is_terminal() {
-            ttyr::reader::Reader::from_fd(stdin.as_fd().try_clone_to_owned()?)?
-        } else {
-            ttyr::reader::Reader::open()?
-        };
-        Ok(Self { reader, last: None })
+        let tty = tty()?;
+        let reader = ttyr::reader::Reader::from_fd(tty.try_clone()?)?;
+        Ok(Self {
+            reader,
+            tty,
+            last: None,
+        })
     }
 
     /// Start crossterm's reader of the console, whose resize records are

@@ -1,7 +1,7 @@
-//! The Windows console's modes, through crossterm, which sets the console's
-//! own modes where `ttyr` (at its pinned rev) has no Windows side yet. The
-//! console has no kitty keyboard protocol ([`Keys::probe`] says so), so no
-//! flags are pushed here.
+//! The Windows console's modes, through crossterm, which tmxr's Windows
+//! client still uses until plan 18 step 8. The console has no kitty keyboard
+//! protocol ([`Keys::probe`] says so), so no flags are pushed here, and
+//! crossterm's restore has none to pop.
 
 use std::io;
 use std::sync::Once;

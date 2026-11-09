@@ -1,14 +1,15 @@
 //! The guard against a real terminal: this test binary run again as the
-//! fixture below, in a pty that is its controlling terminal, as an attached
-//! client runs; the test plays the terminal.
+//! fixture below, in a pty that is its standard streams and (as an attached
+//! client usually runs) its controlling terminal, or (as under a `setsid`
+//! launcher) not; the test plays the terminal.
 //!
-//! Unix only: the guard here is `ttyr`'s, which has no Windows side at its
-//! pinned rev, and the Windows guard's hook is crossterm's restore, with no
+//! Unix only: tmxr's Windows client still takes the console through
+//! crossterm until plan 18 step 8, and crossterm's restore there has no
 //! kitty flags to pop.
 
 use std::fs::File;
 use std::io::{Read, Write};
-use std::os::fd::{FromRawFd, OwnedFd};
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::os::unix::process::CommandExt as _;
 use std::process::Stdio;
 use std::sync::mpsc;
@@ -115,9 +116,16 @@ fn pushes(text: &str) -> Vec<usize> {
         .collect()
 }
 
-/// Runs [`panic_fixture`] in a pty, answering its probes as a kitty
-/// terminal, and returns all it wrote.
-fn run_fixture() -> String {
+/// What [`panic_fixture`] left: all it wrote, and the pty's local modes
+/// once it exited.
+struct Run {
+    text: String,
+    local_modes: libc::tcflag_t,
+}
+
+/// Runs [`panic_fixture`] in a pty, its controlling terminal where
+/// `controlling`, answering its probes as a kitty terminal.
+fn run_fixture(controlling: bool) -> Run {
     let (master, slave) = pty();
     let mut command = tmxr_term::child::command(std::env::current_exe().unwrap());
     command
@@ -135,10 +143,12 @@ fn run_fixture() -> String {
     // SAFETY: runs in the child between fork and exec, calling only
     // `setsid` and `ioctl`, which are async-signal-safe.
     unsafe {
-        command.pre_exec(|| {
-            // Its own session, with the pty (its stdin) as its controlling
-            // terminal, which `ttyr` opens as `/dev/tty`.
-            if libc::setsid() == -1 || libc::ioctl(0, libc::TIOCSCTTY as _, 0) == -1 {
+        command.pre_exec(move || {
+            // Its own session, so without a controlling terminal unless the
+            // pty (its stdin) is made it.
+            if libc::setsid() == -1
+                || (controlling && libc::ioctl(0, libc::TIOCSCTTY as _, 0) == -1)
+            {
                 return Err(std::io::Error::last_os_error());
             }
             Ok(())
@@ -192,12 +202,43 @@ fn run_fixture() -> String {
         da1 = count(&got, DA1_QUERY);
     }
     child.wait().unwrap();
-    String::from_utf8_lossy(&got).into_owned()
+    // SAFETY: `termios` is plain data that `tcgetattr` fills in, from the
+    // pty's side this test holds open.
+    let local_modes = unsafe {
+        let mut termios = std::mem::zeroed::<libc::termios>();
+        assert_eq!(
+            libc::tcgetattr(terminal.as_raw_fd(), &mut termios),
+            0,
+            "tcgetattr: {}",
+            std::io::Error::last_os_error()
+        );
+        termios.c_lflag
+    };
+    Run {
+        text: String::from_utf8_lossy(&got).into_owned(),
+        local_modes,
+    }
 }
 
 #[test]
 fn a_panic_gives_the_terminal_back_once() {
-    let text = run_fixture();
+    gives_the_terminal_back_once(run_fixture(true));
+}
+
+/// As above, from a client with no controlling terminal: its terminal is
+/// taken and given back on its standard streams.
+#[test]
+fn a_panic_gives_a_terminal_that_is_not_the_controlling_one_back_once() {
+    gives_the_terminal_back_once(run_fixture(false));
+}
+
+/// What [`panic_fixture`] left has the terminal taken and given back once
+/// on its panic: raw mode off again on that terminal, and every mode
+/// turned off once.
+fn gives_the_terminal_back_once(Run { text, local_modes }: Run) {
+    // A new pty edits lines and echoes, as raw mode turns off.
+    let cooked = libc::ICANON | libc::ECHO;
+    assert_eq!(local_modes & cooked, cooked, "{local_modes:#x}");
     assert!(text.contains("the fixture panics on purpose"), "{text:?}");
     assert!(text.contains(DONE), "{text:?}");
     // Pushed on attach and again after each hand-over, popped before each

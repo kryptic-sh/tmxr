@@ -2,10 +2,10 @@
 //! mode it turns on and turns them off again in reverse: on the way out,
 //! from its panic hook, and around a suspend or a lock.
 
-use std::fs::OpenOptions;
+use std::fs::File;
 use std::io::{self, Write};
-use std::sync::Once;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, Once, PoisonError, TryLockError};
 
 use ttyr::event::{Event, KeyboardEnhancementFlags};
 use ttyr::terminal::{
@@ -26,6 +26,10 @@ static MOUSE: AtomicBool = AtomicBool::new(false);
 /// Whether the screen is taken, so [`write_resets`] is owed on the way out.
 static TAKEN: AtomicBool = AtomicBool::new(false);
 
+/// The terminal taken, for the panic hook to write to: the one raw mode is
+/// on, which need not be the controlling terminal.
+static TERMINAL: Mutex<Option<File>> = Mutex::new(None);
+
 /// Install `ttyr`'s panic hook, which turns its recorded modes and raw
 /// mode off, and tmxr's over it, which gives back what tmxr wrote itself
 /// and then runs `ttyr`'s. Once, however many times the terminal is taken.
@@ -41,9 +45,10 @@ fn restore_on_panic() {
     });
 }
 
-/// [`give_back`] from the panic hook: to the controlling terminal, as
-/// `ttyr`'s hook writes, not to stdout, whose lock the panicking thread
-/// may hold. A failure has nowhere to be reported.
+/// [`give_back`] from the panic hook: to the terminal taken, as `ttyr`'s
+/// hook writes, not to stdout, whose lock the panicking thread may hold.
+/// Skipped if the panicking thread holds [`TERMINAL`] (a panic while it was
+/// taken); a failure has nowhere to be reported.
 fn give_back_after_panic() {
     let (mouse, taken) = (
         MOUSE.swap(false, Ordering::AcqRel),
@@ -52,8 +57,13 @@ fn give_back_after_panic() {
     if !mouse && !taken {
         return;
     }
-    if let Ok(mut tty) = OpenOptions::new().write(true).open("/dev/tty") {
-        let _ = give_back(&mut tty, mouse, taken);
+    let mut terminal = match TERMINAL.try_lock() {
+        Ok(terminal) => terminal,
+        Err(TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+        Err(TryLockError::WouldBlock) => return,
+    };
+    if let Some(tty) = terminal.as_mut() {
+        let _ = give_back(tty, mouse, taken);
     }
 }
 
@@ -81,7 +91,11 @@ impl Guard {
     /// read while the terminal answered, for the server.
     pub fn enter(keys: &mut Keys) -> io::Result<(Self, Vec<Event>)> {
         restore_on_panic();
-        tty::enable_raw_mode()?;
+        *TERMINAL.lock().unwrap_or_else(PoisonError::into_inner) =
+            Some(File::from(keys.tty.try_clone()?));
+        // On the terminal `keys` reads, which need not be the controlling
+        // one.
+        tty::enable_raw_mode_on(&keys.tty)?;
         // From here an error, or a panic as it unwinds, drops the guard and
         // so gives the terminal back.
         let mut guard = Self {
@@ -192,5 +206,10 @@ impl Drop for Guard {
             TAKEN.swap(false, Ordering::AcqRel),
         );
         let _ = tty::restore(&mut out);
+        // Not held until exit: the next `Guard::enter` stores its own.
+        TERMINAL
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
     }
 }

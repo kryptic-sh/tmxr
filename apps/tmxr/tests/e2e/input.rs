@@ -584,11 +584,11 @@ fn a_kitty_terminal_gets_its_flags_pushed_replaced_and_popped() {
     s.wait_kitty_flags(TMXR_KITTY_FLAGS);
     kitty_pane(&t, "kf", "kittypane");
     move_focus_and_kitty_keys(&t, &s, "kf");
-    // The flags go out after the frame `move_focus_and_kitty_keys` waits for.
-    s.wait_kitty_flags(TMXR_KITTY_FLAGS);
     s.wait_for_raw("none, then tmxr's again", |_| {
         s.kitty_requests().ends_with(&[0, TMXR_KITTY_FLAGS])
     });
+    // Once the replacement is in, so this confirms the final flags.
+    s.wait_kitty_flags(TMXR_KITTY_FLAGS);
     let requests = s.kitty_requests();
     assert_eq!(requests.first(), Some(&TMXR_KITTY_FLAGS), "{requests:?}");
     assert!(requests.contains(&0), "{requests:?}");

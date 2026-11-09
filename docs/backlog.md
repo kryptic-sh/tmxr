@@ -328,36 +328,12 @@ mouse-enabled pane.
   modifyOtherKeys level 2 and a `C-\` bind fires on a kitty terminal's real
   Ctrl+4. tmux 3.8 keeps them apart (`send-keys C-4` sends 52). Older than plan
   18; the encoder already tells them apart by `KeyEncoding` (`legacy_control`).
-- **Colour answers in forms other than `rgb:` are lost at attach until the ttyr
-  pin moves.** The client's probe takes OSC 10/11 answers from ttyr's decoder,
-  which at the pinned rev reads only `rgb:`, where the old probe read every form
-  `colour::parse_x11` does. ttyr's local commit b2b9b5e reads every Xlib numeric
-  form (not names or `cmyk:`) with 16 bits a channel; move the workspace pin to
-  it or later once it is pushed and CI-green. tmxr takes each channel's high
-  byte (`colour::from_rgb16`), which matches tmux for every form tmux reads.
-- **The probe reads until DA1 by hand** (`Keys::probe` in `tmxr-client`'s
-  `terminal.rs`) rather than through ttyr's `collect_answers`, which at the
-  pinned rev splits reports from keys and loses their order. ttyr's local commit
-  c35cf6e keeps one ordered `Answers::events`; once it is pushed and CI-green,
-  move the pin and go back to `collect_answers`, filtering out DA1 and `Wake`.
-  The loop's timeout, partial-answer and `Wake` paths are not tested; a test can
-  drive `Reader::from_fd` over a `UnixStream::pair()` with no pty.
-- **A late answer from one probe can end the next one early** (`terminal.rs`'s
-  probe loop): after a probe times out, a server-initiated `lock-client`,
-  `suspend-client` or lock-after-time can start a new probe before the late
-  answers arrive, and the stale DA1 ends it with partial answers. Keys the user
-  types come after the late answers, so their own prefix+C-z cannot trigger it.
-  Found by reading.
-- **The Unix client's raw mode is the controlling terminal's, a limit of `ttyr`
-  at its pin** (35b22a9): its only public raw mode, `enable_raw_mode`, opens
-  `/dev/tty`; the fd-taking `enable_raw_mode_on` sits in its private
-  `terminal::unix` module, and so does `window_size_of`, so the hello's size
-  (`ttyr::terminal::size`) is `/dev/tty`'s too. crossterm used standard input
-  when it was a terminal, so a client whose stdin and stdout are a terminal but
-  which has no controlling terminal attached in 0.15.0 and now fails to. The
-  reader already reads a dup of stdin (`Keys::open`). Needs `ttyr` to take raw
-  mode (and the size) on a given fd; asked of `ttyr` by the coordinator. Found
-  by reading; not tried.
+- **A late answer from one probe can end the next one early** (`Keys::probe` in
+  `tmxr-client`'s `terminal/probe.rs`, through ttyr's `collect_answers`): after
+  a probe times out, a server-initiated `lock-client`, `suspend-client` or
+  lock-after-time can start a new probe before the late answers arrive, and the
+  stale DA1 ends it with partial answers. Keys the user types come after the
+  late answers, so their own prefix+C-z cannot trigger it. Found by reading.
 - **tmxr inside tmxr whose outer server has `kitty-keys off` reports the kitty
   tier.** The outer pane's emulator still answers the kitty query (`CSI ? u`,
   the `(Some(b'?'), 'u')` arm of `tmxr-term`'s `emulator.rs`) with `CSI ? 0 u`
@@ -376,10 +352,26 @@ mouse-enabled pane.
 - **`docs/plan/03-protocol.md`'s `TerminalInfo` is stale**: it lists
   `{ cols, rows, term, job_control }`, without `tty` or `colour_answers`, and
   its `ClientMsg` list lacks `Keyboard`.
-- **The panic-restore test (`a_panic_gives_the_terminal_back_once`, in
-  `tmxr-client`'s `terminal/guard/unix/tests.rs`) was run on Linux only**; it
-  runs a pty fixture made the controlling terminal with `setsid` and
-  `TIOCSCTTY`, whose macOS run is CI's first.
+- **Unix client tests run on Linux only so far; their macOS run is CI's first.**
+  The panic-restore tests in `tmxr-client`'s `terminal/guard/unix/tests.rs`:
+  `a_panic_gives_the_terminal_back_once`, whose pty fixture is made the
+  controlling terminal with `setsid` and `TIOCSCTTY`, and
+  `a_panic_gives_a_terminal_that_is_not_the_controlling_one_back_once`, with
+  `setsid` alone; both read the pty's termios through its master side
+  (`tcgetattr`) once the fixture exits. The probe's reader tests in
+  `terminal/probe.rs` (`reader_tests`), which drive `ttyr`'s `Reader::from_fd`
+  over a `UnixStream::pair()`. And the e2e
+  `a_client_without_a_controlling_terminal_attaches` (`sessions.rs`), which also
+  reads termios through the master side.
+- **A client with no controlling terminal never sees a resize.** `SIGWINCH` goes
+  to the foreground process group of the terminal's session, and a pty that is
+  no session's controlling terminal (a client under a `setsid` launcher) has
+  none, so ttyr's reader never reports `Event::Resize`. Such a client keeps the
+  hello's size and the one `Keys::resized_since` check after `Keys::open`. A
+  limit, not a regression: HEAD before raw mode moved to stdin (`Keys::open`'s
+  `tty`) could not attach such a client at all, and 0.15.0 relied on `SIGWINCH`
+  too. A possible fix is polling the size (`Reader::size`) on a timer while
+  attached. Found by reading; not tried.
 - **Windows AltGr arrives as Ctrl+Alt** through crossterm, so AltGr+q (`@` on a
   German layout) is read as Ctrl+Alt+`@` and sent as `ESC NUL`, and a non-ASCII
   AltGr character such as Polish `ł` sends nothing (`encode.rs` `ctrl_byte`

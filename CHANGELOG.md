@@ -65,11 +65,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **On Unix the client takes and gives back its terminal through `ttyr`, not
   crossterm**: raw mode, the alternate screen, bracketed paste, focus and colour
   scheme reports, the kitty flags, and their restore on detach, on a panic and
-  around `suspend-client` and `lock-client`. Raw mode is set on the controlling
-  terminal (`/dev/tty`) rather than on standard input. Mouse capture no longer
-  turns on urxvt's mouse form (mode 1015), which tmux does not ask for either:
-  still 1000, 1002, 1003 and SGR's 1006. crossterm is now a Windows-only
-  dependency of `tmxr-client`.
+  around `suspend-client` and `lock-client`. Raw mode and the size are still
+  taken on standard input where it is a terminal, as crossterm took them, so a
+  client with no controlling terminal (under a `setsid` launcher) still
+  attaches. Mouse capture no longer turns on urxvt's mouse form (mode 1015),
+  which tmux does not ask for either: still 1000, 1002, 1003 and SGR's 1006.
+  crossterm is now a Windows-only dependency of `tmxr-client`.
 - **The cursor colour reset the client writes as it gives its terminal back
   (`OSC 112`) ends with ST (`ESC \`) rather than BEL**, on every platform.
 - **The client also asks its terminal for its name and version** (XTVERSION,
@@ -77,6 +78,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   from `suspend-client` and `lock-client`, where it asked only for the kitty
   keyboard protocol; a terminal too slow to answer in time keeps its earlier
   answers, and new colours reach the server. Nothing acts on the version yet.
+- **The terminal's colour answers (OSC 10 and 11) are read in more forms**:
+  besides every form 0.15.0 read (tmux's), `#rgb`, `#rrrgggbbb`, `rgbi:` and
+  `rgb:` with one or three hex digits a channel, each of Xlib's numeric forms.
+  Each channel's high byte is taken, as tmux takes it.
 
 ### Fixed
 
