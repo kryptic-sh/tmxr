@@ -1,4 +1,5 @@
 use super::*;
+#[cfg(unix)]
 use tmxr_term::encode::TMXR_KITTY_FLAGS;
 
 #[test]
