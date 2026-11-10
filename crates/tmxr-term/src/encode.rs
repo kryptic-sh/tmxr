@@ -10,8 +10,8 @@
 
 use tmxr_command::Typed;
 use ttyr::event::{
-    KeyCode, KeyEncoding, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent,
-    MouseEventKind,
+    KeyCode, KeyEncoding, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers, MouseButton,
+    MouseEvent, MouseEventKind,
 };
 use vt1k::{MouseProtocolEncoding, MouseProtocolMode};
 
@@ -161,12 +161,14 @@ fn extended(codepoint: u32, m: KeyModifiers, format: ExtendedKeysFormat) -> Vec<
 /// table of special keys (a character, Enter, Tab, Escape or a modified
 /// Backspace), read as tmux reads a key ([`Typed`], with the legacy
 /// control bytes as [`legacy_control`] names them): its codepoint and
-/// modifiers. A control letter is lower case, and an upper-case letter, or
-/// a printable character with Shift alone, drops Shift, as tmux's
-/// tty_keys_next and tty_keys_extended_key.
+/// modifiers. A control letter keeps its case, as tmux keeps C-a (a
+/// legacy terminal's 0x01, which ttyr reads as the lower-case letter) apart
+/// from C-A (`send-keys C-A`, 65); without Ctrl an upper-case letter, or a
+/// printable character with Shift alone, drops Shift, as tmux's
+/// tty_keys_extended_key.
 fn tmux_key(code: KeyCode, mut m: KeyModifiers) -> Option<(u32, KeyModifiers)> {
     let c = match code {
-        KeyCode::Char(c) if m.contains(KeyModifiers::CONTROL) => c.to_ascii_lowercase(),
+        KeyCode::Char(c) if m.contains(KeyModifiers::CONTROL) => c,
         KeyCode::Char(c) => {
             let printable = c > ' ' && c != '\x7f';
             if c.is_uppercase() || (printable && m == KeyModifiers::SHIFT) {
@@ -221,20 +223,29 @@ fn level_one_is_legacy(codepoint: u32, m: KeyModifiers) -> bool {
         && char::from_u32(codepoint).is_some_and(|c| matches!(c, ' ' | '/' | '2'..='8' | '@'..='~'))
 }
 
-/// The C0 control byte for `C-<c>`, where one exists.
-fn ctrl_byte(c: char) -> Option<u8> {
-    Some(match c {
-        // As tmux's input_key_vt10x: the 0x40 bit and the case bit go.
-        '@'..='~' => c as u8 & 0x1f,
-        ' ' | '2' => 0,
-        '3' => 0x1b,
-        '4' => 0x1c,
-        '5' => 0x1d,
-        '6' => 0x1e,
-        '/' | '7' => 0x1f,
-        '?' | '8' => 0x7f,
-        _ => return None,
-    })
+/// What a legacy pane is sent for `C-<c>`, transcribed from tmux 3.6's
+/// input_key_vt10x: a few keys remapped by its `standard_map` (some to
+/// printable characters, as `C-!` to `1`), `3` to `7` to 0x1b..0x1f, `@` to
+/// `~` to their C0 byte (the 0x40 and case bits gone), and a non-ASCII
+/// character as itself, Ctrl lost, as tmux has no way to report it; `None`
+/// for any other key, which tmux sends nothing for.
+fn ctrl_bytes(c: char) -> Option<Vec<u8>> {
+    const FROM: &str = "1!9(0)=+;:'\",<.>/-8? 2";
+    const TO: &[u8] = b"119900=+;;'',,..\x1f\x1f\x7f\x7f\0\0";
+    if !c.is_ascii() {
+        let mut buf = [0u8; 4];
+        return Some(c.encode_utf8(&mut buf).as_bytes().to_vec());
+    }
+    let byte = if let Some(i) = FROM.find(c) {
+        TO[i]
+    } else if ('3'..='7').contains(&c) {
+        c as u8 - 0x18
+    } else if ('@'..='~').contains(&c) {
+        c as u8 & 0x1f
+    } else {
+        return None;
+    };
+    Some(vec![byte])
 }
 
 /// Encode a key for a pane under the `extended-keys` and
@@ -315,13 +326,19 @@ fn legacy_key(key: &KeyEvent, modes: InputModes, level: u8, format: ExtendedKeys
     };
 
     match code {
-        KeyCode::Char(c) if ctrl => ctrl_byte(c).map_or_else(Vec::new, |b| with_alt(vec![b])),
+        KeyCode::Char(c) if ctrl => ctrl_bytes(c).map_or_else(Vec::new, with_alt),
         KeyCode::Char(c) => {
             let mut buf = [0u8; 4];
             with_alt(c.encode_utf8(&mut buf).as_bytes().to_vec())
         }
+        // The keypad's Enter is a newline, as tmux's table has it for a
+        // pane not in application keypad mode (which tmxr does not track).
+        KeyCode::Enter if key.state.contains(KeyEventState::KEYPAD) && m.is_empty() => {
+            b"\n".to_vec()
+        }
         KeyCode::Enter => with_alt(b"\r".to_vec()),
-        KeyCode::Tab if m.contains(KeyModifiers::SHIFT) => b"\x1b[Z".to_vec(),
+        // tmux's S-Tab (`send-keys S-Tab`) is Tab here, Shift lost, as
+        // its table has it; Shift+Tab from a terminal is BTab.
         KeyCode::Tab => with_alt(b"\t".to_vec()),
         KeyCode::BackTab => b"\x1b[Z".to_vec(),
         KeyCode::Backspace if ctrl => with_alt(vec![0x08]),
@@ -525,11 +542,11 @@ mod tests {
     /// Character `c` typed with `m`, as a terminal reports it: an
     /// upper-case letter as its key with Shift, the letter its shifted key.
     fn typed(c: char, m: KeyModifiers) -> KeyEvent {
-        tmxr_command::Key {
-            code: KeyCode::Char(c),
-            mods: m,
-        }
-        .to_event()
+        let shift = match tmxr_command::keys::single_lower(c) {
+            Some(_) => S,
+            None => KeyModifiers::NONE,
+        };
+        tmxr_command::Key::new(KeyCode::Char(c), m | shift).to_event()
     }
 
     fn enc(code: KeyCode, m: KeyModifiers) -> Vec<u8> {
@@ -600,8 +617,19 @@ mod tests {
 
     #[test]
     fn keys_without_legacy_form_need_extended_mode() {
+        // tmux's input_key_vt10x has no byte for C-#, and maps C-; to `;`
+        // (tmux 3.6 sent `;`, 2026-11-10).
+        let c_hash = KeyEvent::new(KeyCode::Char('#'), C);
+        assert!(encode_key(&c_hash, InputModes::default(), ExtendedKeys::On, XTERM).is_empty());
+        assert_eq!(
+            encode_key(&c_hash, InputModes::default(), ExtendedKeys::Always, XTERM),
+            b"\x1b[27;5;35~"
+        );
         let c_semi = KeyEvent::new(KeyCode::Char(';'), C);
-        assert!(encode_key(&c_semi, InputModes::default(), ExtendedKeys::On, XTERM).is_empty());
+        assert_eq!(
+            encode_key(&c_semi, InputModes::default(), ExtendedKeys::On, XTERM),
+            b";"
+        );
         assert_eq!(
             encode_key(&c_semi, InputModes::default(), ExtendedKeys::Always, XTERM),
             b"\x1b[27;5;59~"
@@ -850,6 +878,101 @@ mod tests {
             encode_key(&typed('É', A), mok2, ExtendedKeys::On, XTERM),
             b"\x1b[27;3;201~"
         );
+    }
+
+    /// tmux's C-A (`send-keys C-A`: the upper-case letter's key with Ctrl
+    /// alone) is 0x01 to a legacy pane as C-a is, and 65 under
+    /// modifyOtherKeys, where C-a is 97 and C-S-a is 97 with Shift, as
+    /// tmux 3.6 sends them.
+    #[test]
+    fn ctrl_with_an_upper_case_letter_keeps_its_case_extended() {
+        let key = |name: &str| name.parse::<tmxr_command::Key>().unwrap().to_event();
+        let mok2 = InputModes {
+            modify_other_keys: 2,
+            ..InputModes::default()
+        };
+        for (name, legacy, extended) in [
+            ("C-A", &b"\x01"[..], &b"\x1b[27;5;65~"[..]),
+            ("C-a", b"\x01", b"\x1b[27;5;97~"),
+            ("C-S-a", b"\x01", b"\x1b[27;6;97~"),
+        ] {
+            let ev = key(name);
+            let at = |modes| encode_key(&ev, modes, ExtendedKeys::On, XTERM);
+            assert_eq!(at(InputModes::default()), legacy, "{name}");
+            assert_eq!(at(mok2), extended, "{name}");
+        }
+        // A kitty pane has no key for it but Ctrl with `a`.
+        let kitty = InputModes {
+            kitty_flags: KITTY_DISAMBIGUATE,
+            ..InputModes::default()
+        };
+        let ev = key("C-A");
+        assert_eq!(
+            encode_key(&ev, kitty, ExtendedKeys::On, XTERM),
+            b"\x1b[97;5u"
+        );
+    }
+
+    /// What tmux 3.6's send-keys sent a `cat -v` pane for these names, at
+    /// level 0 and at modifyOtherKeys level 2 (scratchpad build,
+    /// 2026-11-10): its input_key_vt10x Ctrl map (C-! is 1, C-é is é),
+    /// KPEnter as a newline, S-Tab as Tab, and Shift kept with Ctrl on a
+    /// digit.
+    #[test]
+    fn send_keys_names_reach_a_pane_as_tmuxs() {
+        let key = |name: &str| name.parse::<tmxr_command::Key>().unwrap().to_event();
+        let mok2 = InputModes {
+            modify_other_keys: 2,
+            ..InputModes::default()
+        };
+        for (name, legacy, extended) in [
+            ("C-S-1", "1", "\x1b[27;6;49~"),
+            ("C-1", "1", "\x1b[27;5;49~"),
+            ("C-!", "1", "\x1b[27;5;33~"),
+            ("C-é", "é", "\x1b[27;5;233~"),
+            ("KPEnter", "\n", "\n"),
+            ("KP1", "1", "1"),
+            ("KP/", "/", "/"),
+            ("S-Tab", "\t", "\x1b[27;2;9~"),
+            ("C-S-Tab", "\t", "\x1b[27;6;9~"),
+            ("BTab", "\x1b[Z", "\x1b[27;2;9~"),
+        ] {
+            let ev = key(name);
+            let at = |modes| String::from_utf8(encode_key(&ev, modes, ExtendedKeys::On, XTERM));
+            assert_eq!(at(InputModes::default()).unwrap(), legacy, "{name}");
+            assert_eq!(at(mok2).unwrap(), extended, "{name}");
+        }
+        // The rest of tmux's standard_map, and 3 to 7.
+        for (c, byte) in [
+            ('9', b'9'),
+            ('(', b'9'),
+            ('0', b'0'),
+            (')', b'0'),
+            ('=', b'='),
+            ('+', b'+'),
+            (';', b';'),
+            (':', b';'),
+            ('\'', b'\''),
+            ('"', b'\''),
+            (',', b','),
+            ('<', b','),
+            ('.', b'.'),
+            ('>', b'.'),
+            ('/', 0x1f),
+            ('-', 0x1f),
+            ('8', 0x7f),
+            ('?', 0x7f),
+            (' ', 0),
+            ('2', 0),
+            ('3', 0x1b),
+            ('7', 0x1f),
+            ('@', 0),
+            ('a', 1),
+            ('~', 0x1e),
+        ] {
+            assert_eq!(ctrl_bytes(c), Some(vec![byte]), "{c}");
+        }
+        assert_eq!(ctrl_bytes('#'), None);
     }
 
     #[test]

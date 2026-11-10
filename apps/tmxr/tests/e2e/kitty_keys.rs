@@ -199,3 +199,44 @@ fn held_keys_are_released_when_releases_stop() {
     s.wait_exit();
     wait_logged(&log, &format!(r"{pressed}\x1b[120;5:3u"));
 }
+
+/// A bind on a key only the kitty protocol reports fires from a kitty
+/// terminal, however the key was named: Super by kitty's name, tmxr's and
+/// hjkl's (`super+k`, `Super-l`, `<D-J>`, Super+Shift+j), F13, the keypad's
+/// Enter apart from Enter, and a media key.
+#[test]
+fn a_bind_on_a_kitty_only_key_fires_from_a_kitty_terminal() {
+    let t = Tmxr::new("kittyonly");
+    t.run(&["new-session", "-d", "-s", "ko"]);
+    for (key, name) in [
+        ("super+k", "super-k"),
+        ("Super-l", "super-l"),
+        ("<D-J>", "super-shift-j"),
+        ("F13", "f13"),
+        ("Enter", "enter"),
+        ("kp_enter", "kp-enter"),
+        ("MediaPlay", "media-play"),
+    ] {
+        t.run(&["bind", "-n", key, "rename-window", name]);
+    }
+    let s = t.attach(&["attach", "-t", "ko"]);
+    s.wait_for("status line", |text| text.contains("ko"));
+    s.wait_kitty_flags(TMXR_KITTY_FLAGS);
+    for (key, want) in [
+        (&b"\x1b[107;9u"[..], "super-k"),
+        (b"\x1b[108;9u", "super-l"),
+        (b"\x1b[106:74;10u", "super-shift-j"),
+        (b"\x1b[57376u", "f13"),
+        (b"\x1b[57414u", "kp-enter"),
+        (b"\r", "enter"),
+        (b"\x1b[57414u", "kp-enter"),
+        (b"\x1b[57428u", "media-play"),
+    ] {
+        s.send(key);
+        t.wait_run(
+            &["display-message", "-p", "-t", "ko", "#{window_name}"],
+            &format!("window named {want}"),
+            |o| o.trim() == want,
+        );
+    }
+}

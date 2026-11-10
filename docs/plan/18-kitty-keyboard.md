@@ -317,8 +317,8 @@ it too, and gains the modified keys its tier reports:
      and sends `Dseks` only as a client leaves.
    - Ctrl+Shift with a letter from an xterm terminal (`CSI 27;6;72~`) reaches a
      level-2 pane with the unshifted letter (`CSI 27;6;104~`), where tmux passes
-     the `H` on; binds still take it as C-h. Both are step 7's
-     (`corpus/known_divergences.toml`).
+     the `H` on (`corpus/known_divergences.toml`; still open, in the backlog).
+     Step 7 made binds take it as C-S-h, apart from C-h.
 6. Done: `encode_key` for flags 2, 4, 8 and 16 (`tmxr-term`'s `encode::kitty`,
    tested against the spec's examples and kitty's own test cases), with the
    fallback and the synthesised releases (`tmxr-server`'s `server::releases`);
@@ -339,8 +339,33 @@ it too, and gains the modified keys its tier reports:
      releases the held one first.
    - A popup's program gets releases as a pane's does, but no e2e test covers
      it.
-7. Kitty-style key names and the extended tmux names, in every place a key is
-   named; `list-keys` marking the binds the client cannot use.
+7. Done: every key name in tmux's spelling, tmux's extended (`Super-`, `Hyper-`,
+   `Meta-`, F13 to F35, `KP=`/`KPLeft` and the other keypad keys tmux has no
+   name for, and the kitty spec's other keys in CamelCase, `CapsLock`,
+   `MediaPlay`, `LeftShift`), kitty's (`ctrl+shift+h`, `super+k`, `kp_enter`)
+   and hjkl's (`<D-a>`, `<T-a>`, `<kEnter>`, `<F13>`), in `tmxr-command`'s
+   `keys/names.rs`; a key prints in tmux's name, else the extended one. Keys
+   kept apart as tmux 3.6 keeps them (C-h, C-S-h and C-H; C-a and C-A; C-4 and
+   `C-\`; C-@, C-2 and C-Space; C-1 and C-S-1; S-Tab and BTab; KP1 and 1), the
+   legacy C0 bytes still read as the keys tmux names them. Plain `send-keys`
+   takes only the names tmux knows (`Key::from_tmux_name`) and types any other
+   word, as tmux does. `list-keys` marks for the tier (`keyboard::needs`,
+   `keyboard::needs_comment` in tmxr-server) only when an attached client runs
+   it itself; a command client prints none, as tmux. What binds later steps:
+   - Unlike tmux, `C-S-H` is `C-S-h` (and prints so): the one chord from every
+     terminal, where tmux reads xterm's as C-S-H. tmux's own `M-S-h` and `S-h`
+     drop the Shift (`M-h`, `h`, as tmux's send-keys sends a legacy pane; at
+     level 2 tmux keeps it); kitty's `alt+shift+h` and hjkl's `<M-S-h>` are
+     `M-H`, the chord a terminal sends. `corpus/known_divergences.toml` has
+     each.
+   - The lock modifiers are no part of a key: kitty's `caps_lock+` and
+     `num_lock+` are refused, not ignored (the plan named them; a bind on one
+     would make every key typed with Caps Lock on miss its bind).
+   - A keypad key falls back to its main key's bind (`KeyTables::lookup`, the
+     prefix, menu and choose-tree keys), so a bind on `1` still fires from the
+     keypad's 1 from a kitty terminal.
+   - tmux's C-H is a key no terminal tmxr reads sends (ttyr reads xterm's
+     `CSI 27;5;72~` as Ctrl+Shift+h); `needs` puts it with the kitty keys.
 8. Windows.
 
 ## Testing

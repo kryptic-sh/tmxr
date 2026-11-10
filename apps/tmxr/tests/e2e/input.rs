@@ -130,9 +130,10 @@ fn ctrl_hjkl_prefix_hjkl_and_arrows_move_between_panes() {
 
 /// Alt+Shift+h from a kitty-protocol terminal is M-H, not M-h, Alt+Shift
 /// with a digit or symbol is the shifted character (M-!, M-<), as tmux
-/// names those keys, and Ctrl+Shift with a letter is Ctrl with the letter
-/// (C-h, C-é). The test's terminal answers the client's probe for the
-/// protocol and keeps the flags it pushes, and sends the key as such a
+/// names those keys, and Ctrl+Shift with a letter keeps its Shift (C-S-h,
+/// C-S-é), apart from Ctrl with the letter, as tmux 3.6 keeps them. The
+/// test's terminal answers the client's probe for the protocol and keeps
+/// the flags it pushes, and sends the key as such a
 /// terminal does under them: with alternate keys the shifted character
 /// rides along (`CSI 104:72;4u`), without them only the unshifted key and
 /// Shift (`CSI 104;4u`). ConPTY does not pass these.
@@ -145,9 +146,10 @@ fn alt_shift_from_a_kitty_terminal_keeps_its_shift() {
     t.run(&["bind", "-n", "M-H", "rename-window", "upper"]);
     t.run(&["bind", "-n", "M-h", "rename-window", "lower"]);
     t.run(&["bind", "-n", "C-h", "rename-window", "ctrl"]);
+    t.run(&["bind", "-n", "C-S-h", "rename-window", "ctrl-shift"]);
     t.run(&["bind", "-n", "M-!", "rename-window", "bang"]);
     t.run(&["bind", "-n", "M-<", "rename-window", "less"]);
-    t.run(&["bind", "-n", "C-é", "rename-window", "eacute"]);
+    t.run(&["bind", "-n", "C-S-é", "rename-window", "eacute"]);
     let flags = s.emu.lock().unwrap().input_modes().kitty_flags;
     assert_ne!(flags & 1, 0, "the client pushed kitty flags: {flags}");
     let alternate = flags & 4 != 0;
@@ -169,14 +171,16 @@ fn alt_shift_from_a_kitty_terminal_keeps_its_shift() {
     name(&t, "upper");
     s.send(b"\x1b[104;3u");
     name(&t, "lower");
-    // Ctrl+Shift+h is still C-h to binds, as tmux names it.
+    // Ctrl+Shift+h is C-S-h, and Ctrl+h C-h.
     s.send(key("104", "72", 6).as_bytes());
+    name(&t, "ctrl-shift");
+    s.send(b"\x1b[104;5u");
     name(&t, "ctrl");
     s.send(key("49", "33", 4).as_bytes());
     name(&t, "bang");
     s.send(key("44", "60", 4).as_bytes());
     name(&t, "less");
-    // Ctrl+Shift+é is C-é, as Ctrl+Shift+h is C-h.
+    // Ctrl+Shift+é is C-S-é, as Ctrl+Shift+h is C-S-h.
     s.send(key("233", "201", 6).as_bytes());
     name(&t, "eacute");
 }

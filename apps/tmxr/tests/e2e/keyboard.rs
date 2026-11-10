@@ -166,8 +166,8 @@ fn terminal_features_give_extkeys_by_term() {
 /// The keys an xterm-tier terminal sends under modifyOtherKeys
 /// (`CSI 27 ; mods ; key ~`) reach binds with their modifiers: Ctrl+i is
 /// C-i, not Tab; Alt+a is M-a with no bare Escape in front; Ctrl+Shift+h
-/// is C-S-h, which tmxr's binds still take as C-h until plan 18 step 7
-/// keeps them apart.
+/// is C-S-h, a bind of its own apart from C-h's (which the legacy byte
+/// 0x08 still fires), as tmux 3.6 keeps them.
 #[test]
 fn xterm_keys_reach_binds_with_their_modifiers() {
     let t = Tmxr::new("xtermbinds");
@@ -175,6 +175,7 @@ fn xterm_keys_reach_binds_with_their_modifiers() {
     t.run(&["bind", "-n", "C-i", "rename-window", "ctrl-i"]);
     t.run(&["bind", "-n", "Tab", "rename-window", "tab"]);
     t.run(&["bind", "-n", "M-a", "rename-window", "alt-a"]);
+    t.run(&["bind", "-n", "C-h", "rename-window", "ctrl-h"]);
     t.run(&["bind", "-n", "C-S-h", "rename-window", "ctrl-shift-h"]);
     let s = t.attach_xterm(&["attach", "-t", "xb"], false);
     s.wait_for("status line", |text| text.contains("xb"));
@@ -191,6 +192,9 @@ fn xterm_keys_reach_binds_with_their_modifiers() {
         (b"\t", "tab"),
         (b"\x1b[27;3;97~", "alt-a"),
         (b"\x1b[27;6;72~", "ctrl-shift-h"),
+        (b"\x08", "ctrl-h"),
+        (b"\x1b[27;6;72~", "ctrl-shift-h"),
+        (b"\x1b[27;5;104~", "ctrl-h"),
         (b"\x1b[27;5;105~", "ctrl-i"),
     ] {
         s.send(key);
@@ -276,4 +280,65 @@ fn xterm_keys_reach_a_pane_under_each_extended_keys_setting() {
             }
         }
     }
+}
+
+/// `list-keys -T t` run by a command client inside `session`'s pane, as
+/// the shell there prints it.
+fn list_keys_in_pane(t: &Tmxr, session: &str) -> String {
+    let out = t.dir.path().join(format!("{session}.keys"));
+    let cmd = format!(
+        "'{}' list-keys -T t > '{}.part' && mv '{}.part' '{}'",
+        env!("CARGO_BIN_EXE_tmxr"),
+        out.display(),
+        out.display(),
+        out.display()
+    );
+    t.run(&["send-keys", "-t", session, &cmd, "Enter"]);
+    let deadline = Instant::now() + TIMEOUT;
+    loop {
+        if let Ok(listed) = std::fs::read_to_string(&out) {
+            return listed;
+        }
+        assert!(Instant::now() < deadline, "no list-keys from {session}");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// `list-keys` marks each bind the terminal of the attached client that
+/// runs it (here from a bind) cannot send: for a legacy client, C-S-h needs
+/// extended keys and Super-k kitty keys; for a kitty client, neither. A
+/// command client prints no marks, as tmux prints none, whether it runs in
+/// a pane either client shows or outside tmxr. Every line stays a
+/// `bind-key` command.
+#[test]
+fn list_keys_marks_the_binds_a_clients_terminal_cannot_send() {
+    let t = Tmxr::new("listmarks");
+    t.run(&["new-session", "-d", "-s", "lg"]);
+    t.run(&["new-session", "-d", "-s", "kt"]);
+    t.run(&["bind", "-T", "t", "x", "display", "plain"]);
+    t.run(&["bind", "-T", "t", "C-S-h", "display", "ctrl-shift-h"]);
+    t.run(&["bind", "-T", "t", "super+k", "display", "super-k"]);
+    t.run(&["bind", "-n", "F5", "list-keys", "-T", "t"]);
+    let legacy = t.attach_legacy(&["attach", "-t", "lg"]);
+    legacy.wait_for("status line", |text| text.contains("lg"));
+    let kitty = t.attach(&["attach", "-t", "kt"]);
+    kitty.wait_for("status line", |text| text.contains("kt"));
+    kitty.wait_kitty_flags(TMXR_KITTY_FLAGS);
+    let unmarked = "\
+bind-key -T t x       display-message plain
+bind-key -T t C-S-h   display-message ctrl-shift-h
+bind-key -T t Super-k display-message super-k
+";
+    assert_eq!(list_keys_in_pane(&t, "lg"), unmarked);
+    assert_eq!(list_keys_in_pane(&t, "kt"), unmarked);
+    assert_eq!(t.run(&["list-keys", "-T", "t"]), unmarked);
+    // F5, as both terminals send it.
+    legacy.send(b"\x1b[15~");
+    legacy.wait_for("marked binds", |text| {
+        text.contains("display-message ctrl-shift-h # needs extended keys")
+            && text.contains("display-message super-k # needs kitty keys")
+    });
+    kitty.send(b"\x1b[15~");
+    kitty.wait_for("the binds", |text| text.contains("display-message super-k"));
+    assert!(!kitty.text().contains("# needs"), "{}", kitty.text());
 }

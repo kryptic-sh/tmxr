@@ -279,8 +279,6 @@ named were checked by reading; the runs were not repeated.
     not win32 input events (older than this change).
   - A popup keeps the `extended-keys` / `extended-keys-format` it opened with;
     tmux's `input_key_extended` reads the option on every key.
-  - `send-keys C-A` is folded to `C-a` before encoding, so at level 2 it sends
-    97 where tmux sends 65.
 - **Query replies that still differ from tmux 3.8** (_reproduced_ by the slice-3
   reviewer, 2026-11-02, `Hooks::private_mode` / `cursor_blinks` in
   `emulator.rs`):
@@ -323,11 +321,6 @@ mouse-enabled pane.
   level 2 pane gets `CSI 27;4;33~` where a Unix client's gives `CSI 27;3;33~`,
   and a kitty pane `CSI 33;4u`. 0.15.0 behaved the same on Windows. The
   unshifted key is not known from crossterm's event; goes with the bridge.
-- **`Key::normalise` still folds `C-4` into `C-\`** (`tmxr-command`'s
-  `keys.rs`), for names and events alike, so `send-keys C-4` sends 92 at
-  modifyOtherKeys level 2 and a `C-\` bind fires on a kitty terminal's real
-  Ctrl+4. tmux 3.8 keeps them apart (`send-keys C-4` sends 52). Older than plan
-  18; the encoder already tells them apart by `KeyEncoding` (`legacy_control`).
 - **A late answer from one probe can end the next one early** (`Keys::probe` in
   `tmxr-client`'s `terminal/probe.rs`, through ttyr's `collect_answers`): after
   a probe times out, a server-initiated `lock-client`, `suspend-client` or
@@ -384,10 +377,77 @@ mouse-enabled pane.
 - **Ctrl+Shift with a letter from an xterm terminal reaches a pane unshifted.**
   xterm reports Ctrl+Shift+a as `CSI 27;6;65~`; tmux passes the `A` (65) on to a
   modifyOtherKeys level 2 pane, tmxr the unshifted `a` (97), as it does for a
-  kitty terminal's (`encode_key` takes ttyr's unshifted key). Binds still take
-  C-S-h as C-h (`Key::normalise`). Both are plan 18 step 7's; the oracle reports
-  the first (`corpus/known_divergences.toml`,
+  kitty terminal's (`encode_key` takes ttyr's unshifted key); the event says it
+  came as xterm's (`KeyEncoding::Xterm`), so the encoder could send the shifted
+  key for those. Binds keep C-S-h apart since step 7. The oracle reports it
+  (`corpus/known_divergences.toml`,
   `ctrl_shift_letter_from_an_xterm_terminal_reaches_a_pane_unshifted`).
+- **Key names, plan 18 step 7** (2026-11-10, `tmxr-command`'s `keys.rs` and
+  `keys/names.rs`, `keyboard::needs` in tmxr-server):
+  - _Declined:_ kitty's lock modifiers (`caps_lock+`, `num_lock+`) as part of a
+    key, though the plan named them. A bind keyed on Caps Lock would make every
+    key typed with it on miss its bind unless matching ignored the lock, and
+    then the name would mean nothing; they are refused as unknown keys.
+  - Where tmxr names a key differently from tmux 3.6, deliberately: `C-S-H`
+    lists as `C-S-h` (tmux reads xterm's Ctrl+Shift+h as C-S-H and kitty-form
+    keys as C-S-h; tmxr makes them one key); tmux's own `M-S-h` lists as `M-h`,
+    `S-h` as `h` and `M-S-H` as `M-H`, the Shift dropped (tmux lists each as
+    written). `corpus/known_divergences.toml`,
+    `list_keys_prints_a_shifted_name_as_the_key_tmxr_reads`.
+  - That dropped Shift differs at modifyOtherKeys level 2: tmux sends
+    `send-keys M-S-h` as `CSI 27;4;104~` and `S-a` as `CSI 27;2;97~` (also under
+    `extended-keys always`, and `S-1` as `CSI 27;2;49~`); tmxr sends
+    `CSI 27;3;104~` and `a`. Pre-existing (HEAD dropped it too).
+    `known_divergences.toml`,
+    `send_keys_keeps_shift_beside_a_character_at_level_2`. Needs `Key` to keep
+    Shift beside a character for send-keys only, which binds must not see.
+  - tmux reads xterm's Meta modifier bit (8, in `CSI 27 ; 9 ; … ~` and
+    `CSI 1 ; 9 A`) as `M-`; ttyr reads it as Super, so tmxr takes it as Super,
+    and `keyboard::needs` files Meta with the kitty keys. Raised with ttyr by
+    the coordinator (2026-11-10); once ttyr reads it as Meta, tmxr should map
+    xterm's Meta to `M-` as tmux does, and `needs` move Meta to the xterm tier.
+  - Caps Lock with Ctrl and a letter from an xterm-tier terminal misses C-h's
+    bind: xterm sends `CSI 27;5;72~` (the upper-case letter, no Shift), which
+    ttyr reads as `h` with Ctrl and Shift, so tmxr sees C-S-h. Waits on ttyr's
+    decoding (raised with ttyr by the coordinator); no workaround in tmxr.
+  - tmux's C-H / C-A (Ctrl with an upper-case letter alone) and `S-Tab` are keys
+    no terminal tmxr reads sends: ttyr reads xterm's `CSI 27;5;72~` as
+    Ctrl+Shift+h, and Shift+Tab is BTab; so a bind on them never fires (as in
+    tmux, mostly). `keyboard::needs` files them with the kitty keys, so
+    `list-keys` marks them `# needs kitty keys` for legacy and xterm-tier
+    clients, though a kitty terminal cannot send them either. `send-keys` sends
+    tmux's bytes for them.
+  - tmxr tracks no application keypad mode (DECKPAM) in a pane, so the keypad's
+    keys always go as tmux's table has them for a pane not in it (`KPEnter` a
+    newline, `KP1` a 1); tmux sends `ESC O M`, `ESC O q`, … to a pane in it. Not
+    checked by the oracle.
+  - tmux 3.6's send-keys types a key's name as text when it cannot send the key
+    to the pane (`send-keys C-#` types `C-#`, `C-KP1` types `C-KP1`; run by
+    hand, 2026-11-10); tmxr sends nothing for `C-#`, as HEAD did, and sends `1`
+    for `C-KP1` at extended-keys off.
+  - Keypad keys with a modifier differ from tmux 3.6 (step 7's review, run side
+    by side 2026-11-10): `M-KPEnter` is `ESC \n` in tmux at every level, and
+    `ESC \r` / `CSI 27;3;13~` in tmxr; `M-KP1` at level 2 is `ESC 1` in tmux and
+    `CSI 27;3;49~` in tmxr; `S-KPEnter` at level 0 is `\177` in tmux and `\r` in
+    tmxr (`encode.rs`'s keypad arm). tmux's level-2 bytes for `C-KP1` and
+    `C-KPEnter` are its internal key code, not copied.
+  - `send-keys -K` differs from tmux 3.6 for words that are not tmux key names:
+    tmux types each character into the client's key table (`-K F13`, `Pause`,
+    `ctrl+c`, `<C-b>`, `hello`), where tmxr takes every name style as one key
+    and refuses `-K hello` ("unknown key", as HEAD did). Deliberate so far, for
+    kitty and hjkl names to work there; not in `known_divergences.toml`.
+  - `Key::from_tmux_name` misses names tmux 3.6 reads, all missed before step 7
+    too: `Any` and `User0` (tmux sends nothing; tmxr types the word), `0x41`
+    (tmux sends `A`), and the `[NUL]`-style C0 names; and it takes `F01` and
+    `F+1` as F1 (through `u8::from_str`), where tmux types them.
+  - `keys_without_legacy_form_need_extended_mode` (`tmxr-term`'s `encode.rs`
+    tests) now also pins `C-;` as `;`, a key with a legacy form; its name no
+    longer says all it checks.
+  - Not covered: `command-prompt -k`, menu and choose-tree keys with the new
+    names, and copy-mode tables bound by kitty names have no test of their own
+    (they go through the same `Key` parsing and printing). Nothing was run on
+    Windows or macOS; the Windows client's keys reach `Key::from_event` as
+    `KeyEncoding::Legacy`, so it keeps folding Ctrl+4 into `C-\` until step 8.
 - **`terminal-features` and `extended-keys` take effect at once, unlike
   tmux's.** tmux reads `terminal-features` only as a client's terminal is set up
   (`tty_term_create`), and sends `Dseks` only as a client leaves, not when

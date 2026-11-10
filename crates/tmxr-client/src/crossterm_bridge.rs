@@ -78,11 +78,7 @@ fn char_key(c: char, mods: KeyModifiers) -> KeyEvent {
     let text = || Some(c.to_string());
     match tmxr_command::keys::single_lower(c) {
         // Shift+a: the key with Shift, `A` its shifted key.
-        Some(_) if shift => tmxr_command::Key {
-            code: KeyCode::Char(c),
-            mods,
-        }
-        .to_event(),
+        Some(_) if shift => tmxr_command::Key::new(KeyCode::Char(c), mods).to_event(),
         // Caps Lock and a.
         Some(lower) => KeyEvent::new(KeyCode::Char(lower), mods).with_text(text()),
         // Caps Lock and Shift+a.

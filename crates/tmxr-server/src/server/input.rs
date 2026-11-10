@@ -526,11 +526,7 @@ impl Server {
         let expired = timeout > 0
             && att.table == "prefix"
             && now.duration_since(att.table_at) > Duration::from_millis(timeout)
-            && !(repeating
-                && self
-                    .keys
-                    .get(&att.table, &key.into())
-                    .is_some_and(|b| b.repeat));
+            && !(repeating && self.keys.lookup(&att.table, key).is_some_and(|b| b.repeat));
         let root = self.default_key_table(session);
         let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
             return;
@@ -541,7 +537,7 @@ impl Server {
             att.dirty = true;
         } else if table != root {
             att.dirty = true;
-            if let Some(b) = self.keys.get(&table, &key.into()).cloned() {
+            if let Some(b) = self.keys.lookup(&table, key).cloned() {
                 if !repeating || b.repeat {
                     let repeat_time = self.session_options(session).repeat_time;
                     if b.repeat
@@ -556,7 +552,7 @@ impl Server {
             } else if !repeating {
                 // As tmux's: an unbound key gets a second try in the default
                 // table, and is not passed to the pane either way.
-                if let Some(b) = self.keys.get(&root, &key.into()).cloned() {
+                if let Some(b) = self.keys.lookup(&root, key).cloned() {
                     self.run_bind(id, &b.cmd, Some(ev));
                 }
                 return;
@@ -590,11 +586,10 @@ impl Server {
             // Not bound in copy mode's table, the root table's bind runs,
             // as tmux's server_client_key_callback tries it after a mode's;
             // a key neither binds is not passed to the program.
-            let key = key.into();
             let bind = self
                 .keys
-                .get(self.copy_table(pane), &key)
-                .or_else(|| self.keys.get(&root, &key))
+                .lookup(self.copy_table(pane), key)
+                .or_else(|| self.keys.lookup(&root, key))
                 .cloned();
             if let Some(b) = bind {
                 self.run_bind(id, &b.cmd, Some(ev));
@@ -603,7 +598,7 @@ impl Server {
         }
         // Clock mode has no key table: the root table's binds run in it,
         // as tmux's server_client_key_callback finds no mode table.
-        if let Some(b) = self.keys.get(&root, &key.into()).cloned() {
+        if let Some(b) = self.keys.lookup(&root, key).cloned() {
             self.run_bind(id, &b.cmd, Some(ev));
             return;
         }

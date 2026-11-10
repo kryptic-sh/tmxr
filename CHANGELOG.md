@@ -47,8 +47,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`tmxr-server`'s `server::Attached` has a `held` field**, the keys its
   terminal pressed into programs and has not released; a library caller building
   one with a struct literal sets it (`Vec::new()`).
+- **`tmxr-command`'s `Key` has a `keypad` field**, and its modifiers keep Super,
+  Hyper and Meta; a library caller building one with a struct literal sets it
+  (`false`), or calls `Key::new`.
 
 ### Added
+
+- **Key names for every key the kitty protocol reports, in tmux's form, kitty's
+  and hjkl's**, wherever a key is bound or named (`bind-key`, `unbind-key`,
+  `send-keys -K`, `list-keys`, the `prefix` options, menu and choose-tree keys,
+  `command-prompt -k`); plain `send-keys` takes only the names tmux knows and
+  types any other word, as tmux does. tmux's names grow `Super-`, `Hyper-` and
+  `Meta-` prefixes, F13 to F35, the keypad keys tmux has no name for (`KP=`,
+  `KP,`, `KPLeft`, `KPPPage`, `KPBegin`, …) and the lock, media and modifier
+  keys (`CapsLock`, `PrintScreen`, `Pause`, `Menu`, `MediaPlay`, `RaiseVolume`,
+  `LeftShift`, …); kitty's are read as its docs write them (`ctrl+shift+h`,
+  `super+k`, `alt+shift+h`, `kp_enter`, `f13`, `media_play`); hjkl's `<…>` form
+  takes neovim's `D-` (Super) and `T-` (Meta) and its key names (`<F13>`,
+  `<kEnter>`, `<k0>`). Every spelling of a key is one key, so binding one
+  replaces a bind on another; a key prints in tmux's name, else the extended
+  one. The keypad's keys are their own (`KP1`, `KPEnter`), and a key table that
+  does not bind one falls back to its main key, so a bind on `1` still fires
+  from the keypad.
+- **`list-keys` marks the binds the client's terminal cannot send**, with a
+  trailing `# needs kitty keys` or `# needs extended keys` (C-S-h from a legacy
+  terminal, Super from an xterm-tier one), so each line stays a command. Only
+  when an attached client runs it itself (from a bind or the command prompt): a
+  command client, in a pane or outside tmxr, prints no marks, as tmux prints
+  none. Every default bind is sendable from a legacy terminal.
 
 - **Full kitty keyboard protocol support for panes.** A program that pushes
   kitty flags gets keys under every flag the spec has, not only flag 1: under
@@ -117,6 +143,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`send-keys` types `F13` to `F24` and hjkl's `<…>` names** (`<C-b>`, `<CR>`)
+  as text, as tmux 3.6 does, where it sent them as keys; `send-keys -K` still
+  takes them as keys.
 - **The flags a kitty terminal is asked for now follow the focused pane**:
   tmxr's own (1 and 4) and every flag the program the client's keys go to
   pushed, as focus moves between panes and windows, a popup opens or closes, and
@@ -155,6 +184,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **C-S-h is a key apart from C-h, as tmux 3.6 keeps them**: a bind on C-S-h
+  fires on Ctrl+Shift+h from a kitty or xterm-tier terminal and C-h's on Ctrl+h,
+  where binds took both as C-h. `C-S-H` names the same key as `C-S-h`; tmux's
+  `C-H` (Ctrl with the upper-case letter alone) is a third.
+- **`C-4`, `C-2` and `C-@` are their own keys**, as in tmux 3.6, not `C-\` and
+  `C-Space`: `send-keys C-4` sends Ctrl+4 (52 at modifyOtherKeys level 2, where
+  it sent 92) and a `C-\` bind no longer fires on a kitty terminal's real
+  Ctrl+4. A legacy terminal's bytes still read as the keys tmux names them (0x1c
+  as `C-\`, 0x00 as `C-Space`).
+- **`send-keys C-A` sends 65 at modifyOtherKeys level 2**, as tmux does, where
+  it was folded to `C-a` and sent 97; to a legacy pane both are still 0x01.
+- **`send-keys` sends what tmux 3.6 sends for more names.** `S-Tab` is a key
+  apart from `BTab` (Tab to a legacy pane, `CSI 27;2;9~` at level 2), as is
+  `C-S-1` from `C-1` (`CSI 27;6;49~`, where it sent 5;49). A legacy pane gets
+  Ctrl as tmux's input_key_vt10x maps it, so `C-!` is `1`, `C-;` is `;`, `C--`
+  is 0x1f, and `C-é` and `C-S-1` are `é` and `1`, where each sent nothing; and
+  the keypad's Enter is a newline, as tmux's table has it.
 - **A client that panics pops its kitty keyboard flags once.** It added a panic
   hook popping them each time it took its terminal (at attach, and again after
   each `suspend-client` or `lock-client`), and popped them once more as it

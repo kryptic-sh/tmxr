@@ -1,71 +1,138 @@
-//! tmux key names (`C-b`, `M-h`, `C-\`, `BSpace`, `PPage`, …).
+//! Keys as key tables bind them: the [`Key`] type, how a terminal's key
+//! event becomes one, and back. How a key is named is [`names`].
+
+mod names;
 
 use std::fmt;
-use std::str::FromStr;
 
-use ttyr::event::{KeyCode, KeyEvent, KeyModifiers};
+use ttyr::event::{KeyCode, KeyEncoding, KeyEvent, KeyEventState, KeyModifiers};
 
-/// A key as bound in a key table: a key code plus Ctrl / Alt (Meta) / Shift.
+/// A key as bound in a key table: a key code, the modifiers held with it
+/// (tmux's Ctrl, Alt and Shift, and the kitty protocol's Super, Hyper and
+/// Meta) and whether it is on the keypad.
 ///
 /// Built from terminal events with [`Key::from_event`], which normalises the
 /// ways different terminals report the same chord, so a bind made for `C-\`
 /// matches whether the terminal sent `0x1c` or a kitty `CSI 92;5u`.
+///
+/// Shift is carried by the character a key types (`A`, `%`, `M-A`), except
+/// on a character held with Ctrl: there it is kept, so C-S-h and C-S-1 are
+/// keys of their own, as in tmux 3.6. tmux's C-H (Ctrl with an upper-case
+/// letter and no Shift) is a third key beside C-h and C-S-h, which
+/// `send-keys` sends as tmux does. `S-Tab` is apart from `BTab`, as in
+/// tmux, which a terminal sends for Shift+Tab.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Key {
     pub code: KeyCode,
     pub mods: KeyModifiers,
+    /// The key is on the keypad (tmux's `KP` keys): only a terminal under
+    /// the kitty protocol reports one apart from its main key.
+    pub keypad: bool,
 }
 
 const MODS: KeyModifiers = KeyModifiers::CONTROL
     .union(KeyModifiers::ALT)
-    .union(KeyModifiers::SHIFT);
+    .union(KeyModifiers::SHIFT)
+    .union(KeyModifiers::SUPER)
+    .union(KeyModifiers::HYPER)
+    .union(KeyModifiers::META);
 
 impl Key {
     pub fn new(code: KeyCode, mods: KeyModifiers) -> Self {
-        Self::normalise(code, mods & MODS)
+        Self::normalise(code, mods & MODS, false)
+    }
+
+    /// This key on the keypad, where the keypad has it (`KP1`, `KPEnter`);
+    /// any other key is unchanged.
+    #[must_use]
+    pub fn on_keypad(self) -> Self {
+        Self::normalise(self.code, self.mods, true)
+    }
+
+    /// The main key a keypad key stands for (`1` for `KP1`), which a key
+    /// table falls back to when it binds no keypad key: a bind on `1` fires
+    /// from the keypad's 1 too, as it does from a terminal that does not
+    /// tell the two apart. `None` for a key not on the keypad.
+    pub fn main_key(self) -> Option<Self> {
+        self.keypad.then_some(Self {
+            keypad: false,
+            ..self
+        })
     }
 
     /// The key a terminal's event names, as tmux reads it (see [`Typed`]).
+    /// A legacy terminal's C0 bytes for C-\ C-] C-^ C-_ and C-Space, which
+    /// ttyr reads as Ctrl with 4 to 7 (and Windows reports as Ctrl with 2
+    /// or `@`), are the keys tmux names them, as tmux's tty_keys_next; from
+    /// a terminal that reports keys apart, Ctrl+4 is C-4.
     pub fn from_event(ev: &KeyEvent) -> Self {
         let typed = Typed::of(ev);
-        Self::new(typed.key, typed.modifiers)
+        let code = match typed.key {
+            KeyCode::Char(c)
+                if ev.encoding == KeyEncoding::Legacy
+                    && typed.modifiers.contains(KeyModifiers::CONTROL) =>
+            {
+                KeyCode::Char(match c {
+                    '2' | '@' => ' ',
+                    '4' => '\\',
+                    '5' => ']',
+                    '6' => '^',
+                    '7' => '_',
+                    c => c,
+                })
+            }
+            key => key,
+        };
+        let keypad = ev.state.contains(KeyEventState::KEYPAD);
+        Self::normalise(code, typed.modifiers & MODS, keypad)
     }
 
     /// This key as a terminal reports it, in ttyr's meaning: an upper-case
     /// letter is its lower-case key with Shift, the letter its shifted key,
-    /// as ttyr's decoder reads the letter's byte. For keys tmxr makes
-    /// itself (`send-keys`, `send-prefix`).
+    /// as ttyr's decoder reads the letter's byte; but tmux's C-A, Ctrl with
+    /// the upper-case letter and no Shift, is that letter's key. For keys
+    /// tmxr makes itself (`send-keys`, `send-prefix`).
     pub fn to_event(self) -> KeyEvent {
-        if let KeyCode::Char(c) = self.code
-            && let Some(lower) = single_lower(c)
-        {
-            return KeyEvent::new(KeyCode::Char(lower), self.mods | KeyModifiers::SHIFT)
-                .with_shifted(Some(c));
-        }
-        KeyEvent::new(self.code, self.mods)
+        let ctrl = self.mods.contains(KeyModifiers::CONTROL);
+        let shift = self.mods.contains(KeyModifiers::SHIFT);
+        let state = if self.keypad {
+            KeyEventState::KEYPAD
+        } else {
+            KeyEventState::NONE
+        };
+        let event = match self.code {
+            KeyCode::Char(c) => match single_lower(c) {
+                Some(lower) if shift || !ctrl => {
+                    KeyEvent::new(KeyCode::Char(lower), self.mods | KeyModifiers::SHIFT)
+                        .with_shifted(Some(c))
+                }
+                _ if shift => KeyEvent::new(self.code, self.mods).with_shifted(single_upper(c)),
+                _ => KeyEvent::new(self.code, self.mods),
+            },
+            code => KeyEvent::new(code, self.mods),
+        };
+        event.with_state(state)
     }
 
-    fn normalise(code: KeyCode, mut mods: KeyModifiers) -> Self {
+    fn normalise(code: KeyCode, mut mods: KeyModifiers, keypad: bool) -> Self {
+        let shift = mods.contains(KeyModifiers::SHIFT);
         let code = match code {
+            KeyCode::Char(c) if mods.contains(KeyModifiers::CONTROL) => {
+                // Ctrl keeps Shift apart (C-S-h, C-S-1), and an upper-case
+                // letter with both is the same key (C-S-H). With no Shift,
+                // the upper-case letter is tmux's C-H.
+                match single_lower(c) {
+                    Some(lower) if shift => KeyCode::Char(lower),
+                    _ => KeyCode::Char(c),
+                }
+            }
             KeyCode::Char(c) => {
-                // A character already carries its shift state ('A', '%').
+                // Anything else carries Shift in its character ('A', '%'),
+                // so Shift written beside one is dropped. That is the key
+                // tmux's send-keys sends a legacy pane for M-S-a (M-a); at
+                // modifyOtherKeys level 2 tmux keeps the Shift
+                // (`CSI 27;4;104~` for M-S-h), which tmxr does not.
                 mods.remove(KeyModifiers::SHIFT);
-                let c = if mods.contains(KeyModifiers::CONTROL) {
-                    // Legacy terminals deliver C-\ C-] C-^ C-_ as the bytes
-                    // 0x1c..0x1f, which ttyr reads as C-4 .. C-7, and
-                    // C-Space as 0x00, which Windows reports as C-2. tmux
-                    // names 0x00 C-Space and accepts C-@ for it.
-                    match c {
-                        '2' | '@' => ' ',
-                        '4' => '\\',
-                        '5' => ']',
-                        '6' => '^',
-                        '7' => '_',
-                        c => c.to_ascii_lowercase(),
-                    }
-                } else {
-                    c
-                };
                 KeyCode::Char(c)
             }
             KeyCode::BackTab => {
@@ -74,8 +141,33 @@ impl Key {
             }
             other => other,
         };
-        Self { code, mods }
+        Self {
+            code,
+            mods,
+            keypad: keypad && on_the_keypad(code),
+        }
     }
+}
+
+/// Whether the keypad has a key that is `code` off it: the digits and the
+/// operators, Enter, and (with Num Lock off) the cursor and editing keys,
+/// as the kitty protocol's `KP_*` keys.
+fn on_the_keypad(code: KeyCode) -> bool {
+    matches!(
+        code,
+        KeyCode::Char('0'..='9' | '.' | '/' | '*' | '-' | '+' | '=' | ',')
+            | KeyCode::Enter
+            | KeyCode::Left
+            | KeyCode::Right
+            | KeyCode::Up
+            | KeyCode::Down
+            | KeyCode::PageUp
+            | KeyCode::PageDown
+            | KeyCode::Home
+            | KeyCode::End
+            | KeyCode::Insert
+            | KeyCode::Delete
+    )
 }
 
 /// A key event as tmux reads a key: the character typed, with Shift only
@@ -119,74 +211,21 @@ pub fn single_lower(c: char) -> Option<char> {
     (lower.next().is_none() && l != c).then_some(l)
 }
 
+/// `c`'s upper case, where `c` is lower case and its upper case is one
+/// other character.
+pub(crate) fn single_upper(c: char) -> Option<char> {
+    if !c.is_lowercase() {
+        return None;
+    }
+    let mut upper = c.to_uppercase();
+    let u = upper.next()?;
+    (upper.next().is_none() && u != c).then_some(u)
+}
+
 /// Error for an unrecognised key name.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("unknown key: {0}")]
 pub struct UnknownKey(pub String);
-
-const NAMED: &[(&str, KeyCode)] = &[
-    ("Enter", KeyCode::Enter),
-    ("Escape", KeyCode::Esc),
-    ("Space", KeyCode::Char(' ')),
-    ("Tab", KeyCode::Tab),
-    ("BTab", KeyCode::BackTab),
-    ("BSpace", KeyCode::Backspace),
-    ("Up", KeyCode::Up),
-    ("Down", KeyCode::Down),
-    ("Left", KeyCode::Left),
-    ("Right", KeyCode::Right),
-    ("Home", KeyCode::Home),
-    ("End", KeyCode::End),
-    ("PPage", KeyCode::PageUp),
-    ("PageUp", KeyCode::PageUp),
-    ("PgUp", KeyCode::PageUp),
-    ("NPage", KeyCode::PageDown),
-    ("PageDown", KeyCode::PageDown),
-    ("PgDn", KeyCode::PageDown),
-    ("IC", KeyCode::Insert),
-    ("Insert", KeyCode::Insert),
-    ("DC", KeyCode::Delete),
-    ("Delete", KeyCode::Delete),
-];
-
-impl FromStr for Key {
-    type Err = UnknownKey;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let err = || UnknownKey(s.to_owned());
-        // hjkl's notation (`<C-b>`, `<CR>`, `<M-h>`), accepted alongside
-        // tmux's names.
-        if let Some(inner) = s.strip_prefix('<').and_then(|r| r.strip_suffix('>'))
-            && !inner.is_empty()
-        {
-            return parse_bracketed(inner).ok_or_else(err);
-        }
-        // `^a` is `C-a`, as tmux's key_string_lookup_string; `^` alone is
-        // the key itself.
-        let (caret, named) = match s.strip_prefix('^') {
-            Some(rest) if !rest.is_empty() => (KeyModifiers::CONTROL, rest),
-            _ => (KeyModifiers::NONE, s),
-        };
-        let (mods, rest) = split_mods(named);
-        let mods = mods | caret;
-        if let Some(n) = rest.strip_prefix('F').and_then(|n| n.parse::<u8>().ok())
-            && (1..=24).contains(&n)
-        {
-            return Ok(Self::new(KeyCode::F(n), mods));
-        }
-        if let Some((_, code)) = NAMED
-            .iter()
-            .find(|(name, _)| name.eq_ignore_ascii_case(rest))
-        {
-            return Ok(Self::new(*code, mods));
-        }
-        let mut chars = rest.chars();
-        match (chars.next(), chars.next()) {
-            (Some(c), None) => Ok(Self::new(KeyCode::Char(c), mods)),
-            _ => Err(err()),
-        }
-    }
-}
 
 /// Strip tmux's `C-` / `M-` / `S-` prefixes from a key name. A lone `-` or
 /// a name like `C-` (the key `-` with Ctrl) is handled by requiring something
@@ -220,73 +259,6 @@ pub(crate) fn write_mods(f: &mut fmt::Formatter<'_>, mods: KeyModifiers) -> fmt:
     Ok(())
 }
 
-/// The inside of an hjkl `<…>` key: `C-` / `S-` / `A-` / `M-` prefixes
-/// (any case), then a special name or one character, as hjkl-keymap reads
-/// them.
-fn parse_bracketed(inner: &str) -> Option<Key> {
-    let mut mods = KeyModifiers::NONE;
-    let mut rest = inner;
-    while let Some((m, tail)) = rest.split_once('-')
-        && !tail.is_empty()
-    {
-        match m.to_ascii_uppercase().as_str() {
-            "C" => mods |= KeyModifiers::CONTROL,
-            "S" => mods |= KeyModifiers::SHIFT,
-            "A" | "M" => mods |= KeyModifiers::ALT,
-            _ => break,
-        }
-        rest = tail;
-    }
-    let code = match rest.to_ascii_lowercase().as_str() {
-        "space" => KeyCode::Char(' '),
-        "lt" => KeyCode::Char('<'),
-        "gt" => KeyCode::Char('>'),
-        "cr" | "enter" | "return" => KeyCode::Enter,
-        "esc" | "escape" => KeyCode::Esc,
-        "tab" => KeyCode::Tab,
-        "bs" | "backspace" => KeyCode::Backspace,
-        "del" | "delete" => KeyCode::Delete,
-        "ins" | "insert" => KeyCode::Insert,
-        "up" => KeyCode::Up,
-        "down" => KeyCode::Down,
-        "left" => KeyCode::Left,
-        "right" => KeyCode::Right,
-        "home" => KeyCode::Home,
-        "end" => KeyCode::End,
-        "pageup" => KeyCode::PageUp,
-        "pagedown" => KeyCode::PageDown,
-        name => match name.strip_prefix('f').map(str::parse::<u8>) {
-            Some(Ok(n)) if (1..=24).contains(&n) => KeyCode::F(n),
-            _ => {
-                let mut chars = rest.chars();
-                match (chars.next(), chars.next()) {
-                    (Some(c), None) => KeyCode::Char(c),
-                    _ => return None,
-                }
-            }
-        },
-    };
-    Some(Key::new(code, mods))
-}
-
-impl fmt::Display for Key {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write_mods(f, self.mods)?;
-        match self.code {
-            KeyCode::Char(' ') => f.write_str("Space"),
-            KeyCode::Char(c) => write!(f, "{c}"),
-            KeyCode::F(n) => write!(f, "F{n}"),
-            code => {
-                let name = NAMED
-                    .iter()
-                    .find(|(_, c)| *c == code)
-                    .map_or("Unknown", |(name, _)| name);
-                f.write_str(name)
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -298,7 +270,7 @@ mod tests {
     /// A terminal asked for kitty flag 8 (and 16, and the lock keys it
     /// then reports) sends what it typed as escape codes; through ttyr's
     /// decoder each is the key its legacy bytes are, so binds and key
-    /// tables see no difference.
+    /// tables see no difference; a keypad key falls back to its main key.
     #[test]
     fn keys_reported_as_escape_codes_are_the_keys_typed() {
         let decode = |bytes: &[u8]| {
@@ -325,13 +297,17 @@ mod tests {
             (b"\t", &[b"\x1b[9u"]),
             (b"\x7f", &[b"\x1b[127u"]),
             (b"\x01", &[b"\x1b[97;5u"]),
-            (b"1", &[b"\x1b[57400;129;49u"]),
         ] {
             let want = decode(legacy);
             for bytes in escaped {
                 assert_eq!(decode(bytes), want, "{bytes:?}");
             }
         }
+        // The keypad's 1 is its own key, with the 1 a key table falls back
+        // to behind it.
+        let kp1 = decode(b"\x1b[57400;129;49u");
+        assert!(kp1.keypad);
+        assert_eq!(kp1.main_key(), Some(decode(b"1")));
     }
 
     #[test]
@@ -375,13 +351,32 @@ mod tests {
 
     #[test]
     fn terminal_variants_of_one_chord_are_equal() {
-        // C-\ as legacy byte 0x1c (ttyr: C-4) and as an explicit char.
-        let legacy = Key::from_event(&KeyEvent::new(KeyCode::Char('4'), KeyModifiers::CONTROL));
-        assert_eq!(legacy, k("C-\\"));
-        // C-Space as 0x00, which Windows reports as C-2.
-        let nul = Key::from_event(&KeyEvent::new(KeyCode::Char('2'), KeyModifiers::CONTROL));
-        assert_eq!(nul, k("C-Space"));
-        assert_eq!(k("C-@"), k("C-Space"));
+        let ctrl = |c| KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL);
+        let legacy = |c| Key::from_event(&ctrl(c).with_encoding(KeyEncoding::Legacy));
+        // C-\ C-] C-^ C-_ as the legacy bytes 0x1c..0x1f (ttyr: Ctrl with 4
+        // to 7), and C-Space as 0x00, which Windows reports as Ctrl with 2
+        // or @: the keys tmux names those bytes.
+        for (c, name) in [
+            ('4', "C-\\"),
+            ('5', "C-]"),
+            ('6', "C-^"),
+            ('7', "C-_"),
+            ('2', "C-Space"),
+            ('@', "C-Space"),
+        ] {
+            assert_eq!(legacy(c), k(name), "{c}");
+        }
+        // From a terminal that reports keys apart (kitty's CSI 52;5u),
+        // Ctrl+4 is C-4, as tmux 3.6 keeps the names apart.
+        for c in ['4', '5', '6', '7', '2', '@'] {
+            assert_eq!(
+                Key::from_event(&ctrl(c)),
+                Key::new(KeyCode::Char(c), KeyModifiers::CONTROL)
+            );
+        }
+        assert_ne!(k("C-4"), k("C-\\"));
+        assert_ne!(k("C-@"), k("C-Space"));
+        assert_ne!(k("C-2"), k("C-Space"));
         // Shifted characters carry their shift: a legacy `%`, a legacy
         // `R` (ttyr's key `r` with Shift, `R` shifted), and kitty's Shift+5
         // reporting alternate keys (`5` with Shift, `%` shifted).
@@ -392,10 +387,16 @@ mod tests {
         assert_eq!(upper, k("R"));
         let five = Key::from_event(&ev('5', KeyModifiers::SHIFT).with_shifted(Some('%')));
         assert_eq!(five, k("%"));
-        // Ctrl letters ignore case and Shift: C-S-h is C-h to binds.
+        // A Ctrl letter keeps Shift apart: Ctrl+Shift+h from kitty
+        // (`CSI 104;6u`) or xterm (`CSI 27;6;72~`, ttyr's `h` with Shift
+        // and `H` shifted) is C-S-h, not C-h; and the legacy byte 0x08 is
+        // C-h.
         let ctrl_shift = KeyModifiers::CONTROL | KeyModifiers::SHIFT;
         let ch = Key::from_event(&ev('h', ctrl_shift).with_shifted(Some('H')));
-        assert_eq!(ch, k("C-h"));
+        assert_eq!(ch, k("C-S-h"));
+        assert_eq!(Key::from_event(&ev('h', ctrl_shift)), k("C-S-h"));
+        assert_ne!(ch, k("C-h"));
+        assert_eq!(legacy('h'), k("C-h"));
         // Alt with a shifted letter, from a legacy `ESC A` or kitty's
         // `CSI 97:65;4u` alike, is M-A and not M-a; without the shifted key
         // (kitty's `CSI 97;4u`) too.
@@ -407,12 +408,28 @@ mod tests {
         // Alt+Shift+1 reporting alternate keys is M-!, as tmux names it.
         let bang = Key::from_event(&ev('1', alt_shift).with_shifted(Some('!')));
         assert_eq!(bang, k("M-!"));
-        // Super / Hyper never take part in matching.
-        let sup = Key::from_event(&KeyEvent::new(
-            KeyCode::Char('h'),
-            KeyModifiers::ALT | KeyModifiers::SUPER,
-        ));
-        assert_eq!(sup, k("M-h"));
+        // Super, Hyper and Meta are part of the key; the lock keys are not.
+        let sup = Key::from_event(&ev('h', KeyModifiers::ALT | KeyModifiers::SUPER));
+        assert_eq!(sup, k("M-Super-h"));
+        assert_ne!(sup, k("M-h"));
+        let hyper_meta = Key::from_event(&ev('x', KeyModifiers::HYPER | KeyModifiers::META));
+        assert_eq!(hyper_meta, k("Hyper-Meta-x"));
+        let caps =
+            Key::from_event(&ev('h', KeyModifiers::CONTROL).with_state(KeyEventState::CAPS_LOCK));
+        assert_eq!(caps, k("C-h"));
+        // The keypad's keys are their own, from kitty's `CSI 57400u` and a
+        // legacy terminal's `ESC O M` alike, with their main key behind them.
+        let kp1 = Key::from_event(&ev('1', KeyModifiers::NONE).with_state(KeyEventState::KEYPAD));
+        assert_eq!(kp1, k("KP1"));
+        assert_ne!(kp1, k("1"));
+        assert_eq!(kp1.main_key(), Some(k("1")));
+        assert_eq!(k("1").main_key(), None);
+        let mut decoder = ttyr::event::Decoder::new();
+        decoder.feed(b"\x1bOM");
+        let Some(ttyr::event::Event::Key(kp_enter)) = decoder.flush_event() else {
+            panic!("not a key");
+        };
+        assert_eq!(Key::from_event(&kp_enter), k("KPEnter"));
     }
 
     #[test]
@@ -428,8 +445,45 @@ mod tests {
             (made.key, made.modifiers, made.shifted),
             (alt_a.key, alt_a.modifiers, alt_a.shifted)
         );
+        // tmux's C-A is the upper-case letter's key with Ctrl alone, which
+        // the encoder sends as tmux does (0x01, or 65 extended); C-S-a is
+        // the letter's key with Shift.
+        let made = k("C-A").to_event();
+        assert_eq!(
+            (made.key, made.modifiers),
+            (KeyCode::Char('A'), KeyModifiers::CONTROL)
+        );
+        let made = k("C-S-a").to_event();
+        assert_eq!(
+            (made.key, made.modifiers, made.shifted),
+            (
+                KeyCode::Char('a'),
+                KeyModifiers::CONTROL | KeyModifiers::SHIFT,
+                Some('A')
+            )
+        );
         // And back again, as every other key.
-        for name in ["M-A", "C-b", "%", "Enter", "M-Up", "C-\\", "É"] {
+        for name in [
+            "M-A",
+            "C-b",
+            "%",
+            "Enter",
+            "M-Up",
+            "C-\\",
+            "É",
+            "C-A",
+            "C-S-a",
+            "C-4",
+            "C-@",
+            "KP1",
+            "C-KPEnter",
+            "Super-k",
+            "C-S-Super-h",
+            "Meta-x",
+            "F35",
+            "MediaPlay",
+            "LeftShift",
+        ] {
             assert_eq!(Key::from_event(&k(name).to_event()), k(name), "{name}");
         }
     }

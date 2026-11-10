@@ -141,3 +141,27 @@ terminal = "XTerm(390)"
 pane = ["raw", { print = "\u001b[>4;2m" }, "cat"]
 steps = [{ sleep = 0.5 }, { keys = "\u001b[27;6;65~" }, { sleep = 0.5 }]
 checks = [{ command = "capture-pane -p -t o" }]
+
+[[cases]]
+name = "list_keys_prints_a_shifted_name_as_the_key_tmxr_reads"
+# tmux lists each spelling as bound. tmxr makes C-S-H the C-S-h a terminal
+# sends for Ctrl+Shift+h, and drops Shift written beside a character
+# without Ctrl (M-S-h is M-h, S-h is h, M-S-H is M-H), as tmux's send-keys
+# does for a legacy pane.
+steps = [
+  { run = "bind -T t C-S-H display a" },
+  { run = "bind -T t M-S-h display b" },
+  { run = "bind -T t S-h display c" },
+  { run = "bind -T t M-S-H display d" },
+]
+checks = [{ command = "list-keys -T t" }]
+
+[[cases]]
+name = "send_keys_keeps_shift_beside_a_character_at_level_2"
+# At modifyOtherKeys level 2 tmux sends M-S-h as CSI 27;4;104~ and S-a as
+# CSI 27;2;97~, Shift kept; tmxr's key has dropped it (CSI 27;3;104~, a).
+windows = "never"
+pane = ["raw", { print = "\u001b[>4;2m" }, "cat"]
+steps = [{ sleep = 0.5 }, { run = "send-keys -t o M-S-h S-a" }, { sleep = 0.5 }]
+checks = [{ command = "capture-pane -p -t o" }]
+

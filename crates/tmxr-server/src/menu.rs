@@ -148,10 +148,12 @@ impl Menu {
 
     pub fn key(&mut self, ev: &KeyEvent) -> OverlayAction {
         // An item's own key comes first, so an item may use j, k or q.
+        // A keypad key chooses the item its main key does, as a key table.
         let pressed = Key::from_event(ev);
+        let chooses = |k: &Key| *k == pressed || pressed.main_key() == Some(*k);
         if let Some(i) = (0..self.items.len()).find(|&i| {
             self.selectable(i)
-                && matches!(&self.items[i], MenuItem::Command { key: Some(k), .. } if *k == pressed)
+                && matches!(&self.items[i], MenuItem::Command { key: Some(k), .. } if chooses(k))
         }) {
             return self.run(i);
         }

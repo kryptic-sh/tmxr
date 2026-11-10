@@ -106,8 +106,14 @@ pub(super) fn encode(key: &KeyEvent, flags: u8) -> Vec<u8> {
         }
         return serialize(number, None, mods, event, text.as_deref(), trailer);
     }
+    // A key code is the unshifted key's: tmux's C-A (`send-keys C-A`, the
+    // upper-case letter with Ctrl alone) is Ctrl with `a`.
     let code = match key.key {
-        KeyCode::Char(c) => u32::from(legacy_control(key).unwrap_or(c)),
+        KeyCode::Char(c) => u32::from(
+            legacy_control(key)
+                .or_else(|| tmxr_command::keys::single_lower(c))
+                .unwrap_or(c),
+        ),
         KeyCode::Null => 0,
         _ => return Vec::new(),
     };

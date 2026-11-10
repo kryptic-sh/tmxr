@@ -348,8 +348,14 @@ impl PickerOverlay {
 
     fn normal_key(&mut self, ev: &KeyEvent, typed: tmxr_command::Typed) -> OverlayAction {
         // A row's key chooses it, as tmux's mode tree.
-        let pressed = tmxr_command::Key::from_event(ev).to_string();
-        if let Some((_, target)) = self.keys.iter().find(|(k, _)| *k == pressed) {
+        // A keypad key chooses the row its main key does, as a key table.
+        let pressed = tmxr_command::Key::from_event(ev);
+        let names = [Some(pressed), pressed.main_key()].map(|k| k.map(|k| k.to_string()));
+        if let Some((_, target)) = self
+            .keys
+            .iter()
+            .find(|(k, _)| names.iter().flatten().any(|n| n == k))
+        {
             return self.choose_target(target.clone());
         }
         let ctrl = typed.modifiers.contains(KeyModifiers::CONTROL);

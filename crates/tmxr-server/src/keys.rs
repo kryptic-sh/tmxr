@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use tmxr_command::BindKey;
+use tmxr_command::{BindKey, Key};
 use tmxr_config::Config;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,6 +43,15 @@ impl KeyTables {
 
     pub fn get(&self, table: &str, key: &BindKey) -> Option<&BindSpec> {
         self.tables.get(table)?.get(key)
+    }
+
+    /// The bind a key typed runs in `table`: its own, else (a keypad key)
+    /// its main key's, so a bind on `1` fires from the keypad's 1 too.
+    pub fn lookup(&self, table: &str, key: Key) -> Option<&BindSpec> {
+        self.get(table, &key.into()).or_else(|| {
+            key.main_key()
+                .and_then(|main| self.get(table, &main.into()))
+        })
     }
 
     pub fn bind(&mut self, table: &str, key: BindKey, spec: BindSpec) {
@@ -95,5 +104,24 @@ mod tests {
         let listed = t.list(Some("copy-mode-vi"));
         assert!(listed.iter().all(|(table, _, _)| table == "copy-mode-vi"));
         assert!(listed.iter().any(|(_, key, _)| key.to_string() == "v"));
+    }
+
+    #[test]
+    fn a_keypad_key_falls_back_to_its_main_key() {
+        let k = |s: &str| s.parse::<tmxr_command::Key>().unwrap();
+        let spec = |cmd: &str| BindSpec {
+            cmd: cmd.to_owned(),
+            note: None,
+            repeat: false,
+        };
+        let mut t = KeyTables::default();
+        t.bind("prefix", k("1").into(), spec("one"));
+        t.bind("prefix", k("KPEnter").into(), spec("kp-enter"));
+        assert_eq!(t.lookup("prefix", k("KP1")).unwrap().cmd, "one");
+        assert_eq!(t.lookup("prefix", k("1")).unwrap().cmd, "one");
+        // Its own bind first; a main key never falls to the keypad's.
+        assert_eq!(t.lookup("prefix", k("KPEnter")).unwrap().cmd, "kp-enter");
+        assert!(t.lookup("prefix", k("Enter")).is_none());
+        assert!(t.lookup("prefix", k("KP2")).is_none());
     }
 }

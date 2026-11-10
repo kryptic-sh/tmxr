@@ -1032,6 +1032,53 @@ steps = [
 checks = [{ command = "list-keys -T mytab" }, { command = "list-keys -aN -T mytab" }]
 
 [[cases]]
+name = "list_keys_keeps_apart_the_keys_tmux_does"
+# tmux 3.6 binds each of these as a key of its own and lists it back as
+# bound: Shift kept apart on a Ctrl letter, Ctrl with an upper-case letter
+# alone, Ctrl with a digit or @ apart from the key its legacy byte is, and
+# the keypad apart from the main keys.
+steps = [
+  { run = "bind -T t C-h display a" },
+  { run = "bind -T t C-S-h display b" },
+  { run = "bind -T t C-H display c" },
+  { run = "bind -T t C-a display d" },
+  { run = "bind -T t C-A display e" },
+  { run = "bind -T t C-4 display f" },
+  { run = "bind -T t 'C-\\' display g" },
+  { run = "bind -T t C-@ display h" },
+  { run = "bind -T t C-Space display i" },
+  { run = "bind -T t C-2 display j" },
+  { run = "bind -T t KP1 display k" },
+  { run = "bind -T t 1 display l" },
+  { run = "bind -T t KPEnter display m" },
+  { run = "bind -T t S-F1 display n" },
+  { run = "bind -T t C-S-Up display o" },
+  { run = "bind -T t C-i display p" },
+  { run = "bind -T t Tab display q" },
+  { run = "bind -T t S-Tab display r" },
+  { run = "bind -T t BTab display s" },
+  { run = "bind -T t C-S-Tab display t" },
+  { run = "bind -T t C-S-1 display u" },
+  { run = "bind -T t C-1 display v" },
+]
+checks = [{ command = "list-keys -T t" }]
+
+[[cases]]
+name = "send_keys_drops_shift_written_beside_a_character"
+# tmux's send-keys sends M-S-a as M-a: Shift written beside a character is
+# dropped, the upper-case letter carries it (M-S-A, M-A); with Ctrl a legacy
+# pane gets the letter's control byte either way. (S-a alone tmux sends
+# extended under tmux.conf's `extended-keys always`, tmxr as `a`: backlog.)
+unix_only = true
+program = "stty raw -echo; exec cat -v"
+steps = [
+  { sleep = 0.5 },
+  { run = "send-keys -t o M-S-a M-S-A M-A C-S-a C-A" },
+  { sleep = 0.5 },
+]
+checks = [{ command = "capture-pane -p -t o", expect = "^[a^[A^[A^A^A" }]
+
+[[cases]]
 name = "select_word_then_moving_grows_by_words"
 program = "printf 'alpha beta gamma delta\nsecond line here\nthird line\n'; exec sleep 1000"
 steps = [
@@ -1758,3 +1805,36 @@ steps = [
   { run = "set -gF @selected '#{pane_in_mode}'" },
 ]
 checks = [{ format = "#{@half} #{@selected}", expect = "0 0" }]
+
+[[cases]]
+name = "send_keys_types_a_word_tmux_has_no_key_name_for"
+# A word send-keys does not know as a key name is typed: kitty's, hjkl's and
+# tmxr's own names among them (tmux 3.6 typed every one, 2026-11-10).
+unix_only = true
+program = "stty raw -echo; exec cat -v"
+steps = [
+  { sleep = 0.5 },
+  { run = "send-keys -t o menu pause capslock f13 F13 media_play plus ctrl+c shift+tab backspace Pause KPLeft '<C-b>' KP1" },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "capture-pane -p -t o", expect = "menupausecapslockf13F13media_playplusctrl+cshift+tabbackspacePauseKPLeft<C-b>1" },
+]
+
+[[cases]]
+name = "send_keys_sends_a_legacy_pane_what_tmux_does"
+# A pane made with extended keys off (tmux.conf's `always` gives every pane
+# made before it level 1, which `off` does not take back): Ctrl as tmux's
+# input_key_vt10x maps it (C-! is 1, C-é is é, Shift with Ctrl lost), the
+# keypad's keys as their characters and KPEnter as a newline, S-Tab as Tab
+# and BTab as CSI Z.
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "set -s extended-keys off" },
+  { run = "split-window -t o 'stty raw -echo; exec cat -vt'" },
+  { sleep = 0.5 },
+  { run = "send-keys -t o.1 C-S-1 C-é C-1 C-! C-9 C-- C-. C-, C-8 x KP1 KP/ KP. KPEnter y S-Tab BTab C-S-Tab C-Tab z" },
+  { sleep = 0.5 },
+]
+checks = [{ command = "capture-pane -p -t o.1" }]

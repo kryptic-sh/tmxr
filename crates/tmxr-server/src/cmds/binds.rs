@@ -145,6 +145,13 @@ fn list_keys(
     // A bind's commands as tmux prints them back.
     let shown = |cmd: &str| tmxr_command::print_command_list(cmd).unwrap_or_else(|| cmd.to_owned());
     let pad = |s: &str, w: usize| format!("{s}{}", " ".repeat(w.saturating_sub(width(s))));
+    // A bind the client's terminal cannot send is listed with a comment
+    // saying what it needs.
+    let tier = marked_for(srv, ctx);
+    let mark = |key: &BindKey| {
+        tier.and_then(|t| crate::keyboard::needs_comment(crate::keyboard::needs(key), t))
+            .map_or_else(String::new, |c| format!(" {c}"))
+    };
     let listed: Vec<(String, BindKey, BindSpec)> = all
         .into_iter()
         .filter(|(name, key, _)| table.is_none_or(|t| t == name) && only.is_none_or(|k| k == *key))
@@ -177,8 +184,9 @@ fn list_keys(
                     shown(&b.cmd)
                 };
                 lines.push(format!(
-                    "{start}{}{note}",
-                    pad(&key.to_string(), keywidth + 1)
+                    "{start}{}{note}{}",
+                    pad(&key.to_string(), keywidth + 1),
+                    mark(key)
                 ));
                 if a.has('1') {
                     break;
@@ -230,10 +238,11 @@ fn list_keys(
                 (true, false) => "   ",
             };
             lines.push(format!(
-                "bind-key {r}-T {} {} {}",
+                "bind-key {r}-T {} {} {}{}",
                 pad(t, tablewidth),
                 pad(&escaped(key), keywidth),
-                shown(&b.cmd)
+                shown(&b.cmd),
+                mark(key)
             ));
         }
     }
@@ -255,6 +264,16 @@ fn list_keys(
         }
     }
     Ok(())
+}
+
+/// The keyboard tier of the client `list-keys` marks binds for: the
+/// attached client that ran it itself, from a bind or the command prompt.
+/// `None` for a command client, run in a pane (a shell, a script, a
+/// `run-shell` plugin) or outside tmxr, which prints no marks, as tmux
+/// prints none.
+fn marked_for(srv: &Server, ctx: &Ctx) -> Option<crate::keyboard::Keyboard> {
+    let id = super::attached_client(srv, ctx)?;
+    srv.clients.get(&id)?.att.as_ref().map(|a| a.keyboard)
 }
 
 /// A bind as `list-keys` prints it: the `bind-key` command that makes it.

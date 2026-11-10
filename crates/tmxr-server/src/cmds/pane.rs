@@ -633,8 +633,10 @@ pub(super) fn run(
                         }
                         continue;
                     }
-                    match word.parse::<Key>() {
-                        Ok(k) if !a.has('l') && word.chars().count() > 1 => {
+                    // A word is a key only by a name tmux itself knows; a
+                    // kitty, hjkl or tmxr-only name is typed, as tmux's.
+                    match Key::from_tmux_name(word) {
+                        Some(k) if !a.has('l') && word.chars().count() > 1 => {
                             if !srv.clock_takes_key(pid, from_client) {
                                 srv.send_key_to_pane(pid, &k.to_event());
                             }

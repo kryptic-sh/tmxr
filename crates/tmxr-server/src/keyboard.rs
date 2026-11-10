@@ -8,16 +8,19 @@
 //! attach while `extended-keys` is not `off` ([`extended_keys`]), told to
 //! the client as the mouse mode is, when it changes.
 
+use tmxr_command::BindKey;
 use tmxr_config::Array;
 use tmxr_proto::KeyboardReport;
 use tmxr_term::ExtendedKeys;
+use ttyr::event::{KeyCode, KeyModifiers};
 
 use crate::model::ClientId;
 use crate::server::Server;
 
 /// A client terminal's keyboard tier: how it is asked to report keys
-/// beyond the bytes a VT sends.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+/// beyond the bytes a VT sends. Each tier sends every key the one before it
+/// does, so they order from least to most.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Keyboard {
     /// Bytes as a VT sends them: ASCII control bytes and escape sequences,
     /// typed text as UTF-8.
@@ -49,6 +52,84 @@ pub fn tier(report: &KeyboardReport, term: &str, kitty_keys: bool, features: &Ar
         Keyboard::Xterm
     } else {
         Keyboard::Legacy
+    }
+}
+
+/// The least tier whose terminal can send `key`, so a bind on it can fire
+/// there:
+///
+/// - `Legacy`: what a VT's bytes carry. A character with Alt (`ESC` in
+///   front) and Ctrl only where a C0 byte names it: a lower-case ASCII
+///   letter but `i` and `m` (Tab's and Enter's bytes), and C-Space and
+///   C-\ C-] C-^ C-_; no Shift kept apart (C-S-h). Enter, Tab, BTab,
+///   BSpace and Escape with Alt alone. The cursor and editing keys and F1
+///   to F12 with any of Ctrl, Alt and Shift, in xterm's `CSI 1 ; mods`
+///   forms.
+/// - `Xterm`: modifyOtherKeys's `CSI 27 ; mods ; key ~` adds Ctrl, Alt and
+///   Shift on every other character and on Enter, Tab, BSpace and Escape
+///   (C-S-h, C-i apart from Tab, C-4 apart from C-\).
+/// - `Kitty`: the rest. Super, Hyper and Meta (xterm's own Meta bit, 8, is
+///   Super to ttyr, so Meta never comes from an xterm-tier terminal), the
+///   function keys above F12, the keypad apart from the main keys (tmxr asks
+///   no terminal for application keypad mode), the lock, media and modifier
+///   keys. tmux's C-H (Ctrl with an upper-case letter and no Shift) and
+///   `S-Tab` are here too though no terminal tmxr reads sends them: ttyr
+///   reads `CSI 27 ; 5 ; 72 ~` as Ctrl+Shift+h, and Shift+Tab is BTab.
+///
+/// A mouse key is sent by every tier.
+pub fn needs(key: &BindKey) -> Keyboard {
+    let BindKey::Key(key) = key else {
+        return Keyboard::Legacy;
+    };
+    let mods = key.mods;
+    let ctrl = mods.contains(KeyModifiers::CONTROL);
+    let shift = mods.contains(KeyModifiers::SHIFT);
+    let kitty_only = KeyModifiers::SUPER | KeyModifiers::HYPER | KeyModifiers::META;
+    if key.keypad || mods.intersects(kitty_only) {
+        return Keyboard::Kitty;
+    }
+    let legacy = match key.code {
+        KeyCode::Char(c) if ctrl && c.is_uppercase() && !shift => return Keyboard::Kitty,
+        KeyCode::Char(c) => {
+            !shift
+                && (!ctrl
+                    || (c.is_ascii_lowercase() && !matches!(c, 'i' | 'm'))
+                    || matches!(c, ' ' | '\\' | ']' | '^' | '_'))
+        }
+        KeyCode::Tab if shift => return Keyboard::Kitty,
+        KeyCode::Enter | KeyCode::Tab | KeyCode::BackTab | KeyCode::Backspace | KeyCode::Esc => {
+            !ctrl && !shift
+        }
+        KeyCode::Up
+        | KeyCode::Down
+        | KeyCode::Left
+        | KeyCode::Right
+        | KeyCode::Home
+        | KeyCode::End
+        | KeyCode::PageUp
+        | KeyCode::PageDown
+        | KeyCode::Insert
+        | KeyCode::Delete
+        | KeyCode::F(1..=12) => true,
+        _ => return Keyboard::Kitty,
+    };
+    if legacy {
+        Keyboard::Legacy
+    } else {
+        Keyboard::Xterm
+    }
+}
+
+/// The comment `list-keys` ends a bind's line with where `client`'s tier
+/// cannot send what `needs` says the key needs.
+pub fn needs_comment(need: Keyboard, client: Keyboard) -> Option<&'static str> {
+    if need <= client {
+        return None;
+    }
+    match need {
+        Keyboard::Kitty => Some("# needs kitty keys"),
+        Keyboard::Xterm => Some("# needs extended keys"),
+        Keyboard::Legacy => None,
     }
 }
 
@@ -103,6 +184,144 @@ mod tests {
             secondary: None,
             modify_other_keys: true,
         }
+    }
+
+    fn need(name: &str) -> Keyboard {
+        needs(&name.parse::<BindKey>().unwrap())
+    }
+
+    #[test]
+    fn each_tier_sends_the_keys_its_terminal_can() {
+        // Every default bind is sendable from a legacy terminal.
+        let (tables, _) = crate::keys::KeyTables::from_config(&tmxr_config::defaults());
+        for (table, key, _) in tables.list(None) {
+            assert_eq!(needs(&key), Keyboard::Legacy, "{table} {key}");
+        }
+        for name in [
+            "a",
+            "A",
+            "%",
+            "M-a",
+            "M-A",
+            "M-!",
+            "C-a",
+            "C-h",
+            "C-j",
+            "C-z",
+            "C-M-x",
+            "C-Space",
+            "C-\\",
+            "C-]",
+            "C-^",
+            "C-_",
+            "Enter",
+            "M-Enter",
+            "Tab",
+            "BTab",
+            "M-BTab",
+            "BSpace",
+            "M-BSpace",
+            "Escape",
+            "M-Escape",
+            "Up",
+            "C-Up",
+            "C-M-S-Up",
+            "S-Home",
+            "M-PPage",
+            "C-DC",
+            "F1",
+            "C-F12",
+            "S-F5",
+            "MouseDown1Pane",
+            "C-WheelUpPane",
+        ] {
+            assert_eq!(need(name), Keyboard::Legacy, "{name}");
+        }
+        // Shift kept apart, Ctrl on a key whose byte is another's, and the
+        // modified Enter / Tab / BSpace / Escape: modifyOtherKeys's.
+        for name in [
+            "C-S-h", "C-S-a", "C-i", "C-m", "C-[", "C-4", "C-2", "C-@", "C-1", "C-!", "C-é",
+            "C-Enter", "S-Enter", "C-Tab", "C-BTab", "C-BSpace", "C-Escape", "C-M-S-h", "C-S-1",
+        ] {
+            assert_eq!(need(name), Keyboard::Xterm, "{name}");
+        }
+        // Super, Hyper, and the keys only the kitty protocol reports.
+        for name in [
+            "Super-a",
+            "Hyper-a",
+            "Meta-a",
+            "Meta-Up",
+            "Meta-F1",
+            "C-Meta-x",
+            "S-Tab",
+            "C-Super-h",
+            "Super-Up",
+            "F13",
+            "F35",
+            "KP1",
+            "KPEnter",
+            "KPLeft",
+            "KPBegin",
+            "CapsLock",
+            "PrintScreen",
+            "Pause",
+            "Menu",
+            "MediaPlay",
+            "LeftShift",
+            "C-H",
+            "C-A",
+        ] {
+            assert_eq!(need(name), Keyboard::Kitty, "{name}");
+        }
+    }
+
+    #[test]
+    fn a_bind_is_marked_only_for_a_tier_below_its_need() {
+        use Keyboard::{Kitty, Legacy, Xterm};
+        for (need, client, want) in [
+            (Legacy, Legacy, None),
+            (Legacy, Kitty, None),
+            (Xterm, Legacy, Some("# needs extended keys")),
+            (Xterm, Xterm, None),
+            (Xterm, Kitty, None),
+            (Kitty, Legacy, Some("# needs kitty keys")),
+            (Kitty, Xterm, Some("# needs kitty keys")),
+            (Kitty, Kitty, None),
+        ] {
+            assert_eq!(needs_comment(need, client), want, "{need:?} on {client:?}");
+        }
+    }
+
+    /// `list-keys` run by an attached client itself (from a bind or the
+    /// prompt) marks for that client's tier, as it changes.
+    #[test]
+    fn list_keys_marks_for_the_attached_client_that_runs_it() {
+        let (mut srv, _rx) = attached(true);
+        let ctx = crate::cmds::Ctx {
+            client: Some(1),
+            ..crate::cmds::Ctx::default()
+        };
+        let run = |srv: &mut Server, line: &str| crate::cmds::run_line(srv, &ctx, line).stdout;
+        run(&mut srv, "bind -T t C-S-h display a");
+        run(&mut srv, "bind -T t F13 display b");
+        let marked = |srv: &mut Server| run(srv, "list-keys -T t");
+        assert_eq!(
+            marked(&mut srv),
+            "bind-key -T t F13   display-message b # needs kitty keys\n\
+             bind-key -T t C-S-h display-message a # needs extended keys\n"
+        );
+        say_keyboard(&mut srv, told(false, Some("XTerm(388)")));
+        assert_eq!(
+            marked(&mut srv),
+            "bind-key -T t F13   display-message b # needs kitty keys\n\
+             bind-key -T t C-S-h display-message a\n"
+        );
+        say_keyboard(&mut srv, told(true, None));
+        assert_eq!(
+            marked(&mut srv),
+            "bind-key -T t F13   display-message b\n\
+             bind-key -T t C-S-h display-message a\n"
+        );
     }
 
     fn defaults() -> Array {

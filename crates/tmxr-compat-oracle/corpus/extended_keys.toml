@@ -151,3 +151,32 @@ checks = [
   { terminal_received = "\u001b[>4;2m", expect = true },
   { command = "capture-pane -p -t o", expect = "^[[27;5;105~^[[27;5;59~^[[27;3;97~" },
 ]
+
+[[cases]]
+name = "send_keys_sends_the_keys_tmux_keeps_apart_at_level_2"
+# send-keys names each key as tmux 3.6 does: C-A is the upper-case letter
+# with Ctrl alone (65), C-S-a the letter with Ctrl and Shift (97), C-4 the
+# digit (52) apart from C-\ (92), and C-@ apart from C-Space.
+windows = "never"
+pane = ["raw", { print = "\u001b[>4;2m" }, "cat"]
+steps = [
+  { sleep = 0.5 },
+  { run = "send-keys -t o C-a C-A C-S-a C-4 'C-\\' C-@ C-Space C-h C-S-h" },
+  { sleep = 0.5 },
+]
+checks = [{ command = "capture-pane -p -t o" }]
+
+[[cases]]
+name = "send_keys_tab_and_keypad_names_at_level_2"
+# At level 2 tmux sends S-Tab and BTab alike as Shift with Tab, C-S-Tab with
+# Ctrl and Shift, and the keypad's unmodified keys as their characters,
+# KPEnter a newline.
+windows = "never"
+pane = ["raw", { print = "\u001b[>4;2m" }, "cat"]
+steps = [
+  { sleep = 0.5 },
+  { run = "send-keys -t o S-Tab BTab C-S-Tab C-Tab KP1 KP/ KPEnter C-S-1" },
+  { sleep = 0.5 },
+]
+checks = [{ command = "capture-pane -p -t o" }]
+

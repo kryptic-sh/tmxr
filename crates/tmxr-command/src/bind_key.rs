@@ -197,6 +197,11 @@ const KEYC_BASE: u64 = 0x10_e000;
 const KEYC_META: u64 = 1 << 44;
 const KEYC_CTRL: u64 = 1 << 45;
 const KEYC_SHIFT: u64 = 1 << 46;
+/// tmxr's own modifiers (Super, Hyper, Meta), above every bit of a tmux
+/// key code, so a key with one lists after every key tmux has.
+const SUPER_BIT: u64 = 1 << 56;
+const HYPER_BIT: u64 = 1 << 57;
+const META_BIT: u64 = 1 << 58;
 /// The special keys before the mouse keys: focus in and out, any, the
 /// paste brackets, and the three unclassified mouse events.
 const FIRST_MOUSE: u64 = 8;
@@ -221,6 +226,15 @@ fn modifier_bits(mods: KeyModifiers) -> u64 {
     }
     if mods.contains(KeyModifiers::SHIFT) {
         bits |= KEYC_SHIFT;
+    }
+    for (m, bit) in [
+        (KeyModifiers::SUPER, SUPER_BIT),
+        (KeyModifiers::HYPER, HYPER_BIT),
+        (KeyModifiers::META, META_BIT),
+    ] {
+        if mods.contains(m) {
+            bits |= bit;
+        }
     }
     bits
 }
@@ -273,6 +287,26 @@ impl Key {
     fn tmux_code(&self) -> u64 {
         use ttyr::event::KeyCode;
         let special = |n: u64| KEYC_BASE + BSPACE + n;
+        // Keys tmux has no code for come after every key it has: F13 and
+        // up, then tmxr's keypad keys, then its other keys, each in the
+        // order kitty's spec lists them.
+        let beyond = |n: u64| KEYC_META - 0x1000 + n;
+        if self.keypad {
+            let code = match self.code {
+                KeyCode::Char(c) => match "/*-789+456123".find(c) {
+                    Some(i) => special(KP_SLASH + i as u64),
+                    None => match c {
+                        '0' => special(KP_SLASH + 14),
+                        '.' => special(KP_SLASH + 15),
+                        '=' => beyond(0x100),
+                        _ => beyond(0x101),
+                    },
+                },
+                KeyCode::Enter => special(KP_SLASH + 13),
+                code => beyond(0x110 + kitty_order(code)),
+            };
+            return code | modifier_bits(self.mods);
+        }
         let code = match self.code {
             KeyCode::Char(c) => u64::from(c),
             KeyCode::Enter => 0x0d,
@@ -291,10 +325,42 @@ impl Key {
             KeyCode::Down => special(21),
             KeyCode::Left => special(22),
             KeyCode::Right => special(23),
-            KeyCode::F(n) => KEYC_META - 0x1000 + u64::from(n),
-            _ => KEYC_META - 1,
+            KeyCode::F(n) => beyond(u64::from(n)),
+            code => beyond(0x200 + kitty_order(code)),
         };
         code | modifier_bits(self.mods)
+    }
+}
+
+/// `KEYC_KP_SLASH`, the first keypad key, after the arrows: `KP/ KP* KP-
+/// KP7 KP8 KP9 KP+ KP4 KP5 KP6 KP1 KP2 KP3 KPEnter KP0 KP.` in that order.
+const KP_SLASH: u64 = 24;
+
+/// Where kitty's functional key table lists a key tmux has no code for, to
+/// order those keys among themselves.
+fn kitty_order(code: ttyr::event::KeyCode) -> u64 {
+    use ttyr::event::KeyCode;
+    match code {
+        KeyCode::Left => 0,
+        KeyCode::Right => 1,
+        KeyCode::Up => 2,
+        KeyCode::Down => 3,
+        KeyCode::PageUp => 4,
+        KeyCode::PageDown => 5,
+        KeyCode::Home => 6,
+        KeyCode::End => 7,
+        KeyCode::Insert => 8,
+        KeyCode::Delete => 9,
+        KeyCode::CapsLock => 10,
+        KeyCode::ScrollLock => 11,
+        KeyCode::NumLock => 12,
+        KeyCode::PrintScreen => 13,
+        KeyCode::Pause => 14,
+        KeyCode::Menu => 15,
+        KeyCode::KeypadBegin => 16,
+        KeyCode::Media(m) => 0x20 + m as u64,
+        KeyCode::Modifier(m) => 0x40 + m as u64,
+        _ => 0x7f,
     }
 }
 
@@ -361,6 +427,54 @@ mod tests {
             .map(|k| k.parse::<BindKey>().unwrap().tmux_code())
             .collect();
         assert!(codes.windows(2).all(|p| p[0] < p[1]), "{codes:?}");
+        // The keypad after the arrows, in tmux.h's order; tmxr's own keys
+        // after every key tmux has but those with modifiers, and its own
+        // modifiers after tmux's.
+        let order = [
+            "Right",
+            "KP/",
+            "KP*",
+            "KP-",
+            "KP7",
+            "KP8",
+            "KP9",
+            "KP+",
+            "KP4",
+            "KP5",
+            "KP6",
+            "KP1",
+            "KP2",
+            "KP3",
+            "KPEnter",
+            "KP0",
+            "KP.",
+            "F13",
+            "F35",
+            "KP=",
+            "KP,",
+            "KPLeft",
+            "KPDC",
+            "CapsLock",
+            "Menu",
+            "KPBegin",
+            "MediaPlay",
+            "MuteVolume",
+            "LeftShift",
+            "IsoLevel5Shift",
+            "M-a",
+            "C-a",
+            "C-S-a",
+            "Super-a",
+            "Hyper-a",
+            "Meta-a",
+        ];
+        let codes: Vec<u64> = order
+            .iter()
+            .map(|k| k.parse::<BindKey>().unwrap().tmux_code())
+            .collect();
+        for (pair, keys) in codes.windows(2).zip(order.windows(2)) {
+            assert!(pair[0] < pair[1], "{} before {}", keys[0], keys[1]);
+        }
         // tmux.h has no buttons 4 and 5: MOUSEDOWN6 follows MOUSEDOWN3.
         let code = |k: &str| k.parse::<BindKey>().unwrap().tmux_code();
         assert_eq!(
