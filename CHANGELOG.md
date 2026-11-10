@@ -201,7 +201,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `C-Space`: `send-keys C-4` sends Ctrl+4 (52 at modifyOtherKeys level 2, where
   it sent 92) and a `C-\` bind no longer fires on a kitty terminal's real
   Ctrl+4. A legacy terminal's bytes still read as the keys tmux names them (0x1c
-  as `C-\`, 0x00 as `C-Space`).
+  as `C-\`, 0x00 as `C-Space`), as do the Windows console's records of them
+  outside Windows Terminal (it reports 0x00 as Ctrl+Shift+2 on a US layout).
 - **`send-keys C-A` sends 65 at modifyOtherKeys level 2**, as tmux does, where
   it was folded to `C-a` and sent 97; to a legacy pane both are still 0x01.
 - **`send-keys` sends what tmux 3.6 sends for more names.** `S-Tab` is a key

@@ -188,19 +188,29 @@ fn keys_from_console_bytes() -> bool {
 }
 
 /// The key a terminal meant when the Windows console turned its byte into
-/// another: it reports C-j (0x0a) as Ctrl+Enter and C-h (0x08) as
-/// Ctrl+Backspace, so binds for C-j and C-h never matched. Read them as
-/// tmux reads those bytes. A terminal sending bytes cannot send those two
-/// chords another way. Built for tests everywhere; only Windows reads keys
-/// through a console.
+/// another. It reports C-j (0x0a) as Ctrl+Enter and C-h (0x08) as
+/// Ctrl+Backspace, so binds for C-j and C-h never matched; and it makes a
+/// C0 byte's record from the layout's key for it (`VkKeyScanW`), so NUL,
+/// 0x1e and 0x1f come with Shift (Ctrl+Shift+2, Ctrl+Shift+6, Ctrl+Shift+-
+/// on a US layout), which since Ctrl keeps Shift apart (C-S-2) fired no
+/// C-Space, C-^ or C-_ bind. Read them as tmux reads those bytes. A
+/// terminal sending bytes cannot send those chords another way. Built for
+/// tests everywhere; only Windows reads keys through a console.
 #[cfg(any(windows, test))]
 fn console_key(ev: Event) -> Event {
     match ev {
         Event::Key(mut k) if k.modifiers.contains(KeyModifiers::CONTROL) => {
-            match k.key {
-                KeyCode::Enter => k.key = KeyCode::Char('j'),
-                KeyCode::Backspace => k.key = KeyCode::Char('h'),
-                _ => {}
+            let (key, console_shift) = match k.key {
+                KeyCode::Enter => (KeyCode::Char('j'), false),
+                KeyCode::Backspace => (KeyCode::Char('h'), false),
+                KeyCode::Char('2' | '@' | ' ') => (KeyCode::Char(' '), true),
+                KeyCode::Char('6' | '^') => (KeyCode::Char('^'), true),
+                KeyCode::Char('-' | '_') => (KeyCode::Char('_'), true),
+                key => (key, false),
+            };
+            k.key = key;
+            if console_shift {
+                k.modifiers.remove(KeyModifiers::SHIFT);
             }
             Event::Key(k)
         }
@@ -218,9 +228,10 @@ pub(super) mod tests {
     }
 
     #[test]
-    fn console_bytes_for_c_j_and_c_h_are_read_as_those_keys() {
+    fn console_bytes_are_read_as_tmux_reads_the_bytes() {
         let ctrl = KeyModifiers::CONTROL;
         let ctrl_alt = KeyModifiers::CONTROL | KeyModifiers::ALT;
+        let ctrl_shift = KeyModifiers::CONTROL | KeyModifiers::SHIFT;
         for (from, to) in [
             (key(KeyCode::Enter, ctrl), key(KeyCode::Char('j'), ctrl)),
             (key(KeyCode::Backspace, ctrl), key(KeyCode::Char('h'), ctrl)),
@@ -238,6 +249,30 @@ pub(super) mod tests {
                 key(KeyCode::Backspace, KeyModifiers::NONE),
             ),
             (key(KeyCode::Char('k'), ctrl), key(KeyCode::Char('k'), ctrl)),
+            // The console's records of NUL, 0x1e and 0x1f, however the
+            // layout's key for each is reported: C-Space, C-^ and C-_.
+            (
+                key(KeyCode::Char('2'), ctrl_shift),
+                key(KeyCode::Char(' '), ctrl),
+            ),
+            (
+                key(KeyCode::Char('@'), ctrl_shift),
+                key(KeyCode::Char(' '), ctrl),
+            ),
+            (key(KeyCode::Char(' '), ctrl), key(KeyCode::Char(' '), ctrl)),
+            (
+                key(KeyCode::Char('6'), ctrl_shift),
+                key(KeyCode::Char('^'), ctrl),
+            ),
+            (
+                key(KeyCode::Char('_'), ctrl_shift),
+                key(KeyCode::Char('_'), ctrl),
+            ),
+            // Without Ctrl, typed as they are.
+            (
+                key(KeyCode::Char('@'), KeyModifiers::SHIFT),
+                key(KeyCode::Char('@'), KeyModifiers::SHIFT),
+            ),
             (Event::FocusGained, Event::FocusGained),
         ] {
             assert_eq!(console_key(from.clone()), to, "{from:?}");
