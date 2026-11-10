@@ -3,9 +3,9 @@
 //! client usually runs) its controlling terminal, or (as under a `setsid`
 //! launcher) not; the test plays the terminal.
 //!
-//! Unix only: tmxr's Windows client still takes the console through
-//! crossterm until plan 18 step 8, and crossterm's restore there has no
-//! kitty flags to pop.
+//! Unix only: the fixture plays a terminal through a pty, which Windows has
+//! only as ConPTY, whose console is not one a test can give the client
+//! and read back like this.
 
 use std::fs::File;
 use std::io::{Read, Write};
@@ -197,7 +197,7 @@ fn run_fixture(controlling: bool) -> Run {
     let mut command = tmxr_term::child::command(std::env::current_exe().unwrap());
     command
         .args([
-            "terminal::guard::unix::tests::panic_fixture",
+            "terminal::guard::tests::panic_fixture",
             "--exact",
             "--ignored",
             "--nocapture",

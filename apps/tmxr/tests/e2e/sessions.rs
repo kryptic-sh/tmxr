@@ -1303,22 +1303,24 @@ fn an_ignore_size_client_sizes_windows_only_alone() {
 /// they are ready together once it reads again. The input may as well be a
 /// focus report: a tiling compositor (Hyprland) resizes a window and gives
 /// it the focus at once when its neighbour closes, which lost the resize
-/// that way. Unix only: a Windows
-/// console's resize is an input record in the keys' own queue, with no
-/// signal beside it to lose.
-#[cfg(unix)]
+/// that way. On Windows the console makes no resize record while the lock
+/// command has it (raw mode, which turns them on, is off), so the client
+/// looks at the size once it is back.
 #[test]
 fn a_resize_and_a_key_arriving_together_both_reach_the_server() {
     let t = Tmxr::new("winch");
     let s = t.attach(&["new", "-s", "winch"]);
     s.wait_for("the status line", |text| text.contains("winch"));
+    // A second's wait, in the lock command's shell.
+    let lock = |marker: &str| {
+        if cfg!(windows) {
+            format!("echo {marker}& ping -n 2 127.0.0.1 >nul")
+        } else {
+            format!("echo {marker}; sleep 1")
+        }
+    };
     // It reads nothing from the terminal, so the key waits for the client.
-    t.run(&[
-        "set-option",
-        "-g",
-        "lock-command",
-        "echo LOCKED-NOW; sleep 1",
-    ]);
+    t.run(&["set-option", "-g", "lock-command", &lock("LOCKED-NOW")]);
     let size = |t: &Tmxr, want: &str| {
         t.wait_run(
             &[
@@ -1338,12 +1340,7 @@ fn a_resize_and_a_key_arriving_together_both_reach_the_server() {
     s.send(b"x");
     size(&t, "70x19");
 
-    t.run(&[
-        "set-option",
-        "-g",
-        "lock-command",
-        "echo LOCKED-AGAIN; sleep 1",
-    ]);
+    t.run(&["set-option", "-g", "lock-command", &lock("LOCKED-AGAIN")]);
     t.run(&["lock-session", "-t", "winch"]);
     s.wait_for("the lock command again", |text| {
         text.contains("LOCKED-AGAIN")
@@ -1357,8 +1354,8 @@ fn a_resize_and_a_key_arriving_together_both_reach_the_server() {
 /// stopped reading once a read filled its buffer, and the rest waited for
 /// the next key. The keys go in one write, so they are all waiting when the
 /// client reads, as lines short enough for the pane's canonical mode (macOS
-/// takes 1024 bytes a line). Unix only, as the resize test above: a Windows
-/// console hands over input records, not a byte buffer.
+/// takes 1024 bytes a line). Unix only: a Windows console outside Windows
+/// Terminal hands over input records, not a byte buffer.
 #[cfg(unix)]
 #[test]
 fn keys_typed_faster_than_the_client_reads_all_arrive() {
@@ -1682,8 +1679,9 @@ fn a_clients_reader_sleeps_while_frames_go_out() {
 /// A client in a terminal that takes synchronized updates (it answers
 /// DECRQM for mode 2026) writes each frame as one, so the terminal never
 /// shows a frame half drawn; in one that does not, it writes none. Unix
-/// only: a Windows client does not ask, its console handing over input
-/// records rather than the terminal's answers.
+/// only: ConPTY between the harness and a Windows client is not known to
+/// hand the client's queries on to the harness's terminal (conhost answers
+/// DA1 itself), and outside Windows Terminal the client asks none.
 /// A client's terminal's color scheme, asked at attach and reported again
 /// as it changes, is `#{client_theme}` and runs tmux's theme hooks.
 #[cfg(unix)]

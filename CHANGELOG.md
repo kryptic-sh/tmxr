@@ -92,12 +92,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `escape-time` is sent at once when its release comes from a terminal asked for
   releases. A program that asked for releases gets one made right after each
   press from a client whose terminal reports none (a legacy or xterm-tier
-  terminal, or the Windows client), and one for each key still held when the
-  client's terminal stops reporting them (focus moving to a program that did not
-  ask for them, a key table held, a detach), so no key is left down. Keys from
-  such a client still reach a flag-8 pane encoded from what it reported: its
-  typed characters, with their shifted key and text, as escape codes.
-  `send-keys` keys have no release.
+  terminal), and one for each key still held when the client's terminal stops
+  reporting them (focus moving to a program that did not ask for them, a key
+  table held, a detach), so no key is left down. Keys from such a client still
+  reach a flag-8 pane encoded from what it reported: its typed characters, with
+  their shifted key and text, as escape codes. `send-keys` keys have no release.
 - **`tmxr-server`'s `kitty::keys_to` and `kitty::KeyTarget`**: the pane or popup
   an attached client's keys go to when they run no bind. **`tmxr-term`'s
   `encode::is_modifier_key`** and the flag constants `KITTY_REPORT_EVENTS`,
@@ -113,9 +112,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and Ctrl+h with Caps Lock on (`CSI 27;5;72~`, the upper-case letter) as C-h,
   where tmux reads it as C-H. A terminal with both protocols gets kitty's,
   unless `kitty-keys` is `off`. Unlike tmux, `extended-keys` and
-  `terminal-features` take effect on attached clients at once. The Windows
-  client, which reads console key records, tells the server it cannot read these
-  keys and is never asked.
+  `terminal-features` take effect on attached clients at once. A Windows client
+  outside Windows Terminal, which reads console key records, tells the server it
+  cannot read these keys and is never asked.
 - **The `terminal-features` server option**, tmux's: an array of
   `pattern:feature:feature` entries giving a client whose `TERM` matches the
   pattern those terminal features, set and shown as tmux's (a whole value splits
@@ -128,6 +127,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   **`tmxr-config`'s `Array::assign_split`** and `TERMINAL_FEATURES_SEPARATORS`.
 - **`tmxr-server`'s `kitty::speaks`**: whether an attached client said its
   terminal speaks the kitty keyboard protocol.
+- **`tmxr-client`'s `PROBE_WAIT`**: how long the attaching client waits for its
+  terminal's answers to what it asks it, for tests timing an attach.
 - **The `kitty-keys` server option**, tmxr's own: `on` (the default) or `off`.
   `off` turns the kitty keyboard protocol off both ways: no client asks its
   terminal for it (nor again after `suspend-client` or `lock-client`), and a
@@ -162,15 +163,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   that types no text as its own number (`CSI 57421u` for the keypad's Page Up),
   and the Caps Lock and Num Lock state on every key not sent as text
   (`CSI 1;129A` for Up with Num Lock on).
-- **On Unix the client takes and gives back its terminal through `ttyr`, not
-  crossterm**: raw mode, the alternate screen, bracketed paste, focus and colour
-  scheme reports, the kitty flags, and their restore on detach, on a panic and
-  around `suspend-client` and `lock-client`. Raw mode and the size are still
-  taken on standard input where it is a terminal, as crossterm took them, so a
-  client with no controlling terminal (under a `setsid` launcher) still
-  attaches. Mouse capture no longer turns on urxvt's mouse form (mode 1015),
-  which tmux does not ask for either: still 1000, 1002, 1003 and SGR's 1006.
-  crossterm is now a Windows-only dependency of `tmxr-client`.
+- **The client takes and gives back its terminal through `ttyr`, not
+  crossterm**, on every platform: raw mode, the alternate screen, bracketed
+  paste, focus and colour scheme reports, the kitty flags, and their restore on
+  detach, on a panic and around `suspend-client` and `lock-client`. On Unix raw
+  mode and the size are still taken on standard input where it is a terminal, as
+  crossterm took them, so a client with no controlling terminal (under a
+  `setsid` launcher) still attaches; on Windows they are the console's (`CONIN$`
+  and `CONOUT$`). Mouse capture no longer turns on urxvt's mouse form (mode
+  1015), which tmux does not ask for either: on Unix still 1000, 1002, 1003 and
+  SGR's 1006; on Windows 1003 and 1006 alone (1003 reports every button and
+  motion), with the console's mouse records on and Quick Edit off while
+  captured. `tmxr-client` no longer depends on crossterm.
+- **The Windows client reads its console through `ttyr`**, not crossterm. Under
+  Windows Terminal (`WT_SESSION` set) it turns on the console's VT input and
+  Windows Terminal's win32-input-mode, so keys arrive as full key records and
+  the rest as the terminal sends it: it asks the terminal what it speaks, as on
+  Unix (synchronized updates, its colours, the kitty keyboard protocol, its
+  XTVERSION name), reads its colour scheme reports (`#{client_theme}`, the theme
+  hooks) and colour answers, and can be given modifyOtherKeys. Elsewhere
+  (conhost, or ConPTY behind another terminal) it reads the console's key
+  records and asks nothing, as before. A console key record's release is passed
+  on: a program that asked for releases (kitty flag 2) gets the real one, not
+  one made right after the press, and an Escape held for `escape-time` is sent
+  as its release comes. Pausing the input for `lock-client` wakes the reader
+  rather than polling every 50 ms, so an idle Windows client no longer wakes.
 - **The cursor colour reset the client writes as it gives its terminal back
   (`OSC 112`) ends with ST (`ESC \`) rather than BEL**, on every platform.
 - **The client also asks its terminal for its name and version** (XTVERSION,
@@ -186,6 +203,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **AltGr types its character on Windows**: AltGr+q on a German layout types
+  `@`, and AltGr+l on a Polish one `ł`, where the Windows client read them as
+  Ctrl+Alt with the character and sent `ESC NUL`, or nothing for a non-ASCII
+  one. A real Ctrl+4 to Ctrl+7 from Windows Terminal is `C-4` to `C-7`, not
+  `C-\` to `C-_`, and the keypad's keys are told apart from the main ones there
+  and in conhost.
+- **A resize while `lock-client` runs reaches the server on Windows**, where the
+  console made no resize event with the client's raw mode off and the session
+  kept its old size.
 - **xterm's Meta modifier reads as `M-`, as tmux reads it.** A terminal outside
   the kitty keyboard protocol that has a Meta key apart from Alt (xterm can)
   sends it as modifier bit 8: Meta+Up as `CSI 1;9A`, and Meta+h at

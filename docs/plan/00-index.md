@@ -27,4 +27,4 @@ Section numbers are document identity. Build order is
 | 15  | [15-milestones.md](15-milestones.md)                           | Build order and exit checks                                                             |
 | 16  | [16-open-questions.md](16-open-questions.md)                   | Provisional decisions awaiting the owner's call                                         |
 | 17  | [17-tmux-3-8-corpus.md](17-tmux-3-8-corpus.md)                 | Retargeting the oracle from tmux 3.6 to 3.8 (planned)                                   |
-| 18  | [18-kitty-keyboard.md](18-kitty-keyboard.md)                   | Full kitty keyboard protocol with a plain-input fallback (planned)                      |
+| 18  | 18-kitty-keyboard (done)                                       | Full kitty keyboard protocol with a plain-input fallback (done)                         |

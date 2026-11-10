@@ -1,14 +1,9 @@
 //! Asking the terminal what it speaks, and reading its answers.
 
 use std::io::{self, Write};
-#[cfg(unix)]
 use std::time::Duration;
 
-use ttyr::event::Event;
-// Read in the answers to the probe, which only Unix asks.
-#[cfg(any(unix, test))]
-use ttyr::event::{ColorSlot, ModeSetting, Report};
-#[cfg(any(unix, test))]
+use ttyr::event::{ColorSlot, Event, ModeSetting, Report};
 use ttyr::reader::Answers;
 
 use super::Keys;
@@ -28,8 +23,6 @@ pub(super) struct Probe {
     pub(super) secondary: Option<u16>,
 }
 
-// Only Unix asks; built for its tests everywhere.
-#[cfg(any(unix, test))]
 impl Probe {
     /// The answers among `answers`, the events read while the terminal
     /// answered; and the rest in the order they came, input for the server
@@ -87,7 +80,6 @@ impl Probe {
 /// An OSC 10 or 11 answer `ttyr` does not read (it reads Xlib's numeric
 /// forms), read as tmux reads it (`parse_x11`), so the forms 0.15.0 took
 /// still are: a name, `cmyk:`, `cmy:`, `r,g,b`. The slot and its RGB value.
-#[cfg(any(unix, test))]
 fn unread_colour(bytes: &[u8]) -> Option<(ColorSlot, u32)> {
     let (slot, rest) = if let Some(rest) = bytes.strip_prefix(b"\x1b]10;") {
         (ColorSlot::Foreground, rest)
@@ -102,24 +94,28 @@ fn unread_colour(bytes: &[u8]) -> Option<(ColorSlot, u32)> {
 }
 
 /// Synchronized output's DEC private mode.
-#[cfg(any(unix, test))]
 const SYNC_MODE: u16 = 2026;
 
 /// How long the probe waits for the terminal's answers.
-#[cfg(unix)]
-const PROBE_WAIT: Duration = Duration::from_secs(1);
+pub const PROBE_WAIT: Duration = Duration::from_secs(1);
 
 impl Keys {
     /// Ask the terminal what [`Probe`] holds and read its answers, as tmux
     /// asks at attach. Returns them with the events read meanwhile (keys
     /// typed, a resize, a report not asked for), in the order they came,
-    /// which are input like any other.
-    #[cfg(unix)]
+    /// which are input like any other. A Windows console handing over key
+    /// records ([`Keys::reads_vt`]) is not asked: how a terminal's answers
+    /// reach a program reading records through ConPTY is not known, and as
+    /// keys they would be typed into a pane. It says nothing of itself, as
+    /// a terminal that answers nothing.
     pub(super) fn probe(&mut self, out: &mut impl Write) -> io::Result<(Probe, Vec<Event>)> {
         use ttyr::terminal::{
             RequestKeyboardEnhancementFlags, RequestMode, RequestPrimaryDeviceAttributes,
             RequestSecondaryDeviceAttributes, RequestTerminalColor, RequestTerminalVersion,
         };
+        if !self.reads_vt() {
+            return Ok((Probe::default(), Vec::new()));
+        }
         // DA1 last, as every terminal answers it, and in order.
         ttyr::execute!(
             out,
@@ -139,14 +135,6 @@ impl Keys {
         let (probe, events) = Probe::read(answers, self.last.as_ref());
         self.last = Some(probe.clone());
         Ok((probe, events))
-    }
-
-    /// The Windows console hands over input records, so it is not asked,
-    /// and has no kitty keyboard protocol (crossterm, which reads it, says
-    /// none there).
-    #[cfg(windows)]
-    pub(super) fn probe(&mut self, _out: &mut impl Write) -> io::Result<(Probe, Vec<Event>)> {
-        Ok((Probe::default(), Vec::new()))
     }
 }
 
@@ -340,8 +328,8 @@ mod tests {
 
 /// The probe through `ttyr`'s reader, over a socket pair in place of a
 /// terminal: its deadline, an answer cut short, and what it hands on. Unix
-/// only: the Windows client asks no probe (the console hands over key
-/// records, not a terminal's answers).
+/// only: a socket pair stands in for a terminal only there; on Windows the
+/// reader reads the console.
 #[cfg(all(test, unix))]
 pub(super) mod reader_tests {
     use std::os::fd::OwnedFd;

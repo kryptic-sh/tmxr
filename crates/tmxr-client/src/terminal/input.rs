@@ -14,10 +14,8 @@ use ttyr::event::Event;
 use super::Keys;
 
 /// How often a paused input thread looks whether it may read again, if the
-/// pause ending does not wake it first, and on Windows how long it waits
-/// for an event before checking whether it should pause (the most an
-/// [`Input::pause`] waits there). On Unix it waits for an event without a
-/// timeout, and a pause wakes it.
+/// pause ending does not wake it first. Reading, it waits for an event
+/// without a timeout, and a pause wakes it ([`ttyr::reader::Waker`]).
 pub(super) const INPUT_POLL: Duration = Duration::from_millis(50);
 
 /// What [`Input::kitty_keyboard`] holds when the reader has been told all
@@ -25,22 +23,18 @@ pub(super) const INPUT_POLL: Duration = Duration::from_millis(50);
 const KITTY_TOLD: u8 = 0;
 
 /// What [`Input::kitty_keyboard`] holds for a reader to be told the kitty
-/// protocol is `on`. Only the Unix reader is ever told.
-#[cfg(unix)]
+/// protocol is `on`.
 fn kitty_wanted(on: bool) -> u8 {
     if on { 2 } else { 1 }
 }
 
 /// Tell `keys`' reader what `wanted` holds for it, if anything, and clear
-/// it. Only the Unix reader has anything to be told.
+/// it.
 fn tell_reader(wanted: &AtomicU8, keys: &mut Keys) {
     let told = wanted.swap(KITTY_TOLD, Ordering::AcqRel);
-    #[cfg(unix)]
     if told != KITTY_TOLD {
         keys.set_kitty_keyboard(told == kitty_wanted(true));
     }
-    #[cfg(windows)]
-    let _ = (told, keys);
 }
 
 /// The input thread, which can be paused while another program (the lock
@@ -52,7 +46,6 @@ pub struct Input {
     /// The terminal's input, held by the thread while it reads.
     keys: Arc<Mutex<Keys>>,
     /// Ends a read the thread is waiting in.
-    #[cfg(unix)]
     waker: ttyr::reader::Waker,
     /// Whether the reader is to be told the kitty protocol is on or off
     /// before its next read ([`Input::set_kitty_keyboard`]).
@@ -96,7 +89,6 @@ impl Input {
         // The flag keeps the thread from taking the input again before
         // this does; the lock waits out a read already under way.
         self.paused.store(true, Ordering::Release);
-        #[cfg(unix)]
         self.waker.wake()?;
         let mut keys = self
             .keys
@@ -115,23 +107,11 @@ impl Input {
     /// Have the reader told whether the kitty keyboard protocol is on (see
     /// [`Keys::set_kitty_keyboard`]) before it reads again, without waiting
     /// for the thread: a read under way is woken, and the thread tells it
-    /// before the next. The Windows client's reader has no such switch, and
-    /// its guard never asks for one: there it is an error.
+    /// before the next.
     pub fn set_kitty_keyboard(&self, on: bool) -> io::Result<()> {
-        #[cfg(windows)]
-        {
-            let _ = on;
-            Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "the Windows client's reader does not read the kitty protocol",
-            ))
-        }
-        #[cfg(unix)]
-        {
-            self.kitty_keyboard
-                .store(kitty_wanted(on), Ordering::Release);
-            self.waker.wake()
-        }
+        self.kitty_keyboard
+            .store(kitty_wanted(on), Ordering::Release);
+        self.waker.wake()
     }
 }
 
@@ -143,11 +123,21 @@ pub type Sender = Arc<Mutex<Arc<Stream>>>;
 /// `first` (what [`Keys::resized_since`] and [`Guard::enter`](super::Guard::enter) read) ahead of
 /// the rest.
 pub fn spawn_input(send: Sender, keys: Keys, first: Vec<Event>) -> io::Result<Input> {
-    #[cfg(unix)]
+    let (input, _thread) = spawn_pump(keys, first, move |events| forward(&send, events))?;
+    Ok(input)
+}
+
+/// The input thread, handing each batch it reads to `forward` until that
+/// or the read fails; and its handle, for a test to wait for it to end.
+fn spawn_pump(
+    keys: Keys,
+    first: Vec<Event>,
+    mut forward: impl FnMut(Vec<Event>) -> io::Result<()> + Send + 'static,
+) -> io::Result<(Input, std::thread::JoinHandle<()>)> {
     let waker = keys.reader.waker();
     let (paused, keys) = (Arc::new(AtomicBool::new(false)), Arc::new(Mutex::new(keys)));
     let kitty_keyboard = Arc::new(AtomicU8::new(KITTY_TOLD));
-    let thread = {
+    let handle = {
         let (paused, keys, kitty_keyboard) = (
             Arc::clone(&paused),
             Arc::clone(&keys),
@@ -156,7 +146,7 @@ pub fn spawn_input(send: Sender, keys: Keys, first: Vec<Event>) -> io::Result<In
         std::thread::Builder::new()
             .name("tmxr-input".into())
             .spawn(move || {
-                if !first.is_empty() && forward(&send, first).is_err() {
+                if !first.is_empty() && forward(first).is_err() {
                     return;
                 }
                 loop {
@@ -167,22 +157,20 @@ pub fn spawn_input(send: Sender, keys: Keys, first: Vec<Event>) -> io::Result<In
                     let Ok(events) = read_batch(&keys, &kitty_keyboard) else {
                         break;
                     };
-                    if !events.is_empty() && forward(&send, events).is_err() {
+                    if !events.is_empty() && forward(events).is_err() {
                         break;
                     }
                 }
             })?
-            .thread()
-            .clone()
     };
-    Ok(Input {
+    let input = Input {
         paused,
         keys,
-        #[cfg(unix)]
         waker,
         kitty_keyboard,
-        thread,
-    })
+        thread: handle.thread().clone(),
+    };
+    Ok((input, handle))
 }
 
 /// One batch of events from `keys`, its reader told first what
@@ -204,8 +192,8 @@ pub fn forward(send: &Sender, events: Vec<Event>) -> io::Result<()> {
 }
 
 /// The input's switches over a socket pair in place of a terminal. Unix
-/// only: the Windows client's reader has no kitty switch, and its pause is
-/// the same code.
+/// only: a socket pair stands in for a terminal only there; the Windows
+/// console's are below.
 #[cfg(all(test, unix))]
 mod tests {
     use std::io::Write as _;
@@ -273,5 +261,49 @@ mod tests {
         let start = Instant::now();
         std::thread::park_timeout(Duration::from_secs(5));
         assert!(start.elapsed() < INPUT_POLL, "{:?}", start.elapsed());
+    }
+}
+
+/// The input's pause on a real Windows console: the reader is woken out of
+/// its wait. Windows only; first run in CI.
+#[cfg(all(test, windows))]
+mod console_tests {
+    use std::time::Instant;
+
+    use super::*;
+    use crate::terminal::keys::console_tests::{console, inject, keys, record};
+
+    /// A pause returns at once while the input thread waits for a key, as
+    /// the waker ends the wait; once it ends the thread reads again.
+    #[test]
+    fn a_pause_wakes_a_thread_waiting_for_a_key() {
+        let _turn = console();
+        let (read, reads) = std::sync::mpsc::channel();
+        let (input, thread) = spawn_pump(keys(), Vec::new(), move |events| {
+            read.send(events).map_err(|_| io::Error::other("test over"))
+        })
+        .unwrap();
+        // Long enough for the thread to be waiting in the reader.
+        std::thread::sleep(Duration::from_millis(200));
+        let start = Instant::now();
+        let lent = input.pause().unwrap();
+        assert!(
+            start.elapsed() < Duration::from_secs(2),
+            "{:?}",
+            start.elapsed()
+        );
+        drop(lent);
+        inject(&[record(u16::from(b'X'), u16::from(b'x'), true, 0)]);
+        let events = reads.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(
+            matches!(&events[..], [Event::Key(k)] if k.key == ttyr::event::KeyCode::Char('x')),
+            "{events:?}"
+        );
+        // The next key it reads has nowhere to go, which ends the thread,
+        // and the reader with it, for the next test to open its own.
+        drop(reads);
+        inject(&[record(u16::from(b'Y'), u16::from(b'y'), true, 0)]);
+        thread.join().unwrap();
+        drop(input);
     }
 }

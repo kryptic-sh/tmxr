@@ -3,12 +3,13 @@
 //! asked for xterm's modifyOtherKeys under `extended-keys`, and the
 //! `CSI 27 ; mods ; key ~` keys it then sends reach binds and panes.
 //!
-//! Unix only, all of it: the Windows client reads the console's key
-//! records through crossterm, asks the console no XTVERSION, and tells the
-//! server it cannot read these keys, so it is never asked for the mode
-//! (the server's side of that is unit-tested on every platform:
-//! `terminal_features_give_a_terminal_by_term_the_xterm_tier`); ConPTY
-//! does not pass `CSI 27 ; … ~` keys either.
+//! Unix only, all of it: outside Windows Terminal the Windows client reads
+//! the console's key records, asks no XTVERSION, and tells the server it
+//! cannot read these keys, so it is never asked for the mode (the server's
+//! side of that is unit-tested on every platform:
+//! `terminal_features_give_a_terminal_by_term_the_xterm_tier`); under it,
+//! ConPTY between the harness and the client is not known to hand
+//! XTVERSION on to the harness's terminal, nor `CSI 27 ; … ~` keys back.
 
 #![cfg(unix)]
 
@@ -207,8 +208,7 @@ fn xterm_keys_reach_binds_with_their_modifiers() {
 /// C-S-h's. xterm's Meta modifier (bit 8, where Meta is a key apart from
 /// Alt) is `M-`, as tmux reads it: Meta+h, Ctrl+Meta+h and
 /// Meta+Up fire the binds on M-h, C-M-h and M-Up. Unix only, as the whole
-/// file: the Windows client reads console key records through crossterm,
-/// which neither gets these sequences nor reads bit 8 as Meta.
+/// file.
 #[test]
 fn caps_lock_and_xterms_meta_reach_binds_as_tmux_reads_them() {
     let t = Tmxr::new("xtermmeta");

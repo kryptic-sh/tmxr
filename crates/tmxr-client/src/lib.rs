@@ -6,10 +6,6 @@
 //! go up, output bytes come down, until the server detaches it.
 //! See `docs/plan/02-architecture.md`.
 
-// The Windows client reads the console with crossterm until ttyr does;
-// crossterm is a Windows dependency only, so its tests run there.
-#[cfg(windows)]
-mod crossterm_bridge;
 mod spawn;
 mod terminal;
 
@@ -25,6 +21,7 @@ use tmxr_proto::{
 };
 
 pub use spawn::SERVER_ARG;
+pub use terminal::PROBE_WAIT;
 
 /// What to run.
 pub struct Options {
@@ -132,9 +129,10 @@ fn hello() -> Hello {
             term: std::env::var("TERM").unwrap_or_default(),
             job_control: cfg!(unix),
             tty: terminal::tty_name(),
-            // Read through ttyr's Unix reader; the Windows console hands
-            // over key records instead.
-            colour_answers: cfg!(unix),
+            // Read through ttyr's reader where it reads the terminal's
+            // bytes; not by a Windows console handing over key records,
+            // which is asked nothing.
+            colour_answers: terminal::reads_vt(),
         });
     Hello {
         protocol: PROTOCOL_VERSION,
@@ -206,9 +204,11 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
             ServerMsg::Attached => {
                 if let Some(s) = send.take() {
                     let mut keys = terminal::Keys::open()?;
-                    let mut first: Vec<_> = keys.resized_since(size).into_iter().collect();
-                    let (guard, early) = terminal::Guard::enter(&mut keys)?;
-                    first.extend(early);
+                    let (guard, mut first) = terminal::Guard::enter(&mut keys)?;
+                    // After raw mode, which turns the Windows console's
+                    // resize records on; behind what was read meanwhile,
+                    // as it is looked at after them.
+                    first.extend(keys.resized_since(size));
                     let (fg, bg) = guard.colours();
                     let keyboard = guard.keyboard();
                     term = Some(guard);
@@ -305,9 +305,10 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
             }
             ServerMsg::ExtendedKeys(on) => {
                 // The server asks only a client that said it can
-                // (`KeyboardReport::modify_other_keys`); the Windows client
-                // says not, and refuses the mode if asked anyway, which is
-                // reported and leaves it attached. A failed write is an error.
+                // (`KeyboardReport::modify_other_keys`); a Windows client
+                // reading console key records says not, and refuses the
+                // mode if asked anyway, which is reported and leaves it
+                // attached. A failed write is an error.
                 if let Some(t) = &term
                     && let Err(e) = t.set_extended_keys(on)
                 {
@@ -327,8 +328,8 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
 /// server its colours and what its keyboard speaks where they changed
 /// (forgetting `flags` where the keyboard did: the server says them, and
 /// modifyOtherKeys, again from what it decides), that it is back with the
-/// message `run` returns, and the input read as the terminal answered. The
-/// input
+/// message `run` returns, and the input read as the terminal answered,
+/// after a resize meanwhile that the reader did not see. The input
 /// thread is paused throughout, so what is typed meanwhile goes to
 /// whatever `run` hands the terminal to, and nothing it reads after
 /// overtakes that input. Does nothing with no input thread (not attached).
@@ -344,7 +345,12 @@ fn hand_over(
     };
     let mut paused = input.pause()?;
     let (colours, keyboard) = (guard.colours(), guard.keyboard());
-    let (back, early) = guard.hand_over(&mut paused, *flags, run)?;
+    let size = paused.size().ok();
+    let (back, mut early) = guard.hand_over(&mut paused, *flags, run)?;
+    // A Windows console makes no resize record with raw mode off, as it is
+    // while `run` has it; on Unix the reader saw it, and the server takes
+    // the size twice.
+    early.extend(paused.resized_since(size));
     // The server keeps the terminal's colours and keyboard from attach:
     // tell it of new ones, as attaching does.
     let (fg, bg) = guard.colours();

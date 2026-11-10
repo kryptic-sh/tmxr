@@ -4,17 +4,19 @@
 //! program its press reached, and nowhere when the press ran a bind or
 //! went to tmxr itself.
 //!
-//! A client's terminal reports releases only while it is asked for kitty
-//! flag 2, which it is while its keys go to a program that pushed it
-//! (`crate::kitty::flags`). A press that reaches a program then is held
-//! until its release comes. A press from a terminal that reports none (a
-//! legacy or xterm-tier one, or a kitty one not asked for flag 2) is
-//! released at once, so a program that asked for releases never sees a key
+//! A client's terminal reports releases while it is asked for kitty flag
+//! 2, which it is while its keys go to a program that pushed it
+//! (`crate::kitty::flags`); and a Windows console's key records (from the
+//! console, or Windows Terminal's win32-input-mode) come with their
+//! releases whatever was asked, `KeyEncoding::Windows` on each key. A
+//! press that reaches a program then is held until its release comes. A
+//! press from a terminal that reports none (a legacy or xterm-tier one, or
+//! a kitty one not asked for flag 2) is released at once, so a program that asked for releases never sees a key
 //! stuck down; and when the terminal stops reporting them, every key still
 //! held is released. A key `send-keys` sends has no release.
 
 use tmxr_term::encode::KITTY_REPORT_EVENTS;
-use ttyr::event::{KeyEvent, KeyEventKind, KeyEventState};
+use ttyr::event::{KeyEncoding, KeyEvent, KeyEventKind, KeyEventState};
 
 use super::Server;
 use crate::kitty::KeyTarget;
@@ -60,12 +62,20 @@ impl Server {
                 .is_some_and(|f| f & KITTY_REPORT_EVENTS != 0)
     }
 
+    /// Whether the release of key `ev` from client `id`'s terminal will
+    /// come: it is a Windows console key record, whose release comes
+    /// whatever was asked, or the terminal reports releases now
+    /// ([`Server::reports_releases`]).
+    pub(super) fn release_comes(&self, id: ClientId, ev: &KeyEvent) -> bool {
+        ev.encoding == KeyEncoding::Windows || self.reports_releases(id)
+    }
+
     /// Key `ev` from client `id`'s terminal reached `to`: held until its
-    /// release comes, where the terminal reports releases, or else
-    /// released there at once. A repeat of a held key that reached another
-    /// program adds it, so the release reaches every program that saw it.
+    /// release comes ([`Server::release_comes`]), or else released there
+    /// at once. A repeat of a held key that reached another program adds
+    /// it, so the release reaches every program that saw it.
     pub(super) fn key_reached(&mut self, id: ClientId, ev: &KeyEvent, to: Reached) {
-        if !self.reports_releases(id) {
+        if !self.release_comes(id, ev) {
             self.key_to(id, &to, &ev.clone().with_kind(KeyEventKind::Release));
             return;
         }
@@ -303,9 +313,9 @@ mod tests {
         assert_eq!(held(&srv), vec![KeyCode::Char('b')]);
     }
 
-    /// The Windows client forwards the console's releases whatever was
-    /// asked, so for a client that does not report them because a program
-    /// asked, an Escape's release leaves `escape-time` alone.
+    /// A release from a client not asked for releases, and not a console
+    /// key record's (which comes whatever was asked), is none the server
+    /// waits for: an Escape's release leaves `escape-time` alone.
     #[test]
     fn an_escape_release_from_a_client_not_asked_for_releases_waits() {
         let (mut srv, _rx) = attached(true);
@@ -321,6 +331,43 @@ mod tests {
         srv.inputs(1, vec![Event::Key(escape.with_kind(KeyEventKind::Release))]);
         let att = srv.clients[&1].att.as_ref().unwrap();
         assert_eq!(att.pending_escape, Some(soon));
+    }
+
+    /// A Windows console's key record comes with its release whatever the
+    /// client was asked for, so its press is held for that release, not
+    /// released at once, from a client of any tier; another key from the
+    /// same client is released at once.
+    #[test]
+    fn a_console_key_is_held_for_its_own_release() {
+        let (mut srv, _rx) = attached(true);
+        let console = |c| press(c).with_encoding(KeyEncoding::Windows);
+        srv.key_reached(1, &console('a'), Reached::Panes(Vec::new()));
+        srv.key_reached(1, &press('b'), Reached::Panes(Vec::new()));
+        assert_eq!(held(&srv), vec![KeyCode::Char('a')]);
+        srv.client_release(1, &console('a').with_kind(KeyEventKind::Release));
+        assert_eq!(held(&srv), Vec::new());
+    }
+
+    /// A console key record's Escape release sends an Escape waiting for
+    /// `escape-time` at once, as a kitty terminal's under flag 2 does: its
+    /// release comes whatever was asked.
+    #[test]
+    fn a_console_escape_release_sends_the_waiting_escape() {
+        let (mut srv, _rx) = attached(true);
+        let soon = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        srv.clients
+            .get_mut(&1)
+            .unwrap()
+            .att
+            .as_mut()
+            .unwrap()
+            .pending_escape = Some(soon);
+        let escape = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)
+            .with_encoding(KeyEncoding::Windows)
+            .with_kind(KeyEventKind::Release);
+        srv.inputs(1, vec![Event::Key(escape)]);
+        let att = srv.clients[&1].att.as_ref().unwrap();
+        assert_eq!(att.pending_escape, None);
     }
 
     /// Enter and the keypad's Enter are one `KeyCode`, the keypad in the

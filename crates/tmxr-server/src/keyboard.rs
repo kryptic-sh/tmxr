@@ -470,8 +470,8 @@ mod tests {
         srv.decide_keyboards();
         redraw(&mut srv);
         assert_eq!(extended_keys_told(&rx), [true]);
-        // A client that cannot ask its terminal (the Windows console) is
-        // never told.
+        // A client that cannot read the keys (a Windows console handing over
+        // key records) is never told.
         let windows = KeyboardReport {
             modify_other_keys: false,
             ..told(false, Some("XTerm(390)"))

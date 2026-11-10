@@ -235,7 +235,7 @@ fn ctrl_shift_from_a_kitty_terminal_reaches_a_pane_with_its_shift() {
 /// reports it, the unshifted key with Shift (`CSI 49;4u`), not as the
 /// shifted `!` (`CSI 33;3u`); a legacy pane gets `ESC !`. Unix only: ConPTY
 /// passes no kitty keys, either from the harness to the client or to a
-/// pane, and the Windows client's keys come from the console; the server's
+/// pane; the server's
 /// side is unit-tested on every platform (`tmxr-term`'s
 /// `kitty_sends_a_shifted_symbol_as_its_key_with_shift`).
 #[cfg(unix)]
@@ -277,8 +277,10 @@ fn alt_shift_1_from_a_kitty_terminal_reaches_a_kitty_pane_unshifted() {
 
 /// Keys typed while the client asks its terminal what it speaks, before
 /// the terminal has answered, reach the pane: the probe reads them with the
-/// answers and hands them on. Unix only: the Windows client asks the
-/// console nothing (it hands over input records), so it has no probe.
+/// answers and hands them on. Unix only: outside Windows Terminal the
+/// Windows client asks nothing (the console hands over key records), and
+/// under it ConPTY answers DA1 itself, so the harness cannot type before
+/// its answer.
 #[cfg(unix)]
 #[test]
 fn keys_typed_while_the_terminal_is_asked_reach_the_pane() {
@@ -549,9 +551,9 @@ fn move_focus_and_kitty_keys(t: &Tmxr, s: &Screen, session: &str) {
 /// A terminal without the kitty keyboard protocol (it answers no `CSI ? u`)
 /// is sent no kitty flags at all: not at attach, nor as a pane's program
 /// pushes flags and focus moves to it and away, nor as `kitty-keys` changes,
-/// nor a pop on detach. Unix only: the Windows client never asks (the
-/// console has no protocol), and the probe that tells a terminal apart is
-/// Unix's.
+/// nor a pop on detach. Unix only: ConPTY between the harness and a
+/// Windows client is not known to hand the kitty query on to the harness,
+/// so no harness terminal there says it has the protocol to tell apart.
 #[cfg(unix)]
 #[test]
 fn a_legacy_terminal_is_sent_no_kitty_flags() {
@@ -623,14 +625,103 @@ fn a_command_list_attach_gets_its_kitty_flags() {
     s.wait_kitty_flags(TMXR_KITTY_FLAGS);
 }
 
+/// A Windows console's key record (`CSI Vk;Sc;Uc;Kd;Cs;Rc _`, as Windows
+/// Terminal's win32-input-mode writes one) for `unit` typed on key `vk`
+/// with control key state `state`: its press, then its release.
+fn console_key(vk: u8, unit: char, state: u32) -> String {
+    let unit = u32::from(unit);
+    format!("\x1b[{vk};0;{unit};1;{state};1_\x1b[{vk};0;{unit};0;{state};1_")
+}
+
+/// A Windows console's key records type AltGr's characters without the
+/// Ctrl and Alt the console reports AltGr as (`@` from AltGr+q, `ł` from
+/// AltGr+l, on German and Polish layouts), and keep Ctrl+4 apart from
+/// C-\. On Unix the client's reader decodes the records itself; on
+/// Windows ConPTY (made in win32-input-mode) turns them into the console's
+/// records, which the client reads outside Windows Terminal.
+#[test]
+fn console_key_records_type_altgr_and_keep_ctrl_4() {
+    // wincon.h's control key state: right Alt and left Ctrl, as AltGr.
+    const ALT_GR: u32 = 0x1 | 0x8;
+    const LEFT_CTRL: u32 = 0x8;
+    let t = Tmxr::new("consolekeys");
+    let s = t.attach_env(&["new", "-s", "ck"], &[("WT_SESSION", None)]);
+    s.wait_for("status line", |text| text.contains("ck"));
+    t.wait_settled("ck");
+    s.send(b"x");
+    s.send(console_key(b'Q', '@', ALT_GR).as_bytes());
+    s.send(b"y");
+    s.send(console_key(b'L', '\u{142}', ALT_GR).as_bytes());
+    s.send(b"z");
+    t.wait_run(&["capture-pane", "-p", "-t", "ck"], "AltGr's typing", |o| {
+        o.contains("x@y\u{142}z")
+    });
+    t.run(&["bind", "-n", "C-4", "set", "-g", "@hit", "c4"]);
+    t.run(&["bind", "-n", "C-\\", "set", "-g", "@hit", "backslash"]);
+    s.send(console_key(b'4', '\u{1c}', LEFT_CTRL).as_bytes());
+    t.wait_run(&["show", "-gv", "@hit"], "C-4", |o| o.trim() == "c4");
+    // A legacy terminal's 0x1c is C-\, as tmux reads it. Not on Windows:
+    // which key the console makes of that byte is unchecked.
+    if cfg!(unix) {
+        s.send(b"\x1c");
+        t.wait_run(&["show", "-gv", "@hit"], "C-\\", |o| {
+            o.trim() == "backslash"
+        });
+    }
+}
+
 /// Windows Terminal sends keys as win32-input-mode events, not bytes, and
-/// sets `WT_SESSION`: C-j and C-h come as themselves.
+/// sets `WT_SESSION`: C-j and C-h come as themselves. The client there asks
+/// for VT input and win32-input-mode, so this also runs its probe through
+/// ConPTY, and ConPTY's own encoding of the keys it hands on as VT input.
+/// The probe's answers must come back as bytes: as key records they would
+/// leave the probe to wait its whole time and then be typed into the pane.
 #[cfg(windows)]
 #[test]
 fn ctrl_hjkl_move_between_panes_in_windows_terminal() {
+    // Each attach is timed this often, with and without `WT_SESSION` in
+    // turn, and the quickest of each kind compared, so one slow start does
+    // not hide a probe that waited.
+    const ROUNDS: usize = 3;
+    // A probe that waited out the client's `PROBE_WAIT` attaches at least
+    // that much later than a client that asks nothing; four fifths of it
+    // leaves room for the probe's own round trip.
+    let probe_slack = tmxr_client::PROBE_WAIT * 4 / 5;
     let t = Tmxr::new("move-wt");
-    let s = t.attach_env(&["new", "-s", "nav"], &[("WT_SESSION", Some("e2e"))]);
-    s.wait_for("status line", |text| text.contains("nav"));
+    t.run(&["new-session", "-d", "-s", "nav"]);
+    t.wait_settled("nav");
+    let attach = |wt: Option<&str>| {
+        let start = Instant::now();
+        let s = t.attach_env(&["attach", "-t", "nav"], &[("WT_SESSION", wt)]);
+        s.wait_for("status line", |text| text.contains("nav"));
+        (start.elapsed(), s)
+    };
+    let detach = |mut s: Screen| {
+        t.run(&["detach-client", "-s", "nav"]);
+        s.wait_exit();
+    };
+    // Outside Windows Terminal the client reads key records and asks
+    // nothing: the time an attach takes with no probe.
+    let (mut unasked, mut probed) = (Duration::MAX, Duration::MAX);
+    for _ in 0..ROUNDS {
+        let (took, s) = attach(None);
+        unasked = unasked.min(took);
+        detach(s);
+        let (took, s) = attach(Some("e2e"));
+        probed = probed.min(took);
+        detach(s);
+    }
+    assert!(
+        probed < unasked + probe_slack,
+        "the probe waited: {probed:?} at quickest to attach, {unasked:?} without it"
+    );
+    let s = attach(Some("e2e")).1;
+    // Room for answers that came late to arrive, typed, if they were keys.
+    std::thread::sleep(Duration::from_millis(500));
+    let pane = t.run(&["capture-pane", "-p", "-t", "nav"]);
+    for answer in ["[?", "]10;", "]11;"] {
+        assert!(!pane.contains(answer), "{answer:?} typed:\n{pane}");
+    }
     pane_grid(&t);
     // `CSI Vk;Sc;Uc;Kd;Cs;Rc _`, down then up, with left Ctrl (8) held.
     let win32 = |vk: u8, uc: u8| format!("\x1b[{vk};0;{uc};1;8;1_\x1b[{vk};0;{uc};0;8;1_");

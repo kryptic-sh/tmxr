@@ -35,13 +35,16 @@ impl Server {
     /// sends the Escape first. Returns the event to handle, none while one
     /// is held. A key's release, which the kitty protocol and Windows
     /// send, and a modifier key itself, which kitty's flag 8 sends, change
-    /// nothing; but where the terminal reports releases because a program
-    /// asked for them (kitty flag 2), the held Escape's own release sends
-    /// it at once, so it reaches the program before its release does. The
-    /// Windows console's releases, which come whatever was asked, do not.
+    /// nothing; but where the release is one the server waits for
+    /// ([`Server::release_comes`]: a program asked for them, kitty flag 2,
+    /// or a Windows console key record's), the held Escape's own release
+    /// sends it at once, so it reaches the program before its release does.
     pub(super) fn escape_time(&mut self, id: ClientId, ev: TermEvent) -> Option<TermEvent> {
         let wait = Duration::from_millis(self.cfg.escape_time);
-        let releases = self.reports_releases(id);
+        let releases = match &ev {
+            TermEvent::Key(k) => self.release_comes(id, k),
+            _ => false,
+        };
         let att = self.clients.get_mut(&id)?.att.as_mut()?;
         let press = match &ev {
             TermEvent::Key(k)

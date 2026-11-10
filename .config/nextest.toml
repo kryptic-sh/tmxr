@@ -7,9 +7,15 @@
 # contend on terminal resources and timing, so they run one at a time, with a
 # retry budget for residual timing blips. nextest reports a test that only
 # passed on retry as FLAKY, so a real regression still shows as a failure.
+#
+# windows-console: the Windows client's console tests write records into the
+# console's input and read them back. nextest's processes share the console
+# they inherit from the runner, and a mutex inside one process holds
+# none of the others back, so they run one at a time.
 
 [test-groups]
 pty-e2e = { max-threads = 1 }
+windows-console = { max-threads = 1 }
 
 [profile.default]
 # A deadlocked test is killed and reported by name instead of hanging CI.
@@ -19,3 +25,7 @@ slow-timeout = { period = "120s", terminate-after = 4 }
 filter = 'package(tmxr-cli) & binary(e2e)'
 test-group = 'pty-e2e'
 retries = 2
+
+[[profile.default.overrides]]
+filter = 'package(tmxr-client) & test(/console_tests/)'
+test-group = 'windows-console'

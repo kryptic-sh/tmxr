@@ -94,15 +94,16 @@ mutation is sequential without locks.
 
 The client is deliberately dumb and uses plain threads:
 
-- **Input thread**: `crossterm::event::read()` → `ClientMsg::Input(event)`. On
-  Windows this reads console input records, on Unix it parses stdin — either way
-  the server receives the same structured events. On Unix it waits for an event
-  without a timeout, so an idle client does not wake; pausing it for a lock
-  command raises SIGWINCH, which crossterm's reader watches, to end the wait.
-  The Windows console reader cannot be woken, so there it waits in short polls.
+- **Input thread**: `ttyr`'s `Reader` → `ClientMsg::Input(events)`. On Unix it
+  decodes the terminal's bytes; on Windows the console's, as key records, or
+  under Windows Terminal as VT input with win32-input-mode — either way the
+  server receives the same structured events. It waits for an event without a
+  timeout, so an idle client does not wake; pausing it for a lock command wakes
+  it through the reader's `Waker` on every platform.
 - **Main thread**: reads `ServerMsg` frames; `Output(bytes)` → stdout,
   `Detached` / `Exited` → restore terminal, print the reason, exit.
-- Resize events arrive through crossterm on every platform (`Event::Resize`).
+- Resize events arrive through `ttyr`'s reader on every platform
+  (`Event::Resize`).
 - Terminal restore runs from a guard **and** a panic hook, so a crash never
   leaves the user's terminal in raw mode.
 
@@ -123,24 +124,25 @@ The client is deliberately dumb and uses plain threads:
 
 House-precedent versions, added with `cargo add`, not hand-written.
 
-| Crate                                        | Used by             | Notes                                            |
-| -------------------------------------------- | ------------------- | ------------------------------------------------ |
-| `clap` 4 (derive)                            | app                 | CLI                                              |
-| `thiserror` 2                                | library crates      | typed errors                                     |
-| `tracing`, `tracing-subscriber`              | server, app         | logs to `<state dir>/tmxr/logs/` (never the tty) |
-| `serde`, `postcard`                          | proto               | wire encoding                                    |
-| `interprocess` 2                             | proto/server/client | UDS / named pipes                                |
-| `crossterm` 0.29 (+ `serde`)                 | client, server      | terminal I/O, event types on the wire            |
-| `ratatui` 0.30                               | server              | frame buffer + widgets                           |
-| `portable-pty` 0.9                           | term                | PTYs                                             |
-| `vt1k` (git)                                 | term                | terminal emulation per pane                      |
-| `regex`                                      | server              | navigator pattern                                |
-| `hjkl-layout`                                | server              | pane trees                                       |
-| `hjkl-picker`, `hjkl-picker-tui`             | server              | session picker (fuzzy scoring via `hjkl-fuzzy`)  |
-| `hjkl-config`, `hjkl-xdg`, `toml`            | config, server, app | TOML loading, paths                              |
-| `serde_json`                                 | server              | resurrect save files                             |
-| `hjkl-clipboard`                             | server              | local clipboard for copy mode                    |
-| `libc` (unix) / `windows-sys` 0.61 (windows) | term, client        | setsid, process inspection, toolhelp snapshots   |
-| dev: `tempfile`, `portable-pty`, `vt1k`      | tests               | temp sockets/dirs, e2e PTY harness (hjkl/hrdr)   |
+| Crate                                        | Used by                          | Notes                                             |
+| -------------------------------------------- | -------------------------------- | ------------------------------------------------- |
+| `clap` 4 (derive)                            | app                              | CLI                                               |
+| `thiserror` 2                                | library crates                   | typed errors                                      |
+| `tracing`, `tracing-subscriber`              | server, app                      | logs to `<state dir>/tmxr/logs/` (never the tty)  |
+| `serde`, `postcard`                          | proto                            | wire encoding                                     |
+| `interprocess` 2                             | proto/server/client              | UDS / named pipes                                 |
+| `crossterm` 0.29 (+ `serde`)                 | server                           | output commands, the session picker's keys        |
+| `ttyr` (git)                                 | proto/command/term/client/server | terminal input and modes, event types on the wire |
+| `ratatui` 0.30                               | server                           | frame buffer + widgets                            |
+| `portable-pty` 0.9                           | term                             | PTYs                                              |
+| `vt1k` (git)                                 | term                             | terminal emulation per pane                       |
+| `regex`                                      | server                           | navigator pattern                                 |
+| `hjkl-layout`                                | server                           | pane trees                                        |
+| `hjkl-picker`, `hjkl-picker-tui`             | server                           | session picker (fuzzy scoring via `hjkl-fuzzy`)   |
+| `hjkl-config`, `hjkl-xdg`, `toml`            | config, server, app              | TOML loading, paths                               |
+| `serde_json`                                 | server                           | resurrect save files                              |
+| `hjkl-clipboard`                             | server                           | local clipboard for copy mode                     |
+| `libc` (unix) / `windows-sys` 0.61 (windows) | term, client                     | setsid, process inspection, toolhelp snapshots    |
+| dev: `tempfile`, `portable-pty`, `vt1k`      | tests                            | temp sockets/dirs, e2e PTY harness (hjkl/hrdr)    |
 
 Anything not on this list needs a call before it is added.

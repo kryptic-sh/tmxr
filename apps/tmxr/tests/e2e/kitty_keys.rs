@@ -1,13 +1,14 @@
 //! The kitty keyboard protocol into panes (plan 18 step 6): a program that
 //! pushed flags gets keys under every flag, its releases among them; the
 //! client's terminal is asked for what the program its keys go to wants,
-//! as focus moves; a legacy client's keys get a release made for them; and
-//! a release never runs a bind.
+//! as focus moves; a legacy client's keys get a release made for them, and
+//! a console key record's its own; and a release never runs a bind.
 //!
-//! Unix only, all of it: the kitty harness terminal needs the Unix client,
-//! which reads the protocol's keys with ttyr; the Windows client reads the
-//! console's key records, and ConPTY passes no kitty keys, from the harness
-//! to the client or from the server to a pane. The encoder's side is
+//! Unix only, all of it: the kitty harness terminal needs its query to
+//! reach it and its keys to reach the client. ConPTY between the harness
+//! and a Windows client is not known to pass either (outside Windows
+//! Terminal the client asks nothing, reading key records), nor kitty keys
+//! from the server to a pane. The encoder's side is
 //! unit-tested on every platform (`tmxr-term`'s `encode::kitty::tests`).
 
 #![cfg(unix)]
@@ -137,6 +138,32 @@ fn a_legacy_clients_keys_are_released_for_it() {
     wait_logged(&log, r"\x1b[97;5u\x1b[97;5:3u");
     s.send(b"x");
     wait_logged(&log, r"\x1b[97;5u\x1b[97;5:3ux\x1b[120;1:3u");
+}
+
+/// A Windows console's key records (here as Windows Terminal's
+/// win32-input-mode writes them, `CSI Vk;Sc;Uc;Kd;Cs;Rc _`, which the
+/// client's reader decodes on every platform) come with their releases
+/// whatever was asked, so a program that asked for releases gets those,
+/// not one made at once: two keys held together are released as the
+/// terminal released them.
+#[test]
+fn a_console_keys_releases_are_its_own() {
+    let t = Tmxr::new("consolerelease");
+    t.run(&["new-session", "-d", "-s", "cr"]);
+    let s = t.attach_legacy(&["attach", "-t", "cr"]);
+    s.wait_for("status line", |text| text.contains("cr"));
+    let log = key_log_pane(&t, "cr", "consolepane", 1 | 2, false);
+    let record = |vk: u8, unit: char, down: bool| {
+        format!("\x1b[{vk};0;{};{};0;1_", u32::from(unit), u8::from(down))
+    };
+    let keys = [
+        record(b'A', 'a', true),
+        record(b'B', 'b', true),
+        record(b'A', 'a', false),
+        record(b'B', 'b', false),
+    ];
+    s.send(keys.concat().as_bytes());
+    wait_logged(&log, r"ab\x1b[97;1:3u\x1b[98;1:3u");
 }
 
 /// With the terminal reporting releases (asked for flag 2 by the program

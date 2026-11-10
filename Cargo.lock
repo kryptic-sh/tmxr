@@ -2481,7 +2481,6 @@ dependencies = [
 name = "tmxr-client"
 version = "0.15.0"
 dependencies = [
- "crossterm",
  "interprocess",
  "libc",
  "tmxr-command",
@@ -2719,7 +2718,7 @@ checksum = "d0af592be68c579aa78a16846bd19422978c3c52e438523d45ff5d1bff1f9d4a"
 [[package]]
 name = "ttyr"
 version = "0.1.0"
-source = "git+https://github.com/kryptic-sh/ttyr?rev=05def76#05def76b1ad4319291787121c68568a3098f8fd0"
+source = "git+https://github.com/kryptic-sh/ttyr?rev=861f668#861f6684ff46654d8f4c33a87be35bcf9800d3e0"
 dependencies = [
  "bitflags 2.13.2",
  "rustix",

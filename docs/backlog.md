@@ -304,23 +304,48 @@ the one-byte form keeps Shift on a release. Lower impact, not filed separately:
 compared: OSC 52, titles, zoomed or panned windows, copy-mode clicks on a
 mouse-enabled pane.
 
-## Plan 18's crossterm bridge (2026-11-10)
+## Plan 18, closed (2026-11-10)
 
-- **The Windows client's bridge labels every key `Legacy`.**
-  `crossterm_bridge::ttyr_event` (`tmxr-client`, built and tested on Windows
-  only) cannot tell which form a key came in, and the console has no kitty
-  protocol. So under Windows Terminal's win32-input-mode, which does tell a real
-  Ctrl+4 from Ctrl+`\`, a Ctrl+4 to Ctrl+7 is read as the legacy control byte
-  (`legacy_control` in `tmxr-term`'s `encode.rs`): `C-\` to `C-_` at
-  modifyOtherKeys level 2. Not checked on Windows. Goes with the bridge, once
-  ttyr reads the Windows console (ttyr's phase 07).
-- **A shifted symbol from the Windows bridge keeps crossterm's Shift** (`!` with
-  Alt+Shift for Alt+Shift+1, where ttyr's decoder reads `ESC !` as `!` with Alt
-  alone), as only letters are mapped to ttyr's meaning. Binds are unaffected
-  (`Key` drops Shift from a character), but panes are not: a modifyOtherKeys
-  level 2 pane gets `CSI 27;4;33~` where a Unix client's gives `CSI 27;3;33~`,
-  and a kitty pane `CSI 33;4u`. 0.15.0 behaved the same on Windows. The
-  unshifted key is not known from crossterm's event; goes with the bridge.
+The kitty keyboard plan (`docs/plan/18-kitty-keyboard.md`, deleted as it
+shipped) left these; its decisions are in the code's docs, the changelog and the
+plan 18 sections here.
+
+- **The session picker still takes crossterm's keys**: `tmxr-server`'s
+  `overlay/picker/crossterm_key.rs` converts ttyr's key back for
+  `hjkl_picker_tui::handle_key`, until hjkl takes ttyr's keys. So crossterm
+  stays a dependency of `tmxr-server` (also for its output commands), of the
+  oracle's pane program and of the e2e key-log fixture, and its fork stays in
+  `[patch.crates-io]` and `deny.toml`. hjkl's phase 6 (Super and Meta, F13 to
+  F35, the keypad and media keys) changes `handle_key`; the version bump is to
+  be coordinated with hjkl.
+- **Considered and declined: `kitty-keys always`** (the owner, 2026-11-09).
+  `kitty-keys` takes `on` and `off` only, unlike tmux's `extended-keys always`:
+  the kitty protocol is one a program asks for, and kitty encoding sent to a
+  program that did not ask breaks it.
+- **Not tried by hand in real terminals**: Alacritty, kitty, foot, Ghostty and
+  WezTerm (kitty tier), xterm (xterm tier and legacy), tmxr inside tmxr and tmxr
+  inside tmux (legacy, as tmux answers no kitty query). Every tier is tested
+  against the e2e harness's terminal and the xterm tier against tmux 3.6 through
+  the oracle. Windows is listed under "To check by hand on Windows".
+
+## Plan 18's client (2026-11-10)
+
+- **A console key-up that never comes leaves `ConsoleBytes` holding its entry**
+  (`tmxr-client`'s `terminal/keys.rs`): if focus moves away while Ctrl+2, Ctrl+6
+  or Ctrl+- is held, the entry stays, and a later plain `2`, `6` or Space
+  release is rewritten as C-Space's or C-^'s release (press `2`, release `' '`),
+  once, for a flag-2 pane. The list is bounded by the keys `meant` maps.
+  Clearing it on focus loss would fix it. Found by review, not run.
+- **A shifted symbol from a Windows console key record keeps its Shift** (`!`
+  with Alt+Shift for Alt+Shift+1, where ttyr's decoder reads a terminal's
+  `ESC !` as `!` with Alt alone): ttyr's console mapping (`event::console`'s
+  `char_event`) takes Shift off an upper-case letter only, and a record names
+  the character typed, not the unshifted key. Binds are unaffected (`Key` drops
+  Shift from a character), but panes are not: a modifyOtherKeys level 2 pane
+  gets `CSI 27;4;33~` where a Unix client's gives `CSI 27;3;33~`, and a kitty
+  pane `CSI 33;4u`. As in 0.15.0 (crossterm did the same). The unshifted key
+  could come from the virtual-key code with the layout (`ToUnicodeEx`), which
+  ttyr does not read; a change for ttyr.
 - **A late answer from one probe can end the next one early** (`Keys::probe` in
   `tmxr-client`'s `terminal/probe.rs`, through ttyr's `collect_answers`): after
   a probe times out, a server-initiated `lock-client`, `suspend-client` or
@@ -347,7 +372,7 @@ mouse-enabled pane.
   its `ClientMsg` list lacks `Keyboard`, and its `ServerMsg` list
   `KeyboardFlags` and `ExtendedKeys`.
 - **Unix client tests run on Linux only so far; their macOS run is CI's first.**
-  The panic-restore tests in `tmxr-client`'s `terminal/guard/unix/tests.rs`:
+  The panic-restore tests in `tmxr-client`'s `terminal/guard/tests.rs`:
   `a_panic_gives_the_terminal_back_once`, whose pty fixture is made the
   controlling terminal with `setsid` and `TIOCSCTTY`, and
   `a_panic_gives_a_terminal_that_is_not_the_controlling_one_back_once`, with
@@ -366,11 +391,67 @@ mouse-enabled pane.
   `tty`) could not attach such a client at all, and 0.15.0 relied on `SIGWINCH`
   too. A possible fix is polling the size (`Reader::size`) on a timer while
   attached. Found by reading; not tried.
-- **Windows AltGr arrives as Ctrl+Alt** through crossterm, so AltGr+q (`@` on a
-  German layout) is read as Ctrl+Alt+`@` and sent as `ESC NUL`, and a non-ASCII
-  AltGr character such as Polish `ł` sends nothing (`encode.rs` `ctrl_byte`
-  returns `None`). As in 0.15.0; found by reading, not run on Windows. ttyr's
-  Windows reader reads AltGr typing without Ctrl+Alt; goes with the bridge.
+- **The Windows client's input mode is chosen by `WT_SESSION`**
+  (`terminal::reads_vt` in `tmxr-client`, plan 18 step 8): VT input with
+  win32-input-mode under Windows Terminal, the console's key records elsewhere.
+  Decided because records carry more than the VT input conhost makes of them
+  (releases, AltGr, Ctrl+4, the keypad), and it was not known how a terminal's
+  answers reach a program reading records, so only Windows Terminal, whose
+  win32-input-mode keeps the keys full and its answers VT, is probed. What it
+  costs:
+  - `WT_SESSION` is inherited: a client run from a shell under Windows Terminal
+    over SSH, or in a console another program made inside it, takes itself to be
+    in Windows Terminal. One inside a tmxr pane (`TMXR` set and not empty) does
+    not. Other terminals that speak win32-input-mode (WezTerm) are read as
+    records, unprobed.
+  - Outside Windows Terminal nothing is probed: no kitty tier, no xterm tier, no
+    terminal colours or colour scheme, no synchronized updates, even behind a
+    terminal that has them (Alacritty, VS Code). Since ttyr 861f668 a key record
+    no key made (no virtual-key or scan code: what the console puts in the input
+    itself, such as its answer to DA1) is read as a terminal's bytes in record
+    mode too, so a probe there may now work. Whether a terminal's answers behind
+    ConPTY arrive as such records, or as keys ConPTY made of the bytes, is not
+    known; probing outside Windows Terminal waits on finding out by hand.
+  - Considered and declined: VT input everywhere. It would probe everywhere, but
+    conhost's VT input carries no releases or AltGr state, and a terminal's C-j
+    still arrives as conhost's Ctrl+Enter encoding.
+- **Releases are told by the key, not by the client** (`Server::release_comes`
+  in `server/releases.rs`): a key `KeyEncoding::Windows` (a console key record)
+  is held for its release from any client, besides every key from a client asked
+  for kitty flag 2. Considered and declined: a `releases` field in
+  `KeyboardReport` (protocol 15). The client cannot know its keys have releases:
+  under Windows Terminal it asks for win32-input-mode, and if ConPTY ignored the
+  request its keys would come as plain VT with none, leaving every key held. The
+  encoding on each key says which it got. What it rests on: every console key
+  record's press is followed by a release. An Alt code's character is the one
+  that has none of its own (the console types it on Alt's release), and not only
+  when the user types an Alt code: conhost and ConPTY make Alt+numpad sequences
+  themselves for characters the layout lacks (`€` on a US layout, box drawing,
+  text pasted into conhost). Since ttyr 861f668 its `ConsoleKeys` follows that
+  press with a release at once, in record mode and in win32-input-mode; before,
+  such a key stayed held for a flag-2 program until typed again, focus moved or
+  the client went. Not checked against a real conhost. Costs:
+  - A Windows client given kitty flags (its terminal answered the query) has its
+    held console keys released when its flags lose flag 2 (`release_held`),
+    before their own releases come, which then go nowhere. Harmless.
+- **A console key record's lone Escape is still held for `escape-time`**, though
+  Alt comes as a modifier on its records and an Escape cannot start an Alt chord
+  there; its release now sends it early, which mostly hides it. Dropping the
+  hold for `KeyEncoding::Windows` (and for kitty's `CSI 27u`, filed under the
+  kitty encoder) is a small change in `escape_time`; not done.
+- **The Windows e2e tests run the Windows Terminal path only through
+  `ctrl_hjkl_move_between_panes_in_windows_terminal`**, which sets `WT_SESSION`:
+  the client asks the harness's ConPTY (the system's conhost, made in
+  win32-input-mode by portable-pty) for VT input and win32-input-mode and probes
+  through it. Whether conhost answers that probe with VT bytes or with key
+  records encoded as win32-input-mode (which ttyr 861f668 reads back as bytes
+  when they carry no virtual-key or scan code) is not known until CI runs it:
+  the test asserts the attach takes less than the client's `PROBE_WAIT` longer
+  than one that asks nothing, and that no answer (`[?`, `]10;`, `]11;`) was
+  typed into the pane. It sends C-j and Ctrl+Enter as win32-input-mode records,
+  which pass only if conhost re-encodes them so. Kitty, xterm-tier and probe e2e
+  tests stay Unix only: ConPTY is not known to hand the client's queries on to
+  the harness's terminal.
 
 ## Plan 18's xterm tier (2026-11-10)
 
@@ -441,8 +522,7 @@ mouse-enabled pane.
   - Not covered: `command-prompt -k`, menu and choose-tree keys with the new
     names, and copy-mode tables bound by kitty names have no test of their own
     (they go through the same `Key` parsing and printing). Nothing was run on
-    Windows or macOS; the Windows client's keys reach `Key::from_event` as
-    `KeyEncoding::Legacy`, so it keeps folding Ctrl+4 into `C-\` until step 8.
+    Windows or macOS by hand.
 - **`terminal-features` and `extended-keys` take effect at once, unlike
   tmux's.** tmux reads `terminal-features` only as a client's terminal is set up
   (`tty_term_create`), and sends `Dseks` only as a client leaves, not when
@@ -504,9 +584,8 @@ mouse-enabled pane.
   - A kitty-form key with a modifier bit of 16 or above (kitty's Meta, 32)
     decoded while the reader takes the protocol to be off has its Meta folded
     into Alt too. Only a terminal sending kitty's forms unasked would do that.
-  - The Windows client reads keys through crossterm, which reads bit 8 as Super
-    and gets no `CSI 27` keys from the console; it has no reader to tell and
-    folds nothing. Until plan 18 step 8 moves it to ttyr.
+  - The Windows client reads through ttyr too, and under Windows Terminal (VT
+    input) folds xterm's Meta as on Unix; a console key record carries no Meta.
 
 ## Plan 18's kitty encoder (2026-11-10)
 
@@ -526,12 +605,6 @@ mouse-enabled pane.
 - **No e2e test sends a release to a popup.** A popup's program gets releases as
   a pane's does (`Reached::Popup`, `Popup::send_key`); `kitty_keys.rs` covers
   panes only. A test needs `display-popup` running the key-log fixture.
-- **The Windows client's releases are thrown away and made again.** The console
-  reports key-up events and the bridge passes them on, but the Windows client is
-  `Legacy` tier, so the server releases each press at once and drops the
-  console's own release (nothing is held for it). Under Windows Terminal's
-  win32-input-mode those releases are real and could be held instead; plan 18
-  step 8's.
 - **A kitty-encoded Escape is still held for `escape-time`.** A terminal under
   flag 1 sends Escape as `CSI 27u`, which cannot be the start of an Alt chord,
   yet `escape_time` (`server/input.rs`) holds any lone Escape, so a key typed
@@ -894,13 +967,17 @@ mouse-enabled pane.
     mean window `a`, pane `b` of the current session while a session is named
     `a.b`, write `:a.b`.
 - **Ctrl+Enter / Ctrl+Backspace on Windows outside Windows Terminal** become C-j
-  / C-h (`terminal::console_key`, 2026-10-12): the console reports the bytes a
-  terminal sends for C-j and C-h as those chords, so they cannot be told apart.
-  Whether keys come as bytes is guessed from `WT_SESSION`, so a terminal started
-  from a Windows Terminal shell inherits it and keeps C-j / C-h broken. Checked
-  through ConPTY in the e2e tests (raw bytes and win32-input-mode events); not
-  tried by hand in Alacritty or VS Code. Fixing it at the source needs the key
-  event's character, which crossterm drops for Enter and Backspace.
+  / C-h, and Ctrl+Shift+2, Ctrl+Shift+6 and Ctrl+Shift+- (as `@`, `^`, `_` too)
+  become C-Space, C-^ and C-\_ (`ConsoleBytes` in `tmxr-client`'s
+  `terminal/keys.rs`; C-j and C-h since 2026-10-12, the rest since plan 18 step
+  7 kept Shift apart with Ctrl): the console reports the bytes a terminal sends
+  for those keys as these chords, so they cannot be told apart, and a real
+  Ctrl+Enter in conhost is C-j too. Whether keys come as bytes is guessed from
+  `WT_SESSION`. Checked through ConPTY in the e2e tests (raw bytes and
+  win32-input-mode events); not tried by hand in Alacritty or VS Code. Telling
+  them apart at the source needs to know a record came from a terminal's byte,
+  which ConPTY's records do not say (they carry the layout's virtual-key and
+  scan codes, as a real key's do).
 - **Client flags** (`cmds::session::client_flags`): `-f` takes `read-only`,
   `ignore-size` and `no-detach-on-destroy`, and refuses tmux's others by name:
   `no-output`, `pause-after` and `wait-exit` are control-mode flags, and tmxr
@@ -918,7 +995,8 @@ mouse-enabled pane.
   focus out; the terminal is asked for focus reports only with
   `focus-events on`, as tmux's (`ServerMsg::FocusEvents`), and reports that come
   anyway are taken, as tmux's `tty_keys_next` takes them. On Windows the console
-  hands crossterm focus events whether asked or not, and ConPTY asks its own
+  hands over focus records whether asked or not, which ttyr reads with VT input
+  off (since ttyr 861f668; crossterm read them before), and ConPTY asks its own
   terminal for them when it starts, so `focus-events off` does not keep them out
   there. Compared with tmux by `client_flags_as_tmux` (flags and
   `refresh-client -f`); the focus reports are not.
@@ -928,14 +1006,16 @@ mouse-enabled pane.
   `CSI I` / `CSI O` when that changes, with `pane-focus-in` / `-out`. tmux
   counts only a popup or a menu as covering the pane; tmxr's pickers are
   overlays too (tmux's are pane modes) but leave the pane focused, as tmux's
-  would. Checked end to end on Windows and Linux
+  would. Checked end to end on Linux
   (`a_pane_that_asked_is_told_when_it_gains_and_loses_focus`), a client's own
-  focus out and back in included. The test's fixture reads the reports through
-  crossterm on every platform (since 2026-10-24: 20 of 20 runs on Arch); it read
-  them as raw bytes on Unix before, as crossterm's reader lost the first one in
-  about half of the Linux runs (WSL Ubuntu, 2026-10-18), which the patched
-  crossterm and the fixture polling before it says `ready` no longer do. Not
-  tried in WSL since.
+  focus out and back in included, and on Windows while its client read through
+  crossterm; through ttyr's reader (plan 18 step 8, focus records read since
+  ttyr 861f668) its Windows run is CI's first. The test's fixture reads the
+  reports through crossterm on every platform (since 2026-10-24: 20 of 20 runs
+  on Arch); it read them as raw bytes on Unix before, as crossterm's reader lost
+  the first one in about half of the Linux runs (WSL Ubuntu, 2026-10-18), which
+  the patched crossterm and the fixture polling before it says `ready` no longer
+  do. Not tried in WSL since.
 - **tmux default binds**: most of tmux's defaults are bound (see above);
   `prefix C-z` (suspend-client) errors on Windows, which has no job control.
   Alerts follow tmux 3.6's, as recorded from a running tmux on 2026-10-10 (WSL
@@ -1589,6 +1669,85 @@ mouse-enabled pane.
   with a misleading error from the other side. Commands that print what they
   made are tested in e2e instead, with the expected strings confirmed against
   tmux 3.6 by hand.
+
+## To check by hand on Windows
+
+Plan 18 step 8 (2026-11-10) moved the Windows client onto ttyr's reader and
+guard. It was compiled for Windows here (`x86_64-pc-windows-gnu`) and is tested
+only by CI's windows-latest runner; nothing below has run on a real Windows
+machine. For each, the code path that decides it is named.
+
+- **Windows Terminal, keys** (`WT_SESSION` set; `Guard::enter`'s `raw_mode`
+  turns on `Mode::VirtualTerminalInput` and `Mode::Win32Input`): typing; C-j,
+  C-h, Ctrl+Enter and Ctrl+Backspace each firing its own bind; Ctrl+4 to Ctrl+7
+  firing `C-4` to `C-7` binds, not `C-\` to `C-_`; AltGr characters on a German
+  layout (`@`, `{`, `€`) and a Polish one (`ł`) typed without Ctrl or Alt; Alt
+  with a letter; the keypad's digits and Enter apart from the main ones (bind
+  `KP1`); Shift+Tab; F1 to F12. Then check what ConPTY actually sends with
+  win32-input-mode asked for by the client: if keys come as plain VT instead (no
+  releases, Ctrl+Enter as `\n`), conhost ignored `CSI ? 9001 h`.
+- **Windows Terminal, the probe** (`Keys::probe`): attaching takes no visible
+  second (a probe that times out waits `PROBE_WAIT`), and no stray text such as
+  `[?61;…c` or `1;0;27;1;…_` lands in the pane: the answers must arrive as VT
+  bytes, not as key records. Then `#{client_theme}` follows Windows Terminal's
+  theme as it changes (mode 2031), and a program's OSC 11 query in a pane gets
+  the terminal's background.
+- **Windows Terminal and the kitty protocol**: Windows Terminal 1.25 speaks it
+  itself (its release notes, microsoft/terminal#19817); whether it answers the
+  client's `CSI ? u` through ConPTY is not known. If it does, the client is
+  kitty tier there: `list-keys` prints no `# needs kitty keys` marks for that
+  client (bind `C-S-h` first), and Ctrl+Shift+h fires a `C-S-h` bind.
+- **Releases from console key records** (`Server::release_comes`): a program in
+  a pane that pushes kitty flags 1 and 2 and logs its input (the e2e
+  `key_log_fixture` with `TMXR_E2E_KEY_LOG_RAW=\e[>3u`) gets each key's release
+  when the key is let go, not right after the press; holding a key gives repeats
+  then one release. This also shows whether a kitty sequence reaches a Windows
+  pane through ConPTY at all (plan 18 expected panes to stay at flag 1 or
+  below).
+- **Mouse** (`Guard::set_mouse` on Windows: `ttyr`'s `Mode::Mouse`, mode 1003
+  and SGR alone, where Unix writes 1000, 1002 and 1003): click, drag,
+  double-click and the wheel, under Windows Terminal and in conhost; Quick
+  Edit's selection off while the mouse is captured and back after
+  `set mouse off` and after detaching.
+- **Paste**: under Windows Terminal a paste arrives as one paste (bracketed, a
+  multi-line paste into a shell not run line by line); in conhost as keys, as
+  before.
+- **Resize** while attached, and while `lock-client`'s command runs (`hand_over`
+  in `tmxr-client`'s `lib.rs` compares the size after), in both.
+- **Lock and detach give the console back**: the lock command
+  (`set -g lock-command "cmd /c pause"`) reads keys in a normal console (line
+  input and echo for `set /p`), the client then takes keys again at once; after
+  a detach the shell's console is as before: no win32-input-mode sequences typed
+  at the prompt, Quick Edit as it was, line editing back.
+- **conhost** (no Windows Terminal): Alt+letter, AltGr characters, the keypad,
+  and Ctrl+Enter, which is read as `C-j` (as a terminal's `\n`) outside Windows
+  Terminal; no probe is sent (nothing written but the screen).
+- **C-Space, C-^ and C-\_ outside Windows Terminal** (`ConsoleBytes` in
+  `tmxr-client`'s `terminal/keys.rs`), in conhost (Ctrl+Space, Ctrl+Shift+2,
+  Ctrl+Shift+6, Ctrl+Shift+-) and behind ConPTY (a terminal's NUL, 0x1e and 0x1f
+  bytes): each fires its `C-Space`, `C-^` or `C-_` bind and reaches a pane as
+  that byte. Releases too: a program under kitty flag 2 gets each one's release
+  once, also when Ctrl is let go before the key with Shift still held, and a
+  plain 2 or 6 typed after it is not read as a release of C-Space or C-^.
+- **ConPTY behind another terminal** (Alacritty, VS Code): C-j and C-h binds
+  fire; AltGr characters that terminal sends as bytes type themselves (ConPTY
+  builds their records from the layout, and ttyr's AltGr rule wants right Alt
+  with left Ctrl exactly); 0x1c (Ctrl+`\` there) fires a `C-\` bind.
+- **Nested and remote**: a client inside a tmxr pane under Windows Terminal
+  reads records (`TMXR` set); one run over SSH from Windows Terminal sees
+  `WT_SESSION` only if the SSH server passes it on.
+- **Alt+numpad characters**: an Alt code typed by hand (Alt+0228 on the keypad
+  types `ä`), and those conhost and ConPTY make themselves for characters the
+  layout lacks (`€` or `│` pasted into conhost, or sent as bytes by a terminal
+  behind ConPTY): each types its character once, and a program under kitty flag
+  2 gets its press and then its release, not a key left held (ttyr 861f668's
+  `ConsoleKeys::events`).
+- **Focus** outside Windows Terminal (conhost, ConPTY behind another terminal):
+  with `focus-events on` and a program that asked (mode 1004), switching away
+  from the window and back sends it `CSI O` and `CSI I`, and the client-focus
+  hooks run (ttyr 861f668 reads the console's focus records with VT input off).
+  Under Windows Terminal the terminal's own `?1004h` reports, with the console's
+  records dropped: check each comes once, not twice.
 
 ## Not yet verified
 

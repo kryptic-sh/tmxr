@@ -166,10 +166,16 @@ process name from [04](04-panes-and-terminal.md#process-inspection).
 
 **Keys on Windows.** A terminal that sends keys as bytes (Alacritty, VS Code's
 terminal) goes through the Windows console, which reports C-j (0x0a) as
-Ctrl+Enter and C-h (0x08) as Ctrl+Backspace. The client reads those two chords
-back as C-j and C-h (`terminal::console_key`), unless `WT_SESSION` says the
-terminal is Windows Terminal, whose win32-input-mode sends real key events, so
-its Ctrl+Enter and Ctrl+Backspace stay keys of their own.
+Ctrl+Enter and C-h (0x08) as Ctrl+Backspace, and NUL, 0x1e and 0x1f as the
+layout's keys for them with Shift (Ctrl+Shift+2 on a US layout). The client
+reads those chords back as C-j, C-h, C-Space, C-^ and C-\_ (`ConsoleBytes` in
+`tmxr-client`'s `terminal/keys.rs`), unless `WT_SESSION` says the terminal is
+Windows Terminal, whose win32-input-mode sends real key events, so its
+Ctrl+Enter and Ctrl+Backspace stay keys of their own. `terminal::reads_vt`
+decides, and it keeps the fix-up on where `TMXR` is set (not empty) whatever
+`WT_SESSION` says: a client nested in a tmxr pane inherits `WT_SESSION` from the
+server, but reads that pane's ConPTY, which hands it the outer client's bytes as
+records.
 
 The same holds the other way: a pane's program reads its keys through a ConPTY,
 so the server sends C-h and C-j to a Windows pane in win32-input-mode
