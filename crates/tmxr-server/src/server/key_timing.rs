@@ -35,26 +35,22 @@ impl Server {
     /// sends the Escape first. Returns the event to handle, none while one
     /// is held. A key's release, which the kitty protocol and Windows
     /// send, and a modifier key itself, which kitty's flag 8 sends, change
-    /// nothing; but where the release is one the server waits for
-    /// ([`Server::release_comes`]: a program asked for them, kitty flag 2,
-    /// or a Windows console key record's), the held Escape's own release
-    /// sends it at once, so it reaches the program before its release does.
+    /// nothing; but the held Escape's own release, which a Windows console
+    /// reports before the next key is pressed, waits with it: dropped
+    /// where the Escape makes the next key Meta, sent after it where it
+    /// goes alone, so a program that asked for releases sees it after the
+    /// press.
     pub(super) fn escape_time(&mut self, id: ClientId, ev: TermEvent) -> Option<TermEvent> {
         let wait = Duration::from_millis(self.cfg.escape_time);
-        let releases = match &ev {
-            TermEvent::Key(k) => self.release_comes(id, k),
-            _ => false,
-        };
         let att = self.clients.get_mut(&id)?.att.as_mut()?;
         let press = match &ev {
             TermEvent::Key(k)
-                if releases
-                    && k.kind == KeyEventKind::Release
+                if k.kind == KeyEventKind::Release
                     && k.key == KeyCode::Esc
-                    && att.pending_escape.take().is_some() =>
+                    && att.pending_escape.is_some() =>
             {
-                self.client_key(id, escape_key(), false);
-                return Some(ev);
+                att.pending_escape_release = Some(k.clone());
+                return None;
             }
             TermEvent::Key(k) if not_typed(k) => return Some(ev),
             TermEvent::Key(k) => Some(k.clone()),
@@ -62,12 +58,13 @@ impl Server {
         };
         let now = Instant::now();
         if let Some(deadline) = att.pending_escape.take() {
+            let release = att.pending_escape_release.take();
             match press {
                 Some(mut k) if now < deadline && !k.modifiers.contains(KeyModifiers::ALT) => {
                     k.modifiers |= KeyModifiers::ALT;
                     return Some(TermEvent::Key(k));
                 }
-                _ => self.client_key(id, escape_key(), false),
+                _ => self.send_escape(id, release),
             }
         }
         let lone = press.is_some_and(|k| k.key == KeyCode::Esc && k.modifiers.is_empty());
@@ -77,6 +74,15 @@ impl Server {
             return None;
         }
         Some(ev)
+    }
+
+    /// A held Escape, gone alone: its press, then its `release` where the
+    /// terminal reported one meanwhile.
+    fn send_escape(&mut self, id: ClientId, release: Option<KeyEvent>) {
+        self.client_key(id, escape_key(), false);
+        if let Some(release) = release {
+            self.client_release(id, &release);
+        }
     }
 
     /// Escapes whose `escape-time` is up, sent as Escape.
@@ -94,10 +100,12 @@ impl Server {
             .map(|c| c.id)
             .collect();
         for id in due {
-            if let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
-                att.pending_escape = None;
-            }
-            self.client_key(id, escape_key(), false);
+            let Some(att) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) else {
+                continue;
+            };
+            att.pending_escape = None;
+            let release = att.pending_escape_release.take();
+            self.send_escape(id, release);
         }
     }
 

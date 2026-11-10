@@ -670,6 +670,37 @@ fn console_key_records_type_altgr_and_keep_ctrl_4() {
     }
 }
 
+/// Escape then a key within `escape-time` is Meta and that key from a
+/// Windows console too, whose records report Escape's release before the
+/// key's press: the release waits with the Escape rather than sending it.
+#[test]
+fn escape_and_a_key_from_console_records_make_meta() {
+    // winuser.h's virtual-key code for Escape.
+    const VK_ESCAPE: u8 = 0x1b;
+    let t = Tmxr::new("consoleesc");
+    let s = t.attach_env(&["new", "-s", "ce"], &[("WT_SESSION", None)]);
+    s.wait_for("status line", |text| text.contains("ce"));
+    t.run(&["bind", "-n", "M-x", "set", "-g", "@meta", "yes"]);
+    t.run(&["bind", "-n", "Escape", "set", "-g", "@esc", "yes"]);
+    t.run(&["set", "-s", "escape-time", "1000"]);
+    let escape = console_key(VK_ESCAPE, '\x1b', 0);
+    let x = console_key(b'X', 'x', 0);
+    s.send(format!("{escape}{x}").as_bytes());
+    t.wait_run(&["show", "-gv", "@meta"], "Escape and x as M-x", |o| {
+        o.trim() == "yes"
+    });
+    assert_eq!(
+        t.run(&["show", "-gv", "@esc"]).trim(),
+        "",
+        "an Escape alone"
+    );
+    // Alone, it goes as Escape when the time is up, its release with it.
+    s.send(escape.as_bytes());
+    t.wait_run(&["show", "-gv", "@esc"], "the lone Escape", |o| {
+        o.trim() == "yes"
+    });
+}
+
 /// Windows Terminal sends keys as win32-input-mode events, not bytes, and
 /// sets `WT_SESSION`: C-j and C-h come as themselves. The client there asks
 /// for VT input and win32-input-mode, so this also runs its probe through

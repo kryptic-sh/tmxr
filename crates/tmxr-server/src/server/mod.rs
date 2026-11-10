@@ -143,6 +143,11 @@ pub struct Attached {
     /// A lone Escape held for `escape-time`: a key before this goes as
     /// Meta and that key, as tmux's tty_keys_next.
     pub pending_escape: Option<Instant>,
+    /// The held Escape's release, where its terminal reported it before
+    /// `escape-time` was up (a Windows console, or kitty flag 2, as a user
+    /// lets go of Escape before typing the next key): sent after the Escape
+    /// where it goes alone, dropped where it makes the next key Meta.
+    pub pending_escape_release: Option<ttyr::event::KeyEvent>,
     pub drag: Option<crate::mouse::Drag>,
     /// The mouse button being held, if any.
     pub press: Option<crate::mouse::Press>,

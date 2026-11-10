@@ -434,11 +434,17 @@ plan 18 sections here.
   - A Windows client given kitty flags (its terminal answered the query) has its
     held console keys released when its flags lose flag 2 (`release_held`),
     before their own releases come, which then go nowhere. Harmless.
-- **A console key record's lone Escape is still held for `escape-time`**, though
-  Alt comes as a modifier on its records and an Escape cannot start an Alt chord
-  there; its release now sends it early, which mostly hides it. Dropping the
-  hold for `KeyEncoding::Windows` (and for kitty's `CSI 27u`, filed under the
-  kitty encoder) is a small change in `escape_time`; not done.
+- **A console key record's lone Escape is held for `escape-time`**, though Alt
+  comes as a modifier on its records, so a user typing Escape then x quickly
+  gets M-x, as from any tmux terminal (`escape_time_makes_escape_and_a_key_meta`
+  checks it on Windows too). Its release, which the console reports before the
+  next key is pressed, waits with it (`Attached::pending_escape_release`):
+  dropped where the Escape makes the next key Meta, sent after the Escape where
+  it goes alone. Step 8 first sent the waiting Escape as its release came, which
+  broke Escape-then-key as Meta on every Windows client (CI run 42746257324).
+  Not holding a console record's Escape at all (and kitty's `CSI 27u`, under the
+  kitty encoder) would type Escape then x as Escape and x; not done, as tmux
+  holds every lone Escape.
 - **The Windows e2e tests run the Windows Terminal path only through
   `ctrl_hjkl_move_between_panes_in_windows_terminal`**, which sets `WT_SESSION`:
   the client asks the harness's ConPTY (the system's conhost, made in
@@ -609,8 +615,8 @@ plan 18 sections here.
   flag 1 sends Escape as `CSI 27u`, which cannot be the start of an Alt chord,
   yet `escape_time` (`server/input.rs`) holds any lone Escape, so a key typed
   within `escape-time` after it still gets Alt. Older than step 6, as tmux holds
-  its own Escape. Step 6 made only the held Escape's own release (flag 2) send
-  it at once, so a program never gets the release before the press.
+  its own Escape. Its release (flag 2) waits with it, so a program never gets
+  the release before the press, and none where it became Meta.
 - **Toggling synchronize-panes while a key is held doubles a release.** A press
   reaches `[1]`, a repeat after synchronize-panes goes on reaches `[1, 2]`, and
   `key_reached` keeps both `Reached::Panes` entries as they differ, so pane 1

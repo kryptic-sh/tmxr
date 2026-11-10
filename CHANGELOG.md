@@ -20,8 +20,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   kitty query, its XTVERSION name, its DA2 type) and whether the client can read
   modifyOtherKeys keys; **`ServerMsg` has an `ExtendedKeys(bool)` variant**.
   **`tmxr-server`'s `server::Attached` has `keyboard_report`, `keyboard` (the
-  new `keyboard::Keyboard` tier: `Legacy`, `Xterm`, `Kitty`) and `extended_keys`
-  fields**; a library caller building one with a struct literal sets them.
+  new `keyboard::Keyboard` tier: `Legacy`, `Xterm`, `Kitty`), `extended_keys`
+  and `pending_escape_release` fields**; a library caller building one with a
+  struct literal sets them.
 - **The library crates take `ttyr`'s key, mouse and input event types in place
   of crossterm's**: `tmxr-proto`'s `ClientMsg::Input` carries
   `ttyr::event::Event`; `tmxr-term`'s `encode_key`, `conpty_key` and
@@ -88,10 +89,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it has no release. A release goes to the program its press reached, and
   nowhere when the press ran a bind or went to a prompt, menu or mode: a release
   never runs a bind, ends a key table, counts for `escape-time` or
-  `assume-paste-time`, nor marks the session active; only an Escape held for
-  `escape-time` is sent at once when its release comes from a terminal asked for
-  releases. A program that asked for releases gets one made right after each
-  press from a client whose terminal reports none (a legacy or xterm-tier
+  `assume-paste-time`, nor marks the session active; an Escape held for
+  `escape-time` keeps its release, which a program that asked for releases gets
+  right after the Escape if it goes alone, and not at all if the Escape makes
+  the next key Meta. A program that asked for releases gets one made right after
+  each press from a client whose terminal reports none (a legacy or xterm-tier
   terminal), and one for each key still held when the client's terminal stops
   reporting them (focus moving to a program that did not ask for them, a key
   table held, a detach), so no key is left down. Keys from such a client still
@@ -185,9 +187,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (conhost, or ConPTY behind another terminal) it reads the console's key
   records and asks nothing, as before. A console key record's release is passed
   on: a program that asked for releases (kitty flag 2) gets the real one, not
-  one made right after the press, and an Escape held for `escape-time` is sent
-  as its release comes. Pausing the input for `lock-client` wakes the reader
-  rather than polling every 50 ms, so an idle Windows client no longer wakes.
+  one made right after the press; Escape then a key within `escape-time` is
+  still Meta and that key, though the console reports Escape's release between
+  them. Pausing the input for `lock-client` wakes the reader rather than polling
+  every 50 ms, so an idle Windows client no longer wakes.
 - **The cursor colour reset the client writes as it gives its terminal back
   (`OSC 112`) ends with ST (`ESC \`) rather than BEL**, on every platform.
 - **The client also asks its terminal for its name and version** (XTVERSION,

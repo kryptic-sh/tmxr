@@ -269,12 +269,22 @@ mod tests {
         assert_eq!(att.table, "prefix");
         assert_eq!(att.pending_escape, Some(soon));
         assert_eq!(held(&srv), Vec::new());
-        // But the waiting Escape's own release sends it, as a key the held
-        // key table takes.
-        let escape = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
-        srv.inputs(1, vec![Event::Key(escape.with_kind(KeyEventKind::Release))]);
+        // The waiting Escape's own release waits with it, and goes after
+        // it once its time is up, the Escape a key the held key table
+        // takes.
+        let release =
+            KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE).with_kind(KeyEventKind::Release);
+        srv.inputs(1, vec![Event::Key(release.clone())]);
         let att = srv.clients[&1].att.as_ref().unwrap();
-        assert_eq!(att.pending_escape, None);
+        assert_eq!(att.pending_escape, Some(soon));
+        assert_eq!(att.pending_escape_release, Some(release));
+        escape_pending(&mut srv, std::time::Instant::now());
+        srv.flush_escapes();
+        let att = srv.clients[&1].att.as_ref().unwrap();
+        assert_eq!(
+            (att.pending_escape, &att.pending_escape_release),
+            (None, &None)
+        );
         assert_eq!(att.table, "root");
     }
 
@@ -313,9 +323,8 @@ mod tests {
         assert_eq!(held(&srv), vec![KeyCode::Char('b')]);
     }
 
-    /// A release from a client not asked for releases, and not a console
-    /// key record's (which comes whatever was asked), is none the server
-    /// waits for: an Escape's release leaves `escape-time` alone.
+    /// An Escape's release from any client, asked for releases or not,
+    /// leaves `escape-time` alone: it waits with the Escape.
     #[test]
     fn an_escape_release_from_a_client_not_asked_for_releases_waits() {
         let (mut srv, _rx) = attached(true);
@@ -348,26 +357,54 @@ mod tests {
         assert_eq!(held(&srv), Vec::new());
     }
 
-    /// A console key record's Escape release sends an Escape waiting for
-    /// `escape-time` at once, as a kitty terminal's under flag 2 does: its
-    /// release comes whatever was asked.
+    /// Client 1 has an Escape waiting for `escape-time` until `deadline`.
+    fn escape_pending(srv: &mut Server, deadline: std::time::Instant) {
+        let att = srv.clients.get_mut(&1).unwrap().att.as_mut().unwrap();
+        att.pending_escape = Some(deadline);
+    }
+
+    fn console_key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE).with_encoding(KeyEncoding::Windows)
+    }
+
+    /// A console key record's Escape is released before the next key is
+    /// pressed, as a user types Escape then x: the release waits with the
+    /// Escape, and x within `escape-time` is still M-x, the Escape and its
+    /// release going nowhere.
     #[test]
-    fn a_console_escape_release_sends_the_waiting_escape() {
+    fn an_escape_released_before_the_next_key_still_makes_it_meta() {
         let (mut srv, _rx) = attached(true);
-        let soon = std::time::Instant::now() + std::time::Duration::from_secs(60);
-        srv.clients
-            .get_mut(&1)
-            .unwrap()
-            .att
-            .as_mut()
-            .unwrap()
-            .pending_escape = Some(soon);
-        let escape = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)
-            .with_encoding(KeyEncoding::Windows)
-            .with_kind(KeyEventKind::Release);
-        srv.inputs(1, vec![Event::Key(escape)]);
+        escape_pending(
+            &mut srv,
+            std::time::Instant::now() + std::time::Duration::from_secs(60),
+        );
+        let release = console_key(KeyCode::Esc).with_kind(KeyEventKind::Release);
+        assert_eq!(srv.escape_time(1, Event::Key(release)), None);
+        let x = console_key(KeyCode::Char('x'));
+        let mut meta_x = x.clone();
+        meta_x.modifiers = KeyModifiers::ALT;
+        assert_eq!(srv.escape_time(1, Event::Key(x)), Some(Event::Key(meta_x)));
         let att = srv.clients[&1].att.as_ref().unwrap();
         assert_eq!(att.pending_escape, None);
+        assert_eq!(att.pending_escape_release, None);
+    }
+
+    /// An Escape whose `escape-time` runs out with its release already in
+    /// goes as Escape, its release after it.
+    #[test]
+    fn an_escape_released_and_timed_out_goes_with_its_release() {
+        let (mut srv, _rx) = attached(true);
+        escape_pending(&mut srv, std::time::Instant::now());
+        let release = console_key(KeyCode::Esc).with_kind(KeyEventKind::Release);
+        assert_eq!(srv.escape_time(1, Event::Key(release.clone())), None);
+        assert_eq!(
+            srv.clients[&1].att.as_ref().unwrap().pending_escape_release,
+            Some(release)
+        );
+        srv.flush_escapes();
+        let att = srv.clients[&1].att.as_ref().unwrap();
+        assert_eq!(att.pending_escape, None);
+        assert_eq!(att.pending_escape_release, None);
     }
 
     /// Enter and the keypad's Enter are one `KeyCode`, the keypad in the

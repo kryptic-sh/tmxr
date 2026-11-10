@@ -55,6 +55,7 @@ impl Server {
             locked: false,
             last_input: Instant::now(),
             pending_escape: None,
+            pending_escape_release: None,
             drag: None,
             press: None,
             click: None,
