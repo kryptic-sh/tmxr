@@ -30,6 +30,10 @@ pub struct Guard {
     /// Whether the terminal speaks the kitty keyboard protocol, so it is
     /// asked for the flags the server says.
     kitty: bool,
+    /// Whether kitty flags tmxr asked for are on the terminal's stack, for
+    /// a hand-over to tell whether it popped them.
+    #[cfg(unix)]
+    pushed: bool,
 }
 
 impl Guard {

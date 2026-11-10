@@ -106,6 +106,7 @@ impl Guard {
         let mut guard = Self {
             probe: Default::default(),
             kitty: false,
+            pushed: false,
         };
         let mut out = io::stdout();
         TAKEN.store(true, Ordering::Release);
@@ -156,9 +157,21 @@ impl Guard {
         ttyr::queue!(out, RequestColorScheme)?;
         let kept = self.kitty && probe.kitty;
         self.kitty = probe.kitty;
+        // The probe heard the flags `suspend_with` put back, which are then
+        // replaced or popped: the reader is told what is on now. Where none
+        // were pushed, what the terminal answered stands, as at attach.
         match flags.filter(|_| kept) {
-            Some(flags) => tty::enable(&mut out, keyboard_flags(flags))?,
-            None => tty::disable(&mut out, keyboard_flags(0))?,
+            Some(flags) => {
+                tty::enable(&mut out, keyboard_flags(flags))?;
+                self.pushed = true;
+                keys.set_kitty_keyboard(flags != 0);
+            }
+            None if self.pushed => {
+                tty::disable(&mut out, keyboard_flags(0))?;
+                self.pushed = false;
+                keys.set_kitty_keyboard(false);
+            }
+            None => {}
         }
         self.probe = probe;
         if self.keyboard() != before {
@@ -170,15 +183,19 @@ impl Guard {
 
     /// Ask the terminal for kitty keyboard `flags` in place of those it has
     /// (`ttyr`'s guard pops them and pushes these; the first time, it only
-    /// pushes), as the server says. A terminal without the protocol is left
-    /// alone.
-    pub fn set_keyboard_flags(&self, flags: u8) -> io::Result<()> {
+    /// pushes), as the server says. Returns whether the protocol is on now
+    /// (flags 0 are the legacy keys), which the reader is to be told
+    /// ([`Keys::set_kitty_keyboard`]); `None` for a terminal without the
+    /// protocol, which is left alone.
+    pub fn set_keyboard_flags(&mut self, flags: u8) -> io::Result<Option<bool>> {
         if !self.kitty {
-            return Ok(());
+            return Ok(None);
         }
         let mut out = io::stdout();
         tty::enable(&mut out, keyboard_flags(flags))?;
-        out.flush()
+        self.pushed = true;
+        out.flush()?;
+        Ok(Some(flags != 0))
     }
 
     /// Turn xterm's modifyOtherKeys (level 2) on or off, as the server says

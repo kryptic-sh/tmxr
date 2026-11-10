@@ -294,8 +294,13 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
             }
             ServerMsg::KeyboardFlags(flags) => {
                 keyboard_flags = Some(flags);
-                if let Some(t) = &term {
-                    t.set_keyboard_flags(flags)?;
+                // The reader is told whether the protocol is on before its
+                // next read, without pausing the input thread.
+                if let Some(t) = &mut term
+                    && let Some(on) = t.set_keyboard_flags(flags)?
+                    && let Some(input) = &input
+                {
+                    input.set_kitty_keyboard(on)?;
                 }
             }
             ServerMsg::ExtendedKeys(on) => {

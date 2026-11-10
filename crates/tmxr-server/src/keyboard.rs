@@ -64,17 +64,20 @@ pub fn tier(report: &KeyboardReport, term: &str, kitty_keys: bool, features: &Ar
 ///   C-\ C-] C-^ C-_; no Shift kept apart (C-S-h). Enter, Tab, BTab,
 ///   BSpace and Escape with Alt alone. The cursor and editing keys and F1
 ///   to F12 with any of Ctrl, Alt and Shift, in xterm's `CSI 1 ; mods`
-///   forms.
-/// - `Xterm`: modifyOtherKeys's `CSI 27 ; mods ; key ~` adds Ctrl, Alt and
-///   Shift on every other character and on Enter, Tab, BSpace and Escape
-///   (C-S-h, C-i apart from Tab, C-4 apart from C-\).
-/// - `Kitty`: the rest. Super, Hyper and Meta (xterm's own Meta bit, 8, is
-///   Super to ttyr, so Meta never comes from an xterm-tier terminal), the
-///   function keys above F12, the keypad apart from the main keys (tmxr asks
-///   no terminal for application keypad mode), the lock, media and modifier
-///   keys. tmux's C-H (Ctrl with an upper-case letter and no Shift) and
-///   `S-Tab` are here too though no terminal tmxr reads sends them: ttyr
-///   reads `CSI 27 ; 5 ; 72 ~` as Ctrl+Shift+h, and Shift+Tab is BTab.
+///   forms. xterm's Meta modifier (bit 8) in those forms is `M-`, as tmux
+///   reads it ([`tmxr_command::keys::xterm_meta_as_alt`]), so it fires the
+///   same binds as Alt.
+/// - `Xterm`: modifyOtherKeys's `CSI 27 ; mods ; key ~` adds Ctrl, Alt (or
+///   xterm's Meta, `M-` again) and Shift on every other character and on
+///   Enter, Tab, BSpace and Escape (C-S-h, C-i apart from Tab, C-4 apart
+///   from C-\).
+/// - `Kitty`: the rest. Super, Hyper and the kitty protocol's own Meta
+///   (`Meta-`), the function keys above F12, the keypad apart from the main
+///   keys (tmxr asks no terminal for application keypad mode), the lock,
+///   media and modifier keys. tmux's C-H (Ctrl with an upper-case letter
+///   and no Shift) and `S-Tab` are here too though no terminal tmxr reads
+///   sends them: ttyr reads `CSI 27 ; 5 ; 72 ~` (Ctrl+h with Caps Lock on)
+///   as Ctrl+h with Caps Lock, as kitty reports it, and Shift+Tab is BTab.
 ///
 /// A mouse key is sent by every tier.
 pub fn needs(key: &BindKey) -> Keyboard {
@@ -272,6 +275,39 @@ mod tests {
             "C-A",
         ] {
             assert_eq!(need(name), Keyboard::Kitty, "{name}");
+        }
+    }
+
+    /// The keys xterm's Meta sends (bit 8, read as `M-` outside the kitty
+    /// protocol) need no more than the xterm tier; kitty's own Meta, under
+    /// the protocol, needs kitty.
+    #[test]
+    fn xterm_meta_needs_the_xterm_tier_at_most_and_kittys_needs_kitty() {
+        let need_of = |bytes: &[u8], kitty: bool| {
+            let mut decoder = ttyr::event::Decoder::new();
+            decoder.set_kitty_keyboard(kitty);
+            decoder.feed(bytes);
+            let Some(ttyr::event::Event::Key(ev)) = decoder.flush_event() else {
+                panic!("{bytes:?}: not a key");
+            };
+            let ev = tmxr_command::keys::xterm_meta_as_alt(ev, kitty);
+            needs(&BindKey::Key(tmxr_command::Key::from_event(&ev)))
+        };
+        for (bytes, kitty, want) in [
+            // M-h, C-M-h, M-Enter, M-Up, M-F5.
+            (&b"\x1b[27;9;104~"[..], false, Keyboard::Legacy),
+            (b"\x1b[27;13;104~", false, Keyboard::Legacy),
+            (b"\x1b[27;9;13~", false, Keyboard::Legacy),
+            (b"\x1b[1;9A", false, Keyboard::Legacy),
+            (b"\x1b[15;9~", false, Keyboard::Legacy),
+            // C-M-S-h and C-M-Enter: modifyOtherKeys's.
+            (b"\x1b[27;14;104~", false, Keyboard::Xterm),
+            (b"\x1b[27;13;13~", false, Keyboard::Xterm),
+            // Meta-x and Meta-Up.
+            (b"\x1b[120;33u", true, Keyboard::Kitty),
+            (b"\x1b[1;33A", true, Keyboard::Kitty),
+        ] {
+            assert_eq!(need_of(bytes, kitty), want, "{bytes:?}");
         }
     }
 

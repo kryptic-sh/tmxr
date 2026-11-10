@@ -127,9 +127,12 @@ impl Guard {
         Ok((back, early))
     }
 
-    /// The console has no kitty keyboard protocol: nothing to ask for.
-    pub fn set_keyboard_flags(&self, _flags: u8) -> io::Result<()> {
-        Ok(())
+    /// The console has no kitty keyboard protocol: nothing to ask for, and
+    /// nothing for the reader to be told (`None`; crossterm's reader has no
+    /// switch for it, and only the Unix reader reads modifier bit 8 by
+    /// whether the protocol is on).
+    pub fn set_keyboard_flags(&mut self, _flags: u8) -> io::Result<Option<bool>> {
+        Ok(None)
     }
 
     /// modifyOtherKeys is not supported on Windows ([`MODIFY_OTHER_KEYS`]),

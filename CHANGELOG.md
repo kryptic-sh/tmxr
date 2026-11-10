@@ -109,11 +109,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   2 (`CSI > 4 ; 2 m`) while `extended-keys` is not `off`, and turned off again
   (`CSI > 4 m`) when it goes `off`, on detach and around `suspend-client` and
   `lock-client`. The keys it then sends (`CSI 27 ; mods ; key ~`) reach binds
-  and panes with their modifiers: C-i apart from Tab, M-a without a bare Escape.
-  A terminal with both protocols gets kitty's, unless `kitty-keys` is `off`.
-  Unlike tmux, `extended-keys` and `terminal-features` take effect on attached
-  clients at once. The Windows client, which reads console key records, tells
-  the server it cannot read these keys and is never asked.
+  and panes with their modifiers: C-i apart from Tab, M-a without a bare Escape,
+  and Ctrl+h with Caps Lock on (`CSI 27;5;72~`, the upper-case letter) as C-h,
+  where tmux reads it as C-H. A terminal with both protocols gets kitty's,
+  unless `kitty-keys` is `off`. Unlike tmux, `extended-keys` and
+  `terminal-features` take effect on attached clients at once. The Windows
+  client, which reads console key records, tells the server it cannot read these
+  keys and is never asked.
 - **The `terminal-features` server option**, tmux's: an array of
   `pattern:feature:feature` entries giving a client whose `TERM` matches the
   pattern those terminal features, set and shown as tmux's (a whole value splits
@@ -184,6 +186,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **xterm's Meta modifier reads as `M-`, as tmux reads it.** A terminal outside
+  the kitty keyboard protocol that has a Meta key apart from Alt (xterm can)
+  sends it as modifier bit 8: Meta+Up as `CSI 1;9A`, and Meta+h at
+  modifyOtherKeys as `CSI 27;9;104~`. 0.15.0 read that bit as Super and dropped
+  it, so Meta+Up fired an `Up` bind and reached a pane as plain Up; it now fires
+  `M-Up`'s and reaches a pane as Alt+Up does, as in tmux. Under the kitty
+  protocol bit 8 is still Super, and kitty's own Meta is `Meta-`.
 - **C-S-h is a key apart from C-h, as tmux 3.6 keeps them**: a bind on C-S-h
   fires on Ctrl+Shift+h from a kitty or xterm-tier terminal and C-h's on Ctrl+h,
   where binds took both as C-h. `C-S-H` names the same key as `C-S-h`; tmux's

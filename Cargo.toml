@@ -27,7 +27,7 @@ redundant_pub_crate = "warn"
 vt1k = "0.1.0"
 # Terminal input and its event types, kryptic-sh's own (replacing crossterm);
 # not on crates.io, so pinned by git rev.
-ttyr = { git = "https://github.com/kryptic-sh/ttyr", rev = "ea44d70", version = "0.1.0" }
+ttyr = { git = "https://github.com/kryptic-sh/ttyr", rev = "05def76", version = "0.1.0" }
 # internal
 tmxr-proto = { path = "crates/tmxr-proto", version = "0.15.0" }
 tmxr-command = { path = "crates/tmxr-command", version = "0.15.0" }

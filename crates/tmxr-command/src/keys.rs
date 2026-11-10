@@ -200,6 +200,21 @@ impl Typed {
     }
 }
 
+/// A key event as tmux reads its Meta, given whether the decoder that read
+/// it took the kitty keyboard protocol to be on (`kitty`). Off, Meta is
+/// xterm's (modifier bit 8, in `CSI 1 ; 9 A` and `CSI 27 ; 9 ; … ~`), which
+/// tmux reads as `M-`, the same as Alt: so it is Alt here, and a bind on
+/// `M-h` fires and a pane is sent `M-h`. On, Meta is the kitty protocol's
+/// own, kept as `Meta-`. Which it was cannot be told from the event: kitty
+/// sends its Meta+Up in the same legacy form xterm does.
+pub fn xterm_meta_as_alt(mut ev: KeyEvent, kitty: bool) -> KeyEvent {
+    if !kitty && ev.modifiers.contains(KeyModifiers::META) {
+        ev.modifiers.remove(KeyModifiers::META);
+        ev.modifiers.insert(KeyModifiers::ALT);
+    }
+    ev
+}
+
 /// `c`'s lower case, where `c` is upper case and its lower case is one
 /// other character, as ttyr's decoder takes a letter's key.
 pub fn single_lower(c: char) -> Option<char> {
@@ -430,6 +445,39 @@ mod tests {
             panic!("not a key");
         };
         assert_eq!(Key::from_event(&kp_enter), k("KPEnter"));
+    }
+
+    /// xterm's Meta (modifier bit 8) is `M-`, as tmux reads it, from a
+    /// decoder outside the kitty protocol; under it, bit 8 is Super and
+    /// kitty's own Meta (32) stays `Meta-`, in its `CSI u` and legacy forms.
+    #[test]
+    fn xterm_meta_is_alt_and_kittys_is_meta() {
+        let read = |bytes: &[u8], kitty: bool| {
+            let mut decoder = ttyr::event::Decoder::new();
+            decoder.set_kitty_keyboard(kitty);
+            decoder.feed(bytes);
+            match decoder.next_event().or_else(|| decoder.flush_event()) {
+                Some(ttyr::event::Event::Key(ev)) => Key::from_event(&xterm_meta_as_alt(ev, kitty)),
+                other => panic!("{bytes:?}: {other:?}"),
+            }
+        };
+        for (bytes, name) in [
+            (&b"\x1b[27;9;120~"[..], "M-x"),
+            (b"\x1b[27;13;120~", "C-M-x"),
+            (b"\x1b[1;9A", "M-Up"),
+            (b"\x1b[15;9~", "M-F5"),
+            (b"\x1b[120;9u", "M-x"),
+        ] {
+            assert_eq!(read(bytes, false), k(name), "{bytes:?}");
+        }
+        for (bytes, name) in [
+            (&b"\x1b[120;33u"[..], "Meta-x"),
+            (b"\x1b[1;33A", "Meta-Up"),
+            (b"\x1b[120;9u", "Super-x"),
+            (b"\x1b[1;9A", "Super-Up"),
+        ] {
+            assert_eq!(read(bytes, true), k(name), "{bytes:?}");
+        }
     }
 
     #[test]

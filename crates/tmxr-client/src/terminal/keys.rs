@@ -6,6 +6,8 @@ use std::os::fd::OwnedFd;
 use std::time::Duration;
 
 use ttyr::event::Event;
+#[cfg(unix)]
+use ttyr::event::Report;
 #[cfg(any(windows, test))]
 use ttyr::event::{KeyCode, KeyModifiers};
 
@@ -29,6 +31,12 @@ pub struct Keys {
     /// answer in time when asked again.
     #[cfg(unix)]
     pub(super) last: Option<Probe>,
+    /// Whether the reader takes the kitty keyboard protocol to be on, as
+    /// its decoder does: set with [`Keys::set_kitty_keyboard`], and by
+    /// each answer to the flags query it decodes. It decides whether a
+    /// key's Meta is xterm's ([`tmxr_command::keys::xterm_meta_as_alt`]).
+    #[cfg(unix)]
+    pub(super) kitty_keyboard: bool,
     /// Whether keys arrive as the bytes a terminal sends, turned into key
     /// events by the console ([`keys_from_console_bytes`]).
     #[cfg(windows)]
@@ -79,7 +87,38 @@ impl Keys {
             reader,
             tty,
             last: None,
+            kitty_keyboard: false,
         })
+    }
+
+    /// Tell the reader whether the kitty keyboard protocol is on, as the
+    /// client pushes or pops the flags that turn it on: modifier bit 8 is
+    /// Super under it and xterm's Meta outside it. The terminal's answer to
+    /// the probe's flags query says so too, but only for the flags it had
+    /// when asked: a probe after a hand-over hears the flags put back,
+    /// which the client may pop just after.
+    #[cfg(unix)]
+    pub(super) fn set_kitty_keyboard(&mut self, on: bool) {
+        self.reader.set_kitty_keyboard(on);
+        self.kitty_keyboard = on;
+    }
+
+    /// `events`, read in order, as tmux reads their Meta: xterm's is Alt.
+    /// An answer to the flags query among them turns the protocol on or
+    /// off for the keys after it, as the reader's decoder took it.
+    #[cfg(unix)]
+    pub(super) fn read_meta(&mut self, events: &mut [Event]) {
+        for ev in events {
+            match ev {
+                Event::Report(Report::KeyboardEnhancementFlags(flags)) => {
+                    self.kitty_keyboard = !flags.is_empty();
+                }
+                Event::Key(key) => {
+                    *key = tmxr_command::keys::xterm_meta_as_alt(key.clone(), self.kitty_keyboard);
+                }
+                _ => {}
+            }
+        }
     }
 
     /// Start crossterm's reader of the console, whose resize records are
@@ -115,6 +154,7 @@ impl Keys {
             read.push(self.reader.read()?);
         }
         read.retain(|ev| *ev != Event::Wake);
+        self.read_meta(&mut read);
         Ok(read)
     }
 

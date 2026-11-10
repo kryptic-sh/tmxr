@@ -25,9 +25,9 @@ const FIXTURE: &str = "TMXR_CLIENT_GUARD_FIXTURE";
 /// How long the test waits for the fixture to finish.
 const WAIT: Duration = Duration::from_secs(30);
 
-/// The kitty keyboard query, and the answer the test's terminal gives it.
+/// The kitty keyboard query, which the test's terminal answers with the
+/// flags pushed when it came ([`flags_at`]).
 const KITTY_QUERY: &[u8] = b"\x1b[?u";
-const KITTY_ANSWER: &[u8] = b"\x1b[?0u";
 /// DA1, which the probe asks last, and the test terminal's answer.
 const DA1_QUERY: &[u8] = b"\x1b[c";
 const DA1_ANSWER: &[u8] = b"\x1b[?62c";
@@ -48,9 +48,21 @@ const HAND_OVERS: usize = 2;
 /// flags as a kitty client is told to and for modifyOtherKeys as an xterm
 /// one is (the guard takes both), captures the mouse, gives the
 /// terminal away and back [`HAND_OVERS`] times (as locks do, each taking
-/// the terminal again), captures the mouse again, then panics. Then waits
-/// for the test to have read it all: a pty may drop output its program's
-/// side closes on unread.
+/// the terminal again), asks for flags 0 and the flags again, gives the
+/// terminal away and back once more with no flags to put back (as after
+/// the terminal's keyboard changed), asks for the flags again, captures
+/// the mouse again, then panics. The reader is told at each step whether
+/// the protocol is on. Then waits for the test to have read it all: a pty
+/// may drop output its program's side closes on unread.
+/// Ask for kitty `flags` as the client does for the server, telling the
+/// reader what the guard says is on (the input thread tells it, in the
+/// client).
+fn ask(guard: &mut Guard, keys: &mut Keys, flags: u8) {
+    if let Some(on) = guard.set_keyboard_flags(flags).unwrap() {
+        keys.set_kitty_keyboard(on);
+    }
+}
+
 #[test]
 #[ignore = "a fixture a_panic_gives_the_terminal_back_once runs in a pty"]
 fn panic_fixture() {
@@ -61,14 +73,26 @@ fn panic_fixture() {
         let mut keys = Keys::open().unwrap();
         let (mut guard, _) = Guard::enter(&mut keys).unwrap();
         assert!(guard.keyboard().kitty);
-        guard.set_keyboard_flags(TMXR_KITTY_FLAGS).unwrap();
+        assert!(!keys.kitty_keyboard, "on before any push");
+        ask(&mut guard, &mut keys, TMXR_KITTY_FLAGS);
+        assert!(keys.kitty_keyboard, "off after the push");
         guard.set_extended_keys(true).unwrap();
         guard.set_mouse(true).unwrap();
         for _ in 0..HAND_OVERS {
             guard
                 .hand_over(&mut keys, Some(TMXR_KITTY_FLAGS), || ())
                 .unwrap();
+            assert!(keys.kitty_keyboard, "off after a hand-over");
         }
+        // Flags 0 are the legacy keys: xterm's Meta bit again.
+        ask(&mut guard, &mut keys, 0);
+        assert!(!keys.kitty_keyboard, "on with flags 0");
+        ask(&mut guard, &mut keys, TMXR_KITTY_FLAGS);
+        // The probe hears the flags put back, then they are popped.
+        guard.hand_over(&mut keys, None, || ()).unwrap();
+        assert!(!keys.kitty_keyboard, "on after the pop");
+        ask(&mut guard, &mut keys, TMXR_KITTY_FLAGS);
+        assert!(keys.kitty_keyboard, "off after the last push");
         guard.set_mouse(true).unwrap();
         panic!("the fixture panics on purpose");
     });
@@ -109,6 +133,43 @@ fn count(hay: &[u8], needle: &[u8]) -> usize {
     hay.windows(needle.len()).filter(|w| *w == needle).count()
 }
 
+/// The kitty flags on top of the terminal's stack after what `written`
+/// pushed (`CSI > flags u`) and popped (`CSI < count u`), as it answers
+/// the flags query.
+fn flags_at(written: &[u8]) -> u32 {
+    let mut stack = Vec::new();
+    let mut rest = written;
+    while let Some(at) = rest.windows(2).position(|w| w == b"\x1b[") {
+        rest = &rest[at + 2..];
+        let Some((&kind @ (b'>' | b'<'), after)) = rest.split_first() else {
+            continue;
+        };
+        let digits = after.iter().take_while(|b| b.is_ascii_digit()).count();
+        if digits == 0 || after.get(digits) != Some(&b'u') {
+            continue;
+        }
+        let n: u32 = std::str::from_utf8(&after[..digits])
+            .unwrap()
+            .parse()
+            .unwrap();
+        if kind == b'>' {
+            stack.push(n);
+        } else {
+            stack.truncate(stack.len().saturating_sub(n as usize));
+        }
+    }
+    stack.last().copied().unwrap_or(0)
+}
+
+/// Where `needle` starts in `hay`, each time.
+fn positions(hay: &[u8], needle: &[u8]) -> Vec<usize> {
+    hay.windows(needle.len())
+        .enumerate()
+        .filter(|(_, w)| *w == needle)
+        .map(|(at, _)| at)
+        .collect()
+}
+
 /// The kitty pushes in `text` (`CSI > flags u`).
 fn pushes(text: &str) -> Vec<usize> {
     text.match_indices("\x1b[>")
@@ -129,7 +190,8 @@ struct Run {
 }
 
 /// Runs [`panic_fixture`] in a pty, its controlling terminal where
-/// `controlling`, answering its probes as a kitty terminal.
+/// `controlling`, answering its probes as a kitty terminal, with the flags
+/// it has pushed.
 fn run_fixture(controlling: bool) -> Run {
     let (master, slave) = pty();
     let mut command = tmxr_term::child::command(std::env::current_exe().unwrap());
@@ -197,10 +259,12 @@ fn run_fixture(controlling: bool) -> Run {
             }
         }
         // Answered in the order asked: the kitty query before DA1.
-        for _ in kitty..count(&got, KITTY_QUERY) {
-            terminal.write_all(KITTY_ANSWER).unwrap();
+        let queries = positions(&got, KITTY_QUERY);
+        for &at in &queries[kitty..] {
+            let answer = format!("\x1b[?{}u", flags_at(&got[..at]));
+            terminal.write_all(answer.as_bytes()).unwrap();
         }
-        kitty = count(&got, KITTY_QUERY);
+        kitty = queries.len();
         for _ in da1..count(&got, DA1_QUERY) {
             terminal.write_all(DA1_ANSWER).unwrap();
         }
@@ -246,15 +310,19 @@ fn gives_the_terminal_back_once(Run { text, local_modes }: Run) {
     assert_eq!(local_modes & cooked, cooked, "{local_modes:#x}");
     assert!(text.contains("the fixture panics on purpose"), "{text:?}");
     assert!(text.contains(DONE), "{text:?}");
-    // Pushed on attach and again after each hand-over, popped before each
-    // hand-over and once on the panic: never more pops than pushes, which
-    // would pop the terminal's own flags.
+    // Pushed on attach, again after each hand-over, for flags 0 and back,
+    // and after the hand-over that popped them; popped before each
+    // hand-over, in place of each new push, after the last hand-over and
+    // once on the panic: never more pops than pushes, which would pop the
+    // terminal's own flags.
+    let hand_overs = HAND_OVERS + 1;
     let pushed = pushes(&text);
-    assert_eq!(pushed.len(), HAND_OVERS + 1, "{text:?}");
+    assert_eq!(pushed.len(), 1 + hand_overs + 3, "{text:?}");
     assert_eq!(text.matches(POP).count(), pushed.len(), "{text:?}");
-    // modifyOtherKeys likewise, on as often as off.
-    assert_eq!(text.matches(MOK_ON).count(), HAND_OVERS + 1, "{text:?}");
-    assert_eq!(text.matches(MOK_OFF).count(), HAND_OVERS + 1, "{text:?}");
+    // modifyOtherKeys on at attach and after each hand-over, off before
+    // each and on the panic.
+    assert_eq!(text.matches(MOK_ON).count(), hand_overs + 1, "{text:?}");
+    assert_eq!(text.matches(MOK_OFF).count(), hand_overs + 1, "{text:?}");
     // After the last push, the panic gives everything back once.
     let after = &text[pushed[pushed.len() - 1]..];
     for (what, sequence) in [

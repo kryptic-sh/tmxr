@@ -401,22 +401,17 @@ mouse-enabled pane.
     `known_divergences.toml`,
     `send_keys_keeps_shift_beside_a_character_at_level_2`. Needs `Key` to keep
     Shift beside a character for send-keys only, which binds must not see.
-  - tmux reads xterm's Meta modifier bit (8, in `CSI 27 ; 9 ; … ~` and
-    `CSI 1 ; 9 A`) as `M-`; ttyr reads it as Super, so tmxr takes it as Super,
-    and `keyboard::needs` files Meta with the kitty keys. Raised with ttyr by
-    the coordinator (2026-11-10); once ttyr reads it as Meta, tmxr should map
-    xterm's Meta to `M-` as tmux does, and `needs` move Meta to the xterm tier.
-  - Caps Lock with Ctrl and a letter from an xterm-tier terminal misses C-h's
-    bind: xterm sends `CSI 27;5;72~` (the upper-case letter, no Shift), which
-    ttyr reads as `h` with Ctrl and Shift, so tmxr sees C-S-h. Waits on ttyr's
-    decoding (raised with ttyr by the coordinator); no workaround in tmxr.
   - tmux's C-H / C-A (Ctrl with an upper-case letter alone) and `S-Tab` are keys
-    no terminal tmxr reads sends: ttyr reads xterm's `CSI 27;5;72~` as
-    Ctrl+Shift+h, and Shift+Tab is BTab; so a bind on them never fires (as in
-    tmux, mostly). `keyboard::needs` files them with the kitty keys, so
-    `list-keys` marks them `# needs kitty keys` for legacy and xterm-tier
-    clients, though a kitty terminal cannot send them either. `send-keys` sends
-    tmux's bytes for them.
+    no terminal tmxr reads sends: ttyr reads xterm's `CSI 27;5;72~` (Ctrl+h with
+    Caps Lock on) as Ctrl+h with Caps Lock, and Shift+Tab is BTab; so a bind on
+    them never fires. tmux 3.6 differs for C-H: it reads xterm's `CSI 27;5;72~`
+    as C-H, so Ctrl+h with Caps Lock fires a C-H bind there and not C-h's, where
+    tmxr fires C-h's (`known_divergences.toml`,
+    `caps_lock_ctrl_letter_from_an_xterm_terminal_fires_ctrl_h`; run against
+    tmux 3.6 and 3.8, which diverge the same way). `keyboard::needs` files them
+    with the kitty keys, so `list-keys` marks them `# needs kitty keys` for
+    legacy and xterm-tier clients, though a kitty terminal cannot send them
+    either. `send-keys` sends tmux's bytes for them.
   - tmxr tracks no application keypad mode (DECKPAM) in a pane, so the keypad's
     keys always go as tmux's table has them for a pane not in it (`KPEnter` a
     newline, `KP1` a 1); tmux sends `ESC O M`, `ESC O q`, … to a pane in it. Not
@@ -478,6 +473,40 @@ mouse-enabled pane.
   the e2e harness's terminal answering XTVERSION and against tmux 3.6 through
   the oracle; not yet in xterm, foot (which speaks kitty's protocol, so is xterm
   tier only under `kitty-keys off`), mintty or iTerm2.
+- **xterm's Meta and the reader's kitty flag** (2026-11-10, ttyr 05def76):
+  - _Declined:_ folding Meta into Alt in `Key::from_event` by `KeyEncoding`.
+    kitty sends Meta+Up under its protocol as `CSI 1;33A`, which ttyr tags
+    `Legacy` as it does xterm's `CSI 1;9A`, so the encoding cannot tell kitty's
+    Meta from xterm's. The client folds instead (`Keys::read_meta`, through
+    `tmxr_command::keys::xterm_meta_as_alt`), by whether its reader took the
+    protocol to be on as it decoded each key.
+  - The client tells its reader the protocol is on or off as it pushes or pops
+    flags: for the server's `KeyboardFlags` through `Input::set_kitty_keyboard`,
+    which the input thread applies before its next read, and in
+    `Guard::hand_over` directly, with the thread paused. Keys the terminal sent
+    before it switched but read after are decoded under the new setting. Keys
+    the reader had already decoded and queued when it is told (those after DA1
+    in the same read as a hand-over's probe answers, say) were decoded under the
+    old setting and are folded under the new one. Only a key with modifier bit
+    8, or kitty's Meta, reads differently for either.
+  - A hand-over whose probe times out (no DA1 within `PROBE_WAIT`) leaves its
+    flags answer to arrive later, through the input thread, which then sets the
+    reader to the flags it reports: those `suspend_with` put back, from before
+    `Guard::hand_over` popped them. After a pop that turns the reader on again,
+    wrongly, until the next push or pop.
+  - After `Guard::hand_over` pops tmxr's flags, the terminal is taken to have
+    none beneath them (the reader is told off), though a program that ran the
+    client with flags of its own pushed would leave them on. Not seen; the
+    probe's answer would say so, but it comes before the pop. A hand-over that
+    pops nothing leaves the reader as the probe's answer set it, as attaching
+    does. Not covered by a test that fails without it: the pty fixture's
+    terminal has no flags of its own for an answer to differ from.
+  - A kitty-form key with a modifier bit of 16 or above (kitty's Meta, 32)
+    decoded while the reader takes the protocol to be off has its Meta folded
+    into Alt too. Only a terminal sending kitty's forms unasked would do that.
+  - The Windows client reads keys through crossterm, which reads bit 8 as Super
+    and gets no `CSI 27` keys from the console; it has no reader to tell and
+    folds nothing. Until plan 18 step 8 moves it to ttyr.
 
 ## Plan 18's kitty encoder (2026-11-10)
 

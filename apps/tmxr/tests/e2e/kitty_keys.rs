@@ -202,8 +202,10 @@ fn held_keys_are_released_when_releases_stop() {
 
 /// A bind on a key only the kitty protocol reports fires from a kitty
 /// terminal, however the key was named: Super by kitty's name, tmxr's and
-/// hjkl's (`super+k`, `Super-l`, `<D-J>`, Super+Shift+j), F13, the keypad's
-/// Enter apart from Enter, and a media key.
+/// hjkl's (`super+k`, `Super-l`, `<D-J>`, Super+Shift+j), Super+Up in its
+/// legacy form, kitty's own Meta, F13, the keypad's Enter apart from Enter,
+/// and a media key. Modifier bit 8 is Super only as the client's reader
+/// knows the flags it pushed are on; else it is xterm's Meta, `M-`.
 #[test]
 fn a_bind_on_a_kitty_only_key_fires_from_a_kitty_terminal() {
     let t = Tmxr::new("kittyonly");
@@ -212,6 +214,10 @@ fn a_bind_on_a_kitty_only_key_fires_from_a_kitty_terminal() {
         ("super+k", "super-k"),
         ("Super-l", "super-l"),
         ("<D-J>", "super-shift-j"),
+        ("Super-Up", "super-up"),
+        ("M-Up", "alt-up"),
+        ("Meta-x", "meta-x"),
+        ("M-x", "alt-x"),
         ("F13", "f13"),
         ("Enter", "enter"),
         ("kp_enter", "kp-enter"),
@@ -226,6 +232,11 @@ fn a_bind_on_a_kitty_only_key_fires_from_a_kitty_terminal() {
         (&b"\x1b[107;9u"[..], "super-k"),
         (b"\x1b[108;9u", "super-l"),
         (b"\x1b[106:74;10u", "super-shift-j"),
+        (b"\x1b[1;9A", "super-up"),
+        (b"\x1b[1;3A", "alt-up"),
+        (b"\x1b[120;33u", "meta-x"),
+        (b"\x1b[120;3u", "alt-x"),
+        (b"\x1b[1;9A", "super-up"),
         (b"\x1b[57376u", "f13"),
         (b"\x1b[57414u", "kp-enter"),
         (b"\r", "enter"),

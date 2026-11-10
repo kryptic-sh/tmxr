@@ -134,7 +134,8 @@ impl Keys {
             RequestTerminalVersion,
             RequestPrimaryDeviceAttributes,
         )?;
-        let answers = self.reader.collect_answers(PROBE_WAIT)?;
+        let mut answers = self.reader.collect_answers(PROBE_WAIT)?;
+        self.read_meta(&mut answers.events);
         let (probe, events) = Probe::read(answers, self.last.as_ref());
         self.last = Some(probe.clone());
         Ok((probe, events))
@@ -342,7 +343,7 @@ mod tests {
 /// only: the Windows client asks no probe (the console hands over key
 /// records, not a terminal's answers).
 #[cfg(all(test, unix))]
-mod reader_tests {
+pub(super) mod reader_tests {
     use std::os::fd::OwnedFd;
     use std::os::unix::net::UnixStream;
     use std::sync::{Mutex, MutexGuard, PoisonError};
@@ -350,6 +351,7 @@ mod reader_tests {
 
     use super::tests::decode;
     use super::*;
+    use ttyr::event::KeyModifiers;
 
     /// A process has one `ttyr` reader open at a time, so these tests take
     /// turns.
@@ -361,12 +363,12 @@ mod reader_tests {
 
     /// This test's turn with the reader, held until after its [`Keys`] are
     /// dropped.
-    fn turn() -> MutexGuard<'static, ()> {
+    pub(in crate::terminal) fn turn() -> MutexGuard<'static, ()> {
         READER.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     /// Keys reading one end of a socket pair, the other end the terminal's.
-    fn keys() -> (Keys, UnixStream) {
+    pub(in crate::terminal) fn keys() -> (Keys, UnixStream) {
         let (ours, terminal) = UnixStream::pair().unwrap();
         let tty = OwnedFd::from(ours);
         let reader = ttyr::reader::Reader::from_fd(tty.try_clone().unwrap()).unwrap();
@@ -374,6 +376,7 @@ mod reader_tests {
             reader,
             tty,
             last: None,
+            kitty_keyboard: false,
         };
         (keys, terminal)
     }
@@ -436,5 +439,46 @@ mod reader_tests {
         assert!(start.elapsed() >= PROBE_WAIT, "{:?}", start.elapsed());
         assert_eq!(again, first);
         assert_eq!(others, decode(b"x"));
+    }
+
+    /// The modifiers of the next key the terminal sends after `bytes`.
+    fn next_key_mods(keys: &mut Keys, terminal: &mut UnixStream, bytes: &[u8]) -> KeyModifiers {
+        terminal.write_all(bytes).unwrap();
+        loop {
+            for event in keys.read_batch().unwrap() {
+                if let Event::Key(key) = event {
+                    return key.modifiers;
+                }
+            }
+        }
+    }
+
+    /// Modifier bit 8 (`CSI 1 ; 9 A`) is xterm's Meta, read as tmux reads
+    /// it, Alt, until the reader is told the kitty protocol is on, and
+    /// Super while it is; the terminal's answer to the flags query says
+    /// which too, for the keys after it.
+    #[test]
+    fn bit_8_reads_as_the_reader_is_told_and_the_flags_answer_says() {
+        let _turn = turn();
+        let (mut keys, mut terminal) = keys();
+        let meta_up = b"\x1b[1;9A";
+        let mut next = |keys: &mut Keys, bytes: &[u8]| next_key_mods(keys, &mut terminal, bytes);
+        assert_eq!(next(&mut keys, meta_up), KeyModifiers::ALT);
+        keys.set_kitty_keyboard(true);
+        assert_eq!(next(&mut keys, meta_up), KeyModifiers::SUPER);
+        keys.set_kitty_keyboard(false);
+        assert_eq!(next(&mut keys, meta_up), KeyModifiers::ALT);
+        let mut answered = b"\x1b[?1u".to_vec();
+        answered.extend_from_slice(meta_up);
+        assert_eq!(next(&mut keys, &answered), KeyModifiers::SUPER);
+        assert!(keys.kitty_keyboard);
+        let mut answered = b"\x1b[?0u".to_vec();
+        answered.extend_from_slice(meta_up);
+        assert_eq!(next(&mut keys, &answered), KeyModifiers::ALT);
+        assert!(!keys.kitty_keyboard);
+        // kitty's own Meta (bit 32) read with the answer that turned the
+        // protocol on: Meta, not folded into Alt.
+        assert_eq!(next(&mut keys, b"\x1b[?1u\x1b[120;33u"), KeyModifiers::META);
+        assert!(keys.kitty_keyboard);
     }
 }

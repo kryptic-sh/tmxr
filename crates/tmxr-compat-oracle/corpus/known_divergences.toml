@@ -143,6 +143,24 @@ steps = [{ sleep = 0.5 }, { keys = "\u001b[27;6;65~" }, { sleep = 0.5 }]
 checks = [{ command = "capture-pane -p -t o" }]
 
 [[cases]]
+name = "caps_lock_ctrl_letter_from_an_xterm_terminal_fires_ctrl_h"
+# With Caps Lock on, xterm sends Ctrl+h under modifyOtherKeys as
+# CSI 27;5;72~, the upper-case H without Shift. tmux reads it as C-H, a key
+# apart from C-h, so a C-h bind does not fire; ttyr reads it as Ctrl+h with
+# Caps Lock, as kitty reports Caps Lock, and tmxr fires C-h's bind.
+windows = "never"
+attach = true
+terminal = "XTerm(390)"
+steps = [
+  { run = "bind -n C-h set -g @k ctrl-h" },
+  { run = "bind -n C-H set -g @k ctrl-upper-h" },
+  { sleep = 0.5 },
+  { keys = "\u001b[27;5;72~" },
+  { sleep = 0.3 },
+]
+checks = [{ format = "#{@k}" }]
+
+[[cases]]
 name = "list_keys_prints_a_shifted_name_as_the_key_tmxr_reads"
 # tmux lists each spelling as bound. tmxr makes C-S-H the C-S-h a terminal
 # sends for Ctrl+Shift+h, and drops Shift written beside a character

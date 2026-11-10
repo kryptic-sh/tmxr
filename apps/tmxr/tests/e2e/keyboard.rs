@@ -202,11 +202,55 @@ fn xterm_keys_reach_binds_with_their_modifiers() {
     }
 }
 
+/// With Caps Lock on, xterm sends Ctrl+h as the upper-case letter with no
+/// Shift (`CSI 27 ; 5 ; 72 ~`): it is C-h, and fires C-h's bind, not
+/// C-S-h's. xterm's Meta modifier (bit 8, where Meta is a key apart from
+/// Alt) is `M-`, as tmux reads it: Meta+h, Ctrl+Meta+h and
+/// Meta+Up fire the binds on M-h, C-M-h and M-Up. Unix only, as the whole
+/// file: the Windows client reads console key records through crossterm,
+/// which neither gets these sequences nor reads bit 8 as Meta.
+#[test]
+fn caps_lock_and_xterms_meta_reach_binds_as_tmux_reads_them() {
+    let t = Tmxr::new("xtermmeta");
+    t.run(&["new-session", "-d", "-s", "xc"]);
+    for (key, name) in [
+        ("C-h", "ctrl-h"),
+        ("C-S-h", "ctrl-shift-h"),
+        ("M-h", "alt-h"),
+        ("C-M-h", "ctrl-alt-h"),
+        ("M-Up", "alt-up"),
+        ("Tab", "tab"),
+    ] {
+        t.run(&["bind", "-n", key, "rename-window", name]);
+    }
+    let s = t.attach_xterm(&["attach", "-t", "xc"], false);
+    s.wait_for("status line", |text| text.contains("xc"));
+    s.wait_for_raw("modifyOtherKeys on", |_| modify_other_keys(&s) == (1, 0));
+    // Each key after another that renames the window otherwise, so each
+    // rename is the key's own.
+    for (key, want) in [
+        (&b"\x1b[27;5;72~"[..], "ctrl-h"),
+        (b"\x1b[27;6;72~", "ctrl-shift-h"),
+        (b"\x1b[27;5;72~", "ctrl-h"),
+        (b"\x1b[27;9;104~", "alt-h"),
+        (b"\t", "tab"),
+        (b"\x1b[27;13;104~", "ctrl-alt-h"),
+        (b"\x1b[1;9A", "alt-up"),
+    ] {
+        s.send(key);
+        t.wait_run(
+            &["display-message", "-p", "-t", "xc", "#{window_name}"],
+            &format!("window named {want}"),
+            |o| o.trim() == want,
+        );
+    }
+}
+
 /// The same keys reach a pane's program that asked for modifyOtherKeys
 /// level 2 as the server's encoder sends them under each `extended-keys`
 /// setting: their legacy bytes under `off`, which ignores the program's
 /// request, and xterm's form under `on` and `always`, Ctrl+Shift+h apart
-/// from Ctrl+h and Ctrl+i from Tab. (Ctrl+Shift+h goes out with the
+/// from Ctrl+h and Ctrl+i from Tab, and xterm's Meta as Alt. (Ctrl+Shift+h goes out with the
 /// unshifted `h`, 104, as from a kitty terminal; tmux sends the `H` xterm
 /// reported, 72.)
 #[test]
@@ -218,16 +262,17 @@ fn xterm_keys_reach_a_pane_under_each_extended_keys_setting() {
     let s = t.attach_xterm(&["attach", "-t", "xp"], false);
     s.wait_for("status line", |text| text.contains("xp"));
     // Ctrl+Shift+h, then Ctrl+h as a legacy terminal sends it; Ctrl+i,
-    // then Tab; Alt+a.
-    let keys: [&[u8]; 5] = [
+    // then Tab; Alt+a; Meta+a, which goes on as M-a, as tmux sends it.
+    let keys: [&[u8]; 6] = [
         b"\x1b[27;6;72~",
         b"\x08",
         b"\x1b[27;5;105~",
         b"\t",
         b"\x1b[27;3;97~",
+        b"\x1b[27;9;97~",
     ];
     for (setting, want) in [
-        ("off", [r"\x08", r"\x08", r"\t", r"\t", r"\x1ba"]),
+        ("off", [r"\x08", r"\x08", r"\t", r"\t", r"\x1ba", r"\x1ba"]),
         (
             "on",
             [
@@ -235,6 +280,7 @@ fn xterm_keys_reach_a_pane_under_each_extended_keys_setting() {
                 r"\x1b[27;5;104~",
                 r"\x1b[27;5;105~",
                 r"\t",
+                r"\x1b[27;3;97~",
                 r"\x1b[27;3;97~",
             ],
         ),
@@ -245,6 +291,7 @@ fn xterm_keys_reach_a_pane_under_each_extended_keys_setting() {
                 r"\x1b[27;5;104~",
                 r"\x1b[27;5;105~",
                 r"\t",
+                r"\x1b[27;3;97~",
                 r"\x1b[27;3;97~",
             ],
         ),
