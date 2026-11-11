@@ -322,11 +322,15 @@ plan 18 sections here.
   and `deny.toml`. The hjkl session confirmed (2026-11-11) that hjkl 0.46.0,
   every crate bumped together, takes
   `handle_key(&mut Picker, &ttyr::event::KeyEvent)` (the event raw, Shift not
-  normalised first) and drops both crates' crossterm dependency; whether their
-  ratatui keeps its default crossterm feature is still open. The release waits
-  on the owner asking for it (ttyr 0.1.0 is on crates.io since 2026-11-11).
-  Then: pin 0.46.0, delete the bridge, and drop crossterm, the patch and its
-  `deny.toml` entry.
+  normalised first) and drops both crates' crossterm dependency; on hjkl main
+  (27fd42f9) its -tui crates take ratatui with tmxr's features, so no crossterm
+  at all. Tried 2026-11-11 with hjkl patched to 27fd42f9 by git: with the
+  bridge, `tmxr-server`'s crossterm dependency, the crossterm patch and its
+  `deny.toml` entry gone, the workspace builds, clippy is clean, every test
+  passes, and `cargo tree -i crossterm --target all` finds nothing. The release
+  waits on the owner asking for it (ttyr 0.1.0 is on crates.io since
+  2026-11-11). Then: pin 0.46.0, delete the bridge, and drop crossterm, the
+  patch and its `deny.toml` entry.
 - **Considered and declined: `kitty-keys always`** (the owner, 2026-11-09).
   `kitty-keys` takes `on` and `off` only, unlike tmux's `extended-keys always`:
   the kitty protocol is one a program asks for, and kitty encoding sent to a
