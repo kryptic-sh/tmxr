@@ -316,11 +316,11 @@ plan 18 sections here.
   the last crossterm in tmxr's own code (the oracle's pane program and the e2e
   key-log fixture moved to ttyr 2026-11-11, and `tmxr-server` asks ratatui for
   `std`, `underline-color` and `layout-cache` only, not its default crossterm
-  backend; hjkl 0.44's tui crates still turn ratatui's defaults on, so that set
-  has not been built alone); crossterm stays in the build through it and through
-  hjkl-picker-tui and hjkl-engine-tui, and its fork stays in `[patch.crates-io]`
-  and `deny.toml`. The hjkl session confirmed (2026-11-11) that hjkl 0.46.0,
-  every crate bumped together, takes
+  backend; hjkl 0.45's tui crates still turn ratatui's defaults on, so that set
+  is built alone only in the trial below); crossterm stays in the build through
+  it and through hjkl-picker-tui and hjkl-engine-tui, and its fork stays in
+  `[patch.crates-io]` and `deny.toml`. The hjkl session confirmed (2026-11-11)
+  that hjkl 0.46.0, every crate bumped together, takes
   `handle_key(&mut Picker, &ttyr::event::KeyEvent)` (the event raw, Shift not
   normalised first) and drops both crates' crossterm dependency; on hjkl main
   (27fd42f9) its -tui crates take ratatui with tmxr's features, so no crossterm
