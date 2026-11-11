@@ -132,7 +132,7 @@ House-precedent versions, added with `cargo add`, not hand-written.
 | `serde`, `postcard`                          | proto                            | wire encoding                                     |
 | `interprocess` 2                             | proto/server/client              | UDS / named pipes                                 |
 | `crossterm` 0.29 (+ `serde`)                 | server                           | output commands, the session picker's keys        |
-| `ttyr` (git)                                 | proto/command/term/client/server | terminal input and modes, event types on the wire |
+| `ttyr`                                       | proto/command/term/client/server | terminal input and modes, event types on the wire |
 | `ratatui` 0.30                               | server                           | frame buffer + widgets                            |
 | `portable-pty` 0.9                           | term                             | PTYs                                              |
 | `vt1k` (git)                                 | term                             | terminal emulation per pane                       |

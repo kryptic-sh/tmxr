@@ -324,8 +324,9 @@ plan 18 sections here.
   `handle_key(&mut Picker, &ttyr::event::KeyEvent)` (the event raw, Shift not
   normalised first) and drops both crates' crossterm dependency; whether their
   ratatui keeps its default crossterm feature is still open. The release waits
-  on ttyr reaching crates.io. Then: pin 0.46.0, delete the bridge, and drop
-  crossterm, the patch and its `deny.toml` entry.
+  on the owner asking for it (ttyr 0.1.0 is on crates.io since 2026-11-11).
+  Then: pin 0.46.0, delete the bridge, and drop crossterm, the patch and its
+  `deny.toml` entry.
 - **Considered and declined: `kitty-keys always`** (the owner, 2026-11-09).
   `kitty-keys` takes `on` and `off` only, unlike tmux's `extended-keys always`:
   the kitty protocol is one a program asks for, and kitty encoding sent to a
