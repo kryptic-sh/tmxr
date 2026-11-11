@@ -11,7 +11,7 @@ authors.workspace = true
 readme.workspace = true
 
 [dependencies]
-hjkl-config = "0.44.0"
+hjkl-config = "0.45.1"
 serde = { version = "1.0.229", features = ["derive"] }
 tmxr-command.workspace = true
 toml = "1.2.0"
