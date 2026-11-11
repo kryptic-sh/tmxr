@@ -849,9 +849,9 @@ dependencies = [
  "ahash",
  "anyhow",
  "cc",
- "hjkl-fs",
+ "hjkl-fs 0.44.0",
  "hjkl-theme",
- "hjkl-xdg",
+ "hjkl-xdg 0.44.0",
  "libloading",
  "libmimalloc-sys",
  "memchr",
@@ -903,12 +903,12 @@ dependencies = [
 
 [[package]]
 name = "hjkl-config"
-version = "0.44.0"
+version = "0.45.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f741637c28788aebd79f3a532f81c6ab6fd85be4a8ab98288663834c7acdbd90"
+checksum = "4eaf3c0710c7efb8ee6b253d464667335a505b4a15e41b03b337fdf5a72af413"
 dependencies = [
- "hjkl-fs",
- "hjkl-xdg",
+ "hjkl-fs 0.45.1",
+ "hjkl-xdg 0.45.1",
  "serde",
  "thiserror 2.0.21",
  "toml",
@@ -960,7 +960,19 @@ version = "0.44.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c4af4b0501db47e0f7a638f8e25c8bba66cfa44cd97c69d3cb1c86006ed84b4"
 dependencies = [
- "hjkl-xdg",
+ "hjkl-xdg 0.44.0",
+ "ignore",
+ "libc",
+ "windows-sys",
+]
+
+[[package]]
+name = "hjkl-fs"
+version = "0.45.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "146b7d2977d89be82fcb281cb42c7cac8f8beac49721b65b28ed2679e0b50e6c"
+dependencies = [
+ "hjkl-xdg 0.45.1",
  "ignore",
  "libc",
  "windows-sys",
@@ -1008,7 +1020,7 @@ dependencies = [
  "hjkl-buffer",
  "hjkl-engine",
  "hjkl-form",
- "hjkl-fs",
+ "hjkl-fs 0.44.0",
  "hjkl-fuzzy",
  "regex",
 ]
@@ -1067,6 +1079,16 @@ name = "hjkl-xdg"
 version = "0.44.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adcf5157bdb8dfca0203f8b19ccc6586125194e3c782cf49f8f54237ced470c0"
+dependencies = [
+ "dirs",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "hjkl-xdg"
+version = "0.45.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b447c1eeece12d16782927eee7b4d64798db5c994b5f207e05788ca62baea1e7"
 dependencies = [
  "dirs",
  "thiserror 2.0.21",
@@ -2462,7 +2484,7 @@ dependencies = [
  "clap_complete",
  "clap_complete_nushell",
  "clap_mangen",
- "hjkl-xdg",
+ "hjkl-xdg 0.44.0",
  "libc",
  "portable-pty",
  "tempfile",
@@ -2552,7 +2574,7 @@ dependencies = [
  "hjkl-layout",
  "hjkl-picker",
  "hjkl-picker-tui",
- "hjkl-xdg",
+ "hjkl-xdg 0.44.0",
  "interprocess",
  "libc",
  "ratatui",
