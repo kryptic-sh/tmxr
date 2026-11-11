@@ -851,7 +851,7 @@ dependencies = [
  "cc",
  "hjkl-fs",
  "hjkl-theme",
- "hjkl-xdg",
+ "hjkl-xdg 0.44.0",
  "libloading",
  "libmimalloc-sys",
  "memchr",
@@ -908,7 +908,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f741637c28788aebd79f3a532f81c6ab6fd85be4a8ab98288663834c7acdbd90"
 dependencies = [
  "hjkl-fs",
- "hjkl-xdg",
+ "hjkl-xdg 0.44.0",
  "serde",
  "thiserror 2.0.21",
  "toml",
@@ -960,7 +960,7 @@ version = "0.44.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c4af4b0501db47e0f7a638f8e25c8bba66cfa44cd97c69d3cb1c86006ed84b4"
 dependencies = [
- "hjkl-xdg",
+ "hjkl-xdg 0.44.0",
  "ignore",
  "libc",
  "windows-sys",
@@ -1067,6 +1067,16 @@ name = "hjkl-xdg"
 version = "0.44.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adcf5157bdb8dfca0203f8b19ccc6586125194e3c782cf49f8f54237ced470c0"
+dependencies = [
+ "dirs",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "hjkl-xdg"
+version = "0.45.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90c395b26320530eb600ab42e4f44f3cfff405761ae7c164fc63af76a3afb709"
 dependencies = [
  "dirs",
  "thiserror 2.0.21",
@@ -2462,7 +2472,7 @@ dependencies = [
  "clap_complete",
  "clap_complete_nushell",
  "clap_mangen",
- "hjkl-xdg",
+ "hjkl-xdg 0.45.0",
  "libc",
  "portable-pty",
  "tempfile",
@@ -2552,7 +2562,7 @@ dependencies = [
  "hjkl-layout",
  "hjkl-picker",
  "hjkl-picker-tui",
- "hjkl-xdg",
+ "hjkl-xdg 0.45.0",
  "interprocess",
  "libc",
  "ratatui",
