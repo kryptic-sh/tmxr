@@ -163,6 +163,8 @@ pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
         // counts toward a double click as any press does.
         MouseEventKind::ScrollLeft => (MouseAction::Down(6), here),
         MouseEventKind::ScrollRight => (MouseAction::Down(7), here),
+        // A kind of event tmux has no key for.
+        _ => return,
     };
     let Some(target) = locate(srv, id, m, at) else {
         return;

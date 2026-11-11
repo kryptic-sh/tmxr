@@ -453,6 +453,7 @@ pub fn encode_mouse(
         MouseEventKind::ScrollDown => (Some(65), false, mode != MouseProtocolMode::None),
         MouseEventKind::ScrollLeft => (Some(66), false, mode != MouseProtocolMode::None),
         MouseEventKind::ScrollRight => (Some(67), false, mode != MouseProtocolMode::None),
+        _ => (None, false, false),
     };
     let Some(code) = code.filter(|_| reported) else {
         return Vec::new();

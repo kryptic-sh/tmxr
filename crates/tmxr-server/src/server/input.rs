@@ -114,13 +114,15 @@ impl Server {
             // server_client_report_theme: kept, and its hook run on every
             // report.
             TermEvent::Report(Report::ColorScheme(scheme)) => {
-                if let Some(c) = self.clients.get_mut(&id) {
-                    c.theme = Some(scheme);
-                }
                 let hook = match scheme {
                     ColorScheme::Dark => "client-dark-theme",
                     ColorScheme::Light => "client-light-theme",
+                    // A scheme tmux has no name for.
+                    _ => return,
                 };
+                if let Some(c) = self.clients.get_mut(&id) {
+                    c.theme = Some(scheme);
+                }
                 // Its colours have likely changed with it.
                 self.ask_terminal_colours(id, true);
                 let ctx = crate::cmds::Ctx {

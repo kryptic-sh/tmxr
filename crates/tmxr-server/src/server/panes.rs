@@ -608,7 +608,7 @@ impl Server {
                     let report: &[u8] = match self.pane_theme(pid) {
                         Some(ttyr::event::ColorScheme::Dark) => b"\x1b[?997;1n",
                         Some(ttyr::event::ColorScheme::Light) => b"\x1b[?997;2n",
-                        None => b"",
+                        _ => b"",
                     };
                     self.reply_to_pane(pid, report.to_vec());
                 }

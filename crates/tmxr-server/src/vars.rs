@@ -635,6 +635,7 @@ impl<'a> Context for Vars<'a> {
             "client_theme" => match srv.clients.get(&self.client?)?.theme? {
                 ttyr::event::ColorScheme::Dark => "dark".to_owned(),
                 ttyr::event::ColorScheme::Light => "light".to_owned(),
+                _ => return None,
             },
             "client_termname" => srv
                 .clients

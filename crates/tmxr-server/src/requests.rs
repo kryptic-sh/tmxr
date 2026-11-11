@@ -208,8 +208,9 @@ impl Server {
                     }
                 }
             }
-            // Not asked for.
-            ColorSlot::Cursor => {}
+            // Not asked for: the cursor's colour, or a slot tmxr does not
+            // know.
+            _ => {}
         }
     }
 

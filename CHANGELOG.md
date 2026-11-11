@@ -24,23 +24,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and `pending_escape_release` fields**; a library caller building one with a
   struct literal sets them.
 - **The library crates take `ttyr`'s key, mouse and input event types in place
-  of crossterm's**: `tmxr-proto`'s `ClientMsg::Input` carries
-  `ttyr::event::Event`; `tmxr-term`'s `encode_key`, `conpty_key` and
-  `encode_mouse` take `ttyr`'s `KeyEvent` and `MouseEvent`; `tmxr-command`'s
-  `Key` and `MouseKey::mods` hold `ttyr`'s `KeyCode` and `KeyModifiers`, and
-  `Key::from_event` takes `ttyr`'s `&KeyEvent`. In `tmxr-server`,
-  `cmds::Ctx::key`, `server::Client::theme`, `mouse::MouseTarget::event`,
-  `mouse::Click::mods`, `mouse::handle`, `Server::menu_mouse`,
-  `Server::run_bind`, `Server::send_key_to_pane`, `Server::terminal_colour`,
-  `menu::Menu::key` and `Menu::mouse`, `overlay::Overlay::key`,
-  `popup::Popup::key` and `copy::CopyMode::take_key` take or hold `ttyr`'s
-  types. `ttyr`'s `KeyEvent` names its key `key` where crossterm's named it
-  `code` (`tmxr-command`'s `Key` keeps `code`), and it is not `Copy` (it can
-  carry text), so neither is `copyline::CopyLine`, which holds two. A key means
-  what `ttyr` says: the unshifted key with Shift held and the shifted character
-  beside it (`a` with Shift and `A` shifted, for Shift+a), which `encode_key`
-  and `Key::from_event` read as such; `tmxr-command`'s new `Typed` reads one as
-  tmux does, and `Key::to_event` makes one.
+  of crossterm's** (`ttyr` 0.2, whose event enums are `#[non_exhaustive]`):
+  `tmxr-proto`'s `ClientMsg::Input` carries `ttyr::event::Event`; `tmxr-term`'s
+  `encode_key`, `conpty_key` and `encode_mouse` take `ttyr`'s `KeyEvent` and
+  `MouseEvent`; `tmxr-command`'s `Key` and `MouseKey::mods` hold `ttyr`'s
+  `KeyCode` and `KeyModifiers`, and `Key::from_event` takes `ttyr`'s
+  `&KeyEvent`. In `tmxr-server`, `cmds::Ctx::key`, `server::Client::theme`,
+  `mouse::MouseTarget::event`, `mouse::Click::mods`, `mouse::handle`,
+  `Server::menu_mouse`, `Server::run_bind`, `Server::send_key_to_pane`,
+  `Server::terminal_colour`, `menu::Menu::key` and `Menu::mouse`,
+  `overlay::Overlay::key`, `popup::Popup::key` and `copy::CopyMode::take_key`
+  take or hold `ttyr`'s types. `ttyr`'s `KeyEvent` names its key `key` where
+  crossterm's named it `code` (`tmxr-command`'s `Key` keeps `code`), and it is
+  not `Copy` (it can carry text), so neither is `copyline::CopyLine`, which
+  holds two. A key means what `ttyr` says: the unshifted key with Shift held and
+  the shifted character beside it (`a` with Shift and `A` shifted, for Shift+a),
+  which `encode_key` and `Key::from_event` read as such; `tmxr-command`'s new
+  `Typed` reads one as tmux does, and `Key::to_event` makes one.
 - **`tmxr-config`'s `Config` has `kitty_keys` and `terminal_features` fields**,
   the `kitty-keys` and `terminal-features` options, and **`tmxr-server`'s
   `server::Attached` a `keyboard_flags` field**; a library caller building
@@ -206,6 +206,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Ctrl with a punctuation key works on Windows**: Ctrl+;, Ctrl+, Ctrl+. and
+  the other OEM keys the console gives no character for were dropped by the
+  client; they are now those keys, as their characters on a US layout (ttyr
+  0.2).
+- **A bracketed paste that never ends no longer stalls the client's input**:
+  past 16 MiB without its end marker the paste is given up and the input after
+  it read again (ttyr 0.2).
 - **AltGr types its character on Windows**: AltGr+q on a German layout types
   `@`, and AltGr+l on a Polish one `ł`, where the Windows client read them as
   Ctrl+Alt with the character and sent `ESC NUL`, or nothing for a non-ASCII

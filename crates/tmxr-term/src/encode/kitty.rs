@@ -329,16 +329,17 @@ fn functional(key: &KeyEvent, keypad: bool) -> Option<(u32, char)> {
         KeyCode::PrintScreen => (57361, 'u'),
         KeyCode::Pause => (57362, 'u'),
         KeyCode::Menu => (57363, 'u'),
-        KeyCode::Media(m) => (57428 + media_index(m), 'u'),
-        KeyCode::Modifier(m) => (57441 + modifier_index(m), 'u'),
+        KeyCode::Media(m) => (57428 + media_index(m)?, 'u'),
+        KeyCode::Modifier(m) => (57441 + modifier_index(m)?, 'u'),
         _ => return None,
     })
 }
 
-/// A media key's place in the table, from 57428.
-fn media_index(key: ttyr::event::MediaKeyCode) -> u32 {
+/// A media key's place in the table, from 57428; `None` for one the
+/// table does not have.
+fn media_index(key: ttyr::event::MediaKeyCode) -> Option<u32> {
     use ttyr::event::MediaKeyCode as M;
-    match key {
+    Some(match key {
         M::Play => 0,
         M::Pause => 1,
         M::PlayPause => 2,
@@ -352,13 +353,15 @@ fn media_index(key: ttyr::event::MediaKeyCode) -> u32 {
         M::LowerVolume => 10,
         M::RaiseVolume => 11,
         M::MuteVolume => 12,
-    }
+        _ => return None,
+    })
 }
 
-/// A modifier key's place in the table, from 57441.
-fn modifier_index(key: ttyr::event::ModifierKeyCode) -> u32 {
+/// A modifier key's place in the table, from 57441; `None` for one the
+/// table does not have.
+fn modifier_index(key: ttyr::event::ModifierKeyCode) -> Option<u32> {
     use ttyr::event::ModifierKeyCode as M;
-    match key {
+    Some(match key {
         M::LeftShift => 0,
         M::LeftControl => 1,
         M::LeftAlt => 2,
@@ -373,7 +376,8 @@ fn modifier_index(key: ttyr::event::ModifierKeyCode) -> u32 {
         M::RightMeta => 11,
         M::IsoLevel3Shift => 12,
         M::IsoLevel5Shift => 13,
-    }
+        _ => return None,
+    })
 }
 
 /// `CSI number:shifted:base ; modifiers:event ; text <trailer>`, each part

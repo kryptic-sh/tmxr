@@ -22,6 +22,9 @@ pub(super) fn crossterm_key(k: &KeyEvent) -> ct::KeyEvent {
         KeyEventKind::Press => ct::KeyEventKind::Press,
         KeyEventKind::Repeat => ct::KeyEventKind::Repeat,
         KeyEventKind::Release => ct::KeyEventKind::Release,
+        // A kind crossterm has no name for: releases never reach an
+        // overlay, so a press.
+        _ => ct::KeyEventKind::Press,
     };
     let typed = Typed::of(k);
     let mut typed_mods = typed.modifiers;
@@ -79,13 +82,15 @@ fn key_code(code: KeyCode) -> ct::KeyCode {
         KeyCode::Pause => ct::KeyCode::Pause,
         KeyCode::Menu => ct::KeyCode::Menu,
         KeyCode::KeypadBegin => ct::KeyCode::KeypadBegin,
-        KeyCode::Media(m) => ct::KeyCode::Media(media_key(m)),
-        KeyCode::Modifier(m) => ct::KeyCode::Modifier(modifier_key(m)),
+        KeyCode::Media(m) => media_key(m).map_or(ct::KeyCode::Null, ct::KeyCode::Media),
+        KeyCode::Modifier(m) => modifier_key(m).map_or(ct::KeyCode::Null, ct::KeyCode::Modifier),
+        // A key crossterm has no name for, which the picker ignores.
+        _ => ct::KeyCode::Null,
     }
 }
 
-fn media_key(m: MediaKeyCode) -> ct::MediaKeyCode {
-    match m {
+fn media_key(m: MediaKeyCode) -> Option<ct::MediaKeyCode> {
+    Some(match m {
         MediaKeyCode::Play => ct::MediaKeyCode::Play,
         MediaKeyCode::Pause => ct::MediaKeyCode::Pause,
         MediaKeyCode::PlayPause => ct::MediaKeyCode::PlayPause,
@@ -99,11 +104,12 @@ fn media_key(m: MediaKeyCode) -> ct::MediaKeyCode {
         MediaKeyCode::LowerVolume => ct::MediaKeyCode::LowerVolume,
         MediaKeyCode::RaiseVolume => ct::MediaKeyCode::RaiseVolume,
         MediaKeyCode::MuteVolume => ct::MediaKeyCode::MuteVolume,
-    }
+        _ => return None,
+    })
 }
 
-fn modifier_key(m: ModifierKeyCode) -> ct::ModifierKeyCode {
-    match m {
+fn modifier_key(m: ModifierKeyCode) -> Option<ct::ModifierKeyCode> {
+    Some(match m {
         ModifierKeyCode::LeftShift => ct::ModifierKeyCode::LeftShift,
         ModifierKeyCode::LeftControl => ct::ModifierKeyCode::LeftControl,
         ModifierKeyCode::LeftAlt => ct::ModifierKeyCode::LeftAlt,
@@ -118,7 +124,8 @@ fn modifier_key(m: ModifierKeyCode) -> ct::ModifierKeyCode {
         ModifierKeyCode::RightMeta => ct::ModifierKeyCode::RightMeta,
         ModifierKeyCode::IsoLevel3Shift => ct::ModifierKeyCode::IsoLevel3Shift,
         ModifierKeyCode::IsoLevel5Shift => ct::ModifierKeyCode::IsoLevel5Shift,
-    }
+        _ => return None,
+    })
 }
 
 #[cfg(test)]
