@@ -28,6 +28,9 @@ use tmxr_term::Emulator;
 const COLS: u16 = 100;
 const ROWS: u16 = 30;
 const TIMEOUT: Duration = Duration::from_secs(30);
+/// How long a terminal's output stays unchanged before [`Screen::wait_exit`]
+/// takes everything an exited client wrote as read.
+const OUTPUT_SETTLED: Duration = Duration::from_millis(200);
 /// Longer than the server's `mouse::CLICK_TIME` (tmux's
 /// `KEYC_CLICK_TIMEOUT`): a press this long after the last on the same pane
 /// is a click of its own, not the second of a double click.
@@ -631,15 +634,31 @@ impl Screen {
         self.mouse(code, col, row, true);
     }
 
+    /// Wait for the client to exit, and then for what it wrote last (the
+    /// modes it turned off, its exit message) to be read: the process can
+    /// be gone while the terminal's reader thread has its last output still
+    /// to read. Neither a Unix pty nor ConPTY says when that is done, so the
+    /// output is taken as all read once [`OUTPUT_SETTLED`] passes with no
+    /// more.
     fn wait_exit(&mut self) {
         let deadline = Instant::now() + TIMEOUT;
-        while Instant::now() < deadline {
-            if let Ok(Some(_)) = self.child.try_wait() {
-                return;
-            }
+        while !matches!(self.child.try_wait(), Ok(Some(_))) {
+            assert!(
+                Instant::now() < deadline,
+                "client did not exit; screen:\n{}",
+                self.text()
+            );
             std::thread::sleep(Duration::from_millis(50));
         }
-        panic!("client did not exit; screen:\n{}", self.text());
+        let mut read = self.raw.lock().unwrap().len();
+        loop {
+            std::thread::sleep(OUTPUT_SETTLED);
+            let now = self.raw.lock().unwrap().len();
+            if now == read || Instant::now() >= deadline {
+                return;
+            }
+            read = now;
+        }
     }
 
     /// The status line's cells: `(contents, fg, bg)`, colours as `Debug`
