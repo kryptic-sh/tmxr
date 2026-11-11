@@ -35,36 +35,18 @@ fn main() {
     }
 }
 
-/// Input raw and unechoed, as `stty raw -echo`.
-fn raw() {
-    crossterm::terminal::enable_raw_mode().expect("raw mode");
-    #[cfg(windows)]
-    virtual_terminal_input();
-}
-
-/// Turn on the console's virtual terminal input (and output): ConPTY hands
+/// Input raw and unechoed, as `stty raw -echo`. On Windows also the
+/// console's VT input (ttyr's raw mode turns on VT output): ConPTY hands
 /// the program the escape sequences it is sent, and the mouse modes it asks
 /// for reach the pane, only with it.
-#[cfg(windows)]
-fn virtual_terminal_input() {
-    use windows_sys::Win32::System::Console::{
-        ENABLE_VIRTUAL_TERMINAL_INPUT, ENABLE_VIRTUAL_TERMINAL_PROCESSING, GetConsoleMode,
-        GetStdHandle, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, SetConsoleMode,
-    };
-    for (handle, flag) in [
-        (STD_INPUT_HANDLE, ENABLE_VIRTUAL_TERMINAL_INPUT),
-        (STD_OUTPUT_HANDLE, ENABLE_VIRTUAL_TERMINAL_PROCESSING),
-    ] {
-        let mut mode = 0;
-        // SAFETY: GetStdHandle takes a constant and returns this process's
-        // handle; the console calls only read and set that handle's mode,
-        // through a pointer to a local.
-        let ok = unsafe {
-            let h = GetStdHandle(handle);
-            GetConsoleMode(h, &raw mut mode) != 0 && SetConsoleMode(h, mode | flag) != 0
-        };
-        assert!(ok, "set console mode {flag:#x}");
-    }
+fn raw() {
+    ttyr::terminal::enable_raw_mode().expect("raw mode");
+    #[cfg(windows)]
+    ttyr::terminal::enable(
+        &mut std::io::stdout(),
+        ttyr::terminal::Mode::VirtualTerminalInput,
+    )
+    .expect("VT input");
 }
 
 /// Write all input as `cat -v` does, for ever: a control byte as `^X`

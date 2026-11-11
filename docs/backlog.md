@@ -312,12 +312,20 @@ plan 18 sections here.
 
 - **The session picker still takes crossterm's keys**: `tmxr-server`'s
   `overlay/picker/crossterm_key.rs` converts ttyr's key back for
-  `hjkl_picker_tui::handle_key`, until hjkl takes ttyr's keys. So crossterm
-  stays a dependency of `tmxr-server` (also for its output commands), of the
-  oracle's pane program and of the e2e key-log fixture, and its fork stays in
-  `[patch.crates-io]` and `deny.toml`. hjkl's phase 6 (Super and Meta, F13 to
-  F35, the keypad and media keys) changes `handle_key`; the version bump is to
-  be coordinated with hjkl.
+  `hjkl_picker_tui::handle_key`, until hjkl takes ttyr's keys. That bridge is
+  the last crossterm in tmxr's own code (the oracle's pane program and the e2e
+  key-log fixture moved to ttyr 2026-11-11, and `tmxr-server` asks ratatui for
+  `std`, `underline-color` and `layout-cache` only, not its default crossterm
+  backend; hjkl 0.44's tui crates still turn ratatui's defaults on, so that set
+  has not been built alone); crossterm stays in the build through it and through
+  hjkl-picker-tui and hjkl-engine-tui, and its fork stays in `[patch.crates-io]`
+  and `deny.toml`. The hjkl session confirmed (2026-11-11) that hjkl 0.46.0,
+  every crate bumped together, takes
+  `handle_key(&mut Picker, &ttyr::event::KeyEvent)` (the event raw, Shift not
+  normalised first) and drops both crates' crossterm dependency; whether their
+  ratatui keeps its default crossterm feature is still open. The release waits
+  on ttyr reaching crates.io. Then: pin 0.46.0, delete the bridge, and drop
+  crossterm, the patch and its `deny.toml` entry.
 - **Considered and declined: `kitty-keys always`** (the owner, 2026-11-09).
   `kitty-keys` takes `on` and `off` only, unlike tmux's `extended-keys always`:
   the kitty protocol is one a program asks for, and kitty encoding sent to a
@@ -723,51 +731,16 @@ plan 18 sections here.
   `Server::inputs`) for that; tmxr's prompts and pickers still take keys read
   with the key that opened them, where tmux's prompt does not (its modes do), so
   a command typed in one go reaches the prompt.
-- **crossterm is patched** until a release carries the fixes: crossterm 0.29's
-  Unix parser read `ESC ESC` as a plain Escape, so Alt+Escape lost its Alt
-  (upstream as crossterm-rs/crossterm#1143, branch `fix-alt-escape` of
-  kryptic-sh/crossterm); and its mio event source, which mio wakes
-  edge-triggered, lost input in two ways (both fixed 2026-10-20, offered
-  upstream as crossterm-rs/crossterm#1154 and #1155): it returned on the first
-  tty event of a poll's batch, so a SIGWINCH ready in the same wakeup as a key
-  was never seen, and it stopped reading once a read that filled its 1024-byte
-  buffer gave an event, so the rest of a burst waited for the next key (now read
-  on while `FIONREAD` says bytes wait, a read at a time, so `try_read` hands
-  back what it parsed and keeps its timeout under sustained input, as #1155's
-  review asked; 2026-10-26). Also on that branch: upstream's fix for an unknown
-  finished `CSI ?` report read as incomplete, which swallowed every later key
-  (crossterm-rs/crossterm#1106, cherry-picked), and the terminal's color-scheme
-  report read as `Event::ColorScheme`, which upstream drops, and the terminal's
-  answers to OSC 10 / 11 / 12 / 4 colour queries read as `Event::TerminalColor`
-  (`rgb:` answers only), where upstream types them as Alt+] and keys (neither
-  offered upstream yet; each adds a variant to `Event`; keys after an Alt+] in
-  the same read are dropped, as the parser cannot hand back bytes it read on).
-  tmxr builds against all of them on 0.29.0 (branch `alt-escape-0.29`, pinned by
-  `rev` in the root `Cargo.toml`'s `[patch.crates-io]`, and allowed in
-  `deny.toml`); each event-source fix has an e2e test that fails without it (run
-  on Linux) (`a_resize_and_a_key_arriving_together_both_reach_the_server`,
-  `keys_typed_faster_than_the_client_reads_all_arrive`). The owner's report of
-  the first in use (2026-10-20, Hyprland with Alacritty: closing the window
-  beside the client's grew it, and tmxr kept the old size) was reproduced
-  2026-10-21 in Hyprland 0.56 nested in a `kwin_wayland --virtual` (nothing on
-  the desktop): with B focused beside A, which runs a client, closing B grows A
-  and focuses it; 0.9.0's client kept its size in 2 of 11 runs, the fixed one in
-  none of 23. Once a crossterm release has them, upgrade and drop both. A
-  `[patch]` applies only to builds from this workspace: the release binaries and
-  packages have the fixes, but `cargo install tmxr` from crates.io builds
-  against crates.io's crossterm without them. Still different from tmux: an
-  Escape and a mouse event in one read (`known_divergences.toml`), as crossterm
-  drops the rest of a read once it has an event. Left as it is in the same
-  `try_read`: a read error other than `WouldBlock` or `Interrupted` (EIO once
-  the terminal hangs up) loops on the read without end; tmxr's client does not
-  get there, as the hangup's SIGHUP ends it first (a pty closed under an
-  attached client, 2026-10-20: the client exited). Found adding #1155's timeout
-  test (2026-10-26): a read of 0 bytes (end of file) loops the same way, and the
-  tty is read blocking, so input that stops partway through an event (an
-  unfinished bracketed paste) blocks `read` past any timeout. Also: upstream's
-  CI runs the tests only with `--all-features`, which takes `use-dev-tty` and so
-  compiles out the mio source and #1155's tests with it; they were run with
-  default features here.
+- **crossterm is patched** (`[patch.crates-io]` in the root `Cargo.toml`,
+  kryptic-sh/crossterm branch `alt-escape-0.29`, allowed in `deny.toml`) though
+  tmxr no longer reads input through it: its client reads with ttyr, which
+  carries the same fixes (Alt+Escape, a SIGWINCH with input, a burst past one
+  read, unknown `CSI ?` reports, colour-scheme and colour answers). The patch
+  now reaches only hjkl's crates and the picker bridge (see "The session picker
+  still takes crossterm's keys") and goes with them. The e2e tests written for
+  the crossterm fixes still guard ttyr's reader
+  (`a_resize_and_a_key_arriving_together_both_reach_the_server`,
+  `keys_typed_faster_than_the_client_reads_all_arrive`).
 - **tmux default binds**: all of tmux 3.6's 267 are bound (compared with its
   `list-keys`, 2026-10-11) except the 18 digit binds (`1`-`9` in vi, `M-1`-`M-9`
   in emacs) that open a "(repeat)" prompt, declined: tmxr's copy mode takes
@@ -1017,11 +990,9 @@ plan 18 sections here.
   focus out and back in included, and on Windows while its client read through
   crossterm; through ttyr's reader (plan 18 step 8, focus records read since
   ttyr 861f668) its Windows run is CI's first. The test's fixture reads the
-  reports through crossterm on every platform (since 2026-10-24: 20 of 20 runs
-  on Arch); it read them as raw bytes on Unix before, as crossterm's reader lost
-  the first one in about half of the Linux runs (WSL Ubuntu, 2026-10-18), which
-  the patched crossterm and the fixture polling before it says `ready` no longer
-  do. Not tried in WSL since.
+  reports through ttyr's reader on every platform since 2026-11-11 (through
+  crossterm before, where unpatched crossterm lost the first one in about half
+  of the Linux runs, WSL Ubuntu 2026-10-18). Not tried in WSL since.
 - **tmux default binds**: most of tmux's defaults are bound (see above);
   `prefix C-z` (suspend-client) errors on Windows, which has no job control.
   Alerts follow tmux 3.6's, as recorded from a running tmux on 2026-10-10 (WSL

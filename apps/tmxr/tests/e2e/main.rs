@@ -410,7 +410,7 @@ impl Tmxr {
                         let _ = writer.lock().unwrap().write_all(&keys);
                     }
                     // Answer terminal queries (ConPTY's cursor-position
-                    // probe, crossterm's capability probes) like a terminal;
+                    // probe, the client's capability probes) like a terminal;
                     // mode 2026's as answered above, which the emulator,
                     // holding a pane's synchronized output, would say it
                     // knows.
@@ -920,12 +920,12 @@ fn script_fixture() {
 #[test]
 #[ignore = "a fixture other tests run in a pane"]
 fn key_log_fixture() {
-    use crossterm::event::{EnableFocusChange, Event, KeyEventKind, read};
+    use ttyr::event::{Event, KeyEventKind};
     let Some(log) = std::env::var_os(KEY_LOG) else {
         return;
     };
     let mut log = std::fs::File::create(log).unwrap();
-    crossterm::terminal::enable_raw_mode().unwrap();
+    ttyr::terminal::enable_raw_mode().unwrap();
     if let Some(mode) = std::env::var_os(KEY_LOG_RAW) {
         let mode = mode.to_str().unwrap().replace(r"\e", "\x1b");
         print!("{mode}raw-on");
@@ -952,18 +952,16 @@ fn key_log_fixture() {
     if focus {
         // The marker follows the mode, so a test that sees it on screen
         // knows the server has the mode too.
-        crossterm::execute!(std::io::stdout(), EnableFocusChange).unwrap();
+        ttyr::execute!(std::io::stdout(), ttyr::terminal::EnableFocusChange).unwrap();
         print!("focus-on");
         std::io::stdout().flush().unwrap();
     }
-    // Start crossterm's reader before saying so: on Linux, input that came
-    // before it existed was lost now and then.
-    let _ = crossterm::event::poll(Duration::ZERO);
+    let mut reader = ttyr::reader::Reader::open().unwrap();
     writeln!(log, "ready").unwrap();
     loop {
-        match read().unwrap() {
+        match reader.read().unwrap() {
             Event::Key(k) if k.kind == KeyEventKind::Press => {
-                writeln!(log, "{:?} {:?}", k.code, k.modifiers).unwrap();
+                writeln!(log, "{:?} {:?}", k.key, k.modifiers).unwrap();
             }
             Event::FocusGained if focus => writeln!(log, "FocusGained").unwrap(),
             Event::FocusLost if focus => writeln!(log, "FocusLost").unwrap(),

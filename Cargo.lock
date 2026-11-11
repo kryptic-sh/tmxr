@@ -2462,7 +2462,6 @@ dependencies = [
  "clap_complete",
  "clap_complete_nushell",
  "clap_mangen",
- "crossterm",
  "hjkl-xdg",
  "libc",
  "portable-pty",
@@ -2474,6 +2473,7 @@ dependencies = [
  "tmxr-term",
  "tracing",
  "tracing-subscriber",
+ "ttyr",
  "windows-sys",
 ]
 
@@ -2507,14 +2507,13 @@ dependencies = [
 name = "tmxr-compat-oracle"
 version = "0.15.0"
 dependencies = [
- "crossterm",
  "portable-pty",
  "serde",
  "tempfile",
  "tmxr-term",
  "toml",
+ "ttyr",
  "vt1k",
- "windows-sys",
 ]
 
 [[package]]

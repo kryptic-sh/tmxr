@@ -4,9 +4,10 @@
 [[cases]]
 name = "an_escape_and_a_click_in_one_read_are_typed"
 # tmux reads ESC ESC [<2;6;6M as Alt+Escape and then typed text, and so
-# passes it all to the program; no click. tmxr's client parses its input
-# with crossterm, which drops what is left of a read once it has an event, so
-# it reads ESC ESC then the click; a lone Alt+Escape matches (keys.toml).
+# passes it all to the program; no click. tmxr's client decodes its input
+# with ttyr, which reads the escapes and then the click as a click (seen
+# 2026-11-11, which opens the pane menu); a lone Alt+Escape matches
+# (keys.toml).
 attach = true
 unix_only = true
 program = "stty raw -echo; exec cat -v"
