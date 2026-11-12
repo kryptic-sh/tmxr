@@ -104,20 +104,17 @@ impl Keys {
     /// asks at attach. Returns them with the events read meanwhile (keys
     /// typed, a resize, a report not asked for), in the order they came,
     /// which are input like any other. A Windows console handing over key
-    /// records ([`Keys::reads_vt`]) is not asked: how a terminal's answers
-    /// reach a program reading records through ConPTY is not known, and as
-    /// keys they would be typed into a pane. It says nothing of itself, as
-    /// a terminal that answers nothing.
+    /// records ([`Keys::reads_vt`]) is asked only for synchronized updates
+    /// and its colours: its keys come as records whatever the terminal
+    /// speaks, so its kitty or xterm keyboard says nothing the client can
+    /// use. The console puts the answers in its input as records no key
+    /// made, which `ttyr` reads as the terminal's bytes.
     pub(super) fn probe(&mut self, out: &mut impl Write) -> io::Result<(Probe, Vec<Event>)> {
         use ttyr::terminal::{
             RequestKeyboardEnhancementFlags, RequestMode, RequestPrimaryDeviceAttributes,
             RequestSecondaryDeviceAttributes, RequestTerminalColor, RequestTerminalVersion,
         };
-        if !self.reads_vt() {
-            return Ok((Probe::default(), Vec::new()));
-        }
-        // DA1 last, as every terminal answers it, and in order.
-        ttyr::execute!(
+        ttyr::queue!(
             out,
             RequestMode {
                 mode: SYNC_MODE,
@@ -125,11 +122,17 @@ impl Keys {
             },
             RequestTerminalColor(ColorSlot::Foreground),
             RequestTerminalColor(ColorSlot::Background),
-            RequestKeyboardEnhancementFlags,
-            RequestSecondaryDeviceAttributes,
-            RequestTerminalVersion,
-            RequestPrimaryDeviceAttributes,
         )?;
+        if self.reads_vt() {
+            ttyr::queue!(
+                out,
+                RequestKeyboardEnhancementFlags,
+                RequestSecondaryDeviceAttributes,
+                RequestTerminalVersion,
+            )?;
+        }
+        // DA1 last, as every terminal answers it, and in order.
+        ttyr::execute!(out, RequestPrimaryDeviceAttributes)?;
         let mut answers = self.reader.collect_answers(PROBE_WAIT)?;
         self.read_meta(&mut answers.events);
         let (probe, events) = Probe::read(answers, self.last.as_ref());
@@ -468,5 +471,40 @@ pub(super) mod reader_tests {
         // protocol on: Meta, not folded into Alt.
         assert_eq!(next(&mut keys, b"\x1b[?1u\x1b[120;33u"), KeyModifiers::META);
         assert!(keys.kitty_keyboard);
+    }
+}
+
+/// The probe on a real Windows console handing over key records, as
+/// outside Windows Terminal: the answers come back as records no key
+/// made, as the console writes them. Windows only.
+#[cfg(all(test, windows))]
+mod console_tests {
+    use crate::terminal::keys::console_tests::{console, inject, keys, record};
+
+    /// Asked only for synchronized updates and its colours, then DA1, the
+    /// console's answers are read as such, and none is handed on as input.
+    #[test]
+    fn a_console_handing_over_records_is_asked_for_sync_and_colours() {
+        let _turn = console();
+        let mut keys = keys();
+        let answers = "\x1b[?2026;2$y\x1b]11;rgb:1a1a/1b1b/2626\x1b\\\x1b[?61;6;7c";
+        let text: Vec<_> = answers
+            .encode_utf16()
+            .map(|unit| record(0, unit, true, 0))
+            .collect();
+        inject(&text);
+        let mut asked = Vec::new();
+        let (probe, others) = keys.probe(&mut asked).unwrap();
+        let asked = String::from_utf8(asked).unwrap();
+        assert!(asked.ends_with("\x1b[c"), "DA1 last: {asked:?}");
+        for query in ["\x1b[?2026$p", "\x1b]10;?", "\x1b]11;?"] {
+            assert!(asked.contains(query), "{query:?} not asked: {asked:?}");
+        }
+        for query in ["\x1b[?u", "\x1b[>c", "\x1b[>q"] {
+            assert!(!asked.contains(query), "{query:?} asked: {asked:?}");
+        }
+        assert!(probe.sync, "{probe:?}");
+        assert_eq!(probe.bg, Some(0x1a1b26), "{probe:?}");
+        assert!(others.is_empty(), "{others:?}");
     }
 }

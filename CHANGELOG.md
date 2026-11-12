@@ -185,12 +185,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   XTVERSION name), reads its colour scheme reports (`#{client_theme}`, the theme
   hooks) and colour answers, and can be given modifyOtherKeys. Elsewhere
   (conhost, or ConPTY behind another terminal) it reads the console's key
-  records and asks nothing, as before. A console key record's release is passed
-  on: a program that asked for releases (kitty flag 2) gets the real one, not
-  one made right after the press; Escape then a key within `escape-time` is
-  still Meta and that key, though the console reports Escape's release between
-  them. Pausing the input for `lock-client` wakes the reader rather than polling
-  every 50 ms, so an idle Windows client no longer wakes.
+  records, and asks the terminal only whether it takes synchronized updates and
+  for its colours, where 0.15.0 asked nothing: frames there are drawn as one
+  update, and panes asking for the default colours get the terminal's. A console
+  key record's release is passed on: a program that asked for releases (kitty
+  flag 2) gets the real one, not one made right after the press; Escape then a
+  key within `escape-time` is still Meta and that key, though the console
+  reports Escape's release between them. Pausing the input for `lock-client`
+  wakes the reader rather than polling every 50 ms, so an idle Windows client no
+  longer wakes.
 - **The cursor colour reset the client writes as it gives its terminal back
   (`OSC 112`) ends with ST (`ESC \`) rather than BEL**, on every platform.
 - **The client also asks its terminal for its name and version** (XTVERSION,

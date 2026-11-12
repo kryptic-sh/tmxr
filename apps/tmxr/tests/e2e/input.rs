@@ -705,19 +705,17 @@ fn escape_and_a_key_from_console_records_make_meta() {
 /// sets `WT_SESSION`: C-j and C-h come as themselves. The client there asks
 /// for VT input and win32-input-mode, so this also runs its probe through
 /// ConPTY, and ConPTY's own encoding of the keys it hands on as VT input.
-/// The probe's answers must come back as bytes: as key records they would
-/// leave the probe to wait its whole time and then be typed into the pane.
+/// Outside it the client reads key records and still probes, for sync and
+/// colours. Either way the answers must be read as answers: as keys they
+/// would leave the probe to wait its whole time and then be typed into
+/// the pane.
 #[cfg(windows)]
 #[test]
 fn ctrl_hjkl_move_between_panes_in_windows_terminal() {
     // Each attach is timed this often, with and without `WT_SESSION` in
-    // turn, and the quickest of each kind compared, so one slow start does
-    // not hide a probe that waited.
+    // turn, and the quickest of each kind kept, so one slow start does not
+    // fail a probe that did not wait.
     const ROUNDS: usize = 3;
-    // A probe that waited out the client's `PROBE_WAIT` attaches at least
-    // that much later than a client that asks nothing; four fifths of it
-    // leaves room for the probe's own round trip.
-    let probe_slack = tmxr_client::PROBE_WAIT * 4 / 5;
     let t = Tmxr::new("move-wt");
     t.run(&["new-session", "-d", "-s", "nav"]);
     t.wait_settled("nav");
@@ -731,28 +729,35 @@ fn ctrl_hjkl_move_between_panes_in_windows_terminal() {
         t.run(&["detach-client", "-s", "nav"]);
         s.wait_exit();
     };
-    // Outside Windows Terminal the client reads key records and asks
-    // nothing: the time an attach takes with no probe.
-    let (mut unasked, mut probed) = (Duration::MAX, Duration::MAX);
-    for _ in 0..ROUNDS {
-        let (took, s) = attach(None);
-        unasked = unasked.min(took);
-        detach(s);
-        let (took, s) = attach(Some("e2e"));
-        probed = probed.min(took);
+    for wt in [None, Some("e2e")] {
+        let quickest = (0..ROUNDS)
+            .map(|_| {
+                let (took, s) = attach(wt);
+                detach(s);
+                took
+            })
+            .min()
+            .unwrap();
+        // A probe that waited out the client's `PROBE_WAIT` attaches no
+        // sooner than that.
+        assert!(
+            quickest < tmxr_client::PROBE_WAIT,
+            "the probe waited with WT_SESSION {wt:?}: {quickest:?} at quickest to attach"
+        );
+        let s = attach(wt).1;
+        // Room for answers that came late to arrive, typed, if they were
+        // keys.
+        std::thread::sleep(Duration::from_millis(500));
+        let pane = t.run(&["capture-pane", "-p", "-t", "nav"]);
+        for answer in ["[?", "]10;", "]11;"] {
+            assert!(
+                !pane.contains(answer),
+                "{answer:?} typed with WT_SESSION {wt:?}:\n{pane}"
+            );
+        }
         detach(s);
     }
-    assert!(
-        probed < unasked + probe_slack,
-        "the probe waited: {probed:?} at quickest to attach, {unasked:?} without it"
-    );
     let s = attach(Some("e2e")).1;
-    // Room for answers that came late to arrive, typed, if they were keys.
-    std::thread::sleep(Duration::from_millis(500));
-    let pane = t.run(&["capture-pane", "-p", "-t", "nav"]);
-    for answer in ["[?", "]10;", "]11;"] {
-        assert!(!pane.contains(answer), "{answer:?} typed:\n{pane}");
-    }
     pane_grid(&t);
     // `CSI Vk;Sc;Uc;Kd;Cs;Rc _`, down then up, with left Ctrl (8) held.
     let win32 = |vk: u8, uc: u8| format!("\x1b[{vk};0;{uc};1;8;1_\x1b[{vk};0;{uc};0;8;1_");

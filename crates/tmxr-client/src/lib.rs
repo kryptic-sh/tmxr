@@ -131,7 +131,7 @@ fn hello() -> Hello {
             tty: terminal::tty_name(),
             // Read through ttyr's reader where it reads the terminal's
             // bytes; not by a Windows console handing over key records,
-            // which is asked nothing.
+            // which is asked only its probe's questions at attach.
             colour_answers: terminal::reads_vt(),
         });
     Hello {

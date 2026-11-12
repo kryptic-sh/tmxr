@@ -403,28 +403,29 @@ plan 18 sections here.
   (`terminal::reads_vt` in `tmxr-client`, plan 18 step 8): VT input with
   win32-input-mode under Windows Terminal, the console's key records elsewhere.
   Decided because records carry more than the VT input conhost makes of them
-  (releases, AltGr, Ctrl+4, the keypad), and it was not known how a terminal's
-  answers reach a program reading records, so only Windows Terminal, whose
-  win32-input-mode keeps the keys full and its answers VT, is probed. What it
-  costs:
+  (releases, AltGr, Ctrl+4, the keypad). What it costs:
   - `WT_SESSION` is inherited: a client run from a shell under Windows Terminal
     over SSH, or in a console another program made inside it, takes itself to be
     in Windows Terminal. One inside a tmxr pane (`TMXR` set and not empty) does
     not. Other terminals that speak win32-input-mode (WezTerm) are read as
-    records, unprobed.
-  - Outside Windows Terminal nothing is probed: no kitty tier, no xterm tier, no
-    terminal colours or colour scheme, no synchronized updates, even behind a
-    terminal that has them (Alacritty, VS Code). Since ttyr 861f668 a key record
-    no key made (no virtual-key or scan code: what the console puts in the input
-    itself, such as its answer to DA1) is read as a terminal's bytes in record
-    mode too, so a probe there may now work. The ttyr session measured it on
-    2026-11-13 (inside a tmxr 0.15 pane, built-in ConPTY, Windows 11 build
-    26300): a pane's `CSI c` went out through ConPTY, and the outer terminal's
-    answer came back to a record-mode reader as text records (no virtual-key or
-    scan code, one per character), which ttyr reads as the DA1 report. A kitty
-    flags push and query got through too, with VT input on. Not tried behind
-    Alacritty or VS Code, but the record form is ConPTY's. So probing outside
-    Windows Terminal looks possible; it is not built.
+    records, probed only as below.
+  - Outside Windows Terminal the probe asks only for synchronized updates and
+    the terminal's colours (decided by the owner 2026-11-13; `Keys::probe`):
+    keys come as records whatever the terminal speaks, so no kitty or xterm
+    tier. The answers come back as records no key made (no virtual-key or scan
+    code), which ttyr reads as the terminal's bytes. The ttyr session found it
+    on 2026-11-13 inside a tmxr 0.15 pane (built-in ConPTY, Windows 11 build
+    26300): a pane's `CSI c` went out through ConPTY and the outer terminal's
+    answer came back as such records, one per character. Checked here by
+    `a_console_handing_over_records_is_asked_for_sync_and_colours` (records
+    injected into a real console) and by the e2e attach under the harness's
+    ConPTY, which answers at once. Not tried by hand behind Alacritty or VS
+    Code, nor in Windows 10's conhost: a console that does not answer DA1 makes
+    each attach wait the client's `PROBE_WAIT`. Still not asked there: the
+    colour scheme (mode 2031 reports, `#{client_theme}`), later colour answers
+    (`TerminalInfo::colour_answers` stays false, so the server's repeated OSC
+    10/11 queries and a pane's OSC 4 palette queries are not sent on), each a
+    possible next step now that answers are known to come back.
   - Considered and declined: VT input everywhere. It would probe everywhere, but
     conhost's VT input carries no releases or AltGr state, and a terminal's C-j
     still arrives as conhost's Ctrl+Enter encoding.
@@ -466,12 +467,13 @@ plan 18 sections here.
   records encoded as win32-input-mode (which ttyr 861f668 reads back as bytes
   when they carry no virtual-key or scan code) is not known; either way the test
   passes, locally (Windows 11 build 26300) and on CI's built-in and
-  bundled-ConPTY jobs (run 42966281779). It asserts the attach takes less than
-  the client's `PROBE_WAIT` longer than one that asks nothing, and that no
-  answer (`[?`, `]10;`, `]11;`) was typed into the pane. It sends C-j and
-  Ctrl+Enter as win32-input-mode records, which pass only if conhost re-encodes
-  them so. Kitty, xterm-tier and probe e2e tests stay Unix only: ConPTY is not
-  known to hand the client's queries on to the harness's terminal.
+  bundled-ConPTY jobs (run 42966281779). It asserts the quickest attach, with
+  `WT_SESSION` and without (where the client reads records and probes for sync
+  and colours), takes less than the client's `PROBE_WAIT`, and that no answer
+  (`[?`, `]10;`, `]11;`) was typed into the pane. It sends C-j and Ctrl+Enter as
+  win32-input-mode records, which pass only if conhost re-encodes them so.
+  Kitty, xterm-tier and probe e2e tests stay Unix only: ConPTY is not known to
+  hand the client's queries on to the harness's terminal.
 
 ## Plan 18's xterm tier (2026-11-10)
 
