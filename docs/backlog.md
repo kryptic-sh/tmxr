@@ -351,8 +351,9 @@ plan 18 sections here.
   Shift from a character), but panes are not: a modifyOtherKeys level 2 pane
   gets `CSI 27;4;33~` where a Unix client's gives `CSI 27;3;33~`, and a kitty
   pane `CSI 33;4u`. As in 0.15.0 (crossterm did the same). The unshifted key
-  could come from the virtual-key code with the layout (`ToUnicodeEx`), which
-  ttyr does not read; a change for ttyr.
+  could come from the virtual-key code with the layout (`ToUnicodeEx`). ttyr's
+  main reads it since f35b372 (unreleased): Alt+Shift+1 comes as `1` with
+  Alt+Shift and `shifted` `!`; taking it waits on a ttyr release.
 - **A late answer from one probe can end the next one early** (`Keys::probe` in
   `tmxr-client`'s `terminal/probe.rs`, through ttyr's `collect_answers`): after
   a probe times out, a server-initiated `lock-client`, `suspend-client` or
@@ -416,9 +417,14 @@ plan 18 sections here.
     terminal that has them (Alacritty, VS Code). Since ttyr 861f668 a key record
     no key made (no virtual-key or scan code: what the console puts in the input
     itself, such as its answer to DA1) is read as a terminal's bytes in record
-    mode too, so a probe there may now work. Whether a terminal's answers behind
-    ConPTY arrive as such records, or as keys ConPTY made of the bytes, is not
-    known; probing outside Windows Terminal waits on finding out by hand.
+    mode too, so a probe there may now work. The ttyr session measured it on
+    2026-11-13 (inside a tmxr 0.15 pane, built-in ConPTY, Windows 11 build
+    26300): a pane's `CSI c` went out through ConPTY, and the outer terminal's
+    answer came back to a record-mode reader as text records (no virtual-key or
+    scan code, one per character), which ttyr reads as the DA1 report. A kitty
+    flags push and query got through too, with VT input on. Not tried behind
+    Alacritty or VS Code, but the record form is ConPTY's. So probing outside
+    Windows Terminal looks possible; it is not built.
   - Considered and declined: VT input everywhere. It would probe everywhere, but
     conhost's VT input carries no releases or AltGr state, and a terminal's C-j
     still arrives as conhost's Ctrl+Enter encoding.
