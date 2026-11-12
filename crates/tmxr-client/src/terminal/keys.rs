@@ -244,9 +244,14 @@ fn releases(key: KeyCode, (pressed, held): (KeyCode, Meant)) -> bool {
 
 #[cfg(any(windows, test))]
 impl ConsoleBytes {
-    /// `ev` as the terminal meant it.
+    /// `ev` as the terminal meant it. Losing focus forgets the keys held:
+    /// their key-ups go to the window focused instead, and one kept would
+    /// read a later plain key's release as its own.
     fn key(&mut self, ev: &mut Event) {
         let Event::Key(k) = ev else {
+            if *ev == Event::FocusLost {
+                self.held.clear();
+            }
             return;
         };
         let read = match k.kind {
@@ -389,6 +394,18 @@ pub(super) mod tests {
                 key(KeyCode::Char('@'), shift),
             ),
             (Event::FocusGained, Event::FocusGained),
+            // Focus moves away with C-Space held: its key-up never comes,
+            // and a later plain 2's release stays a 2's.
+            (
+                key(KeyCode::Char('2'), ctrl_shift),
+                key(KeyCode::Char(' '), ctrl),
+            ),
+            (Event::FocusLost, Event::FocusLost),
+            (key(KeyCode::Char('2'), none), key(KeyCode::Char('2'), none)),
+            (
+                release(KeyCode::Char('2'), none),
+                release(KeyCode::Char('2'), none),
+            ),
         ] {
             let mut read = from.clone();
             console.key(&mut read);

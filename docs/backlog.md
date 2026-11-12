@@ -343,12 +343,6 @@ plan 18 sections here.
 
 ## Plan 18's client (2026-11-10)
 
-- **A console key-up that never comes leaves `ConsoleBytes` holding its entry**
-  (`tmxr-client`'s `terminal/keys.rs`): if focus moves away while Ctrl+2, Ctrl+6
-  or Ctrl+- is held, the entry stays, and a later plain `2`, `6` or Space
-  release is rewritten as C-Space's or C-^'s release (press `2`, release `' '`),
-  once, for a flag-2 pane. The list is bounded by the keys `meant` maps.
-  Clearing it on focus loss would fix it. Found by review, not run.
 - **A shifted symbol from a Windows console key record keeps its Shift** (`!`
   with Alt+Shift for Alt+Shift+1, where ttyr's decoder reads a terminal's
   `ESC !` as `!` with Alt alone): ttyr's console mapping (`event::console`'s
