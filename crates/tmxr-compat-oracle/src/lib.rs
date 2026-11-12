@@ -308,17 +308,16 @@ pub fn tmxr_program() -> PathBuf {
     )
 }
 
-/// The program a case's `pane` steps run in: `$ORACLE_PANE`, else
-/// `oracle-pane` beside the test binary's directory, where cargo builds it.
+/// The program a case's `pane` steps run in: `$ORACLE_PANE`, else the
+/// workspace's debug build, as [`tmxr_program`]. Not found from the test
+/// binary: cargo 1.100 builds those apart from the workspace's programs.
 pub fn pane_program() -> PathBuf {
     std::env::var_os("ORACLE_PANE").map_or_else(
         || {
             let exe = format!("oracle-pane{}", std::env::consts::EXE_SUFFIX);
-            let me = std::env::current_exe().unwrap_or_default();
-            // The test binary is in `target/<profile>/deps`.
-            me.parent()
-                .and_then(Path::parent)
-                .map_or_else(|| PathBuf::from(&exe), |dir| dir.join(&exe))
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../target/debug")
+                .join(exe)
         },
         PathBuf::from,
     )
