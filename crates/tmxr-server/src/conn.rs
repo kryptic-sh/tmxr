@@ -219,8 +219,7 @@ fn hang_up(conn: &interprocess::local_socket::Stream) -> std::io::Result<()> {
 /// pipe is flushed first, which waits until the client has read everything
 /// sent, as `DisconnectNamedPipe` discards what it has not; disconnecting
 /// then fails the client's read and this side's, now and later, which
-/// interprocess reads as the end of the stream. Compiled, not run: no
-/// test here has run on Windows.
+/// interprocess reads as the end of the stream.
 #[cfg(windows)]
 fn hang_up(conn: &interprocess::local_socket::Stream) -> std::io::Result<()> {
     use std::os::windows::io::{AsHandle as _, AsRawHandle as _};

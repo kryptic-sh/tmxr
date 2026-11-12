@@ -87,14 +87,13 @@ means as the reviewer said, not checked.
 
 ### Reported, not checked
 
-- **Hanging up a dropped connection is not run on Windows** (2026-11-10):
-  `conn::hang_up` flushes the named pipe (interprocess's
-  `DuplexPipeStream::flush`) and then calls `DisconnectNamedPipe`, which should
-  fail the client's read and the server's blocked one alike; it was compiled for
-  `x86_64-pc-windows-gnu` only, and `a_connection_the_server_drops_is_closed`
-  has not run there. The flush blocks until the client has read everything sent,
-  not only while the pipe's buffer is full, so a detached client whose console
-  is paused keeps one more writer thread blocked while it is paused (its reader
+- **Hanging up a dropped connection on Windows** (2026-11-10): `conn::hang_up`
+  flushes the named pipe (interprocess's `DuplexPipeStream::flush`) and then
+  calls `DisconnectNamedPipe`. `a_connection_the_server_drops_is_closed` passes
+  on Windows and times out with the Windows `hang_up` made a no-op (checked
+  2026-11-13). The flush blocks until the client has read everything sent, not
+  only while the pipe's buffer is full, so a detached client whose console is
+  paused keeps one more writer thread blocked while it is paused (its reader
   thread was already left behind before this change). No e2e test covers the
   hang-up: the tmxr client exits on its reply or `Detached` without waiting for
   the end of the stream, so the unit test drives a raw connection.
@@ -465,13 +464,14 @@ plan 18 sections here.
   win32-input-mode by portable-pty) for VT input and win32-input-mode and probes
   through it. Whether conhost answers that probe with VT bytes or with key
   records encoded as win32-input-mode (which ttyr 861f668 reads back as bytes
-  when they carry no virtual-key or scan code) is not known until CI runs it:
-  the test asserts the attach takes less than the client's `PROBE_WAIT` longer
-  than one that asks nothing, and that no answer (`[?`, `]10;`, `]11;`) was
-  typed into the pane. It sends C-j and Ctrl+Enter as win32-input-mode records,
-  which pass only if conhost re-encodes them so. Kitty, xterm-tier and probe e2e
-  tests stay Unix only: ConPTY is not known to hand the client's queries on to
-  the harness's terminal.
+  when they carry no virtual-key or scan code) is not known; either way the test
+  passes, locally (Windows 11 build 26300) and on CI's built-in and
+  bundled-ConPTY jobs (run 42966281779). It asserts the attach takes less than
+  the client's `PROBE_WAIT` longer than one that asks nothing, and that no
+  answer (`[?`, `]10;`, `]11;`) was typed into the pane. It sends C-j and
+  Ctrl+Enter as win32-input-mode records, which pass only if conhost re-encodes
+  them so. Kitty, xterm-tier and probe e2e tests stay Unix only: ConPTY is not
+  known to hand the client's queries on to the harness's terminal.
 
 ## Plan 18's xterm tier (2026-11-10)
 
@@ -1427,11 +1427,13 @@ plan 18 sections here.
     client sends standard input ahead of the command); an empty pane is restored
     by resurrect empty, without what was shown in it; `display-message -v`;
     `display-message -a` lists tmxr's variables (`vars::NAMES`), fewer than
-    tmux's; the
-    `choose-*`pickers' tagging and sort keys (tmux's`t`, `T`, `O`), which tmxr's picker has no counterpart for; `choose-tree
-    -F`replaces the text after a row's mark, where tmux's is the whole tree line;`command-prompt`Tab completes and offers menus as tmux's (names, sessions, a session's windows, the`target`and`window-target`types;`prompt_tab\*\*`in`corpus/keys.toml`),
-    though which ten names a long menu keeps was matched by result (the last
-    ten), not read from tmux's code.
+    tmux's; the `choose-*` pickers' tagging and sort keys (tmux's `t`, `T`,
+    `O`), which tmxr's picker has no counterpart for; `choose-tree -F` replaces
+    the text after a row's mark, where tmux's is the whole tree line;
+    `command-prompt` Tab completes and offers menus as tmux's (names, sessions,
+    a session's windows, the `target` and `window-target` types; `prompt_tab*`
+    in `corpus/keys.toml`), though which ten names a long menu keeps was matched
+    by result (the last ten), not read from tmux's code.
   - Hooks and modes: the client's theme follows its terminal as tmux's: the
     client sends `CSI ? 2031 h` and `CSI ? 996 n` as its terminal starts and
     `CSI ? 2031 l` as it stops, and the terminal's `CSI ? 997 ; 1 / 2 n`
