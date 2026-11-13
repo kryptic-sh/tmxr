@@ -326,11 +326,12 @@ plan 18 sections here.
   at all. Tried 2026-11-11 with hjkl patched to 27fd42f9 by git: with the
   bridge, `tmxr-server`'s crossterm dependency, the crossterm patch and its
   `deny.toml` entry gone, the workspace builds, clippy is clean, every test
-  passes, and `cargo tree -i crossterm --target all` finds nothing. tmxr is on
-  ttyr 0.2.0 (2026-11-11), and hjkl main is too (676faba3), so 0.46.0's
-  `handle_key` takes ttyr 0.2's `KeyEvent`. The release waits on the owner
-  asking for it (ttyr is on crates.io). Then: pin 0.46.0, delete the bridge, and
-  drop crossterm, the patch and its `deny.toml` entry.
+  passes, and `cargo tree -i crossterm --target all` finds nothing. hjkl main is
+  on ttyr 0.2 (676faba3), so 0.46.0's `handle_key` takes ttyr 0.2's `KeyEvent`,
+  but tmxr moved to ttyr 0.3.0 on 2026-11-13: hjkl has to take 0.3 too before
+  tmxr can pin it, or the two `KeyEvent`s are different types. The release waits
+  on the owner asking for it (ttyr is on crates.io). Then: pin 0.46.0, delete
+  the bridge, and drop crossterm, the patch and its `deny.toml` entry.
 - **Considered and declined: `kitty-keys always`** (the owner, 2026-11-09).
   `kitty-keys` takes `on` and `off` only, unlike tmux's `extended-keys always`:
   the kitty protocol is one a program asks for, and kitty encoding sent to a
@@ -343,17 +344,6 @@ plan 18 sections here.
 
 ## Plan 18's client (2026-11-10)
 
-- **A shifted symbol from a Windows console key record keeps its Shift** (`!`
-  with Alt+Shift for Alt+Shift+1, where ttyr's decoder reads a terminal's
-  `ESC !` as `!` with Alt alone): ttyr's console mapping (`event::console`'s
-  `char_event`) takes Shift off an upper-case letter only, and a record names
-  the character typed, not the unshifted key. Binds are unaffected (`Key` drops
-  Shift from a character), but panes are not: a modifyOtherKeys level 2 pane
-  gets `CSI 27;4;33~` where a Unix client's gives `CSI 27;3;33~`, and a kitty
-  pane `CSI 33;4u`. As in 0.15.0 (crossterm did the same). The unshifted key
-  could come from the virtual-key code with the layout (`ToUnicodeEx`). ttyr's
-  main reads it since f35b372 (unreleased): Alt+Shift+1 comes as `1` with
-  Alt+Shift and `shifted` `!`; taking it waits on a ttyr release.
 - **A late answer from one probe can end the next one early** (`Keys::probe` in
   `tmxr-client`'s `terminal/probe.rs`, through ttyr's `collect_answers`): after
   a probe times out, a server-initiated `lock-client`, `suspend-client` or

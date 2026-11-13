@@ -24,7 +24,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and `pending_escape_release` fields**; a library caller building one with a
   struct literal sets them.
 - **The library crates take `ttyr`'s key, mouse and input event types in place
-  of crossterm's** (`ttyr` 0.2, whose event enums are `#[non_exhaustive]`):
+  of crossterm's** (`ttyr` 0.3, whose event enums are `#[non_exhaustive]`):
   `tmxr-proto`'s `ClientMsg::Input` carries `ttyr::event::Event`; `tmxr-term`'s
   `encode_key`, `conpty_key` and `encode_mouse` take `ttyr`'s `KeyEvent` and
   `MouseEvent`; `tmxr-command`'s `Key` and `MouseKey::mods` hold `ttyr`'s
@@ -209,6 +209,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A shifted symbol with Alt reaches a pane from Windows as from any other
+  terminal**: Alt+Shift+1 under modifyOtherKeys level 2 sends `CSI 27;3;33~`
+  (`!` with Alt), where it sent `CSI 27;4;33~` with Shift kept. `ttyr` 0.3 reads
+  a console key record's unshifted key from the keyboard layout.
 - **Ctrl with a punctuation key works on Windows**: Ctrl+;, Ctrl+, Ctrl+. and
   the other OEM keys the console gives no character for were dropped by the
   client; they are now those keys, as their characters on a US layout (ttyr

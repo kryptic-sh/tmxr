@@ -932,7 +932,9 @@ fn script_fixture() {
 }
 
 /// Not a test: the program [`key_log_program`] starts. In raw mode, it logs
-/// `ready`, then each key press it reads as `code modifiers`, one a line;
+/// `ready`, then each key press it reads as `code modifiers`, one a line,
+/// but a modifier or lock key alone (ConPTY's records for a chord it types
+/// press Ctrl first, which ttyr reports);
 /// with [`KEY_LOG_FOCUS`] set it asks for focus reports and logs each as
 /// `FocusGained` or `FocusLost` (and on Unix, no keys); with [`KEY_LOG_RAW`]
 /// set it logs bytes instead.
@@ -979,7 +981,9 @@ fn key_log_fixture() {
     writeln!(log, "ready").unwrap();
     loop {
         match reader.read().unwrap() {
-            Event::Key(k) if k.kind == KeyEventKind::Press => {
+            Event::Key(k)
+                if k.kind == KeyEventKind::Press && !tmxr_term::encode::is_modifier_key(k.key) =>
+            {
                 writeln!(log, "{:?} {:?}", k.key, k.modifiers).unwrap();
             }
             Event::FocusGained if focus => writeln!(log, "FocusGained").unwrap(),

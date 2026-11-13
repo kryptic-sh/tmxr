@@ -648,6 +648,28 @@ mod tests {
     /// tmux 3.6's bytes for a key at modifyOtherKeys level 1 and 2, under
     /// each `extended-keys-format` (input_key, input_key_mode1 and
     /// input_key_extended).
+    /// Alt+Shift+1 as a Windows console's record reads (the layout's key
+    /// with Shift, its shifted key `!`) reaches a modifyOtherKeys level 2
+    /// pane as a terminal's `ESC !` does: `!` with Alt.
+    #[test]
+    fn a_console_shifted_symbol_is_sent_as_a_terminals() {
+        let modes = InputModes {
+            modify_other_keys: 2,
+            ..InputModes::default()
+        };
+        let console = KeyEvent::new(KeyCode::Char('1'), A | S)
+            .with_shifted(Some('!'))
+            .with_encoding(KeyEncoding::Windows);
+        let terminal = KeyEvent::new(KeyCode::Char('!'), A);
+        for key in [console, terminal] {
+            assert_eq!(
+                encode_key(&key, modes, ExtendedKeys::On, XTERM),
+                b"\x1b[27;3;33~",
+                "{key:?}"
+            );
+        }
+    }
+
     #[test]
     fn extended_keys_are_tmuxs_at_each_level_and_format() {
         const CSI_U: ExtendedKeysFormat = ExtendedKeysFormat::CsiU;
