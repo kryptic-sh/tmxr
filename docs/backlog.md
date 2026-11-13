@@ -326,12 +326,12 @@ plan 18 sections here.
   at all. Tried 2026-11-11 with hjkl patched to 27fd42f9 by git: with the
   bridge, `tmxr-server`'s crossterm dependency, the crossterm patch and its
   `deny.toml` entry gone, the workspace builds, clippy is clean, every test
-  passes, and `cargo tree -i crossterm --target all` finds nothing. hjkl main is
-  on ttyr 0.2 (676faba3), so 0.46.0's `handle_key` takes ttyr 0.2's `KeyEvent`,
-  but tmxr moved to ttyr 0.3.0 on 2026-11-13: hjkl has to take 0.3 too before
-  tmxr can pin it, or the two `KeyEvent`s are different types. The release waits
-  on the owner asking for it (ttyr is on crates.io). Then: pin 0.46.0, delete
-  the bridge, and drop crossterm, the patch and its `deny.toml` entry.
+  passes, and `cargo tree -i crossterm --target all` finds nothing. tmxr moved
+  to ttyr 0.3.0 on 2026-11-13, and hjkl main followed (0f2970be, by the hjkl
+  session's account), so a release cut from it takes the same `KeyEvent`;
+  crates.io's hjkl 0.45.1 is still on ttyr 0.2. The release waits on the owner
+  asking for it. Then: pin it, delete the bridge, and drop crossterm, the patch
+  and its `deny.toml` entry.
 - **Considered and declined: `kitty-keys always`** (the owner, 2026-11-09).
   `kitty-keys` takes `on` and `off` only, unlike tmux's `extended-keys always`:
   the kitty protocol is one a program asks for, and kitty encoding sent to a
