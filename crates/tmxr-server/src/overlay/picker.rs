@@ -5,8 +5,6 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::thread::JoinHandle;
 
-mod crossterm_key;
-
 use hjkl_picker::{Picker, PickerAction, PickerEvent, PickerLogic};
 use ttyr::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -338,7 +336,7 @@ impl PickerOverlay {
             return self.normal_key(ev, typed);
         }
         if let PickerEvent::Select(_) | PickerEvent::Cancel =
-            hjkl_picker_tui::handle_key(&mut self.picker, crossterm_key::crossterm_key(ev))
+            hjkl_picker_tui::handle_key(&mut self.picker, ev)
         {
             return OverlayAction::Close;
         }

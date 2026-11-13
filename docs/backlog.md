@@ -309,29 +309,6 @@ The kitty keyboard plan (`docs/plan/18-kitty-keyboard.md`, deleted as it
 shipped) left these; its decisions are in the code's docs, the changelog and the
 plan 18 sections here.
 
-- **The session picker still takes crossterm's keys**: `tmxr-server`'s
-  `overlay/picker/crossterm_key.rs` converts ttyr's key back for
-  `hjkl_picker_tui::handle_key`, until hjkl takes ttyr's keys. That bridge is
-  the last crossterm in tmxr's own code (the oracle's pane program and the e2e
-  key-log fixture moved to ttyr 2026-11-11, and `tmxr-server` asks ratatui for
-  `std`, `underline-color` and `layout-cache` only, not its default crossterm
-  backend; hjkl 0.45's tui crates still turn ratatui's defaults on, so that set
-  is built alone only in the trial below); crossterm stays in the build through
-  it and through hjkl-picker-tui and hjkl-engine-tui, and its fork stays in
-  `[patch.crates-io]` and `deny.toml`. The hjkl session confirmed (2026-11-11)
-  that hjkl 0.46.0, every crate bumped together, takes
-  `handle_key(&mut Picker, &ttyr::event::KeyEvent)` (the event raw, Shift not
-  normalised first) and drops both crates' crossterm dependency; on hjkl main
-  (27fd42f9) its -tui crates take ratatui with tmxr's features, so no crossterm
-  at all. Tried 2026-11-11 with hjkl patched to 27fd42f9 by git: with the
-  bridge, `tmxr-server`'s crossterm dependency, the crossterm patch and its
-  `deny.toml` entry gone, the workspace builds, clippy is clean, every test
-  passes, and `cargo tree -i crossterm --target all` finds nothing. tmxr moved
-  to ttyr 0.3.0 on 2026-11-13, and hjkl main followed (0f2970be, by the hjkl
-  session's account), so a release cut from it takes the same `KeyEvent`;
-  crates.io's hjkl 0.45.1 is still on ttyr 0.2. The release waits on the owner
-  asking for it. Then: pin it, delete the bridge, and drop crossterm, the patch
-  and its `deny.toml` entry.
 - **Considered and declined: `kitty-keys always`** (the owner, 2026-11-09).
   `kitty-keys` takes `on` and `off` only, unlike tmux's `extended-keys always`:
   the kitty protocol is one a program asks for, and kitty encoding sent to a
@@ -729,16 +706,6 @@ plan 18 sections here.
   `Server::inputs`) for that; tmxr's prompts and pickers still take keys read
   with the key that opened them, where tmux's prompt does not (its modes do), so
   a command typed in one go reaches the prompt.
-- **crossterm is patched** (`[patch.crates-io]` in the root `Cargo.toml`,
-  kryptic-sh/crossterm branch `alt-escape-0.29`, allowed in `deny.toml`) though
-  tmxr no longer reads input through it: its client reads with ttyr, which
-  carries the same fixes (Alt+Escape, a SIGWINCH with input, a burst past one
-  read, unknown `CSI ?` reports, colour-scheme and colour answers). The patch
-  now reaches only hjkl's crates and the picker bridge (see "The session picker
-  still takes crossterm's keys") and goes with them. The e2e tests written for
-  the crossterm fixes still guard ttyr's reader
-  (`a_resize_and_a_key_arriving_together_both_reach_the_server`,
-  `keys_typed_faster_than_the_client_reads_all_arrive`).
 - **tmux default binds**: all of tmux 3.6's 267 are bound (compared with its
   `list-keys`, 2026-10-11) except the 18 digit binds (`1`-`9` in vi, `M-1`-`M-9`
   in emacs) that open a "(repeat)" prompt, declined: tmxr's copy mode takes
@@ -1078,19 +1045,20 @@ plan 18 sections here.
   against 507–538 ms; before vt1k's `Row` kept where its written cells end,
   finding it took 40% of the server's time (pprof). The vt100 fork's
   packed-history branch (`packed-history`, never pushed) is superseded.
-- **crates.io cannot take tmxr-server, tmxr-client or tmxr** while they depend
-  on the crossterm fork through git (tmxr-server and tmxr-client match its
-  `Event::ColorScheme`, which crates.io's crossterm 0.29.0 lacks). vt1k, the
-  other git dependency, is on crates.io since 0.1.0 (2026-10-26). v0.10.0
-  (2026-10-23) published on crates.io only tmxr-proto, tmxr-command, tmxr-config
-  and tmxr-term, so crates.io's tmxr stays at 0.9.0. Decided by the owner
+- **Publishing to crates.io again needs the owner's call.** tmxr-server,
+  tmxr-client and tmxr could not go there while they depended on the crossterm
+  fork through git; nothing is patched or taken from git any more (the fork went
+  with hjkl 0.46.0 and the picker's crossterm bridge, 2026-11-13, and
+  `cargo tree -i crossterm --target all` finds nothing). vt1k, the other git
+  dependency, is on crates.io since 0.1.0 (2026-10-26). v0.10.0 (2026-10-23)
+  published on crates.io only tmxr-proto, tmxr-command, tmxr-config and
+  tmxr-term, so crates.io's tmxr stays at 0.9.0. Decided by the owner
   (2026-10-23): no crates.io publishing for now; the `publish-crates` job is off
   (`if: false`, out of `tag-release-status`'s needs) and the README installs
-  with `cargo install --git`. A crossterm fork crate would sit beside
-  crates.io's crossterm that hjkl's crates and ratatui use, which crosses at one
-  call, (`hjkl_picker_tui::handle_key`'s `KeyEvent`), so it needs a conversion
-  there or hjkl moved to the fork too; the other way out is the fork's fixes
-  landing upstream (crossterm-rs/crossterm#1155 is one of them).
+  with `cargo install --git`. Turning it back on: `if: false` off the job, the
+  job back in `tag-release-status`'s needs, and the README's install section;
+  the next tag then publishes every crate at its version. Not tried:
+  `cargo publish --dry-run` on tmxr-server, tmxr-client and tmxr.
 - **No frame-rate cap**: the server renders after each pass of its loop, and a
   pass stops handling events after `DRAIN_BUDGET` so a flood still repaints.
   Each pane's output waits in a bounded queue (`output::QUEUE_LIMIT`) that
@@ -1220,10 +1188,11 @@ plan 18 sections here.
 - **A resize just after attaching went unseen on Linux** (2026-10-18), in
   `refresh_client_sets_and_clears_client_flags` under load (CI run 39064458482):
   the client's log showed the `x` typed after the resize but no `Resize` event.
-  The cause was crossterm's dropped SIGWINCH (see "crossterm is patched"),
-  reproduced deterministically on 2026-10-20 (Arch Linux): a resize and a key
-  arriving while a lock command runs, when the client reads nothing, lost the
-  resize every time with the old crossterm and none with the fix
+  The cause was crossterm's dropped SIGWINCH (fixed then in kryptic-sh's
+  crossterm fork, since dropped: ttyr reads the client's input and carries the
+  fix), reproduced deterministically on 2026-10-20 (Arch Linux): a resize and a
+  key arriving while a lock command runs, when the client reads nothing, lost
+  the resize every time with the old crossterm and none with the fix
   (`a_resize_and_a_key_arriving_together_both_reach_the_server`, which passes
   with the old crossterm when no key comes). The flags test resizes once again.
   A resize between the client's hello and crossterm's first read was lost too

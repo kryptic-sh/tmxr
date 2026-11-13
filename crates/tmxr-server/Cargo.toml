@@ -10,13 +10,12 @@ authors.workspace = true
 readme.workspace = true
 
 [dependencies]
-crossterm = "0.29.0"
 glob = "0.3.4"
-hjkl-clipboard = "0.45.1"
-hjkl-layout = "0.45.1"
-hjkl-picker = "0.45.1"
-hjkl-picker-tui = "0.45.1"
-hjkl-xdg = "0.45.1"
+hjkl-clipboard = "0.46.0"
+hjkl-layout = "0.46.0"
+hjkl-picker = "0.46.0"
+hjkl-picker-tui = "0.46.0"
+hjkl-xdg = "0.46.0"
 interprocess = "2.4.7"
 ratatui = { version = "0.30.2", default-features = false, features = ["std", "underline-color", "layout-cache"] }
 regex = "1.13.1"

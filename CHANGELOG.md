@@ -148,6 +148,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **crossterm is gone from the build**: the hjkl crates (clipboard, config,
+  layout, picker, picker-tui, xdg) are updated to 0.46.0, whose picker takes
+  `ttyr`'s key events, so the pickers hand keys to it as read and tmxr no longer
+  converts them to crossterm's or patches crossterm from kryptic-sh's fork.
 - **`send-keys` types `F13` to `F24` and hjkl's `<…>` names** (`<C-b>`, `<CR>`)
   as text, as tmux 3.6 does, where it sent them as keys; `send-keys -K` still
   takes them as keys.

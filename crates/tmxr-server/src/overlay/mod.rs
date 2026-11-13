@@ -1029,4 +1029,22 @@ mod tests {
         assert_eq!(o.key(&k(KeyCode::Esc)), OverlayAction::Close);
         assert_eq!(sessions().key(&k(KeyCode::Char('q'))), OverlayAction::Close);
     }
+
+    #[test]
+    fn a_picker_query_takes_the_character_a_shifted_key_types() {
+        let mut o = Overlay::Picker(Box::new(PickerOverlay::new("sessions", items(&["main"]))));
+        o.key(&k(KeyCode::Char('i')));
+        // Shift+a as a terminal reports it, and Shift+1 as the Windows
+        // console does: the key on its base layout, the symbol shifted.
+        o.key(&shifted('a'));
+        o.key(
+            &KeyEvent::new(KeyCode::Char('1'), KeyModifiers::SHIFT)
+                .with_shifted(Some('!'))
+                .with_encoding(ttyr::event::KeyEncoding::Windows),
+        );
+        let Overlay::Picker(p) = &o else {
+            unreachable!()
+        };
+        assert_eq!(p.query(), "A!");
+    }
 }
