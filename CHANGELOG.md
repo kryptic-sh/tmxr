@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-17
+
 ### Breaking
 
 - **The client-server protocol is now 15** (once attached the client says what
@@ -152,6 +154,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Dependencies updated to their latest releases**, among the locked ones mio
+  1.2.5, uuid 1.29.2 and cc 1.11.2.
 - **crossterm is gone from the build**: the hjkl crates (clipboard, config,
   layout, picker, picker-tui, xdg) are updated to 0.46.0, whose picker takes
   `ttyr`'s key events, so the pickers hand keys to it as read and tmxr no longer
@@ -2526,7 +2530,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   published to GitHub Releases with `.sha256` files, and shell completions and a
   man page from the hidden `tmxr --completions <shell>` and `tmxr --man`.
 
-[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/kryptic-sh/tmxr/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/kryptic-sh/tmxr/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/kryptic-sh/tmxr/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/kryptic-sh/tmxr/compare/v0.12.2...v0.13.0
