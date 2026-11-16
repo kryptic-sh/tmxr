@@ -54,6 +54,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **tmxr is on crates.io again**: `cargo install --locked tmxr-cli` installs
+  this release, and every release publishes the workspace's crates there.
+  crates.io's tmxr-cli stopped at 0.9.0 while a crate depended on a crossterm
+  fork through git.
 - **Key names for every key the kitty protocol reports, in tmux's form, kitty's
   and hjkl's**, wherever a key is bound or named (`bind-key`, `unbind-key`,
   `send-keys -K`, `list-keys`, the `prefix` options, menu and choose-tree keys,

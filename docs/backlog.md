@@ -1045,20 +1045,6 @@ plan 18 sections here.
   against 507–538 ms; before vt1k's `Row` kept where its written cells end,
   finding it took 40% of the server's time (pprof). The vt100 fork's
   packed-history branch (`packed-history`, never pushed) is superseded.
-- **Publishing to crates.io again needs the owner's call.** tmxr-server,
-  tmxr-client and tmxr could not go there while they depended on the crossterm
-  fork through git; nothing is patched or taken from git any more (the fork went
-  with hjkl 0.46.0 and the picker's crossterm bridge, 2026-11-13, and
-  `cargo tree -i crossterm --target all` finds nothing). vt1k, the other git
-  dependency, is on crates.io since 0.1.0 (2026-10-26). v0.10.0 (2026-10-23)
-  published on crates.io only tmxr-proto, tmxr-command, tmxr-config and
-  tmxr-term, so crates.io's tmxr stays at 0.9.0. Decided by the owner
-  (2026-10-23): no crates.io publishing for now; the `publish-crates` job is off
-  (`if: false`, out of `tag-release-status`'s needs) and the README installs
-  with `cargo install --git`. Turning it back on: `if: false` off the job, the
-  job back in `tag-release-status`'s needs, and the README's install section;
-  the next tag then publishes every crate at its version. Not tried:
-  `cargo publish --dry-run` on tmxr-server, tmxr-client and tmxr.
 - **No frame-rate cap**: the server renders after each pass of its loop, and a
   pass stops handling events after `DRAIN_BUDGET` so a flood still repaints.
   Each pane's output waits in a bounded queue (`output::QUEUE_LIMIT`) that

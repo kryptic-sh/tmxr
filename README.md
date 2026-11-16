@@ -178,8 +178,8 @@ brew install kryptic-sh/tap/tmxr
 scoop bucket add kryptic-sh https://github.com/kryptic-sh/scoop-bucket
 scoop install tmxr
 
-# From this repository with cargo (the package is tmxr-cli; the binary is tmxr)
-cargo install --locked --git https://github.com/kryptic-sh/tmxr tmxr-cli
+# crates.io (the package is tmxr-cli; the binary is tmxr)
+cargo install --locked tmxr-cli
 
 # Debian/Ubuntu, Fedora, Alpine: the .deb / .rpm / .apk from the latest release
 ```
@@ -196,9 +196,6 @@ ConPTY (MIT, `ConPTY-LICENSE.txt`); keep them beside `tmxr.exe`. Windows' own
 ConPTY drops the end of a program's tmux passthrough, so without them inline
 images stay off. The Scoop package includes them; tmxr built from source
 (`cargo install tmxr-cli`) uses Windows' own.
-
-tmxr is not published to crates.io for now: the `tmxr-cli` there stops at 0.9.0.
-Use a release, a package, or the `cargo install --git` above.
 
 Shell completions and the man page come from the binary itself:
 `tmxr --completions <bash|zsh|fish|powershell|elvish|nushell>` and `tmxr --man`.
