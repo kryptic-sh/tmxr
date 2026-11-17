@@ -1604,7 +1604,13 @@ fn popups_and_menus_are_placed_where_tmux_places_them() {
         });
         assert_eq!(corner(&s), Some(want), "menu -x {x} -y {y}");
         s.send(b"\x1b");
-        s.wait_for("closed", |text| !text.contains("aaa"));
+        // Above the status line, whose host name may hold "aaa" too.
+        s.wait_for("closed", |text| {
+            !text
+                .lines()
+                .take(usize::from(ROWS - 1))
+                .any(|l| l.contains("aaa"))
+        });
     }
     assert!(
         !t.output(&["display-popup", "-x", "Q", "echo"])
