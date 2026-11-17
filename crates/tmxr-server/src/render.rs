@@ -1148,9 +1148,7 @@ fn draw_overlay(
     let opts = srv.client_window_options(id);
     let mode_style = style_option(&opts.mode_style, &vars);
     let border = style_option(&opts.pane_active_border_style, &vars);
-    // The window's rows, top..y.
-    let top = srv.window_top(shown(srv, att));
-    let y = top + rows.saturating_sub(srv.status_rows(shown(srv, att)));
+    let (top, y) = window_rows(srv, att, rows);
     // A menu's or popup's own style (-s, -S, -H), else the option's.
     let look = |spec: &Option<String>, option: &str| {
         style_option(spec.as_deref().unwrap_or(option), &vars)
@@ -1269,55 +1267,161 @@ pub fn title(srv: &Server, id: ClientId) -> Option<String> {
 /// Fewest rows worth giving a preview.
 const PREVIEW_MIN_ROWS: u16 = 3;
 
+/// The window's rows, `top..y`, on a client `rows` high: where overlays
+/// are drawn, the status line's rows left out.
+fn window_rows(srv: &Server, att: &crate::server::Attached, rows: u16) -> (u16, u16) {
+    let top = srv.window_top(shown(srv, att));
+    (
+        top,
+        top + rows.saturating_sub(srv.status_rows(shown(srv, att))),
+    )
+}
+
+/// The picker's close button, on its top border.
+const PICKER_CLOSE: &str = "[X]";
+
+/// Where the picker overlay's parts go, for drawing it and for finding
+/// what a click is on.
+struct PickerLayout {
+    /// The box, border included.
+    area: Rect,
+    /// Inside the border: the query row, then the list.
+    inner: Rect,
+    /// The matches the list shows, by index.
+    shown: std::ops::Range<usize>,
+    /// The rows the list takes when a preview sits under it.
+    list_rows: u16,
+    /// The pane previewed under the list, with the rows it may take.
+    preview: Option<(PaneId, u16)>,
+}
+
+impl PickerLayout {
+    /// The picker laid out in the window's rows `top..y` of a client
+    /// `cols` wide: centred, a list under the query and, for windows, a
+    /// preview of the highlighted entry's active pane when there is room.
+    fn new(srv: &Server, p: &PickerOverlay, cols: u16, (top, y): (u16, u16)) -> Self {
+        let picker = &p.picker;
+        let preview_pane = p.previewed().and_then(|v| {
+            let window = match v {
+                Previewed::Session(_) => return None,
+                Previewed::Window(s, i) => *srv.sessions.get(&s)?.windows.get(&i)?,
+            };
+            srv.windows.get(&window).map(|w| w.active)
+        });
+        let w = cols
+            .saturating_sub(4)
+            .clamp(10, if preview_pane.is_some() { 100 } else { 70 });
+        let list_rows = (picker.matched() as u16).clamp(1, PICKER_LIST_ROWS);
+        let list_h = list_rows + 3;
+        let room = y.saturating_sub(top).saturating_sub(2);
+        let preview_rows = match preview_pane {
+            Some(_) => room.saturating_sub(list_h + 1),
+            None => 0,
+        };
+        let preview_rows = if preview_rows >= PREVIEW_MIN_ROWS {
+            preview_rows
+        } else {
+            0
+        };
+        let h = if preview_rows > 0 {
+            list_h + 1 + preview_rows
+        } else {
+            list_h
+        }
+        .min(room)
+        .max(4);
+        let area = Rect::new(
+            (cols.saturating_sub(w)) / 2,
+            top + y.saturating_sub(top).saturating_sub(h) / 2,
+            w.min(cols),
+            h,
+        );
+        let inner = Block::default().borders(Borders::ALL).inner(area);
+        let list_space = if preview_rows > 0 {
+            list_rows
+        } else {
+            inner.height.saturating_sub(1)
+        };
+        let visible = usize::from(list_space);
+        let matched = picker.matched();
+        let start = picker
+            .selected
+            .saturating_sub(visible.saturating_sub(1))
+            .min(matched.saturating_sub(visible.min(matched)));
+        let end = (start + visible).min(matched);
+        Self {
+            area,
+            inner,
+            shown: start..end,
+            list_rows,
+            preview: preview_pane
+                .filter(|_| preview_rows > 0)
+                .map(|pid| (pid, preview_rows)),
+        }
+    }
+
+    /// The first column of the close button, a cell in from the top
+    /// border's right corner; none on a box too narrow to keep it clear of
+    /// the title.
+    fn close_x(&self) -> Option<u16> {
+        let w = PICKER_CLOSE.len() as u16;
+        (self.area.width >= PICKER_CLOSE_MIN_WIDTH).then(|| self.area.right() - 2 - w)
+    }
+
+    /// What a click at (`col`, `row`) is on.
+    fn hit(&self, col: u16, row: u16) -> Option<PickerHit> {
+        if let Some(x) = self.close_x()
+            && row == self.area.y
+            && (x..x + PICKER_CLOSE.len() as u16).contains(&col)
+        {
+            return Some(PickerHit::Close);
+        }
+        let first = self.inner.y + 1;
+        let i = usize::from(row.checked_sub(first)?);
+        (i < self.shown.len() && col >= self.inner.x && col < self.inner.right())
+            .then(|| PickerHit::Row(self.shown.start + i))
+    }
+}
+
+/// Narrowest picker box that shows the close button: room for a title as
+/// long as ` sessions 99/99 ` beside it.
+const PICKER_CLOSE_MIN_WIDTH: u16 = 24;
+
+/// What a click on the picker is on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PickerHit {
+    /// The close button.
+    Close,
+    /// The list's row for match `n`.
+    Row(usize),
+}
+
+/// What a click at (`col`, `row`) on client `id`'s picker is on, laid out
+/// as [`draw_picker`] draws it.
+pub fn picker_hit(srv: &Server, id: ClientId, col: u16, row: u16) -> Option<PickerHit> {
+    let att = srv.clients.get(&id)?.att.as_ref()?;
+    let Some(Overlay::Picker(p)) = &att.overlay else {
+        return None;
+    };
+    PickerLayout::new(srv, p, att.cols, window_rows(srv, att, att.rows)).hit(col, row)
+}
+
 /// The picker overlay: query row, matches, and for windows a preview of
 /// the highlighted entry's active pane (a session's is the whole client,
-/// [`shown`]), centred in the window's rows `top..y`. Returns the query
-/// cursor while typing.
+/// [`shown`]), centred in the window's rows `top..y`, with a close button
+/// on its top border. Returns the query cursor while typing.
 fn draw_picker(
     srv: &Server,
     p: &PickerOverlay,
     buf: &mut Buffer,
     cols: u16,
-    (top, y): (u16, u16),
+    window: (u16, u16),
     border: Style,
     mode_style: Style,
 ) -> Option<Position> {
     let picker = &p.picker;
-    let preview_pane = p.previewed().and_then(|v| {
-        let window = match v {
-            Previewed::Session(_) => return None,
-            Previewed::Window(s, i) => *srv.sessions.get(&s)?.windows.get(&i)?,
-        };
-        srv.windows.get(&window).map(|w| w.active)
-    });
-    let w = cols
-        .saturating_sub(4)
-        .clamp(10, if preview_pane.is_some() { 100 } else { 70 });
-    let list_rows = (picker.matched() as u16).clamp(1, PICKER_LIST_ROWS);
-    let list_h = list_rows + 3;
-    let room = y.saturating_sub(top).saturating_sub(2);
-    let preview_rows = match preview_pane {
-        Some(_) => room.saturating_sub(list_h + 1),
-        None => 0,
-    };
-    let preview_rows = if preview_rows >= PREVIEW_MIN_ROWS {
-        preview_rows
-    } else {
-        0
-    };
-    let h = if preview_rows > 0 {
-        list_h + 1 + preview_rows
-    } else {
-        list_h
-    }
-    .min(room)
-    .max(4);
-    let area = Rect::new(
-        (cols.saturating_sub(w)) / 2,
-        top + y.saturating_sub(top).saturating_sub(h) / 2,
-        w.min(cols),
-        h,
-    );
+    let layout = PickerLayout::new(srv, p, cols, window);
+    let (area, inner) = (layout.area, layout.inner);
     Clear.render(area, buf);
     let block = Block::default()
         .borders(Borders::ALL)
@@ -1328,8 +1432,10 @@ fn draw_picker(
             picker.matched(),
             picker.total()
         ));
-    let inner = block.inner(area);
     block.render(area, buf);
+    if let Some(x) = layout.close_x() {
+        buf.set_string(x, area.y, PICKER_CLOSE, border);
+    }
     if inner.height == 0 {
         return None;
     }
@@ -1339,22 +1445,11 @@ fn draw_picker(
         Span::raw(query.clone()),
     ]))
     .render(Rect::new(inner.x, inner.y, inner.width, 1), buf);
-    let list_space = if preview_rows > 0 {
-        list_rows
-    } else {
-        inner.height.saturating_sub(1)
-    };
-    let visible = usize::from(list_space);
-    let matched = picker.matched();
-    let start = picker
-        .selected
-        .saturating_sub(visible.saturating_sub(1))
-        .min(matched.saturating_sub(visible.min(matched)));
-    let end = (start + visible).min(matched);
+    let start = layout.shown.start;
     // Matched characters take the picker's accent: the active border
     // colour, like its frame and prompt.
     let highlight = border.add_modifier(Modifier::BOLD);
-    for (i, (label, hits, _)) in picker.visible_rows(start..end).into_iter().enumerate() {
+    for (i, (label, hits, _)) in picker.visible_rows(layout.shown).into_iter().enumerate() {
         let row = inner.y + 1 + i as u16;
         let selected = start + i == picker.selected;
         let base = if selected {
@@ -1382,8 +1477,8 @@ fn draw_picker(
         }
         Paragraph::new(Line::from(spans)).render(Rect::new(inner.x, row, inner.width, 1), buf);
     }
-    if let Some(pid) = preview_pane.filter(|_| preview_rows > 0) {
-        let sep = inner.y + 1 + list_rows;
+    if let Some((pid, preview_rows)) = layout.preview {
+        let sep = inner.y + 1 + layout.list_rows;
         buf.set_string(
             inner.x,
             sep,

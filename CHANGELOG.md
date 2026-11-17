@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The session picker with the mouse**: a click on the session's name in the
+  status line opens it (the default `@status_session` marks the name with
+  `range=user|sessions`, and the default `MouseDown1Status` opens
+  `choose-tree -Zs` on that range, switching as before anywhere else), a click
+  on a row in any picker picks that row as `Enter` does, and a click on the
+  `[X]` on its top border closes it. While a picker is open the mouse no longer
+  reaches the panes under it.
+
 ## [0.16.0] - 2026-11-17
 
 ### Breaking

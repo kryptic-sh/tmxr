@@ -6,7 +6,9 @@ use ratatui::layout::Rect;
 use tmxr_command::Key;
 use tmxr_term::encode::is_modifier_key;
 use tmxr_term::{conpty_key, encode_key, encode_paste};
-use ttyr::event::{ColorScheme, Event as TermEvent, KeyCode, KeyEvent, KeyEventKind, Report};
+use ttyr::event::{
+    ColorScheme, Event as TermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, Report,
+};
 
 use super::Server;
 use crate::cmds::{Ctx, Outcome};
@@ -375,6 +377,118 @@ impl Server {
         }
     }
 
+    /// What client `id`'s overlay `ov`, taken out to be given an event,
+    /// answered with `action` (not `Pass`): put back, closed, or the
+    /// command, switch or edit it chose carried out. `peeked` is the
+    /// session the overlay showed before the event, seen once it moves on.
+    fn overlay_done(
+        &mut self,
+        id: ClientId,
+        ov: Overlay,
+        action: OverlayAction,
+        peeked: Option<SessionId>,
+    ) {
+        // A menu's item runs against the menu's target, as tmux's.
+        let menu_ctx = match &ov {
+            Overlay::Menu(m) => Some(Ctx {
+                client: Some(id),
+                pane: m.pane,
+                mouse: m.mouse,
+                ..Ctx::default()
+            }),
+            _ => None,
+        };
+        if let Overlay::Prompt(p) = &ov
+            && p.submitted
+            && !p.key
+        {
+            self.remember_prompt(&p.kind, p.text());
+        }
+        match action {
+            OverlayAction::Keep => {
+                if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
+                    a.overlay = Some(ov);
+                }
+            }
+            OverlayAction::Close => {}
+            // Answered before this match.
+            OverlayAction::Pass => {}
+            OverlayAction::Run(cmd) => match menu_ctx {
+                Some(ctx) => self.run_bind_ctx(id, &ctx, &cmd),
+                None => self.run_bind(id, &cmd, None),
+            },
+            OverlayAction::Preview(cmd) => {
+                self.run_bind(id, &cmd, None);
+                // The prompt stays, unless the command opened something
+                // in its place.
+                if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut())
+                    && a.overlay.is_none()
+                {
+                    a.overlay = Some(ov);
+                }
+            }
+            OverlayAction::Edit(line) => {
+                if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
+                    a.overlay = Some(Overlay::prompt(":".into(), line, None));
+                }
+            }
+            OverlayAction::EditBuffer(name, reopen) => {
+                if let Err(e) = self.edit_buffer(id, &name, reopen) {
+                    self.show_message_for(id, e, None, false, false);
+                }
+            }
+            OverlayAction::Switch(sid) => self.switch_client(id, sid),
+            OverlayAction::SwitchWindow(sid, idx) => {
+                self.switch_client(id, sid);
+                let _ = self.select_window(sid, idx);
+            }
+        }
+        // A session the picker showed has been seen once it moves
+        // on or closes.
+        let now = self
+            .clients
+            .get(&id)
+            .and_then(|c| c.att.as_ref())
+            .and_then(|a| a.overlay.as_ref())
+            .and_then(Overlay::peeked);
+        if let Some(left) = peeked.filter(|&s| Some(s) != now) {
+            self.leave_session(left);
+        }
+        self.mark_client_dirty(id);
+    }
+
+    /// A mouse event on client `id`'s open picker: a click on a row picks
+    /// it, as Enter there does, and one on the close button closes the
+    /// picker. The click is taken on its release, so the release does not
+    /// reach whatever is under a picker the press closed.
+    pub fn picker_mouse(&mut self, id: ClientId, m: ttyr::event::MouseEvent) {
+        use crate::render::PickerHit;
+        use ttyr::event::{MouseButton, MouseEventKind};
+        if m.kind != MouseEventKind::Up(MouseButton::Left) {
+            return;
+        }
+        let Some(hit) = crate::render::picker_hit(self, id, m.column, m.row) else {
+            return;
+        };
+        let Some(mut ov) = self
+            .clients
+            .get_mut(&id)
+            .and_then(|c| c.att.as_mut())
+            .and_then(|a| a.overlay.take())
+        else {
+            return;
+        };
+        let peeked = ov.peeked();
+        let action = match (hit, &mut ov) {
+            (PickerHit::Row(n), Overlay::Picker(p)) => {
+                p.select(Some(n));
+                ov.key(&KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+            }
+            _ => OverlayAction::Close,
+        };
+        self.overlay_done(id, ov, action, peeked);
+    }
+
     /// A key from client `id`, through its overlay and key tables;
     /// `send-keys -K` gives keys here too.
     /// A key from client `id`'s terminal, or (`sent`) `send-keys -K`.
@@ -430,78 +544,12 @@ impl Server {
             if action == OverlayAction::Pass {
                 att.overlay = Some(ov);
             } else {
-                // A menu's item runs against the menu's target, as tmux's.
-                let menu_ctx = match &ov {
-                    Overlay::Menu(m) => Some(Ctx {
-                        client: Some(id),
-                        pane: m.pane,
-                        mouse: m.mouse,
-                        ..Ctx::default()
-                    }),
-                    _ => None,
-                };
-                if let Overlay::Prompt(p) = &ov
-                    && p.submitted
-                    && !p.key
-                {
-                    self.remember_prompt(&p.kind, p.text());
-                }
-                match action {
-                    OverlayAction::Keep => {
-                        if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
-                            a.overlay = Some(ov);
-                        }
-                    }
-                    OverlayAction::Close => {}
-                    // Answered before this match.
-                    OverlayAction::Pass => {}
-                    OverlayAction::Run(cmd) => match menu_ctx {
-                        Some(ctx) => self.run_bind_ctx(id, &ctx, &cmd),
-                        None => self.run_bind(id, &cmd, None),
-                    },
-                    OverlayAction::Preview(cmd) => {
-                        self.run_bind(id, &cmd, None);
-                        // The prompt stays, unless the command opened something
-                        // in its place.
-                        if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut())
-                            && a.overlay.is_none()
-                        {
-                            a.overlay = Some(ov);
-                        }
-                    }
-                    OverlayAction::Edit(line) => {
-                        if let Some(a) = self.clients.get_mut(&id).and_then(|c| c.att.as_mut()) {
-                            a.overlay = Some(Overlay::prompt(":".into(), line, None));
-                        }
-                    }
-                    OverlayAction::EditBuffer(name, reopen) => {
-                        if let Err(e) = self.edit_buffer(id, &name, reopen) {
-                            self.show_message_for(id, e, None, false, false);
-                        }
-                    }
-                    OverlayAction::Switch(sid) => self.switch_client(id, sid),
-                    OverlayAction::SwitchWindow(sid, idx) => {
-                        self.switch_client(id, sid);
-                        let _ = self.select_window(sid, idx);
-                    }
-                }
+                self.overlay_done(id, ov, action, peeked);
                 if let Some(popup) = popup
                     && !sent
                 {
                     self.key_reached(id, &ev, super::releases::Reached::Popup(popup));
                 }
-                // A session the picker showed has been seen once it moves
-                // on or closes.
-                let now = self
-                    .clients
-                    .get(&id)
-                    .and_then(|c| c.att.as_ref())
-                    .and_then(|a| a.overlay.as_ref())
-                    .and_then(Overlay::peeked);
-                if let Some(left) = peeked.filter(|&s| Some(s) != now) {
-                    self.leave_session(left);
-                }
-                self.mark_client_dirty(id);
                 return;
             }
         }

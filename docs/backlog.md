@@ -709,7 +709,16 @@ plan 18 sections here.
 - **tmux default binds**: all of tmux 3.6's 267 are bound (compared with its
   `list-keys`, 2026-10-11) except the 18 digit binds (`1`-`9` in vi, `M-1`-`M-9`
   in emacs) that open a "(repeat)" prompt, declined: tmxr's copy mode takes
-  counts directly (`5j`).
+  counts directly (`5j`). One differs on purpose (the owner, 2026-11-18):
+  `MouseDown1Status` opens the session picker on the `sessions` user range the
+  default `@status_session` puts on the session's name, and is tmux's
+  `switch-client -t =` everywhere else.
+- **Picker mouse, what it does not do**: a click picks a row (as `Enter`) or
+  hits `[X]`, on the left button's release; the wheel, a right click and a click
+  on the query row do nothing, and the preview under a window picker takes no
+  clicks. `[X]` is left off a box narrower than `PICKER_CLOSE_MIN_WIDTH`.
+  Checked by `the_session_picker_opens_closes_and_picks_with_the_mouse` (Windows
+  run only locally; CI covers the rest).
 - **Scrollbars** follow tmux 3.6 (`layout_fix_panes`, the slider formula,
   `window_copy_scroll1`), checked against tmux's pane sizes.
 - **Option scopes** follow tmux 3.6: global, per session, per window and per

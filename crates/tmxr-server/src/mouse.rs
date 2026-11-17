@@ -108,6 +108,18 @@ pub fn handle(srv: &mut Server, id: ClientId, m: MouseEvent) {
         srv.menu_mouse(id, m);
         return;
     }
+    // So does an open picker: a click picks a row or closes it, and
+    // nothing reaches the panes under it. A press there is not where the
+    // last one was, so the next press starts a new run of clicks.
+    if matches!(att.overlay, Some(crate::overlay::Overlay::Picker(_))) {
+        if matches!(m.kind, MouseEventKind::Down(_))
+            && let Some(att) = srv.clients.get_mut(&id).and_then(|c| c.att.as_mut())
+        {
+            att.click = None;
+        }
+        srv.picker_mouse(id, m);
+        return;
+    }
     let press = att.press;
     // A mouse event is input as a key is, for assume-paste-time's gap, as
     // tmux's server_client_key_callback times both.

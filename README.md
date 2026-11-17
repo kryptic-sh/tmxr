@@ -44,7 +44,8 @@ missing or behaves differently from tmux is listed in
   picks, `q` or `Escape` closes; `i`, `a` or `/` start typing to filter, and
   `Escape` stops. In the session picker `C-x` kills, `C-r` renames, and `Enter`
   on a new name creates that session; the highlighted session's pane shows below
-  the list.
+  the list. With the mouse, a click on the session's name in the status line
+  opens the session picker, a click on a row picks it, and `[X]` closes it.
 - **Tokyo Night status line** in the catppuccin layout, built from tmux formats
   you can restyle.
 - **Terminal title**: the client's terminal shows the title the active pane's

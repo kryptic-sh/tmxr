@@ -535,6 +535,60 @@ fn session_picker_kills_renames_and_creates_sessions() {
 }
 
 #[test]
+fn the_session_picker_opens_closes_and_picks_with_the_mouse() {
+    let t = Tmxr::new("pickmouse");
+    t.run(&["new-session", "-d", "-s", "alpha"]);
+    let s = t.attach(&["new", "-s", "bravo"]);
+    s.wait_for("status line", |text| text.contains("bravo"));
+    s.wait_mouse(true);
+    // The column `word` starts at on row `row`, cell by cell.
+    let col_of = |row: u16, word: &str| {
+        let cells = s.row_cells(row);
+        let n = word.chars().count();
+        (0..cells.len())
+            .find(|&i| {
+                cells[i..]
+                    .iter()
+                    .take(n)
+                    .map(|c| c.0.as_str())
+                    .collect::<String>()
+                    == word
+            })
+            .map(|i| u16::try_from(i).unwrap())
+    };
+    // Where `word` is above the status line.
+    let above_status = |word: &str| (0..ROWS - 1).find_map(|r| Some((col_of(r, word)?, r)));
+    let open = || {
+        let name = col_of(ROWS - 1, "bravo").expect("the session's name in the status line");
+        s.click(0, name, ROWS - 1);
+        s.wait_for("picker", |text| text.contains("sessions 2/2"));
+    };
+
+    // A click on the session's name in the status line opens the picker,
+    // and one on its close button closes it.
+    open();
+    let (x, y) = above_status("[X]").expect("the close button");
+    s.click(0, x + 1, y);
+    s.wait_for("picker closed", |text| !text.contains("sessions 2/2"));
+    assert!(
+        t.run(&["ls"])
+            .lines()
+            .any(|l| l.starts_with("bravo:") && l.contains("(attached)")),
+        "closing switches nothing"
+    );
+
+    // A click on a row switches to that session.
+    open();
+    let (x, y) = above_status("alpha").expect("alpha's row");
+    s.click(0, x, y);
+    t.wait_run(&["ls"], "alpha attached", |o| {
+        o.lines()
+            .any(|l| l.starts_with("alpha:") && l.contains("(attached)"))
+    });
+    s.wait_for("picker closed", |text| !text.contains("sessions 2/2"));
+}
+
+#[test]
 fn session_picker_shows_the_highlighted_session_in_the_client() {
     let t = Tmxr::new("preview");
     t.run(&["new-session", "-d", "-s", "alpha"]);

@@ -174,7 +174,7 @@ impl PickerOverlay {
     }
 
     /// Highlight row `row`, when there is one.
-    pub(super) fn select(&mut self, row: Option<usize>) {
+    pub(crate) fn select(&mut self, row: Option<usize>) {
         if let Some(row) = row {
             self.picker.selected = row;
         }
