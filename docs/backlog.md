@@ -203,6 +203,25 @@ presets, most of `vars.rs`, and the Windows parts of `process.rs` (skimmed).
   `session_picker_shows_the_highlighted_session_in_the_client` on Linux only;
   not tried by hand.
 
+## tmux 3.8 features tmxr does not have yet
+
+The owner asked (2026-11-27) for tmxr to follow tmux 3.8; these are the parts of
+3.8 that are subsystems rather than behaviour changes, left for their own work.
+Each was read in tmux 3.8's source (`options-table.c`, `colour.c`, `hooks.c`),
+not tried.
+
+- **Themes.** 3.8 has ten theme colours (`themeblack` … `thememagenta`,
+  `colour.c`) set by the `theme` option (detect, ANSI, light, dark) and the
+  `light-theme-*` / `dark-theme-*` options, and many defaults use them
+  (`message-style` is `bg=themedarkgrey,fg=themewhite`, `clock-mode-colour`
+  `themeblue`, the mode formats `#[fg=themelightgrey]`). tmxr has none of it:
+  its style parser does not know the names, and its pickers draw a row's text
+  without reading `#[…]`, so 3.8's `#{tree_mode_format}` and the other mode
+  formats stay 3.6's (`mode_formats_as_tmux` is in `known_divergences.toml` for
+  it). The colour options 3.8 made strings (`clock-mode-colour`,
+  `cursor-colour`, `display-panes-colour`, `display-panes-active-colour`) are
+  strings in tmxr too.
+
 ## Gaps found by review (2026-11-02)
 
 A read-only review after v0.14.0, looking for input or terminal state that tmxr

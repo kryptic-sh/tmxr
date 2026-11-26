@@ -18,6 +18,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Colour options tmux 3.8 made strings are strings**: `clock-mode-colour`,
+  `cursor-colour`, `display-panes-colour` and `display-panes-active-colour` are
+  quoted by `show-options` and appended to by `set -a`, as in 3.8.
 - **Scrolling in copy mode under vi keys keeps the cursor on its text**, as tmux
   3.8 (issue 5216): `scroll-up` / `scroll-down` move the view and leave the
   cursor on the line it was on, until that line leaves the view; under emacs

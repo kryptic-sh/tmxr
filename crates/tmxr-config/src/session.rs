@@ -37,8 +37,8 @@ options_table! {
     /// Where the session's clients go when it is destroyed.
     "detach-on-destroy" => detach_on_destroy: DetachOnDestroy,
     /// `display-panes` number colour for the active pane, and the others.
-    "display-panes-active-colour" => display_panes_active_colour: Word,
-    "display-panes-colour" => display_panes_colour: Word,
+    "display-panes-active-colour" => display_panes_active_colour: String,
+    "display-panes-colour" => display_panes_colour: String,
     /// How long `display-panes` shows pane numbers, in milliseconds.
     "display-panes-time" => display_panes_time: u64,
     /// How long a status message shows, in milliseconds.

@@ -109,6 +109,9 @@ checks = [{ command = "capture-pane -p -t o" }]
 [[cases]]
 name = "mode_formats_as_tmux"
 # tmux 3.8: theme colours in the defaults (from formats.toml)
+# 3.8's mode formats colour their text with theme colours (themelightgrey and
+# the rest), which tmxr does not have yet; its pickers would show the #[…]
+# as text. Kept until themes are (see the backlog).
 steps = [{ run = "new-window -d -t o:1 -n second" }]
 checks = [
   { command = "display -p '#{buffer_mode_format}'" },
@@ -563,32 +566,6 @@ checks = [
   { format = "#{@seen}", expect = "slider" },
   { format = "#{pane_in_mode}", expect = "1" },
   { format = "#{scroll_position}" },
-]
-
-[[cases]]
-name = "show_options_quotes_strings_as_tmux"
-# tmux 3.8: theme colours in the defaults (from options.toml)
-steps = [
-  { run = "set -g @a 'a b'" },
-  { run = "set -g @b \"it's\"" },
-  { run = "set -g @c 'x\"y'" },
-  { run = "set -g @d '~/x'" },
-  { run = "set -g @e ''" },
-  { run = "set -t o status-left '[#S] '" },
-  { run = "set -wg clock-mode-colour '#ff0000'" },
-  { run = "set -g prefix C-a" },
-  { run = "set -w -t o:0 window-status-format '#I #W'" },
-]
-checks = [
-  { command = "show -g @a", expect = '@a "a b"' },
-  { command = "show -g @b", expect = "@b \"it's\"" },
-  { command = "show -g @c", expect = "@c 'x\"y'" },
-  { command = "show -g @d", expect = '@d \~/x' },
-  { command = "show -g @e", expect = "@e ''" },
-  { command = "show -t o status-left", expect = 'status-left "[#S] "' },
-  { command = "show -wg clock-mode-colour", expect = "clock-mode-colour #ff0000" },
-  { command = "show -g prefix", expect = "prefix C-a" },
-  { command = "show -w -t o:0 window-status-format", expect = 'window-status-format "#I #W"' },
 ]
 
 [[cases]]

@@ -3,7 +3,7 @@
 
 use serde::Deserialize;
 
-use crate::table::{OptionValue, Word, options_table};
+use crate::table::{OptionValue, options_table};
 use crate::{ScrollbarPosition, Scrollbars};
 
 /// `cursor-style`: a pane's cursor shape when its program has not asked
@@ -455,7 +455,7 @@ options_table! {
     /// pane.
     "automatic-rename-format" => automatic_rename_format: String,
     /// The colour of clock mode's digits.
-    "clock-mode-colour" => clock_mode_colour: Word,
+    "clock-mode-colour" => clock_mode_colour: String,
     /// How clock mode tells the time: 12 or 24 hours, with seconds or not.
     "clock-mode-style" => clock_mode_style: ClockModeStyle,
         /// Copy mode search matches under the cursor.
@@ -471,7 +471,7 @@ options_table! {
     "copy-mode-selection-style" => copy_mode_selection_style: String,
     /// A pane's cursor colour until its program sets one (OSC 12); `none`
     /// for the terminal's own.
-    "cursor-colour" => cursor_colour: Word,
+    "cursor-colour" => cursor_colour: String,
     /// A pane's cursor shape until its program asks for one.
     "cursor-style" => cursor_style: CursorStyle,
     /// What fills the client beyond a smaller window; empty, a dot.
