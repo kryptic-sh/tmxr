@@ -312,6 +312,13 @@ impl CopyMode {
         spans
     }
 
+    /// Take the marks away, and with them the count, as tmux 3.8's
+    /// window_copy_clear_marks.
+    pub(super) fn clear_marks(&mut self) {
+        self.marks = false;
+        self.search_count = None;
+    }
+
     /// Mark the last search's matches after it ran, as tmux's
     /// window_copy_search: a copy mode's first search, or one for other
     /// text than the search before it (`previous`), clears the marks and,
@@ -329,12 +336,12 @@ impl CopyMode {
         }
         self.marks = true;
         if !same {
-            self.search_count = self.search.as_ref().map_or(0, |search| {
+            self.search_count = Some(self.search.as_ref().map_or(0, |search| {
                 let needle = Needle::new(&search.needle, search.regex);
                 (0..self.lines.len())
                     .map(|y| needle.row_matches(&self.lines, y).len())
                     .sum()
-            });
+            }));
         }
     }
 

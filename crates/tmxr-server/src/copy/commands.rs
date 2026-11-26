@@ -212,7 +212,7 @@ pub fn command(
     if let Some(cm) = srv.panes.get_mut(&pane).and_then(|p| p.copy.as_mut())
         && super::clears_marks(name, cm.emacs)
     {
-        cm.marks = false;
+        cm.clear_marks();
     }
     if let Some(p) = srv.panes.get_mut(&pane)
         && let Some(search) = p.copy.as_ref().and_then(|cm| cm.search.clone())
@@ -370,8 +370,8 @@ fn run_command(
             }
         }
         // A motion down that leaves copy mode once it is at the bottom, as
-        // tmux's: the scrolls when the view reaches the bottom, the cursor
-        // when it could not move there.
+        // tmux 3.8's: the scrolls when the view reaches the bottom with no
+        // selection made, the cursor when it could not move there.
         "scroll-down-and-cancel"
         | "page-down-and-cancel"
         | "halfpage-down-and-cancel"
@@ -381,7 +381,8 @@ fn run_command(
             cm.apply_counted(motion, None);
             let bottom = cm.position().0 == 0;
             let stuck = motion != "cursor-down" || cm.cy == before;
-            if bottom && stuck {
+            let selecting = motion != "cursor-down" && cm.anchor.is_some();
+            if bottom && stuck && !selecting {
                 leave(srv, pane);
             }
         }
@@ -389,9 +390,10 @@ fn run_command(
             if !cm.apply_counted(other, args.first().map(String::as_str)) {
                 return Err(format!("unknown copy-mode command: {other}"));
             }
-            // As tmux 3.6's, with a selection or without.
+            // Not while a selection is made, as tmux 3.8's (issue 5349).
             let scrolled_out = matches!(other, "scroll-down" | "page-down" | "halfpage-down")
                 && cm.scroll_exit
+                && cm.anchor.is_none()
                 && cm.position().0 == 0;
             if scrolled_out {
                 leave(srv, pane);

@@ -18,6 +18,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Copy mode keeps a selection at the bottom, and drops a cleared search's
+  count**, as tmux 3.8: `copy-mode -e` (and the wheel's, the slider's and the
+  `…-down-and-cancel` scrolls) no longer leaves copy mode at the bottom while a
+  selection is made; and once a search's marks are cleared, `#{search_count}`
+  and `#{search_count_partial}` are empty rather than the last search's.
 - **No paste is guessed from a terminal that brackets pastes**, as in tmux 3.8:
   `assume-paste-time` applies only to a client reading a Windows console's key
   records (conhost), where a paste arrives as keys; everywhere else the client

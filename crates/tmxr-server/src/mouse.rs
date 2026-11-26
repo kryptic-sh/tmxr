@@ -740,7 +740,8 @@ fn scroll_to_slider(srv: &mut Server, pane: PaneId, grab: u16, my: u16, exit: bo
     cm.top = offset.min(size);
     let rows = usize::from(cm.rows.max(1));
     cm.cy = cm.cy.clamp(cm.top, cm.top + rows - 1);
-    let at_bottom = cm.top == size;
+    // Not while a selection is made, as tmux 3.8's window_copy_scroll1.
+    let at_bottom = cm.top == size && cm.anchor.is_none();
     let window = p.window;
     srv.mark_window_dirty(window);
     if exit && at_bottom {

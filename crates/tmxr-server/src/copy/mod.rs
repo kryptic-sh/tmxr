@@ -91,8 +91,9 @@ pub struct CopyMode {
     /// clear them do ([`clears_marks`]).
     pub marks: bool,
     /// How many matches the last search had across every line
-    /// (`#{search_count}`), kept when the marks are cleared.
-    pub search_count: usize,
+    /// (`#{search_count}`); none once its marks are cleared, as tmux 3.8's
+    /// window_copy_clear_marks.
+    pub search_count: Option<usize>,
     /// `mode-keys` is emacs, under which more commands clear the marks.
     pub emacs: bool,
     /// The last search went down, as tmux's searchdirection.
@@ -218,7 +219,7 @@ impl CopyMode {
             cols,
             search: None,
             marks: false,
-            search_count: 0,
+            search_count: Some(0),
             emacs: false,
             search_forward: false,
             search_all: true,
@@ -1336,7 +1337,7 @@ impl CopyMode {
                 };
                 if needle.is_empty() {
                     self.search = None;
-                    self.marks = false;
+                    self.clear_marks();
                 } else if let Some(forward) = forward {
                     // Up, the cursor's own place never counts; down, it
                     // does until the search moves on.

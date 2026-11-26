@@ -1192,3 +1192,66 @@ checks = [
   { command = "list-keys -T prefix F9" },
   { command = "show-hooks -g after-new-window" },
 ]
+
+[[cases]]
+# copy-mode -e leaves once halfpage-down or page-down reaches the bottom,
+# a selection or not.
+name = "copy_mode_e_leaves_at_the_bottom_as_tmux"
+pane = [{ seq = 100 }]
+steps = [
+  { sleep = 0.5 },
+  { run = "copy-mode -e -t o" },
+  { run = "send -t o -X halfpage-up" },
+  { run = "send -t o -X halfpage-down" },
+  { run = "set -gF @half '#{pane_in_mode}'" },
+  { run = "copy-mode -e -t o" },
+  { run = "send -t o -X halfpage-up" },
+  { run = "send -t o -X begin-selection" },
+  { run = "send -t o -X page-down" },
+  { run = "set -gF @selected '#{pane_in_mode}'" },
+]
+checks = [{ format = "#{@half} #{@selected}", expect = "0 1" }]
+
+[[cases]]
+name = "a_searchs_formats_as_tmux"
+# tmux's search marks, their count over the whole history, the match at
+# the cursor (or just past it), and which commands clear the marks: under
+# vi keys a cursor move keeps them, begin-selection does not.
+unix_only = true
+size = [40, 8]
+program = "for i in $(seq 1 12); do echo \"foo bar $i foo\"; done; echo 'a foo-bar'; printf 'end foo'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g mode-keys vi" },
+  { run = "copy-mode -t o" },
+  { run = "set -gF @before '#{search_present} #{search_count}'" },
+  { run = "send-keys -t o -X search-backward zzz" },
+  { run = "set -gF @none '#{search_present} #{search_count} [#{search_match}]'" },
+  { run = "send-keys -t o -X search-backward foo" },
+  { run = "send-keys -t o -N 3 -X cursor-right" },
+  { run = "set -gF @found '#{search_present} #{search_count} [#{search_match}] [#{copy_cursor_line}]'" },
+  { run = "send-keys -t o -X cursor-right" },
+  { run = "set -gF @past '#{search_present} [#{search_match}]'" },
+  { run = "send-keys -t o -X begin-selection" },
+]
+checks = [
+  { format = "#{@before} | #{@none} | #{@found} | #{@past} | #{search_present} #{search_count} #{search_count_partial} #{search_timed_out}" },
+]
+
+[[cases]]
+name = "emacs_keys_clear_a_searchs_marks_on_a_move_as_tmux"
+unix_only = true
+size = [40, 8]
+program = "for i in $(seq 1 12); do echo \"foo bar $i foo\"; done; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g mode-keys emacs" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X search-backward foo" },
+  { run = "send-keys -t o -X toggle-position" },
+  { run = "set -gF @kept '#{search_present}'" },
+  { run = "send-keys -t o -X cursor-down" },
+]
+checks = [
+  { format = "#{@kept} #{search_present} #{search_count}" },
+]

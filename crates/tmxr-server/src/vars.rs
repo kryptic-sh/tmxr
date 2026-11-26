@@ -995,8 +995,13 @@ impl<'a> Context for Vars<'a> {
             // cursor, as tmux's window_copy_formats; tmxr's searches never
             // stop short, so never time out or count only part.
             "search_present" => flag(pane?.copy.as_ref()?.marks),
-            "search_count" => pane?.copy.as_ref()?.search_count.to_string(),
-            "search_count_partial" | "search_timed_out" => {
+            // Neither once the marks are cleared, as tmux 3.8's.
+            "search_count" => pane?.copy.as_ref()?.search_count?.to_string(),
+            "search_count_partial" => {
+                pane?.copy.as_ref()?.search_count?;
+                "0".to_owned()
+            }
+            "search_timed_out" => {
                 pane?.copy.as_ref()?;
                 "0".to_owned()
             }
