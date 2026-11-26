@@ -801,7 +801,7 @@ fn source_file_runs_a_tmux_command_file() {
     );
     assert_eq!(
         t.run(&["list-keys", "-T", "prefix", "z"]).trim(),
-        r"bind-key -T prefix z display-message one \;\; display-message two"
+        r"bind-key  -T prefix z display-message one \;\; display-message two"
     );
 }
 

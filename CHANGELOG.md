@@ -16,6 +16,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `[X]` on its top border closes it. While a picker is open the mouse no longer
   reaches the panes under it.
 
+### Changed
+
+- **`list-keys` prints as tmux 3.8's**: a `bind-key` line has two spaces before
+  `-T` when no listed bind repeats; `-N` lists the prefix table before the root,
+  puts the prefix key (or `-P`'s text) and a space before every key, pads to the
+  widest key listed, and lists noted mouse binds too (tmxr's default mouse binds
+  have notes, so `prefix ?` now shows them); `-1` takes the first bind listed,
+  not each table's first.
+
 ### Fixed
 
 - **`tmxr kill-server` ends a server from before an upgrade**: a server speaking

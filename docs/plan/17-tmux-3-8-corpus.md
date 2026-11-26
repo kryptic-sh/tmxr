@@ -16,12 +16,6 @@ reading tmux 3.8's `CHANGES` and source; none is a tmxr bug the 3.6 runs hid,
 and none is a fragile case. What 3.6 did is inferred from the recorded values,
 not read in 3.6's source. Grouped by cause:
 
-1. **`list-keys` output** (`cmd-list-keys.c` `LIST_KEYS_TEMPLATE`, 3.7's -O /
-   -F): a bind with no repeat prints two spaces before `-T`, and `-N` lists the
-   prefix table before the root. Cases: `list_keys_prints_commands_as_tmux`,
-   `a_binds_variables_print_expanded_as_tmux`, `blocks_print_in_braces_as_tmux`,
-   `list_keys_keeps_apart_the_keys_tmux_does`,
-   `list_keys_in_tmuxs_order_and_layout`. Small (`cmds/binds.rs`).
 2. **The command prompt's Tab completion** (`prompt.c`): 3.8 knows only the
    `command` and `search` prompt types (no `target` / `window-target`), and
    completes command names inline, underlined, with no menu and no session or

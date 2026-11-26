@@ -343,20 +343,20 @@ mod tests {
         let marked = |srv: &mut Server| run(srv, "list-keys -T t");
         assert_eq!(
             marked(&mut srv),
-            "bind-key -T t F13   display-message b # needs kitty keys\n\
-             bind-key -T t C-S-h display-message a # needs extended keys\n"
+            "bind-key  -T t F13   display-message b # needs kitty keys\n\
+             bind-key  -T t C-S-h display-message a # needs extended keys\n"
         );
         say_keyboard(&mut srv, told(false, Some("XTerm(388)")));
         assert_eq!(
             marked(&mut srv),
-            "bind-key -T t F13   display-message b # needs kitty keys\n\
-             bind-key -T t C-S-h display-message a\n"
+            "bind-key  -T t F13   display-message b # needs kitty keys\n\
+             bind-key  -T t C-S-h display-message a\n"
         );
         say_keyboard(&mut srv, told(true, None));
         assert_eq!(
             marked(&mut srv),
-            "bind-key -T t F13   display-message b\n\
-             bind-key -T t C-S-h display-message a\n"
+            "bind-key  -T t F13   display-message b\n\
+             bind-key  -T t C-S-h display-message a\n"
         );
     }
 

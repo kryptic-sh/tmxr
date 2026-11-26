@@ -208,35 +208,6 @@ checks = [
 ]
 
 [[cases]]
-name = "list_keys_in_tmuxs_order_and_layout"
-# tmux 3.8: list-keys prints through LIST_KEYS_TEMPLATE (from keys.toml)
-steps = [
-  { run = "unbind -a" },
-  { run = "unbind -a -T root" },
-  { run = "bind -N 'note a' a display-message a" },
-  { run = "bind -N 'ctrl b' C-b send-prefix" },
-  { run = "bind -N 'meta x' M-x display-message mx" },
-  { run = "bind -N 'up arrow' Up display-message up" },
-  { run = "bind -N 'space bar' Space display-message sp" },
-  { run = "bind -N quote '\"' display-message q" },
-  { run = "bind -r -N 'f one' F1 display-message f1" },
-  { run = "bind -n -N 'root z' z display-message rz" },
-  { run = "bind -n M-y display-message rmy" },
-  { run = "bind -n MouseDown1Pane select-pane" },
-  { run = "bind -T mytab Enter display-message e" },
-]
-checks = [
-  { command = "list-keys -N" },
-  { command = "list-keys -aN" },
-  { command = "list-keys -N -P '>> '" },
-  { command = "list-keys -N -T root" },
-  { command = "list-keys -T prefix" },
-  { command = "list-keys -T root" },
-  { command = "list-keys -T mytab" },
-  { command = "list-keys -T prefix F1" },
-]
-
-[[cases]]
 name = "scrolling_keeps_the_cursors_row_and_history_bottom_its_end_as_tmux"
 # tmux 3.8: vi scrolling keeps the cursor on its text (from keys.toml)
 # scroll-up / -down move the cursor with the view, keeping its column as
@@ -455,49 +426,6 @@ checks = [
 ]
 
 [[cases]]
-name = "list_keys_prints_commands_as_tmux"
-# tmux 3.8: list-keys prints through LIST_KEYS_TEMPLATE (from keys.toml)
-steps = [
-  { run = "bind -T mytab a display hi" },
-  { run = "bind -T mytab b set -g @x 1 \\; display 'a b'" },
-  { run = "bind -T mytab c splitw -h -c '#{pane_current_path}'" },
-]
-checks = [{ command = "list-keys -T mytab" }, { command = "list-keys -aN -T mytab" }]
-
-[[cases]]
-name = "list_keys_keeps_apart_the_keys_tmux_does"
-# tmux 3.8: list-keys prints through LIST_KEYS_TEMPLATE (from keys.toml)
-# tmux 3.6 binds each of these as a key of its own and lists it back as
-# bound: Shift kept apart on a Ctrl letter, Ctrl with an upper-case letter
-# alone, Ctrl with a digit or @ apart from the key its legacy byte is, and
-# the keypad apart from the main keys.
-steps = [
-  { run = "bind -T t C-h display a" },
-  { run = "bind -T t C-S-h display b" },
-  { run = "bind -T t C-H display c" },
-  { run = "bind -T t C-a display d" },
-  { run = "bind -T t C-A display e" },
-  { run = "bind -T t C-4 display f" },
-  { run = "bind -T t 'C-\\' display g" },
-  { run = "bind -T t C-@ display h" },
-  { run = "bind -T t C-Space display i" },
-  { run = "bind -T t C-2 display j" },
-  { run = "bind -T t KP1 display k" },
-  { run = "bind -T t 1 display l" },
-  { run = "bind -T t KPEnter display m" },
-  { run = "bind -T t S-F1 display n" },
-  { run = "bind -T t C-S-Up display o" },
-  { run = "bind -T t C-i display p" },
-  { run = "bind -T t Tab display q" },
-  { run = "bind -T t S-Tab display r" },
-  { run = "bind -T t BTab display s" },
-  { run = "bind -T t C-S-Tab display t" },
-  { run = "bind -T t C-S-1 display u" },
-  { run = "bind -T t C-1 display v" },
-]
-checks = [{ command = "list-keys -T t" }]
-
-[[cases]]
 name = "command_prompt_tab_completes_as_tmux"
 # tmux 3.8: no Tab completion menu and no target prompt types (prompt.c); kept for now, the owner's call (from keys.toml)
 attach = true
@@ -590,20 +518,6 @@ checks = [
   { command = "show-buffer -b buffer1" },
   { format = "#{copy_cursor_x},#{copy_cursor_y}" },
 ]
-
-[[cases]]
-name = "a_binds_variables_print_expanded_as_tmux"
-# tmux 3.8: list-keys prints through LIST_KEYS_TEMPLATE (from keys.toml)
-attach = true
-unix_only = true
-steps = [
-  { run = "command-prompt -b" },
-  { sleep = 0.3 },
-  { keys = "bind F5 display \"$HOME\" \\; display ${HOME}x\u000d" },
-  { sleep = 0.3 },
-  { run = "bind F6 display '$HOME'" },
-]
-checks = [{ command = "list-keys -T prefix F5" }, { command = "list-keys -T prefix F6" }]
 
 [[cases]]
 name = "prompt_tab_opens_a_menu_of_the_names_as_tmux"
@@ -926,36 +840,6 @@ steps = [
 checks = [
   { screen_find = "switchc", expect = "2,6" },
   { screen_find = "swapw", expect = "2,4" },
-]
-
-[[cases]]
-name = "blocks_print_in_braces_as_tmux"
-# tmux 3.8: list-keys prints through LIST_KEYS_TEMPLATE (from keys.toml)
-attach = true
-unix_only = true
-steps = [
-  { run = "command-prompt -b" },
-  { sleep = 0.3 },
-  { keys = "bind F7 command-prompt { display \"%%\" }\u000d" },
-  { sleep = 0.3 },
-  { run = "command-prompt -b" },
-  { sleep = 0.3 },
-  { keys = "bind F8 if -F 1 { display a; display b } { display c }\u000d" },
-  { sleep = 0.3 },
-  { run = "command-prompt -b" },
-  { sleep = 0.3 },
-  { keys = "bind F9 if -F 1 { if -F 1 { display deep } }\u000d" },
-  { sleep = 0.3 },
-  { run = "command-prompt -b" },
-  { sleep = 0.3 },
-  { keys = "set-hook -g after-new-window { display hooked; display twice }\u000d" },
-  { sleep = 0.3 },
-]
-checks = [
-  { command = "list-keys -T prefix F7" },
-  { command = "list-keys -T prefix F8" },
-  { command = "list-keys -T prefix F9" },
-  { command = "show-hooks -g after-new-window" },
 ]
 
 [[cases]]

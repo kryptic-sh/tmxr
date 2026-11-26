@@ -372,9 +372,9 @@ fn list_keys_marks_the_binds_a_clients_terminal_cannot_send() {
     kitty.wait_for("status line", |text| text.contains("kt"));
     kitty.wait_kitty_flags(TMXR_KITTY_FLAGS);
     let unmarked = "\
-bind-key -T t x       display-message plain
-bind-key -T t C-S-h   display-message ctrl-shift-h
-bind-key -T t Super-k display-message super-k
+bind-key  -T t x       display-message plain
+bind-key  -T t C-S-h   display-message ctrl-shift-h
+bind-key  -T t Super-k display-message super-k
 ";
     assert_eq!(list_keys_in_pane(&t, "lg"), unmarked);
     assert_eq!(list_keys_in_pane(&t, "kt"), unmarked);

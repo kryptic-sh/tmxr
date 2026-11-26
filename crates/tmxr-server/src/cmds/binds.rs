@@ -113,13 +113,13 @@ pub(super) fn run(
     Ok(true)
 }
 
-/// `list-keys`, as tmux 3.6's cmd_list_keys_exec: tables by name and each
+/// `list-keys`, as tmux 3.8's cmd_list_keys_exec: tables by name and each
 /// in tmux's key order, as `bind-key` lines with the table and key padded to
 /// the widest; or with -N the noted binds (with -a every one, its command
-/// for a note) and no mouse keys, without -T the root table then the prefix
-/// table, each key after the prefix key (or -P's text, or as many spaces)
-/// and padded to the widest noted key. -1 takes each table's first, shown
-/// on a client when there is one; a key no table binds is an error.
+/// for a note), without -T the prefix table then the root
+/// table, each key after the prefix key (or -P's text) and a space, padded
+/// to the widest. -1 takes the first, shown on a client when there is one;
+/// a key no table binds is an error.
 fn list_keys(
     srv: &mut Server,
     ctx: &Ctx,
@@ -152,88 +152,68 @@ fn list_keys(
         tier.and_then(|t| crate::keyboard::needs_comment(crate::keyboard::needs(key), t))
             .map_or_else(String::new, |c| format!(" {c}"))
     };
-    let listed: Vec<(String, BindKey, BindSpec)> = all
+    let notes = a.has('N');
+    let noted = |b: &BindSpec| b.note.as_deref().is_some_and(|n| !n.is_empty());
+    let mut listed: Vec<(String, BindKey, BindSpec)> = all
         .into_iter()
-        .filter(|(name, key, _)| table.is_none_or(|t| t == name) && only.is_none_or(|k| k == *key))
+        .filter(|(name, key, b)| {
+            only.is_none_or(|k| k == *key)
+                && match (notes, table) {
+                    (_, Some(t)) => t == name,
+                    (false, None) => true,
+                    (true, None) => name == "prefix" || name == "root",
+                }
+                && (!notes || noted(b) || a.has('a'))
+        })
         .collect();
+    // -N without -T: the prefix table first, as tmux's
+    // cmd_list_keys_get_root_and_prefix.
+    if notes && table.is_none() {
+        listed.sort_by_key(|(name, _, _)| name != "prefix");
+    }
+    // -1: the first alone, which is all the widths are taken over.
+    if a.has('1') {
+        listed.truncate(1);
+    }
+    let escaped = |k: &BindKey| tmxr_command::escape_arg(&k.to_string());
     let mut lines = Vec::new();
-    if a.has('N') {
-        let noted = |b: &BindSpec| b.note.as_deref().is_some_and(|n| !n.is_empty());
-        let in_table = |t: &str| -> Vec<&(String, BindKey, BindSpec)> {
-            listed
-                .iter()
-                .filter(|(name, key, _)| name == t && !matches!(key, BindKey::Mouse(_)))
-                .collect()
+    if notes {
+        let start = match a.value('P') {
+            Some(p) => p.to_owned(),
+            None => Some(srv.cfg.session.prefix.to_string())
+                .filter(|p| p != "None")
+                .unwrap_or_default(),
         };
-        let key_width = |t: &str| {
-            in_table(t)
-                .into_iter()
-                .filter(|(_, _, b)| noted(b))
-                .map(|(_, k, _)| width(&k.to_string()))
-                .max()
-                .unwrap_or(0)
-        };
-        let mut notes = |t: &str, keywidth: usize, start: &str| {
-            for (_, key, b) in in_table(t)
-                .into_iter()
-                .filter(|(_, _, b)| noted(b) || a.has('a'))
-            {
-                let note = if noted(b) {
-                    b.note.clone().unwrap_or_default()
-                } else {
-                    shown(&b.cmd)
-                };
-                lines.push(format!(
-                    "{start}{}{note}{}",
-                    pad(&key.to_string(), keywidth + 1),
-                    mark(key)
-                ));
-                if a.has('1') {
-                    break;
-                }
-            }
-        };
-        if let Some(t) = table {
-            let start = a.value('P').unwrap_or_default();
-            notes(t, key_width(t), start);
-        } else {
-            let prefix = srv.cfg.session.prefix.to_string();
-            let mut with_prefix = prefix != "None";
-            let start = match a.value('P') {
-                Some(p) => p.to_owned(),
-                None if with_prefix => format!("{prefix} "),
-                None => String::new(),
+        let keywidth = listed
+            .iter()
+            .map(|(_, k, _)| width(&k.to_string()))
+            .max()
+            .unwrap_or(0);
+        for (_, key, b) in &listed {
+            let note = if noted(b) {
+                b.note.clone().unwrap_or_default()
+            } else {
+                shown(&b.cmd)
             };
-            let mut keywidth = key_width("root");
-            if with_prefix {
-                match key_width("prefix") {
-                    0 => with_prefix = false,
-                    w => keywidth = keywidth.max(w),
-                }
-            }
-            notes("root", keywidth, &" ".repeat(width(&start)));
-            if with_prefix {
-                notes("prefix", keywidth, &start);
-            }
+            lines.push(format!(
+                "{start} {} {note}{}",
+                pad(&key.to_string(), keywidth),
+                mark(key)
+            ));
         }
     } else {
         let repeat = listed.iter().any(|(_, _, b)| b.repeat);
         let tablewidth = listed.iter().map(|(t, _, _)| width(t)).max().unwrap_or(0);
-        let escaped = |k: &BindKey| tmxr_command::escape_arg(&k.to_string());
         let keywidth = listed
             .iter()
             .map(|(_, k, _)| width(&escaped(k)))
             .max()
             .unwrap_or(0);
-        let mut last_table = None;
         for (t, key, b) in &listed {
-            // -1: each table's first.
-            if a.has('1') && last_table == Some(t) {
-                continue;
-            }
-            last_table = Some(t);
+            // tmux's template prints `#{?key_repeat,-r,  }` only when some
+            // bind repeats, and a space either way.
             let r = match (repeat, b.repeat) {
-                (false, _) => "",
+                (false, _) => " ",
                 (true, true) => "-r ",
                 (true, false) => "   ",
             };
