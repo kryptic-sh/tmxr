@@ -8,6 +8,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Windows host names show in lower case**, as other systems' usually are:
+  `#H`, `#h`, `#{host}`, `#{host_short}` and a pane's first title. A new server
+  option, `windows-proper-hostname` (off by default; `set -s` or the config
+  file), shows the name as Windows has it, usually upper case. Other systems
+  show the host name as it is either way.
 - **The session picker with the mouse**: a click on the session's name in the
   status line opens it (the default `@status_session` marks the name with
   `range=user|sessions`, and the default `MouseDown1Status` opens

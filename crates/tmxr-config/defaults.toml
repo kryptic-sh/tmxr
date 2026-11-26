@@ -62,6 +62,10 @@ extended-keys-format = "xterm"
 # panes' programs may push kitty flags. false does neither: programs that ask
 # find it off and fall back. extended-keys covers xterm-style keys alone.
 kitty-keys = true
+# tmxr's: on Windows the host name (#H, #h) is shown in lower case, as other
+# systems' usually are; true shows it as Windows has it, usually upper case.
+# Other systems show it as it is either way.
+windows-proper-hostname = false
 # tmux's default: features a terminal is given by its TERM, `pattern:feature:…`
 # (tmux's `terminal-features`). tmxr acts on `extkeys` (xterm's
 # modifyOtherKeys, under extended-keys) and reads the rest.

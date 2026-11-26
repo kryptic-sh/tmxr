@@ -2003,3 +2003,26 @@ fn a_job_whose_command_changes_stops_its_old_run() {
     }
     assert!(!running("sleep 312"), "the server's exit stopped the run");
 }
+
+/// `#H` shows a Windows host name in lower case unless
+/// `windows-proper-hostname` asks for it as Windows has it; elsewhere it
+/// is the same either way.
+#[test]
+fn the_host_name_shows_as_windows_proper_hostname_says() {
+    let t = Tmxr::new("hostcase");
+    t.run(&["new-session", "-d", "-s", "hc"]);
+    let host = |t: &Tmxr| t.run(&["display", "-p", "#H|#h|#{host}"]).trim().to_owned();
+    assert_eq!(
+        t.run(&["show", "-sv", "windows-proper-hostname"]).trim(),
+        "off"
+    );
+    let shown = host(&t);
+    t.run(&["set", "-s", "windows-proper-hostname", "on"]);
+    let proper = host(&t);
+    if cfg!(windows) {
+        assert_eq!(shown, proper.to_lowercase());
+    } else {
+        assert_eq!(shown, proper);
+    }
+    assert!(!shown.is_empty() && shown.contains('|'), "{shown}");
+}

@@ -67,6 +67,9 @@ pub struct Config {
     /// `kitty-keys`: whether clients ask their terminals for the kitty
     /// keyboard protocol and panes' programs may push kitty flags.
     pub kitty_keys: bool,
+    /// `windows-proper-hostname`: on Windows, the host name as Windows has
+    /// it (`#H`, `#h`), usually upper case; off, in lower case.
+    pub windows_proper_hostname: bool,
     /// `terminal-features`: `pattern:feature:…` entries, each giving the
     /// terminal features after it to a client whose `TERM` matches the
     /// pattern, as tmux's. Items by index, as tmux's arrays keep them.
@@ -146,6 +149,7 @@ struct File {
     extended_keys: String,
     extended_keys_format: String,
     kitty_keys: bool,
+    windows_proper_hostname: bool,
     terminal_features: Vec<String>,
     set_clipboard: String,
     rgb_colour: String,
@@ -344,6 +348,7 @@ impl From<File> for Config {
             extended_keys: f.extended_keys,
             extended_keys_format: f.extended_keys_format,
             kitty_keys: f.kitty_keys,
+            windows_proper_hostname: f.windows_proper_hostname,
             terminal_features: f.terminal_features.into_iter().collect(),
             set_clipboard: f.set_clipboard,
             rgb_colour: f.rgb_colour,
@@ -893,6 +898,9 @@ impl Config {
                 .extended_keys_format
                 .clone_from(&from.extended_keys_format),
             "kitty-keys" => self.kitty_keys = from.kitty_keys,
+            "windows-proper-hostname" => {
+                self.windows_proper_hostname = from.windows_proper_hostname;
+            }
             "terminal-features" => self.terminal_features.clone_from(&from.terminal_features),
             "set-clipboard" => self.set_clipboard.clone_from(&from.set_clipboard),
             "rgb-colour" => self.rgb_colour.clone_from(&from.rgb_colour),

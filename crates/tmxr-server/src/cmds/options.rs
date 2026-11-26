@@ -222,6 +222,9 @@ fn set_option(srv: &mut Server, ctx: &Ctx, p: &Parsed) -> Res {
             }
         },
         "kitty-keys" => c.kitty_keys = super::on_off(value, c.kitty_keys)?,
+        "windows-proper-hostname" => {
+            c.windows_proper_hostname = super::on_off(value, c.windows_proper_hostname)?;
+        }
         "set-clipboard" => need()?.clone_into(&mut c.set_clipboard),
         "rgb-colour" => match need()? {
             v @ ("on" | "off" | "16" | "auto") => v.clone_into(&mut c.rgb_colour),
@@ -318,6 +321,7 @@ pub const SERVER_OPTIONS: &[&str] = &[
     "set-clipboard",
     "socket-access",
     "terminal-features",
+    "windows-proper-hostname",
 ];
 
 /// A flag as `show-options` prints it.
@@ -419,6 +423,7 @@ fn config_option(c: &tmxr_config::Config, name: &str) -> Option<String> {
         "focus-events" => on_off(c.focus_events).to_owned(),
         "history-file" => c.history_file.clone(),
         "kitty-keys" => on_off(c.kitty_keys).to_owned(),
+        "windows-proper-hostname" => on_off(c.windows_proper_hostname).to_owned(),
         "message-limit" => c.message_limit.to_string(),
         "prefix-timeout" => c.prefix_timeout.to_string(),
         "prompt-history-limit" => c.prompt_history_limit.to_string(),
@@ -527,6 +532,21 @@ pub fn option_lines(srv: &Server) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn windows_proper_hostname_is_a_server_option_off_by_default() {
+        assert!(SERVER_OPTIONS.contains(&"windows-proper-hostname"));
+        let mut c = tmxr_config::defaults();
+        assert_eq!(
+            config_option(&c, "windows-proper-hostname").as_deref(),
+            Some("off")
+        );
+        c.windows_proper_hostname = true;
+        assert_eq!(
+            config_option(&c, "windows-proper-hostname").as_deref(),
+            Some("on")
+        );
+    }
 
     #[test]
     fn kitty_keys_is_a_server_option_shown_on_or_off() {

@@ -25,6 +25,18 @@ pub fn hostname() -> String {
     }
 }
 
+/// The host name as tmxr shows it (`#H`, `#h`, a pane's first title): on
+/// Windows in lower case, as other systems' usually are, unless `proper`
+/// (`windows-proper-hostname`) asks for it as Windows has it; elsewhere as
+/// it is.
+pub fn shown_host(host: &str, proper: bool) -> String {
+    if cfg!(windows) && !proper {
+        host.to_lowercase()
+    } else {
+        host.to_owned()
+    }
+}
+
 pub fn home_dir() -> PathBuf {
     std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
@@ -232,6 +244,20 @@ pub fn base64_decode(text: &str) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A Windows host name shows in lower case unless the proper one is
+    /// asked for; elsewhere it shows as it is.
+    #[test]
+    fn a_windows_host_name_shows_in_lower_case_by_default() {
+        let lower = if cfg!(windows) {
+            "desktop-ab12"
+        } else {
+            "DESKTOP-AB12"
+        };
+        assert_eq!(shown_host("DESKTOP-AB12", false), lower);
+        assert_eq!(shown_host("DESKTOP-AB12", true), "DESKTOP-AB12");
+        assert_eq!(shown_host("laptop.local", false), "laptop.local");
+    }
 
     #[test]
     fn base64_decodes_rfc_4648s_test_vectors() {

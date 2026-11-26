@@ -609,8 +609,11 @@ impl<'a> Context for Vars<'a> {
             srv.session_of_window(window)
         };
         Some(match name {
-            "host" => srv.host.clone(),
-            "host_short" => srv.host.split('.').next().unwrap_or(&srv.host).to_owned(),
+            "host" => crate::util::shown_host(&srv.host, srv.cfg.windows_proper_hostname),
+            "host_short" => {
+                let host = crate::util::shown_host(&srv.host, srv.cfg.windows_proper_hostname);
+                host.split('.').next().unwrap_or(&host).to_owned()
+            }
             "pid" => srv.pid.to_string(),
             "version" => env!("CARGO_PKG_VERSION").to_owned(),
             "start_time" => epoch(srv.started),
@@ -896,10 +899,10 @@ impl<'a> Context for Vars<'a> {
                 }
                 f
             }
-            "pane_title" => pane?
-                .emu
-                .title()
-                .map_or_else(|| srv.host.clone(), str::to_owned),
+            "pane_title" => pane?.emu.title().map_or_else(
+                || crate::util::shown_host(&srv.host, srv.cfg.windows_proper_hostname),
+                str::to_owned,
+            ),
             "pane_current_path" => pane_current_path(srv, pane?.id)?.display().to_string(),
             "pane_current_command" => {
                 let p = pane?;
