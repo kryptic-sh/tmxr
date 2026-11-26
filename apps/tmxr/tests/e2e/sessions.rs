@@ -2033,3 +2033,55 @@ fn a_client_without_a_controlling_terminal_attaches() {
         text.matches("no-ctty-marker").count() >= 2
     });
 }
+
+/// `kill-server` ends a server that speaks another protocol (one left
+/// running from before an upgrade), which refuses every command: here a
+/// stand-in that answers as one would, with a `sleep` as its process.
+#[cfg(unix)]
+#[test]
+fn kill_server_ends_a_server_speaking_another_protocol() {
+    use std::os::unix::process::ExitStatusExt as _;
+    use tmxr_proto::{ClientMsg, PROTOCOL_VERSION, ServerMsg, read_msg, write_msg};
+    let t = Tmxr::new("oldproto");
+    let dir = t.dir.path().join("old");
+    std::fs::create_dir(&dir).unwrap();
+    let path = dir.join("server");
+    let listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
+    let process = tmxr_term::child::command("sleep")
+        .arg("100")
+        .spawn()
+        .unwrap();
+    let pid = process.id();
+    // Reaped here, as the server's parent would, so it is gone once dead.
+    let ended = std::thread::spawn(move || {
+        let mut process = process;
+        process.wait().unwrap()
+    });
+    std::thread::spawn(move || {
+        let (mut conn, _) = listener.accept().unwrap();
+        let _ = read_msg::<_, ClientMsg>(&mut conn);
+        let hello = ServerMsg::Hello {
+            protocol: PROTOCOL_VERSION - 1,
+            version: "0.0.1".into(),
+            pid,
+        };
+        write_msg(&mut conn, &hello).unwrap();
+        let refusal = ServerMsg::CommandResult {
+            status: 1,
+            stdout: String::new(),
+            stderr: "protocol mismatch".into(),
+        };
+        let _ = write_msg(&mut conn, &refusal);
+        // Held open, as a server would until it exits.
+        std::thread::sleep(Duration::from_secs(30));
+    });
+    let out = tmxr_term::child::command(env!("CARGO_BIN_EXE_tmxr"))
+        .arg("-S")
+        .arg(&path)
+        .arg("kill-server")
+        .envs(t.env())
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(ended.join().unwrap().signal(), Some(libc::SIGTERM));
+}

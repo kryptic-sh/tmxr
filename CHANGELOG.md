@@ -16,6 +16,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `[X]` on its top border closes it. While a picker is open the mouse no longer
   reaches the panes under it.
 
+### Fixed
+
+- **`tmxr kill-server` ends a server from before an upgrade**: a server speaking
+  another protocol refused every command, `kill-server` too, though its refusal
+  said to run it. The client now ends that server itself, by the process id its
+  hello gives: SIGTERM on Unix, which the server takes as `kill-server` and
+  saves its sessions; on Windows it is terminated, keeping the sessions' last
+  periodic save.
+
 ## [0.16.0] - 2026-11-17
 
 ### Breaking

@@ -44,6 +44,13 @@ fn starts_server(args: &[String]) -> bool {
     )
 }
 
+/// Whether the command is `kill-server`, which a server speaking another
+/// protocol cannot take: the client ends that server itself.
+fn kills_server(args: &[String]) -> bool {
+    args.first()
+        .is_some_and(|name| tmxr_command::lookup(name).is_ok_and(|c| c.name == "kill-server"))
+}
+
 /// Whether the command would attach this terminal.
 fn would_attach(args: &[String]) -> bool {
     if args.is_empty() {
@@ -152,6 +159,7 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
     let conn = Arc::new(stream);
     let (mut recv, mut send) = (&*conn, &*conn);
     let to_io = |e: tmxr_proto::ProtoError| io::Error::other(e.to_string());
+    let kill_server = kills_server(&args);
     let hello = hello();
     let size = hello.terminal.as_ref().map(|t| (t.cols, t.rows));
     write_msg(&mut send, &ClientMsg::Hello(hello)).map_err(to_io)?;
@@ -192,8 +200,22 @@ fn session(stream: Stream, args: Vec<String>) -> io::Result<i32> {
         };
         match msg {
             ServerMsg::Hello {
-                protocol, version, ..
+                protocol,
+                version,
+                pid,
             } => {
+                // A server from before an upgrade refuses every command,
+                // `kill-server` too; the client ends it, as the refusal
+                // says to (its Hello is the same in every protocol).
+                if protocol != PROTOCOL_VERSION && kill_server {
+                    return match terminal::end_server(pid) {
+                        Ok(()) => Ok(0),
+                        Err(e) => {
+                            eprintln!("kill-server: server {version} (pid {pid}): {e}");
+                            Ok(1)
+                        }
+                    };
+                }
                 if protocol != PROTOCOL_VERSION {
                     eprintln!(
                         "server {version} speaks protocol {protocol}, this client {} speaks {PROTOCOL_VERSION}",

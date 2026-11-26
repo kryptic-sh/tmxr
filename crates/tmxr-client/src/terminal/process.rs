@@ -73,6 +73,62 @@ pub fn hang_up_parent() -> io::Result<()> {
     Ok(())
 }
 
+/// How long [`end_server`] waits for the server to go: it saves its
+/// sessions on the way out.
+const SERVER_EXIT_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// End the server process `pid` and wait for it to go, for `kill-server`
+/// against a server that speaks another protocol and so takes no command.
+/// On Unix it is sent SIGTERM, which every tmxr server takes as
+/// `kill-server` (saving its sessions first).
+#[cfg(unix)]
+pub fn end_server(pid: u32) -> io::Result<()> {
+    let pid = libc::pid_t::try_from(pid).map_err(io::Error::other)?;
+    // SAFETY: `kill` only sends a signal.
+    if unsafe { libc::kill(pid, libc::SIGTERM) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let deadline = std::time::Instant::now() + SERVER_EXIT_WAIT;
+    // Signal 0 checks the process is still there, sending nothing.
+    // SAFETY: as above.
+    while unsafe { libc::kill(pid, 0) } == 0 {
+        if std::time::Instant::now() >= deadline {
+            return Err(io::Error::other(format!("server {pid} did not exit")));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    Ok(())
+}
+
+/// [`end_server`] on Windows, where another process cannot ask the server
+/// to exit: it is terminated, so it makes no exit save (its sessions keep
+/// the last periodic one).
+#[cfg(windows)]
+pub fn end_server(pid: u32) -> io::Result<()> {
+    use windows_sys::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE, TerminateProcess, WaitForSingleObject,
+    };
+    // SAFETY: OpenProcess takes plain values and returns a handle or null.
+    let process = unsafe { OpenProcess(PROCESS_TERMINATE | PROCESS_SYNCHRONIZE, 0, pid) };
+    if process.is_null() {
+        return Err(io::Error::last_os_error());
+    }
+    let wait = u32::try_from(SERVER_EXIT_WAIT.as_millis()).unwrap_or(u32::MAX);
+    // SAFETY: `process` is the open handle just returned, closed once here.
+    let ended = unsafe {
+        let ended = TerminateProcess(process, 1) != 0
+            && WaitForSingleObject(process, wait) == WAIT_OBJECT_0;
+        CloseHandle(process);
+        ended
+    };
+    if ended {
+        Ok(())
+    } else {
+        Err(io::Error::other(format!("server {pid} did not exit")))
+    }
+}
+
 /// Run `argv` in this client's place (`detach-client -E`), its shell as
 /// `SHELL`, as tmux's client_exec: the process becomes it, so this returns
 /// only when that fails.

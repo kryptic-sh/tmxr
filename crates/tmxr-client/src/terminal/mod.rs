@@ -10,4 +10,4 @@ pub use guard::Guard;
 pub use input::{Input, Sender, forward, spawn_input};
 pub use keys::{Keys, reads_vt, size};
 pub use probe::PROBE_WAIT;
-pub use process::{exec, hang_up_parent, run_lock, suspend, tty_name};
+pub use process::{end_server, exec, hang_up_parent, run_lock, suspend, tty_name};
