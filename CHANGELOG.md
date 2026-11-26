@@ -18,6 +18,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`show-hooks` lists tmux 3.8's hooks**, in its order: the new ones
+  (`pane-created`, `window-zoomed`, `client-created` and the rest, and
+  `after-swap-window`) are listed and `set-hook` takes them, so a tmux 3.8
+  config that sets one loads; tmxr does not fire them yet. `after-queue`, which
+  3.8 dropped, is no longer listed.
 - **`#{window_layout}` is tmux 3.8's JSON**: `{"V":2,"L":{…}}`, each cell's
   type, size and offset, and each pane's id, index, and whether it is active or
   how recently it was (`#{window_visible_layout}` too). `select-layout` reads

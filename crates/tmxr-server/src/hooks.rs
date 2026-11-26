@@ -51,25 +51,41 @@ pub const EVENTS: &[&str] = &[
     "window-unlinked",
 ];
 
-/// The events above that tmux keeps with the window and pane options
-/// (`OPTIONS_TABLE_PANE_HOOK`); the rest, and every `after-` hook, it keeps
-/// with the session options.
+/// The hooks tmux 3.8 keeps with the window and pane options
+/// (`OPTIONS_TABLE_PANE_HOOK`), in its table's order; the rest, and every
+/// `after-` hook, it keeps with the session options.
 pub const PANE_HOOKS: &[&str] = &[
+    "pane-activity",
+    "pane-bell",
+    "pane-command-finished",
+    "pane-command-started",
+    "pane-created",
     "pane-died",
     "pane-exited",
     "pane-focus-in",
     "pane-focus-out",
     "pane-mode-changed",
+    "pane-mode-entered",
+    "pane-mode-exited",
+    "pane-moved",
+    "pane-prompt-closed",
+    "pane-prompt-opened",
+    "pane-resized",
     "pane-set-clipboard",
+    "pane-shell-prompt",
     "pane-title-changed",
+    "window-created",
+    "window-closed",
     "window-layout-changed",
     "window-pane-changed",
     "window-renamed",
     "window-resized",
+    "window-unzoomed",
+    "window-zoomed",
 ];
 
-/// The hooks tmux 3.6 keeps with the session options, in its table's order
-/// (as its `show-hooks -g` lists them); tmxr lists those it fires.
+/// The hooks tmux 3.8 keeps with the session options, in its table's order
+/// (as its `show-hooks -g` lists them).
 pub const TMUX_SESSION_HOOKS: &[&str] = &[
     "after-bind-key",
     "after-capture-pane",
@@ -89,7 +105,6 @@ pub const TMUX_SESSION_HOOKS: &[&str] = &[
     "after-new-window",
     "after-paste-buffer",
     "after-pipe-pane",
-    "after-queue",
     "after-refresh-client",
     "after-rename-session",
     "after-rename-window",
@@ -108,12 +123,15 @@ pub const TMUX_SESSION_HOOKS: &[&str] = &[
     "after-show-messages",
     "after-show-options",
     "after-split-window",
+    "after-swap-window",
     "after-unbind-key",
     "alert-activity",
     "alert-bell",
     "alert-silence",
     "client-active",
     "client-attached",
+    "client-created",
+    "client-closed",
     "client-detached",
     "client-focus-in",
     "client-focus-out",
@@ -122,17 +140,49 @@ pub const TMUX_SESSION_HOOKS: &[&str] = &[
     "client-light-theme",
     "client-dark-theme",
     "command-error",
+    "marked-pane-changed",
     "session-closed",
     "session-created",
+    "session-added-to-group",
     "session-renamed",
+    "session-removed-from-group",
     "session-window-changed",
     "window-linked",
     "window-unlinked",
 ];
 
-/// Whether `name` is a hook tmxr fires.
+/// tmux 3.8's hooks tmxr does not fire yet: `set-hook` takes them and
+/// `show-hooks` lists them, as tmux's, so a config setting one loads, but
+/// nothing runs them (the backlog has what each needs).
+pub const NOT_FIRED: &[&str] = &[
+    "client-closed",
+    "client-created",
+    "marked-pane-changed",
+    "pane-activity",
+    "pane-bell",
+    "pane-command-finished",
+    "pane-command-started",
+    "pane-created",
+    "pane-mode-entered",
+    "pane-mode-exited",
+    "pane-moved",
+    "pane-prompt-closed",
+    "pane-prompt-opened",
+    "pane-resized",
+    "pane-shell-prompt",
+    "session-added-to-group",
+    "session-removed-from-group",
+    "window-closed",
+    "window-created",
+    "window-unzoomed",
+    "window-zoomed",
+];
+
+/// Whether `name` is a hook tmxr takes: one it fires, or tmux 3.8's it does
+/// not fire yet ([`NOT_FIRED`]).
 pub fn known(name: &str) -> bool {
     EVENTS.contains(&name)
+        || NOT_FIRED.contains(&name)
         || name
             .strip_prefix("after-")
             .is_some_and(|cmd| tmxr_command::lookup(cmd).is_ok_and(|c| c.name == cmd))

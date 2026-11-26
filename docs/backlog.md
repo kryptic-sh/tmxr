@@ -222,6 +222,20 @@ not tried.
   `cursor-colour`, `display-panes-colour`, `display-panes-active-colour`) are
   strings in tmxr too.
 
+- **tmux 3.8's new hooks are taken but not fired.** `set-hook` takes them and
+  `show-hooks` lists them in 3.8's order (`hooks::NOT_FIRED`), so a config
+  setting one loads, but nothing runs: `client-created`, `client-closed`,
+  `marked-pane-changed`, `session-added-to-group`, `session-removed-from-group`,
+  `pane-activity`, `pane-bell`, `pane-command-started`, `pane-command-finished`,
+  `pane-shell-prompt` (the last three from OSC 133 marks), `pane-created`,
+  `pane-moved`, `pane-resized`, `pane-mode-entered`, `pane-mode-exited`,
+  `pane-prompt-opened`, `pane-prompt-closed`, `window-created`, `window-closed`,
+  `window-zoomed`, `window-unzoomed`. 3.8 also gives hooks keys and values
+  (`hooks_insert_event`; `wait-for -v` shows them) and monitor hooks
+  (`set-hook -B`), which tmxr has none of. Each fires where tmux 3.8's
+  `hooks_insert_event` calls are; firing one means moving its name from
+  `NOT_FIRED` to `EVENTS` with an e2e test that it runs.
+
 ## Gaps found by review (2026-11-02)
 
 A read-only review after v0.14.0, looking for input or terminal state that tmxr

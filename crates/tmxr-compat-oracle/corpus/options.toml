@@ -710,3 +710,23 @@ checks = [
   { command = "show -g prefix", expect = "prefix C-a" },
   { command = "show -w -t o:0 window-status-format", expect = 'window-status-format "#I #W"' },
 ]
+
+[[cases]]
+name = "show_hooks_lists_hooks_in_tmuxs_order"
+steps = [
+  { run = "set-hook -g after-new-window 'display hi'" },
+  { run = "set-hook -gw pane-died 'display dead'" },
+  { run = "set-hook -t o session-renamed 'display r'" },
+  { run = "set-hook -t o client-attached 'display a'" },
+]
+checks = [
+  { command = "show-hooks -gw" },
+  { command = "show-hooks -t o" },
+]
+
+[[cases]]
+name = "show_hooks_g_lists_every_session_hook_as_tmux"
+# tmux 3.8 lists every hook in its session table, in its order (3.8 has no
+# after-queue); tmxr lists the ones it does not fire yet too.
+steps = [{ run = "set-hook -g after-new-window 'display hi'" }]
+checks = [{ command = "show-hooks -g" }]
