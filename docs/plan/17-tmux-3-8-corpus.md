@@ -62,11 +62,7 @@ not read in 3.6's source. Grouped by cause:
     `window_layout_is_tmuxs_string_and_select_layout_takes_it`. Medium.
 13. **Scrollbars no longer narrow the pane** (`modal` is an overlay, 3.8
     auto-hide): `scrollbars_modal_in_copy_mode`. Medium.
-14. **More terminals get extended keys** (3.8 names WezTerm, ghostty and Rio
-    from XTVERSION, each with `extkeys`):
-    `a_terminal_named_as_neither_is_not_asked_for_modify_other_keys`. Small; the
-    case needs another terminal name.
-15. **Unknown**: `a_slider_drag_ends_on_the_slider` (tmxr 152, 3.8 159). Bisect
+14. **Unknown**: `a_slider_drag_ends_on_the_slider` (tmxr 152, 3.8 159). Bisect
     with the 3.7 / 3.7b / 3.7c packages in the pacman cache.
 
 These cases in `known_divergences.toml` match 3.8 and move to their corpus files

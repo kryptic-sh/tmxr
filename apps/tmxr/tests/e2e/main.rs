@@ -407,6 +407,12 @@ impl Tmxr {
                         let answer = format!("\x1bP>|{version}\x1b\\");
                         let _ = writer.lock().unwrap().write_all(answer.as_bytes());
                     }
+                    // DA2 as xterm's, not the emulator's tmux-like 84, which
+                    // tmux 3.8 (and the client) take for a terminal with
+                    // extended keys.
+                    if asked(DA2_QUERY) {
+                        let _ = writer.lock().unwrap().write_all(DA2_ANSWER);
+                    }
                     if asked(DA1_QUERY)
                         && let Some(keys) = typed_before_da1.take()
                     {
@@ -424,6 +430,7 @@ impl Tmxr {
                     if version.is_some() {
                         fed = without(&fed, XTVERSION_QUERY);
                     }
+                    fed = without(&fed, DA2_QUERY);
                     let replies = emu.lock().unwrap().process(&fed);
                     if !replies.is_empty() {
                         let _ = writer.lock().unwrap().write_all(&replies);
@@ -778,6 +785,11 @@ const KITTY_QUERY: &[u8] = b"\x1b[?u";
 /// The primary device attributes query (DA1), which the client asks last
 /// of its questions to the terminal.
 const DA1_QUERY: &[u8] = b"\x1b[c";
+
+/// The secondary device attributes query (DA2), and the harness's terminal's
+/// answer to it, as xterm 390's: a VT420, which no one gives extended keys.
+const DA2_QUERY: &[u8] = b"\x1b[>c";
+const DA2_ANSWER: &[u8] = b"\x1b[>41;390;0c";
 
 /// XTVERSION, the query for the terminal's name and version.
 const XTVERSION_QUERY: &[u8] = b"\x1b[>q";

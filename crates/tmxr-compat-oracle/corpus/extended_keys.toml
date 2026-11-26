@@ -108,7 +108,8 @@ checks = [
 
 # The client's terminal and modifyOtherKeys (plan 18 step 5). tmux asks a
 # terminal for it (`CSI > 4 ; 2 m`, its `Eneks`) once the terminal's
-# XTVERSION answer names one it gives `extkeys` (XTerm, foot, mintty, iTerm2)
+# XTVERSION answer names one tmux 3.8 gives `extkeys` (XTerm, foot, mintty,
+# iTerm2, tmux, WezTerm, ghostty)
 # and `extended-keys` is not off; tmxr does the same for a terminal without
 # the kitty protocol, as the oracle's is.
 
@@ -171,3 +172,21 @@ steps = [
   { sleep = 0.5 },
 ]
 checks = [{ command = "capture-pane -p -t o" }]
+
+[[cases]]
+name = "a_terminal_named_without_extkeys_is_not_asked_for_modify_other_keys"
+# Rio, which tmux 3.8 names but gives no extkeys.
+windows = "never"
+attach = true
+terminal = "Rio 0.2.10"
+steps = [{ sleep = 0.5 }]
+checks = [{ terminal_received = "\u001b[>4;2m", expect = false }]
+
+[[cases]]
+name = "a_wezterm_terminal_is_asked_for_modify_other_keys"
+# tmux 3.8 names WezTerm (and ghostty) from XTVERSION, with extkeys.
+windows = "never"
+attach = true
+terminal = "WezTerm 20240203"
+steps = [{ sleep = 0.5 }]
+checks = [{ terminal_received = "\u001b[>4;2m", expect = true }]

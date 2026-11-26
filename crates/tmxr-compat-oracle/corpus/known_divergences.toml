@@ -107,15 +107,6 @@ steps = [{ sleep = 0.5 }, { run = "send-keys -t o M-S-h S-a" }, { sleep = 0.5 }]
 checks = [{ command = "capture-pane -p -t o" }]
 
 [[cases]]
-name = "a_terminal_named_as_neither_is_not_asked_for_modify_other_keys"
-# tmux 3.8: WezTerm, ghostty and Rio get extended keys (from extended_keys.toml)
-windows = "never"
-attach = true
-terminal = "WezTerm 20240203"
-steps = [{ sleep = 0.5 }]
-checks = [{ terminal_received = "\u001b[>4;2m", expect = false }]
-
-[[cases]]
 name = "formats_read_option_values_as_tmux"
 # tmux 3.8: new default status lines 2 to 5 (from formats.toml)
 steps = [

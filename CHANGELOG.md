@@ -18,6 +18,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **More terminals are asked for extended keys**, as tmux 3.8 asks them: a
+  terminal whose XTVERSION names it WezTerm or ghostty, or tmux (by XTVERSION or
+  DA2), is sent `CSI > 4 ; 2 m` when `extended-keys` is on. Rio, which 3.8 also
+  names, is not.
 - **An empty pane has no pid and is not dead**, as in tmux 3.8: for a pane made
   with an empty command, `#{pane_pid}` is empty (it was 0) and `#{pane_dead}` is
   0 (it was 1), so its window is no longer named `[dead]`.
