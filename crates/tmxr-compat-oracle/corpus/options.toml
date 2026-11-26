@@ -631,3 +631,18 @@ checks = [
   { command = "list-clients -F '#{client_session}'" },
   { command = "list-sessions -F '#{session_name}'" },
 ]
+
+# Fast keys are not taken as a paste from a terminal that brackets pastes,
+# as the oracle's does: tmux 3.8's server_client_is_assume_paste guesses only
+# for one without bracketed paste, so the third fast key still runs its bind.
+[[cases]]
+name = "fast_keys_from_a_bracketing_terminal_are_not_a_paste"
+attach = true
+unix_only = true
+steps = [
+  { run = "bind -n z set -g @hit y" },
+  { sleep = 0.3 },
+  { keys = "xyz" },
+  { sleep = 0.5 },
+]
+checks = [{ format = "[#{@hit}]" }, { command = "show -gv assume-paste-time" }]

@@ -10,6 +10,20 @@ use super::input::not_typed;
 use crate::model::{ClientId, SessionId};
 
 impl Server {
+    /// Whether client `id`'s terminal brackets what is pasted into it, so
+    /// no paste need be guessed, as tmux 3.8's server_client_is_assume_paste
+    /// decides for a terminal with bracketed paste: the client turns it on
+    /// wherever it reads the terminal's own input (`reads_vt`, which it
+    /// tells the server as `colour_answers`), not a Windows console's key
+    /// records, which carry a paste as keys.
+    pub(super) fn brackets_pastes(&self, id: ClientId) -> bool {
+        self.clients
+            .get(&id)
+            .and_then(|c| c.hello.as_ref())
+            .and_then(|h| h.terminal.as_ref())
+            .is_some_and(|t| t.colour_answers)
+    }
+
     /// Whether a key `since` the last one is pasted text, as tmux's
     /// server_client_is_assume_paste: the first key within
     /// `assume-paste-time` of the one before starts assuming a paste and is

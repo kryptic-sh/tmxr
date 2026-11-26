@@ -870,24 +870,6 @@ checks = [
 ]
 
 [[cases]]
-name = "a_key_after_a_click_counts_toward_a_paste_as_tmux"
-# tmux 3.8: no paste guessing when the terminal brackets pastes (from mouse.toml)
-attach = true
-unix_only = true
-program = "exec sleep 1000"
-steps = [
-  { run = "set -g mouse on" },
-  { run = "set -g assume-paste-time 500" },
-  { run = "bind -n x set -ga @hits x" },
-  { sleep = 0.7 },
-  { mouse = { action = "click", at = [5, 5] } },
-  { keys = "x" },
-  { keys = "x" },
-  { sleep = 0.6 },
-]
-checks = [{ format = "[#{@hits}]" }]
-
-[[cases]]
 name = "show_options_quotes_strings_as_tmux"
 # tmux 3.8: theme colours in the defaults (from options.toml)
 steps = [
@@ -912,19 +894,6 @@ checks = [
   { command = "show -g prefix", expect = "prefix C-a" },
   { command = "show -w -t o:0 window-status-format", expect = 'window-status-format "#I #W"' },
 ]
-
-[[cases]]
-name = "assume_paste_time_pastes_the_third_fast_key"
-# tmux 3.8: no paste guessing when the terminal brackets pastes (from options.toml)
-attach = true
-unix_only = true
-steps = [
-  { run = "bind -n z set -g @hit y" },
-  { sleep = 0.3 },
-  { keys = "xyz" },
-  { sleep = 0.5 },
-]
-checks = [{ format = "[#{@hit}]" }, { command = "show -gv assume-paste-time" }]
 
 [[cases]]
 name = "status_takes_on_off_and_2_to_5_as_tmux"

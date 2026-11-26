@@ -18,6 +18,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **No paste is guessed from a terminal that brackets pastes**, as in tmux 3.8:
+  `assume-paste-time` applies only to a client reading a Windows console's key
+  records (conhost), where a paste arrives as keys; everywhere else the client
+  turns bracketed paste on, so fast keys run their binds as typed keys.
 - **More terminals are asked for extended keys**, as tmux 3.8 asks them: a
   terminal whose XTVERSION names it WezTerm or ghostty, or tmux (by XTVERSION or
   DA2), is sent `CSI > 4 ; 2 m` when `extended-keys` is on. Rio, which 3.8 also

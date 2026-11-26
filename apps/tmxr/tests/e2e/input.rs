@@ -1269,13 +1269,19 @@ fn escape_time_makes_escape_and_a_key_meta() {
     );
 }
 
+/// What two quick keys after a click make of `@hits`: a client reading a
+/// Windows console's key records (no `WT_SESSION`) guesses pastes, the
+/// first key arming one and the second pasted; one reading its terminal's
+/// own input turns bracketed paste on, which tmux 3.8 takes as no need to
+/// guess, so both are keys.
+const HITS_AFTER_A_CLICK: &str = if cfg!(windows) { "x" } else { "xx" };
+
 /// assume-paste-time times a key from the mouse event before it too, as
-/// tmux's: after a click, the first quick key arms the paste and the next
-/// is pasted, where timed from the key before the click both are keys.
+/// tmux's, where a paste is guessed at all ([`HITS_AFTER_A_CLICK`]).
 #[test]
 fn a_key_right_after_a_click_counts_toward_a_paste() {
     let t = Tmxr::new("pasteclick");
-    let s = t.attach(&["new", "-s", "pc"]);
+    let s = t.attach_env(&["new", "-s", "pc"], &[("WT_SESSION", None)]);
     s.wait_for("status line", |text| text.contains("pc"));
     t.run(&["set", "-g", "mouse", "on"]);
     t.run(&["set", "-g", "assume-paste-time", "500"]);
@@ -1287,11 +1293,7 @@ fn a_key_right_after_a_click_counts_toward_a_paste() {
         s.send(b"x");
     }
     std::thread::sleep(Duration::from_millis(400));
-    assert_eq!(
-        t.run(&["show", "-gv", "@hits"]).trim(),
-        "x",
-        "the second was pasted"
-    );
+    assert_eq!(t.run(&["show", "-gv", "@hits"]).trim(), HITS_AFTER_A_CLICK);
 }
 
 /// assume-paste-time is timed per session, as tmux's SESSION_PASTING: one
@@ -1299,9 +1301,10 @@ fn a_key_right_after_a_click_counts_toward_a_paste() {
 #[test]
 fn a_paste_is_timed_across_the_sessions_clients() {
     let t = Tmxr::new("pastesess");
-    let a = t.attach(&["new", "-s", "ps"]);
+    let no_wt = [("WT_SESSION", None)];
+    let a = t.attach_env(&["new", "-s", "ps"], &no_wt);
     a.wait_for("status line", |text| text.contains("ps"));
-    let b = t.attach(&["attach", "-t", "ps"]);
+    let b = t.attach_env(&["attach", "-t", "ps"], &no_wt);
     b.wait_for("status line", |text| text.contains("ps"));
     t.run(&["set", "-g", "mouse", "on"]);
     t.run(&["set", "-g", "assume-paste-time", "500"]);
@@ -1313,9 +1316,5 @@ fn a_paste_is_timed_across_the_sessions_clients() {
         b.send(b"x");
     }
     std::thread::sleep(Duration::from_millis(400));
-    assert_eq!(
-        t.run(&["show", "-gv", "@hits"]).trim(),
-        "x",
-        "the second was pasted"
-    );
+    assert_eq!(t.run(&["show", "-gv", "@hits"]).trim(), HITS_AFTER_A_CLICK);
 }

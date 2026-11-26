@@ -658,3 +658,22 @@ steps = [
   { sleep = 1.0 },
 ]
 checks = [{ format = "#{@seen}", expect = "DUDU" }]
+
+# A click and fast keys after it are no paste either, from a terminal that
+# brackets pastes (tmux 3.8): both keys run their bind.
+[[cases]]
+name = "keys_after_a_click_from_a_bracketing_terminal_are_not_a_paste"
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "set -g mouse on" },
+  { run = "set -g assume-paste-time 500" },
+  { run = "bind -n x set -ga @hits x" },
+  { sleep = 0.7 },
+  { mouse = { action = "click", at = [5, 5] } },
+  { keys = "x" },
+  { keys = "x" },
+  { sleep = 0.6 },
+]
+checks = [{ format = "[#{@hits}]" }]

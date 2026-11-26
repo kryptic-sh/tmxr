@@ -39,30 +39,26 @@ not read in 3.6's source. Grouped by cause:
 6. **A cleared search drops its counts** (`window_copy_clear_marks`, 3.7):
    `a_searchs_formats_as_tmux`,
    `emacs_keys_clear_a_searchs_marks_on_a_move_as_tmux`. Small.
-7. **No paste guessing when the terminal brackets pastes**
-   (`server_client_is_assume_paste`, 3.7), which is every VT100-like one:
-   `assume_paste_time_pastes_the_third_fast_key`,
-   `a_key_after_a_click_counts_toward_a_paste_as_tmux`. Small.
-8. **New default status lines 2 to 5** (`options-table.c`: the
+7. **New default status lines 2 to 5** (`options-table.c`: the
    `window-pane-status-format` options, `pane-status-current-style`
    `underscore`): `status_takes_on_off_and_2_to_5_as_tmux`,
    `status_3_draws_the_pane_and_session_lines_as_tmux`,
    `message_line_puts_a_message_on_that_status_line_as_tmux`,
    `formats_read_option_values_as_tmux`. Small to medium.
-9. **Themes** (3.8): mode formats gain theme colours, and `clock-mode-colour` is
+8. **Themes** (3.8): mode formats gain theme colours, and `clock-mode-colour` is
    a string option defaulting to `themeblue`, so `show-options` quotes it:
    `mode_formats_as_tmux`, `show_options_quotes_strings_as_tmux`. The defaults
    are small; themes themselves are large.
-10. **New hooks** (3.8): `show_hooks_lists_hooks_in_tmuxs_order` (and the known
-    divergence `show_hooks_g_lists_the_hooks_tmxr_fires`). Listing them is
-    small; firing them is large.
-11. **A hook's `#{command}` is the command that fired it**
+9. **New hooks** (3.8): `show_hooks_lists_hooks_in_tmuxs_order` (and the known
+   divergence `show_hooks_g_lists_the_hooks_tmxr_fires`). Listing them is small;
+   firing them is large.
+10. **A hook's `#{command}` is the command that fired it**
     (`hooks_insert_event`): `command_is_the_running_command_as_tmux`. Medium.
-12. **JSON layout strings** (3.8; the old form still accepted):
+11. **JSON layout strings** (3.8; the old form still accepted):
     `window_layout_is_tmuxs_string_and_select_layout_takes_it`. Medium.
-13. **Scrollbars no longer narrow the pane** (`modal` is an overlay, 3.8
+12. **Scrollbars no longer narrow the pane** (`modal` is an overlay, 3.8
     auto-hide): `scrollbars_modal_in_copy_mode`. Medium.
-14. **Unknown**: `a_slider_drag_ends_on_the_slider` (tmxr 152, 3.8 159). Bisect
+13. **Unknown**: `a_slider_drag_ends_on_the_slider` (tmxr 152, 3.8 159). Bisect
     with the 3.7 / 3.7b / 3.7c packages in the pacman cache.
 
 These cases in `known_divergences.toml` match 3.8 and move to their corpus files

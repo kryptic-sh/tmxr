@@ -561,7 +561,7 @@ impl Server {
             .get_mut(&session)
             .and_then(|s| s.key_at.replace(now))
             .map(|t| now.duration_since(t));
-        if !sent && self.assume_paste(session, since) {
+        if !sent && !self.brackets_pastes(id) && self.assume_paste(session, since) {
             self.paste_key(id, session, &ev);
             return;
         }
