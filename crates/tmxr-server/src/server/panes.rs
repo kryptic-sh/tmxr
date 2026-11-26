@@ -472,8 +472,7 @@ impl Server {
         if let Some(win) = self.windows.get_mut(&wid)
             && win.active != pane
         {
-            win.last_pane = Some(win.active);
-            win.active = pane;
+            win.set_active(pane);
             if win.zoomed {
                 win.zoomed = false;
                 self.relayout(wid);
@@ -501,16 +500,18 @@ impl Server {
         };
         match win.layout.remove_leaf(pane as usize) {
             Ok(focus) => {
+                // The pane gone is no last pane, and the latest of them takes
+                // its place, leaving them, as tmux 3.8's window_lost_pane.
+                win.forget_last(pane);
                 if win.active == pane {
                     win.active = win
-                        .last_pane
-                        .filter(|l| *l != pane && win.layout.contains(*l as usize))
+                        .last_panes
+                        .iter()
+                        .copied()
+                        .find(|l| win.layout.contains(*l as usize))
                         .unwrap_or(focus as PaneId);
-                }
-                // The pane gone is no last pane, nor is the one that took
-                // its place, as tmux's window_lost_pane.
-                if win.last_pane == Some(pane) || win.last_pane == Some(win.active) {
-                    win.last_pane = None;
+                    let active = win.active;
+                    win.forget_last(active);
                 }
                 win.zoomed = false;
                 self.relayout(wid);

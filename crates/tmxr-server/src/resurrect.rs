@@ -297,7 +297,9 @@ pub fn capture(srv: &Server) -> Save {
                         zoomed: w.zoomed,
                         synchronize: options.synchronize_panes,
                         active: panes.iter().position(|p| *p == w.active).unwrap_or(0),
-                        last: w.last_pane.and_then(|l| panes.iter().position(|p| *p == l)),
+                        last: w
+                            .last_pane()
+                            .and_then(|l| panes.iter().position(|p| *p == l)),
                         layout: save_layout(&w.layout, &panes),
                         panes: panes
                             .iter()
@@ -646,7 +648,11 @@ fn restore_session(
                 win.layout = tree;
             }
             win.active = panes.get(w.active).copied().unwrap_or(win.active);
-            win.last_pane = w.last.and_then(|l| panes.get(l).copied());
+            win.last_panes = w
+                .last
+                .and_then(|l| panes.get(l).copied())
+                .into_iter()
+                .collect();
             win.zoomed = w.zoomed && panes.len() > 1;
             // Kept as the window's own where they differ from the global
             // options.

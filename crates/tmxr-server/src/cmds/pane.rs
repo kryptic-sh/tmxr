@@ -96,11 +96,11 @@ pub(super) fn run(
                 return Ok(true);
             }
             let to = if a.has('l') {
-                srv.windows[&wid].last_pane.ok_or("no last pane")?
+                srv.windows[&wid].last_pane().ok_or("no last pane")?
             } else if let Some(d) = dir_flag(a) {
                 let w = &srv.windows[&wid];
                 let rects = crate::layout::pane_rects(&w.layout, w.cols, w.rows);
-                match crate::layout::neighbour(&rects, pid, w.last_pane, d, w.cols, w.rows) {
+                match crate::layout::neighbour(&rects, pid, w.last_pane(), d, w.cols, w.rows) {
                     Some(n) => n,
                     None => return Ok(true),
                 }
@@ -121,7 +121,7 @@ pub(super) fn run(
                 let panes = win.panes();
                 (panes.len() == 2).then(|| panes.into_iter().find(|p| *p != win.active))?
             };
-            let last = win.last_pane.or_else(other).ok_or("no last pane")?;
+            let last = win.last_pane().or_else(other).ok_or("no last pane")?;
             // -d / -e: the last pane's input off or on, and it stays last.
             if a.has('d') || a.has('e') {
                 set_input_off(srv, last, a.has('d'));
@@ -142,10 +142,7 @@ pub(super) fn run(
                 if w.panes().len() > 1 || w.zoomed {
                     // Zooming another pane makes it active, the one before
                     // it the last, as tmux's window_zoom.
-                    if w.active != pid {
-                        w.last_pane = Some(w.active);
-                    }
-                    w.active = pid;
+                    w.set_active(pid);
                     w.zoomed = !w.zoomed;
                 }
                 srv.relayout(wid);
@@ -908,14 +905,14 @@ fn navigate(srv: &mut Server, ctx: &Ctx, a: &Args) -> Res {
         }
     }
     let to = if a.has('l') {
-        match srv.windows[&wid].last_pane {
+        match srv.windows[&wid].last_pane() {
             Some(l) => l,
             None => return Ok(()),
         }
     } else if let Some(d) = dir_flag(a) {
         let w = &srv.windows[&wid];
         let rects = crate::layout::pane_rects(&w.layout, w.cols, w.rows);
-        match crate::layout::neighbour(&rects, pid, w.last_pane, d, w.cols, w.rows) {
+        match crate::layout::neighbour(&rects, pid, w.last_pane(), d, w.cols, w.rows) {
             Some(n) => n,
             None => return Ok(()),
         }

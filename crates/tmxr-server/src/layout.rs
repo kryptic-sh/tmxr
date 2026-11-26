@@ -286,46 +286,72 @@ fn cell_of(tree: &LayoutTree, area: LayoutRect) -> Cell {
     }
 }
 
-fn write_cell(cell: &Cell, out: &mut String) {
+/// What tmux 3.8's layout JSON says of a pane besides its cell: whether it
+/// is the active pane, where it is in the last panes (latest 0), and its
+/// index in the window.
+pub struct PaneInfo {
+    pub active: bool,
+    pub last: Option<usize>,
+    pub index: u32,
+}
+
+fn write_json(cell: &Cell, out: &mut String, info: &dyn Fn(PaneId) -> PaneInfo) {
     use std::fmt::Write as _;
     let r = cell.rect;
-    let _ = write!(out, "{}x{},{},{}", r.w, r.h, r.x, r.y);
+    let t = match &cell.kind {
+        CellKind::Pane(_) => 'p',
+        CellKind::Split(dir, _) if *dir == SplitDir::Vertical => 'h',
+        CellKind::Split(..) => 'v',
+    };
+    let _ = write!(
+        out,
+        "{{\"t\":\"{t}\",\"w\":{},\"h\":{},\"x\":{},\"y\":{}",
+        r.w, r.h, r.x, r.y
+    );
     match &cell.kind {
         CellKind::Pane(id) => {
-            let _ = write!(out, ",{id}");
+            let id = *id as PaneId;
+            let pane = info(id);
+            if pane.active {
+                out.push_str(",\"a\":true");
+            } else if let Some(last) = pane.last {
+                let _ = write!(out, ",\"l\":{last}");
+            }
+            let _ = write!(out, ",\"i\":{},\"I\":\"%{id}\"", pane.index);
         }
-        CellKind::Split(dir, children) => {
-            let (open, close) = if *dir == SplitDir::Vertical {
-                ('{', '}')
-            } else {
-                ('[', ']')
-            };
-            out.push(open);
+        CellKind::Split(_, children) => {
+            out.push_str(",\"c\":[");
             for (i, child) in children.iter().enumerate() {
                 if i > 0 {
                     out.push(',');
                 }
-                write_cell(child, out);
+                write_json(child, out, info);
             }
-            out.push(close);
+            out.push(']');
         }
     }
+    out.push('}');
 }
 
-/// `tree` over a `cols` × `rows` window as tmux's `layout_dump` writes it
-/// (`#{window_layout}`): `checksum,cell`.
-pub fn dump(tree: &LayoutTree, cols: u16, rows: u16) -> String {
+/// `tree` over a `cols` × `rows` window as tmux 3.8's `layout_dump` writes
+/// it (`#{window_layout}`): JSON, version 2, each pane with what `info`
+/// says of it.
+pub fn dump(tree: &LayoutTree, cols: u16, rows: u16, info: &dyn Fn(PaneId) -> PaneInfo) -> String {
     let mut body = String::new();
-    write_cell(&cell_of(tree, rect(0, 0, cols, rows)), &mut body);
-    format!("{:04x},{body}", layout_checksum(&body))
+    write_json(&cell_of(tree, rect(0, 0, cols, rows)), &mut body, info);
+    format!("{{\"V\":2,\"L\":{body}}}")
 }
 
-/// A layout string read as tmux's `layout_parse` reads one: the checksum
-/// must match and the cells nest properly. Returns the tree, the pane ids
+/// A layout read as tmux 3.8's `layout_parse` reads one: its JSON, or the
+/// older string, whose checksum must match; the cells must nest properly. Returns the tree, the pane ids
 /// it names kept as the leaves' (callers lay it over their panes with
 /// [`reuse`]), and the size it is for, which tmux resizes the window to.
 pub fn parse(layout: &str) -> Result<(LayoutTree, (u16, u16)), String> {
     let invalid = || "invalid layout".to_owned();
+    if layout.starts_with('{') {
+        let cell = parse_json(layout).ok_or_else(invalid)?;
+        return Ok((tree_of(&cell), (cell.rect.w, cell.rect.h)));
+    }
     let (sum, body) = layout.split_once(',').ok_or_else(invalid)?;
     let sum = u16::from_str_radix(sum, 16).map_err(|_| invalid())?;
     if sum != layout_checksum(body) {
@@ -337,6 +363,51 @@ pub fn parse(layout: &str) -> Result<(LayoutTree, (u16, u16)), String> {
         return Err(invalid());
     }
     Ok((tree_of(&cell), (cell.rect.w, cell.rect.h)))
+}
+
+/// A JSON layout (`{"V":2,"L":…}`) as tmux 3.8's `layout_parse_json`
+/// reads its cells: each a type (`h`, `v` or `p`), a size and offset, a
+/// split's children (`c`) and a pane's id (`I`, `%N`).
+fn parse_json(layout: &str) -> Option<Cell> {
+    let value: serde_json::Value = serde_json::from_str(layout).ok()?;
+    value.get("V")?.as_u64()?;
+    json_cell(value.get("L")?, 0)
+}
+
+fn json_cell(node: &serde_json::Value, depth: usize) -> Option<Cell> {
+    if depth > MOST_NESTED {
+        return None;
+    }
+    let number = |key: &str| node.get(key)?.as_u64().and_then(|n| u16::try_from(n).ok());
+    let rect = rect(number("x")?, number("y")?, number("w")?, number("h")?);
+    let kind = match node.get("t")?.as_str()? {
+        "p" => {
+            // A pane with no id is one tmux numbers itself.
+            let id = match node.get("I") {
+                Some(id) => id.as_str()?.strip_prefix('%')?.parse().ok()?,
+                None => 0,
+            };
+            CellKind::Pane(id)
+        }
+        t => {
+            let dir = match t {
+                "h" => SplitDir::Vertical,
+                "v" => SplitDir::Horizontal,
+                _ => return None,
+            };
+            let children = node
+                .get("c")?
+                .as_array()?
+                .iter()
+                .map(|c| json_cell(c, depth + 1))
+                .collect::<Option<Vec<_>>>()?;
+            if children.is_empty() {
+                return None;
+            }
+            CellKind::Split(dir, children)
+        }
+    };
+    Some(Cell { rect, kind })
 }
 
 /// Digits at the start of `s`, taken off it.
@@ -777,6 +848,40 @@ fn stack(mut rows: Vec<LayoutTree>) -> LayoutTree {
 mod tests {
     use super::*;
 
+    /// tmux's older layout string (`checksum,cell`), as tmux 3.6 wrote it,
+    /// to show the strings it reads come back whole.
+    fn dump_old(tree: &LayoutTree, cols: u16, rows: u16) -> String {
+        let mut body = String::new();
+        write_cell(&cell_of(tree, rect(0, 0, cols, rows)), &mut body);
+        format!("{:04x},{body}", layout_checksum(&body))
+    }
+
+    fn write_cell(cell: &Cell, out: &mut String) {
+        use std::fmt::Write as _;
+        let r = cell.rect;
+        let _ = write!(out, "{}x{},{},{}", r.w, r.h, r.x, r.y);
+        match &cell.kind {
+            CellKind::Pane(id) => {
+                let _ = write!(out, ",{id}");
+            }
+            CellKind::Split(dir, children) => {
+                let (open, close) = if *dir == SplitDir::Vertical {
+                    ('{', '}')
+                } else {
+                    ('[', ']')
+                };
+                out.push(open);
+                for (i, child) in children.iter().enumerate() {
+                    if i > 0 {
+                        out.push(',');
+                    }
+                    write_cell(child, out);
+                }
+                out.push(close);
+            }
+        }
+    }
+
     /// 0 | (1 / 2): a left pane and a right column split top/bottom.
     fn three() -> LayoutTree {
         LayoutTree::split(
@@ -974,10 +1079,33 @@ mod tests {
         ] {
             let (tree, size) = parse(tmux).unwrap();
             assert_eq!(size, (80, 24));
-            assert_eq!(dump(&tree, 80, 24), tmux);
+            assert_eq!(dump_old(&tree, 80, 24), tmux);
         }
         assert_eq!(parse("0000,80x24,0,0,1").unwrap_err(), "invalid layout");
         assert!(parse("d67e,80x24,0,0{40x24,0,0,0").is_err());
+    }
+
+    #[test]
+    fn json_layouts_round_trip_as_tmux_3_8_writes_them() {
+        // What tmux 3.8 wrote for a 100x30 window (2026-11-27): pane %0 and
+        // %3 side by side, %1 over %2 on the right; %3 active, the others
+        // last in turn.
+        let tmux = r#"{"V":2,"L":{"t":"h","w":100,"h":30,"x":0,"y":0,"c":[{"t":"p","w":25,"h":30,"x":0,"y":0,"l":2,"i":0,"I":"%0"},{"t":"p","w":24,"h":30,"x":26,"y":0,"a":true,"i":1,"I":"%3"},{"t":"v","w":49,"h":30,"x":51,"y":0,"c":[{"t":"p","w":49,"h":15,"x":51,"y":0,"l":1,"i":2,"I":"%1"},{"t":"p","w":49,"h":14,"x":51,"y":16,"l":0,"i":3,"I":"%2"}]}]}}"#;
+        let (tree, size) = parse(tmux).unwrap();
+        assert_eq!(size, (100, 30));
+        let order = [0, 3, 1, 2];
+        let last_panes = [2, 1, 0];
+        let info = |id: PaneId| PaneInfo {
+            active: id == 3,
+            last: last_panes.iter().position(|&p| p == id),
+            index: order.iter().position(|&p| p == id).unwrap() as u32,
+        };
+        assert_eq!(dump(&tree, 100, 30, &info), tmux);
+        assert_eq!(
+            parse(r#"{"V":2,"L":{"t":"x"}}"#).unwrap_err(),
+            "invalid layout"
+        );
+        assert!(parse("{").is_err());
     }
 
     /// Splits nested past [`MOST_NESTED`] are refused, not read until the

@@ -162,7 +162,9 @@ pub struct Window {
     /// while they agree.
     pub order: Vec<PaneId>,
     pub active: PaneId,
-    pub last_pane: Option<PaneId>,
+    /// The panes active before the current one, the latest first, as tmux
+    /// 3.8's `last_panes`: its first is the last pane (`last-pane`, `!`).
+    pub last_panes: Vec<PaneId>,
     /// The client that last typed into or resized while showing it, as
     /// tmux's `w->latest`; `client-active` runs when it changes.
     pub latest: Option<crate::model::ClientId>,
@@ -196,6 +198,27 @@ pub struct Window {
 }
 
 impl Window {
+    /// The pane active before the current one (`last-pane`, `{last}`).
+    pub fn last_pane(&self) -> Option<PaneId> {
+        self.last_panes.first().copied()
+    }
+
+    /// Make `pane` active, the one active before it the last, as tmux
+    /// 3.8's window_set_active_pane keeps its `last_panes`.
+    pub fn set_active(&mut self, pane: PaneId) {
+        if pane == self.active {
+            return;
+        }
+        self.forget_last(pane);
+        let before = std::mem::replace(&mut self.active, pane);
+        self.last_panes.insert(0, before);
+    }
+
+    /// Take `pane` out of the last panes.
+    pub fn forget_last(&mut self, pane: PaneId) {
+        self.last_panes.retain(|p| *p != pane);
+    }
+
     pub fn panes(&self) -> Vec<PaneId> {
         let leaves: Vec<PaneId> = self
             .layout

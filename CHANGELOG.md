@@ -18,6 +18,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`#{window_layout}` is tmux 3.8's JSON**: `{"V":2,"L":{…}}`, each cell's
+  type, size and offset, and each pane's id, index, and whether it is active or
+  how recently it was (`#{window_visible_layout}` too). `select-layout` reads
+  the JSON and the older `checksum,cell` string alike, so layouts saved from
+  earlier versions still apply; resurrect keeps its own layout record, which is
+  unchanged. Each window now remembers every pane it had active, latest first,
+  as 3.8 does: when the active pane goes, the one before it takes over.
 - **Colour options tmux 3.8 made strings are strings**: `clock-mode-colour`,
   `cursor-colour`, `display-panes-colour` and `display-panes-active-colour` are
   quoted by `show-options` and appended to by `set -a`, as in 3.8.
@@ -82,6 +89,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Breaking
 
+- **`tmxr-server`'s `layout::dump` writes tmux 3.8's JSON and takes each pane's
+  details** (a new `PaneInfo`: active, place in the last panes, index);
+  `model::Window`'s `last_pane` field is now `last_panes`, a list, with a
+  `last_pane()` method, `set_active` and `forget_last`. A library caller updates
+  the call and field uses.
 - **The client-server protocol is now 15** (once attached the client says what
   its terminal said of its keyboard, the server tells a client whose terminal
   speaks the kitty protocol which flags to ask it for and one in the xterm tier

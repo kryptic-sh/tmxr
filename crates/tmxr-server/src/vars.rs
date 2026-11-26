@@ -269,6 +269,21 @@ impl<'a> Vars<'a> {
     }
 }
 
+/// What `window`'s layout JSON says of each pane: whether it is active,
+/// where it is in the last panes, and its index (`#{pane_index}`).
+fn layout_panes<'w>(
+    srv: &'w Server,
+    window: &'w crate::model::Window,
+) -> impl Fn(PaneId) -> crate::layout::PaneInfo + 'w {
+    let base = u32::from(srv.window_options(window.id).pane_base_index);
+    let panes = window.panes();
+    move |id| crate::layout::PaneInfo {
+        active: window.active == id,
+        last: window.last_panes.iter().position(|p| *p == id),
+        index: panes.iter().position(|p| *p == id).map_or(0, |i| i as u32) + base,
+    }
+}
+
 /// The directory a pane's foreground program is in: the process's own cwd
 /// where the platform exposes it, else what the shell reported with OSC 7,
 /// else where the pane started.
@@ -796,15 +811,16 @@ impl<'a> Context for Vars<'a> {
             // As tmux's: the whole layout even when zoomed, and what shows.
             "window_layout" => {
                 let w = window?;
-                crate::layout::dump(&w.layout, w.cols, w.rows)
+                crate::layout::dump(&w.layout, w.cols, w.rows, &layout_panes(srv, w))
             }
             "window_visible_layout" => {
                 let w = window?;
+                let info = layout_panes(srv, w);
                 if w.zoomed {
                     let only = hjkl_layout::LayoutTree::Leaf(w.active as usize);
-                    crate::layout::dump(&only, w.cols, w.rows)
+                    crate::layout::dump(&only, w.cols, w.rows, &info)
                 } else {
-                    crate::layout::dump(&w.layout, w.cols, w.rows)
+                    crate::layout::dump(&w.layout, w.cols, w.rows, &info)
                 }
             }
             "window_bell_flag" => flag(window?.bell.contains(&session?.id)),
@@ -863,7 +879,7 @@ impl<'a> Context for Vars<'a> {
                 (i as u32 + u32::from(srv.window_options(w.id).pane_base_index)).to_string()
             }
             "pane_active" => flag(window?.active == pane?.id),
-            "pane_last" => flag(window?.last_pane == Some(pane?.id)),
+            "pane_last" => flag(window?.last_pane() == Some(pane?.id)),
             // As tmux 3.8's window_pane_printable_flags: active, last, the
             // zoomed pane (tmxr has no floating or modal panes).
             "pane_flags" => {
@@ -871,7 +887,7 @@ impl<'a> Context for Vars<'a> {
                 let mut f = String::new();
                 for (on, c) in [
                     (w.active == id, '*'),
-                    (w.last_pane == Some(id), '-'),
+                    (w.last_pane() == Some(id), '-'),
                     (w.zoomed && w.active == id, 'Z'),
                 ] {
                     if on {

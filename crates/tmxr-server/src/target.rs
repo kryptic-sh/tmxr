@@ -566,8 +566,9 @@ pub fn pane(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, Wind
     let n = panes.len();
     let rects = crate::layout::pane_rects(&win.layout, win.cols, win.rows);
     let not_found = || format!("can't find pane: {pane_part}");
-    let dir =
-        |d| neighbour(&rects, current, win.last_pane, d, win.cols, win.rows).ok_or_else(not_found);
+    let dir = |d| {
+        neighbour(&rects, current, win.last_pane(), d, win.cols, win.rows).ok_or_else(not_found)
+    };
     // `+N` / `-N` count from the current pane, wrapping, as tmux's.
     let step = |forward: bool, count: &str| -> Res<PaneId> {
         let count = if count.is_empty() {
@@ -585,7 +586,7 @@ pub fn pane(srv: &Server, ctx: &Ctx, spec: Option<&str>) -> Res<(SessionId, Wind
     let find = || -> Res<PaneId> {
         Ok(match pane_part {
             "" => current,
-            "!" | "{last}" => win.last_pane.ok_or("no last pane")?,
+            "!" | "{last}" => win.last_pane().ok_or("no last pane")?,
             "{next}" => step(true, "")?,
             "{previous}" => step(false, "")?,
             "{left-of}" => dir(Dir::Left)?,

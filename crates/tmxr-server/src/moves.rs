@@ -297,7 +297,9 @@ impl Server {
             if ws != wd {
                 // Only one of the two is in this window; it is replaced.
                 win.active = swapped(win.active, src, dst);
-                win.last_pane = win.last_pane.map(|p| swapped(p, src, dst));
+                for p in &mut win.last_panes {
+                    *p = swapped(*p, src, dst);
+                }
             }
         }
         if ws != wd {
