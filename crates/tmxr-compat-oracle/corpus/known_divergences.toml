@@ -134,30 +134,6 @@ checks = [
 ]
 
 [[cases]]
-name = "scrolling_keeps_the_cursors_row_and_history_bottom_its_end_as_tmux"
-# tmux 3.8: vi scrolling keeps the cursor on its text (from keys.toml)
-# scroll-up / -down move the cursor with the view, keeping its column as
-# cursor-up / -down do; history-bottom goes to the last line's end.
-unix_only = true
-size = [40, 12]
-program = "for i in $(seq 1 40); do echo \"line $i ( foo bar.baz )\"; echo; done; printf 'last line'; exec sleep 1000"
-steps = [
-  { sleep = 0.5 },
-  { run = "copy-mode -t o" },
-  { run = "send-keys -t o -X history-top" },
-  { run = "send-keys -t o -N 4 -X cursor-down" },
-  { run = "send-keys -t o -N 7 -X cursor-right" },
-  { run = "send-keys -t o -N 2 -X scroll-down" },
-  { run = "set -gF @down '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position}'" },
-  { run = "send-keys -t o -X scroll-up" },
-  { run = "set -gF @up '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position}'" },
-  { run = "send-keys -t o -X history-bottom" },
-]
-checks = [
-  { format = "#{@down} #{@up} #{copy_cursor_x},#{copy_cursor_y} #{scroll_position}" },
-]
-
-[[cases]]
 name = "command_prompt_tab_completes_as_tmux"
 # tmux 3.8: no Tab completion menu and no target prompt types (prompt.c); kept for now, the owner's call (from keys.toml)
 attach = true

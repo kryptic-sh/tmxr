@@ -18,6 +18,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Scrolling in copy mode under vi keys keeps the cursor on its text**, as tmux
+  3.8 (issue 5216): `scroll-up` / `scroll-down` move the view and leave the
+  cursor on the line it was on, until that line leaves the view; under emacs
+  keys the cursor keeps its row on the screen, as before.
 - **Copy mode keeps the cursor on the text, as tmux 3.8**: under vi keys the
   cursor goes no further than a line's last character (not a wide one's right
   half; column 0 on an empty line), and `cursor-right` wraps from there; under

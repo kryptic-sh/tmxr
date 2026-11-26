@@ -1191,19 +1191,25 @@ impl CopyMode {
             "halfpage-down" => self.page(true, true),
             "page-up" => self.page(false, false),
             "page-down" => self.page(true, false),
-            // The view a line up or down, the cursor keeping its row on the
-            // screen, so moving a line as cursor-up / -down move it, as
-            // tmux's window_copy_cursor_up / _down with scroll_only.
+            // The view a line up or down, as tmux 3.8's window_copy_cursor_up
+            // / _down with scroll_only: under vi keys the cursor stays on
+            // its text while that is in view (issue 5216); under emacs keys,
+            // or once its line leaves the view, it keeps its row on the
+            // screen, so moving a line as cursor-up / -down move it.
             "scroll-up" => {
                 if self.top > 0 {
                     self.top -= 1;
-                    self.vertical(false);
+                    if self.emacs || self.cy >= self.top + rows {
+                        self.vertical(false);
+                    }
                 }
             }
             "scroll-down" => {
                 if self.top < self.lines.len().saturating_sub(rows) {
                     self.top += 1;
-                    self.vertical(true);
+                    if self.emacs || self.cy < self.top {
+                        self.vertical(true);
+                    }
                 }
             }
             "begin-selection" => {
