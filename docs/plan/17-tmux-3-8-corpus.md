@@ -60,15 +60,13 @@ not read in 3.6's source. Grouped by cause:
     (`hooks_insert_event`): `command_is_the_running_command_as_tmux`. Medium.
 12. **JSON layout strings** (3.8; the old form still accepted):
     `window_layout_is_tmuxs_string_and_select_layout_takes_it`. Medium.
-13. **An empty pane has no pid and is not dead**:
-    `split_window_with_an_empty_command_makes_an_empty_pane`. Small.
-14. **Scrollbars no longer narrow the pane** (`modal` is an overlay, 3.8
+13. **Scrollbars no longer narrow the pane** (`modal` is an overlay, 3.8
     auto-hide): `scrollbars_modal_in_copy_mode`. Medium.
-15. **More terminals get extended keys** (3.8 names WezTerm, ghostty and Rio
+14. **More terminals get extended keys** (3.8 names WezTerm, ghostty and Rio
     from XTVERSION, each with `extkeys`):
     `a_terminal_named_as_neither_is_not_asked_for_modify_other_keys`. Small; the
     case needs another terminal name.
-16. **Unknown**: `a_slider_drag_ends_on_the_slider` (tmxr 152, 3.8 159). Bisect
+15. **Unknown**: `a_slider_drag_ends_on_the_slider` (tmxr 152, 3.8 159). Bisect
     with the 3.7 / 3.7b / 3.7c packages in the pacman cache.
 
 These cases in `known_divergences.toml` match 3.8 and move to their corpus files

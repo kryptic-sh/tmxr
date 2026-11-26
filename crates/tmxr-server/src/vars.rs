@@ -833,9 +833,9 @@ impl<'a> Context for Vars<'a> {
                 }
             }
             "pane_synchronized" => flag(srv.pane_options(pane?.id).synchronize_panes),
-            // An empty pane has no program, so counts as dead, as tmux's
-            // (its fd is -1).
-            "pane_dead" => flag(pane?.dead.is_some() || pane?.pty.is_empty()),
+            // Dead once a program has ended: an empty pane, which never had
+            // one, is not, as tmux 3.8's format_cb_pane_dead.
+            "pane_dead" => flag(pane?.dead.is_some()),
             "pane_start_path" => pane?.start_cwd.display().to_string(),
             // Each word quoted as tmux's args_escape, as its
             // cmd_stringify_argv joins them.
@@ -883,15 +883,8 @@ impl<'a> Context for Vars<'a> {
                 }
                 .unwrap_or_default()
             }
-            // 0 for an empty pane, as tmux's.
-            "pane_pid" => {
-                let p = pane?;
-                if p.pty.is_empty() {
-                    "0".to_owned()
-                } else {
-                    p.pty.pid()?.to_string()
-                }
-            }
+            // None for an empty pane, as tmux 3.8's.
+            "pane_pid" => pane?.pty.pid()?.to_string(),
             // tmux's: whether the format is for a pane, a window or a
             // session (`Kind`).
             "buffer_mode_format" => BUFFER_MODE_FORMAT.to_owned(),

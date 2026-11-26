@@ -779,15 +779,16 @@ fn split_window_i_shows_its_input_in_an_empty_pane() {
         String::from_utf8_lossy(&refused.stderr).contains("pane is not empty"),
         "{refused:?}"
     );
-    // No program: no pid, dead, and the cursor hidden, as tmux's.
+    // No program: no pid, not dead (nothing ended), and the cursor
+    // hidden, as tmux 3.8's.
     let vars = t.run(&[
         "display",
         "-p",
         "-t",
         "e.1",
-        "#{pane_pid} #{pane_dead} #{cursor_flag}",
+        "[#{pane_pid}] #{pane_dead} #{cursor_flag}",
     ]);
-    assert_eq!(vars.trim(), "0 1 0");
+    assert_eq!(vars.trim(), "[] 0 0");
     // Typing goes nowhere.
     t.run(&["send-keys", "-t", "e.1", "typed", "Enter"]);
     std::thread::sleep(Duration::from_millis(200));

@@ -560,3 +560,15 @@ steps = [
 checks = [
   { command = "list-panes -t o -F '#{pane_index} #{pane_active} #{pane_last}'", expect = "0 0 0\n1 0 1\n2 1 0" },
 ]
+
+[[cases]]
+name = "split_window_with_an_empty_command_makes_an_empty_pane"
+steps = [
+  { run = "split-window -t o ''" },
+  { run = "send-keys -t o.1 typed Enter" },
+  { sleep = 0.3 },
+]
+checks = [
+  { command = "list-panes -t o -F '#{pane_index} #{?#{==:#{pane_pid},0},none,pid} #{pane_dead} #{cursor_flag}'" },
+  { command = "capture-pane -p -t o.1" },
+]

@@ -860,19 +860,6 @@ checks = [
 ]
 
 [[cases]]
-name = "split_window_with_an_empty_command_makes_an_empty_pane"
-# tmux 3.8: an empty pane has no pid and is not dead (from layout.toml)
-steps = [
-  { run = "split-window -t o ''" },
-  { run = "send-keys -t o.1 typed Enter" },
-  { sleep = 0.3 },
-]
-checks = [
-  { command = "list-panes -t o -F '#{pane_index} #{?#{==:#{pane_pid},0},none,pid} #{pane_dead} #{cursor_flag}'" },
-  { command = "capture-pane -p -t o.1" },
-]
-
-[[cases]]
 name = "a_slider_drag_ends_on_the_slider"
 # tmux 3.8: differs for a reason not yet found (from mouse.toml)
 attach = true

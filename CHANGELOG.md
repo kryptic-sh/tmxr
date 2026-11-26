@@ -18,6 +18,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **An empty pane has no pid and is not dead**, as in tmux 3.8: for a pane made
+  with an empty command, `#{pane_pid}` is empty (it was 0) and `#{pane_dead}` is
+  0 (it was 1), so its window is no longer named `[dead]`.
 - **Formats follow tmux 3.8's**: `q:` also escapes `{`, `}`, newline and tab, so
   `#{E;q:…}` of text holding a format leaves it unexpanded; `#{loop_last_flag}`
   is set only inside a loop (empty elsewhere, where it was 0); and `#{L:…}`

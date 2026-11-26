@@ -462,7 +462,8 @@ fn resurrect_restores_an_empty_pane_empty() {
         "two panes",
         |o| o.lines().count() == 2,
     );
-    assert_eq!(pids(&t).lines().nth(1), Some("0"), "the pane is empty");
+    // An empty pane has no pid, as tmux 3.8's.
+    assert_eq!(pids(&t).lines().nth(1), Some(""), "the pane is empty");
     t.run(&["resurrect-save"]);
     t.run(&["kill-server"]);
     t.wait_run(&["ls"], "server gone", str::is_empty);
@@ -476,6 +477,6 @@ fn resurrect_restores_an_empty_pane_empty() {
     let restored = pids(&t);
     let restored: Vec<&str> = restored.lines().collect();
     assert_eq!(restored.len(), 2, "{restored:?}");
-    assert_ne!(restored[0], "0", "the first pane runs its shell");
-    assert_eq!(restored[1], "0", "the empty pane is empty again");
+    assert_ne!(restored[0], "", "the first pane runs its shell");
+    assert_eq!(restored[1], "", "the empty pane is empty again");
 }
