@@ -244,14 +244,10 @@ fn file_key<'d>(defaults: &'d Table, name: &str) -> Option<(Option<&'static str>
         return Some((None, k.as_str()));
     }
     let status = defaults.get("status")?.as_table()?;
-    let in_status = match name {
-        "window-status-format" => "window-format",
-        "window-status-current-format" => "window-current-format",
-        n => n
-            .strip_prefix("status-")
-            .filter(|k| status.contains_key(*k))
-            .unwrap_or(n),
-    };
+    let in_status = crate::STATUS_OPTIONS
+        .iter()
+        .find(|(_, option)| *option == name)
+        .map_or(name, |(key, _)| *key);
     plain(status, in_status).map(|(k, _)| (Some("status"), k.as_str()))
 }
 
@@ -408,6 +404,19 @@ mod tests {
             cfg.hooks["session-created"],
             ["new-window -d", "new-window -d"]
         );
+    }
+
+    #[test]
+    fn status_options_land_on_their_status_keys() {
+        let (cfg, skipped) = import(
+            "set -g window-status-separator '|'\n\
+             set -g window-pane-status-format '#P!'\n\
+             set -g status-left L\n",
+        );
+        assert_eq!(skipped, Vec::<String>::new());
+        assert_eq!(cfg.window.window_status_separator, "|");
+        assert_eq!(cfg.window.window_pane_status_format, "#P!");
+        assert_eq!(cfg.session.status_left, "L");
     }
 
     #[test]

@@ -82,6 +82,7 @@ pub const NAMES: &[&str] = &[
     "pane_dead_status",
     "pane_dead_time",
     "pane_fg",
+    "pane_flags",
     "pane_format",
     "pane_height",
     "pane_id",
@@ -863,6 +864,22 @@ impl<'a> Context for Vars<'a> {
             }
             "pane_active" => flag(window?.active == pane?.id),
             "pane_last" => flag(window?.last_pane == Some(pane?.id)),
+            // As tmux 3.8's window_pane_printable_flags: active, last, the
+            // zoomed pane (tmxr has no floating or modal panes).
+            "pane_flags" => {
+                let (w, id) = (window?, pane?.id);
+                let mut f = String::new();
+                for (on, c) in [
+                    (w.active == id, '*'),
+                    (w.last_pane == Some(id), '-'),
+                    (w.zoomed && w.active == id, 'Z'),
+                ] {
+                    if on {
+                        f.push(c);
+                    }
+                }
+                f
+            }
             "pane_title" => pane?
                 .emu
                 .title()

@@ -18,6 +18,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The default status lines 2 to 5 are tmux 3.8's**: the pane and session lines
+  are indented by `status-left`'s width; each pane's entry is drawn from two new
+  window options, `window-pane-status-format` and
+  `window-pane-current-status-format` (`#P:[#T]` and the new `#{pane_flags}`:
+  `*` active, `-` last, `Z` zoomed), separated by `window-status-separator`,
+  which every line now expands; and `pane-status-current-style` and
+  `session-status-current-style` default to `underscore`.
 - **Copy mode keeps a selection at the bottom, and drops a cleared search's
   count**, as tmux 3.8: `copy-mode -e` (and the wheel's, the slider's and the
   `…-down-and-cancel` scrolls) no longer leaves copy mode at the bottom while a
@@ -48,6 +55,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`--import-tmux-conf` takes every status option**: `window-status-separator`
+  and the window-status styles were left out as unknown; it now finds each
+  option's `[status]` key from the same table the config uses.
 - **`tmxr kill-server` ends a server from before an upgrade**: a server speaking
   another protocol refused every command, `kill-server` too, though its refusal
   said to run it. The client now ends that server itself, by the process id its

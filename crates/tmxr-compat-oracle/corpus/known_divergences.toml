@@ -107,19 +107,6 @@ steps = [{ sleep = 0.5 }, { run = "send-keys -t o M-S-h S-a" }, { sleep = 0.5 }]
 checks = [{ command = "capture-pane -p -t o" }]
 
 [[cases]]
-name = "formats_read_option_values_as_tmux"
-# tmux 3.8: new default status lines 2 to 5 (from formats.toml)
-steps = [
-  { run = "set -g status-justify centre" },
-  { run = "set -w -t o pane-status-style fg=red" },
-  { run = "set -g escape-time 25" },
-]
-checks = [
-  { format = "[#{status-justify}] [#{E:pane-status-style}] [#{escape-time}] [#{base-index}] [#{pane-status-current-style}] [#{session-status-style}] [#{nosuchoption}]" },
-  { command = "show -gv session-status-current-style" },
-]
-
-[[cases]]
 name = "mode_formats_as_tmux"
 # tmux 3.8: theme colours in the defaults (from formats.toml)
 steps = [{ run = "new-window -d -t o:1 -n second" }]
@@ -827,48 +814,6 @@ checks = [
   { command = "show -wg clock-mode-colour", expect = "clock-mode-colour #ff0000" },
   { command = "show -g prefix", expect = "prefix C-a" },
   { command = "show -w -t o:0 window-status-format", expect = 'window-status-format "#I #W"' },
-]
-
-[[cases]]
-name = "status_takes_on_off_and_2_to_5_as_tmux"
-# tmux 3.8: new default status lines 2 to 5 (from options.toml)
-steps = [{ run = "set -g status 4" }]
-checks = [
-  { command = "show -gv status" },
-  { command = "show -g status-format" },
-  { command = "show -gv status-format[2]" },
-]
-
-[[cases]]
-name = "status_3_draws_the_pane_and_session_lines_as_tmux"
-# tmux 3.8: new default status lines 2 to 5 (from options.toml)
-attach = true
-unix_only = true
-steps = [{ run = "set -g status 3" }, { sleep = 0.5 }]
-checks = [
-  { format = "#{window_height} #{pane_height}" },
-  { screen_contains = " P: 0[", expect = true },
-  { screen_contains = " S: o*", expect = true },
-]
-
-[[cases]]
-name = "message_line_puts_a_message_on_that_status_line_as_tmux"
-# tmux 3.8: new default status lines 2 to 5 (from options.toml)
-attach = true
-unix_only = true
-steps = [
-  { run = "set -g status 3" },
-  { run = "set -g message-line 2" },
-  { sleep = 0.3 },
-  { run = "display-message -d 0 '#[fg=red]STYLEDMSG'" },
-  { sleep = 0.3 },
-]
-checks = [
-  { screen_contains = "STYLEDMSG", expect = true },
-  { screen_contains = "#[fg", expect = false },
-  { screen_contains = " P: 0[", expect = true },
-  { screen_contains = " S: o*", expect = false },
-  { command = "show -gv message-line" },
 ]
 
 [[cases]]

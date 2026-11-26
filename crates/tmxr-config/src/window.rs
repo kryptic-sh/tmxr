@@ -535,6 +535,10 @@ options_table! {
     /// The colours the window's active pane takes where its program sets
     /// none, over `window-style`'s; `default`, none of its own.
     "window-active-style" => window_active_style: String,
+    /// Each pane's entry, and the current one's, in tmux 3.8's default
+    /// second status line (`status-format[1]`).
+    "window-pane-current-status-format" => window_pane_current_status_format: String,
+    "window-pane-status-format" => window_pane_status_format: String,
     "window-size" => window_size: WindowSize,
     /// Added to the entry of a window with an activity or silence alert,
     /// unless `default`; a bell alert's takes the bell style first.

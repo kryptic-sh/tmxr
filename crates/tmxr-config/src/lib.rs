@@ -270,6 +270,8 @@ impl From<File> for Config {
                 window_style: f.window_style,
                 window_active_style: f.window_active_style,
                 fill_character: f.fill_character,
+                window_pane_current_status_format: s.window_pane_current_format,
+                window_pane_status_format: s.window_pane_format,
                 window_status_current_format: s.window_current_format,
                 window_status_activity_style: s.window_activity_style,
                 window_status_bell_style: s.window_bell_style,
@@ -395,6 +397,8 @@ struct StatusFile {
     right_length: u16,
     window_format: String,
     window_current_format: String,
+    window_pane_format: String,
+    window_pane_current_format: String,
     left_style: String,
     right_style: String,
     window_style: String,
@@ -907,7 +911,7 @@ impl Config {
 
 /// A config file's `[status]` keys and the options each sets, as `File`
 /// turns them into a [`Config`].
-const STATUS_OPTIONS: &[(&str, &str)] = &[
+pub(crate) const STATUS_OPTIONS: &[(&str, &str)] = &[
     ("clock-mode-colour", "clock-mode-colour"),
     (
         "copy-mode-current-match-style",
@@ -940,6 +944,11 @@ const STATUS_OPTIONS: &[(&str, &str)] = &[
     ("window-bell-style", "window-status-bell-style"),
     ("window-current-style", "window-status-current-style"),
     ("window-format", "window-status-format"),
+    (
+        "window-pane-current-format",
+        "window-pane-current-status-format",
+    ),
+    ("window-pane-format", "window-pane-status-format"),
     ("window-last-style", "window-status-last-style"),
     ("window-separator", "window-status-separator"),
     ("window-style", "window-status-style"),

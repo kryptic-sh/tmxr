@@ -1273,3 +1273,15 @@ checks = [
   { command = "display -p 'a#{L:x}b'" },
   { command = "display -p 'a#{W/zz:x}b'" },
 ]
+
+[[cases]]
+name = "formats_read_option_values_as_tmux"
+steps = [
+  { run = "set -g status-justify centre" },
+  { run = "set -w -t o pane-status-style fg=red" },
+  { run = "set -g escape-time 25" },
+]
+checks = [
+  { format = "[#{status-justify}] [#{E:pane-status-style}] [#{escape-time}] [#{base-index}] [#{pane-status-current-style}] [#{session-status-style}] [#{nosuchoption}]" },
+  { command = "show -gv session-status-current-style" },
+]
