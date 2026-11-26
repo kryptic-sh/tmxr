@@ -18,6 +18,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **A drag over a program on the alternate screen copies**, as tmux 3.8's
+  default `MouseDrag1Pane` no longer tests `#{alternate_on}`: dragging in `less`
+  or `man` (which do not ask for the mouse) selects into copy mode.
 - **A hook's `#{command}` is the command that fired it**, as tmux 3.8: in an
   `after-new-window` hook it is `new-window`, not the hook's own command; a hook
   an event fires has the command running when it happened.

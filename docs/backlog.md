@@ -222,6 +222,27 @@ not tried.
   `cursor-colour`, `display-panes-colour`, `display-panes-active-colour`) are
   strings in tmxr too.
 
+- **Scrollbars as tmux 3.8 draws them** (not done; read in 3.8's `window.c` and
+  `window-copy.c`). 3.8 has `off`, `on`, `modal` and a new `auto-hide`: only
+  `on` reserves columns (`window_pane_scrollbar_reserve`); `modal` (in a mode)
+  and `auto-hide` (always) are overlays drawn over the pane, shown while
+  scrolling (`window_pane_scrollbar_show` in the copy-mode scrolls) or while the
+  mouse hovers over the bar (`server_client` on motion), hidden
+  `pane-scrollbars-timeout` (500 ms) after, a new window option. tmxr's `modal`
+  still narrows the pane in copy mode (`scrollbar::content`), and it has neither
+  `auto-hide` nor the timeout; `scrollbars_modal_in_copy_mode` is in
+  `known_divergences.toml`. Following it means a per-pane shown-until time, the
+  server tick redrawing when it passes, the overlay drawn and hit by
+  `scrollbar::draw` / `hit` inside the pane's cell, and hover from motion
+  reports (only sent with `mouse on`).
+- **A slider drag ends one row off tmux 3.8's**
+  (`a_slider_drag_ends_on_the_slider`, in `known_divergences.toml`: tmxr's view
+  ends at 152, 3.8's at 159). Not traced; likely the scrollbar rework above
+  (3.8's `window_copy_scroll1` says the status line's offset is already in
+  `sl_mpos`). The 3.7, 3.7b and 3.7c packages in the pacman cache can bisect it.
+- **A click on an open menu's item closes it in tmux 3.8** where tmxr's menu
+  (from 3.6) keeps it open (seen by a reviewer 2026-11-02, with the mouse on or
+  off; not checked against 3.8's `menu.c`).
 - **tmux 3.8's new hooks are taken but not fired.** `set-hook` takes them and
   `show-hooks` lists them in 3.8's order (`hooks::NOT_FIRED`), so a config
   setting one loads, but nothing runs: `client-created`, `client-closed`,

@@ -677,3 +677,20 @@ steps = [
   { sleep = 0.6 },
 ]
 checks = [{ format = "[#{@hits}]" }]
+
+# A drag over a program on the alternate screen that did not ask for the
+# mouse (less, man) copies, as tmux 3.8's MouseDrag1Pane no longer tests
+# #{alternate_on}.
+[[cases]]
+name = "a_drag_on_the_alternate_screen_copies"
+attach = true
+pane = [{ print = "\u001b[?1049halpha beta gamma\n" }]
+steps = [
+  { wait_text = "alpha beta gamma" },
+  { mouse = { action = "drag", at = [0, 0], to = [4, 0] } },
+  { sleep = 0.5 },
+]
+checks = [
+  { command = "show-buffer", expect = "alpha" },
+  { format = "#{pane_in_mode}", expect = "0" },
+]
