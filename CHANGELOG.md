@@ -18,6 +18,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **A hook's `#{command}` is the command that fired it**, as tmux 3.8: in an
+  `after-new-window` hook it is `new-window`, not the hook's own command; a hook
+  an event fires has the command running when it happened.
 - **`show-hooks` lists tmux 3.8's hooks**, in its order: the new ones
   (`pane-created`, `window-zoomed`, `client-created` and the rest, and
   `after-swap-window`) are listed and `set-hook` takes them, so a tmux 3.8

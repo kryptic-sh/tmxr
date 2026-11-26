@@ -967,7 +967,7 @@ impl<'a> Context for Vars<'a> {
                 )
             }
             // The command whose formats these are, as tmux's.
-            "command" => srv.running?.to_owned(),
+            "command" => srv.hook_fired_by.or(srv.running)?.to_owned(),
             // A cell's size in pixels: tmux's defaults for a terminal that
             // reports none (DEFAULT_XPIXEL / DEFAULT_YPIXEL), as tmxr's
             // client sends no pixel size.

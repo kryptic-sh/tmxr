@@ -114,21 +114,6 @@ checks = [
 ]
 
 [[cases]]
-name = "command_is_the_running_command_as_tmux"
-# tmux 3.8: a hook's command is the one that fired it (hooks_insert_event) (from formats.toml)
-steps = [
-  { run = "set -gF @set '#{command}'" },
-  { run = "set-hook -g after-new-window \"set -gF @hook '#{command}'\"" },
-  { run = "new-window -d" },
-  { sleep = 0.3 },
-]
-checks = [
-  { command = "display -p '#{command}'" },
-  { command = "list-windows -F '#{command}'" },
-  { format = "#{@set} #{@hook}" },
-]
-
-[[cases]]
 name = "command_prompt_tab_completes_as_tmux"
 # tmux 3.8: no Tab completion menu and no target prompt types (prompt.c); kept for now, the owner's call (from keys.toml)
 attach = true

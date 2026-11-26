@@ -21,11 +21,9 @@ not read in 3.6's source. Grouped by cause:
    completes command names inline, underlined, with no menu and no session or
    window names. Cases: every `prompt_tab_*` and
    `command_prompt_tab_completes_as_tmux`. Following it removes tmxr's menu.
-3. **A hook's `#{command}` is the command that fired it**
-   (`hooks_insert_event`): `command_is_the_running_command_as_tmux`. Medium.
-4. **Scrollbars no longer narrow the pane** (`modal` is an overlay, 3.8
+3. **Scrollbars no longer narrow the pane** (`modal` is an overlay, 3.8
    auto-hide): `scrollbars_modal_in_copy_mode`. Medium.
-5. **Unknown**: `a_slider_drag_ends_on_the_slider` (tmxr 152, 3.8 159). Bisect
+4. **Unknown**: `a_slider_drag_ends_on_the_slider` (tmxr 152, 3.8 159). Bisect
    with the 3.7 / 3.7b / 3.7c packages in the pacman cache.
 
 These cases in `known_divergences.toml` match 3.8 and move to their corpus files

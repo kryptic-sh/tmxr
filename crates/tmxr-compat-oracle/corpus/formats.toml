@@ -1285,3 +1285,17 @@ checks = [
   { format = "[#{status-justify}] [#{E:pane-status-style}] [#{escape-time}] [#{base-index}] [#{pane-status-current-style}] [#{session-status-style}] [#{nosuchoption}]" },
   { command = "show -gv session-status-current-style" },
 ]
+
+[[cases]]
+name = "command_is_the_running_command_as_tmux"
+steps = [
+  { run = "set -gF @set '#{command}'" },
+  { run = "set-hook -g after-new-window \"set -gF @hook '#{command}'\"" },
+  { run = "new-window -d" },
+  { sleep = 0.3 },
+]
+checks = [
+  { command = "display -p '#{command}'" },
+  { command = "list-windows -F '#{command}'" },
+  { format = "#{@set} #{@hook}" },
+]

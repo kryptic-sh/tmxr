@@ -343,7 +343,7 @@ pub struct Server {
     /// Global hooks (`set-hook -g`).
     pub hooks: crate::hooks::HookTable,
     /// Events whose hooks run once the current event is handled.
-    pub pending_hooks: Vec<(String, Ctx, crate::hooks::HookScope)>,
+    pub pending_hooks: Vec<crate::hooks::Pending>,
     /// The state the notification hooks last saw (`notify`).
     pub watched: crate::notify::Watched,
     /// Why the config file was not used when the server started, shown to
@@ -353,6 +353,9 @@ pub struct Server {
     pub in_hook: bool,
     /// The command running now, for `#{command}`.
     pub running: Option<&'static str>,
+    /// While a hook's commands run, the command that fired it, which
+    /// `#{command}` is in them, as tmux 3.8's hooks_insert_event.
+    pub hook_fired_by: Option<&'static str>,
     /// How many command files `source-file` has open inside each other,
     /// held under `cmds::source`'s `SOURCE_DEPTH_LIMIT`.
     pub source_depth: usize,
@@ -483,6 +486,7 @@ impl Server {
             socket_access: tmxr_proto::socket::Access::Owner,
             hooks,
             pending_hooks: Vec::new(),
+            hook_fired_by: None,
             watched: crate::notify::Watched::default(),
             config_error: None,
             in_hook: false,

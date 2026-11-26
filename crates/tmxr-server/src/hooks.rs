@@ -17,6 +17,15 @@ use crate::server::Server;
 /// Hook name → its commands.
 pub type HookTable = BTreeMap<String, Vec<String>>;
 
+/// A hook queued to run: its name, where its event happened, and the
+/// command that fired it.
+pub struct Pending {
+    name: String,
+    ctx: Ctx,
+    scope: HookScope,
+    fired_by: Option<&'static str>,
+}
+
 /// The named events tmxr fires, besides `after-<command>` for every command.
 pub const EVENTS: &[&str] = &[
     "alert-activity",
@@ -217,7 +226,19 @@ impl Server {
     /// for its `after-` hook.
     pub fn queue_hook(&mut self, name: &str, ctx: Ctx, scope: HookScope) {
         if !self.in_hook {
-            self.pending_hooks.push((name.to_owned(), ctx, scope));
+            // `after-<command>`'s command, else the one running as the
+            // event happened.
+            let fired_by = name
+                .strip_prefix("after-")
+                .and_then(|cmd| tmxr_command::lookup(cmd).ok())
+                .map(|c| c.name)
+                .or(self.running);
+            self.pending_hooks.push(Pending {
+                name: name.to_owned(),
+                ctx,
+                scope,
+                fired_by,
+            });
         }
     }
 
@@ -252,9 +273,16 @@ impl Server {
     /// Run the hooks of everything queued, in order.
     pub fn run_pending_hooks(&mut self) {
         while !self.pending_hooks.is_empty() {
-            for (name, ctx, scope) in std::mem::take(&mut self.pending_hooks) {
+            for Pending {
+                name,
+                ctx,
+                scope,
+                fired_by,
+            } in std::mem::take(&mut self.pending_hooks)
+            {
                 let commands = self.hook_commands(&name, &ctx, scope);
                 self.in_hook = true;
+                self.hook_fired_by = fired_by;
                 for cmd in commands {
                     let out = crate::cmds::run_string(self, &ctx, &cmd);
                     if !out.stderr.is_empty() {
@@ -262,6 +290,7 @@ impl Server {
                     }
                 }
                 self.in_hook = false;
+                self.hook_fired_by = None;
             }
         }
     }
