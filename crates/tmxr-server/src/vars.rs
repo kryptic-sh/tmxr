@@ -60,7 +60,6 @@ pub const NAMES: &[&str] = &[
     "keypad_cursor_flag",
     "keypad_flag",
     "last_window_index",
-    "loop_last_flag",
     "mouse_all_flag",
     "mouse_any_flag",
     "mouse_button_flag",
@@ -539,9 +538,12 @@ impl<'a> Context for Vars<'a> {
                     })
                     .collect()
             }
+            // Attached clients only, as tmux 3.8's sort_get_clients: not a
+            // command client such as the one expanding this.
             LoopKind::Clients => srv
                 .clients
                 .values()
+                .filter(|c| c.att.is_some())
                 .map(|c| {
                     let vars = Vars {
                         client: Some(c.id),
@@ -609,8 +611,6 @@ impl<'a> Context for Vars<'a> {
             "client_flags" => client_flags(srv.clients.get(&self.client?)?),
             "client_readonly" => flag(srv.clients.get(&self.client?)?.read_only()),
             "client_width" => att?.cols.to_string(),
-            // Set by a format loop for its last item.
-            "loop_last_flag" => "0".to_owned(),
             "client_created" => epoch(srv.clients.get(&self.client?)?.created),
             // The users the server and the client run as: a uid on Unix, a
             // SID on Windows, and that user's name.

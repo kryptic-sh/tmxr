@@ -58,23 +58,17 @@ not read in 3.6's source. Grouped by cause:
     small; firing them is large.
 11. **A hook's `#{command}` is the command that fired it**
     (`hooks_insert_event`): `command_is_the_running_command_as_tmux`. Medium.
-12. **`q:` also escapes braces** (`format_quote_shell`):
-    `e_t_q_and_m_chain_with_other_modifiers`. Small.
-13. **Loops**: `loop_last_flag` is unset outside a loop, and `#{L:}` counts only
-    attached clients (`sort_get_clients`):
-    `format_loops_go_over_sessions_windows_and_panes`,
-    `loops_and_n_whose_lookups_fail_as_tmux`. Small.
-14. **JSON layout strings** (3.8; the old form still accepted):
+12. **JSON layout strings** (3.8; the old form still accepted):
     `window_layout_is_tmuxs_string_and_select_layout_takes_it`. Medium.
-15. **An empty pane has no pid and is not dead**:
+13. **An empty pane has no pid and is not dead**:
     `split_window_with_an_empty_command_makes_an_empty_pane`. Small.
-16. **Scrollbars no longer narrow the pane** (`modal` is an overlay, 3.8
+14. **Scrollbars no longer narrow the pane** (`modal` is an overlay, 3.8
     auto-hide): `scrollbars_modal_in_copy_mode`. Medium.
-17. **More terminals get extended keys** (3.8 names WezTerm, ghostty and Rio
+15. **More terminals get extended keys** (3.8 names WezTerm, ghostty and Rio
     from XTVERSION, each with `extkeys`):
     `a_terminal_named_as_neither_is_not_asked_for_modify_other_keys`. Small; the
     case needs another terminal name.
-18. **Unknown**: `a_slider_drag_ends_on_the_slider` (tmxr 152, 3.8 159). Bisect
+16. **Unknown**: `a_slider_drag_ends_on_the_slider` (tmxr 152, 3.8 159). Bisect
     with the 3.7 / 3.7b / 3.7c packages in the pacman cache.
 
 These cases in `known_divergences.toml` match 3.8 and move to their corpus files

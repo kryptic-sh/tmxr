@@ -18,6 +18,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Formats follow tmux 3.8's**: `q:` also escapes `{`, `}`, newline and tab, so
+  `#{E;q:…}` of text holding a format leaves it unexpanded; `#{loop_last_flag}`
+  is set only inside a loop (empty elsewhere, where it was 0); and `#{L:…}`
+  loops over attached clients only, not a command client such as the one
+  expanding it.
 - **`list-keys` prints as tmux 3.8's**: a `bind-key` line has two spaces before
   `-T` when no listed bind repeats; `-N` lists the prefix table before the root,
   puts the prefix key (or `-P`'s text) and a space before every key, pads to the

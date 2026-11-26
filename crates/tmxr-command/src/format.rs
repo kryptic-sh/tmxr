@@ -1324,12 +1324,12 @@ pub fn glob_regex(glob: &str) -> String {
     out
 }
 
-/// tmux's `q:`: a backslash before each character a shell would read
-/// specially.
+/// tmux's `q:` (3.8's format_quote_shell): a backslash before each
+/// character a shell or a format would read specially.
 fn quote_shell(s: &str) -> String {
     let mut out = String::with_capacity(s.len() * 2);
     for c in s.chars() {
-        if "|&;<>()$`\\\"'*?[# =%".contains(c) {
+        if "|&;<>(){}$`\\\"'*?[# =%\n\t".contains(c) {
             out.push('\\');
         }
         out.push(c);
