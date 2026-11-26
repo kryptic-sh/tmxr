@@ -18,6 +18,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Copy mode keeps the cursor on the text, as tmux 3.8**: under vi keys the
+  cursor goes no further than a line's last character (not a wide one's right
+  half; column 0 on an empty line), and `cursor-right` wraps from there; under
+  emacs keys no further than just past it. The column remembered for up and
+  down, line copies and a rectangle's edge follow, as in 3.8. Rectangle
+  selection still goes past the text.
 - **The default status lines 2 to 5 are tmux 3.8's**: the pane and session lines
   are indented by `status-left`'s width; each pane's entry is drawn from two new
   window options, `window-pane-status-format` and

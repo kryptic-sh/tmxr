@@ -21,34 +21,23 @@ not read in 3.6's source. Grouped by cause:
    completes command names inline, underlined, with no menu and no session or
    window names. Cases: every `prompt_tab_*` and
    `command_prompt_tab_completes_as_tmux`. Following it removes tmxr's menu.
-3. **vi copy mode keeps the cursor off the cell past the text**
-   (`window_copy_update_cursor`, 3.7): the cursor is clamped to the line's
-   visible end (and off wide characters' padding), which changes the remembered
-   column, line copies and a rectangle's edge. Cases: every
-   `copy_cursor_x_follows_tmux_*`, `select_line_cursor_moves_as_tmux`,
-   `select_word_on_a_line_of_wide_characters_as_tmux`,
-   `line_selection_back_where_it_was_made_as_tmux`,
-   `line_and_word_selections_move_by_lines_as_tmux`,
-   `copied_text_under_vi_keys_as_tmux`,
-   `copy_mode_rectangle_is_cleared_by_select_line` (this one's link to the clamp
-   is a guess). Medium (`copy/`).
-4. **vi scrolling keeps the cursor on its text** (3.8, issue 5216):
+3. **vi scrolling keeps the cursor on its text** (3.8, issue 5216):
    `scrolling_keeps_the_cursors_row_and_history_bottom_its_end_as_tmux`. Small.
-5. **Themes** (3.8): mode formats gain theme colours, and `clock-mode-colour` is
+4. **Themes** (3.8): mode formats gain theme colours, and `clock-mode-colour` is
    a string option defaulting to `themeblue`, so `show-options` quotes it:
    `mode_formats_as_tmux`, `show_options_quotes_strings_as_tmux`. The defaults
    are small; themes themselves are large.
-6. **New hooks** (3.8): `show_hooks_lists_hooks_in_tmuxs_order` (and the known
+5. **New hooks** (3.8): `show_hooks_lists_hooks_in_tmuxs_order` (and the known
    divergence `show_hooks_g_lists_the_hooks_tmxr_fires`). Listing them is small;
    firing them is large.
-7. **A hook's `#{command}` is the command that fired it**
+6. **A hook's `#{command}` is the command that fired it**
    (`hooks_insert_event`): `command_is_the_running_command_as_tmux`. Medium.
-8. **JSON layout strings** (3.8; the old form still accepted):
+7. **JSON layout strings** (3.8; the old form still accepted):
    `window_layout_is_tmuxs_string_and_select_layout_takes_it`. Medium.
-9. **Scrollbars no longer narrow the pane** (`modal` is an overlay, 3.8
+8. **Scrollbars no longer narrow the pane** (`modal` is an overlay, 3.8
    auto-hide): `scrollbars_modal_in_copy_mode`. Medium.
-10. **Unknown**: `a_slider_drag_ends_on_the_slider` (tmxr 152, 3.8 159). Bisect
-    with the 3.7 / 3.7b / 3.7c packages in the pacman cache.
+9. **Unknown**: `a_slider_drag_ends_on_the_slider` (tmxr 152, 3.8 159). Bisect
+   with the 3.7 / 3.7b / 3.7c packages in the pacman cache.
 
 These cases in `known_divergences.toml` match 3.8 and move to their corpus files
 when CI does: `decrqm_reports_modes_tmux_3_6_does_not`,

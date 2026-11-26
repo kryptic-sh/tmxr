@@ -755,6 +755,33 @@ impl CopyMode {
         self.cx = self.cx.min(usize::from(self.cols));
     }
 
+    /// The cursor kept on its line's text, as tmux 3.8's
+    /// window_copy_update_cursor (window_copy_cursor_limit): under vi keys
+    /// on the last character, not a wide one's right half (column 0 on an
+    /// empty line); under emacs keys up to just past it. Not with rectangle
+    /// selection on, which may go past the text as vi's virtualedit.
+    fn limit_cursor(&mut self) {
+        if !self.rect {
+            self.cx = self.cx.min(self.cursor_limit(self.cy));
+        }
+    }
+
+    /// The furthest column the cursor goes on line `y`, as tmux 3.8's
+    /// window_copy_cursor_limit: under vi keys its last character
+    /// (grid_line_limit), under emacs keys just past it, a wide last
+    /// character's right half included.
+    fn cursor_limit(&self, y: usize) -> usize {
+        let len = self.line_len(y);
+        if self.emacs {
+            return len + usize::from(self.padding(y, len));
+        }
+        let mut x = len.saturating_sub(1);
+        while x > 0 && self.padding(y, x) {
+            x -= 1;
+        }
+        x
+    }
+
     /// A rectangle is being selected: tmux's `sel && rectflag`, under which
     /// up and down keep the column and right goes to the screen's edge.
     fn rect_selecting(&self) -> bool {
@@ -897,7 +924,7 @@ impl CopyMode {
         let px = if self.rect_selecting() {
             usize::from(self.cols)
         } else {
-            self.line_len(self.cy)
+            self.cursor_limit(self.cy)
         };
         if self.cx >= px && self.cy < self.last_line() {
             (self.cy, self.cx) = (self.cy + 1, 0);
@@ -1420,6 +1447,7 @@ impl CopyMode {
         }
         if !matches!(name, "scroll-up" | "scroll-down") {
             self.clamp_x();
+            self.limit_cursor();
             self.scroll_to_cursor();
         }
         true

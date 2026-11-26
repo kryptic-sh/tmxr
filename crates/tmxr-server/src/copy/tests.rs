@@ -225,7 +225,10 @@ fn word_motions() {
     assert_eq!(cm.cx, 10);
     cm.apply("start-of-line", None);
     cm.apply("end-of-line", None);
-    assert_eq!(cm.cx, 16, "one past the last character, as tmux's");
+    assert_eq!(
+        cm.cx, 15,
+        "on the last character under vi keys, as tmux 3.8's"
+    );
 }
 
 #[test]
@@ -334,8 +337,11 @@ fn other_end_swaps_cursor_and_anchor_and_a_count_by_parity() {
 
 #[test]
 fn centring_and_scroll_middle_place_the_cursor_and_the_view() {
-    // 30 numbered lines in a 5-row, 20-column pane.
-    let text: String = (0..30).map(|i| format!("{i}\r\n")).collect();
+    // 30 numbered lines in a 5-row, 20-column pane, each long enough for
+    // the middle column (vi keys keep the cursor on a line's text).
+    let text: String = (0..30)
+        .map(|i| format!("{i:<2}{}\r\n", "x".repeat(15)))
+        .collect();
     let mut cm = mode(&text);
     cm.apply("history-top", None);
     cm.apply("cursor-centre-vertical", None);
