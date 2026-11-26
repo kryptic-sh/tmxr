@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-27
+
+### Breaking
+
+- **`tmxr-server`'s `layout::dump` writes tmux 3.8's JSON and takes each pane's
+  details** (a new `PaneInfo`: active, place in the last panes, index);
+  `model::Window`'s `last_pane` field is now `last_panes`, a list, with a
+  `last_pane()` method, `set_active` and `forget_last`. A library caller updates
+  the call and field uses.
+
 ### Added
 
 - **Windows host names show in lower case**, as other systems' usually are:
@@ -105,11 +115,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Breaking
 
-- **`tmxr-server`'s `layout::dump` writes tmux 3.8's JSON and takes each pane's
-  details** (a new `PaneInfo`: active, place in the last panes, index);
-  `model::Window`'s `last_pane` field is now `last_panes`, a list, with a
-  `last_pane()` method, `set_active` and `forget_last`. A library caller updates
-  the call and field uses.
 - **The client-server protocol is now 15** (once attached the client says what
   its terminal said of its keyboard, the server tells a client whose terminal
   speaks the kitty protocol which flags to ask it for and one in the xterm tier
@@ -2630,7 +2635,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   published to GitHub Releases with `.sha256` files, and shell completions and a
   man page from the hidden `tmxr --completions <shell>` and `tmxr --man`.
 
-[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/kryptic-sh/tmxr/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/kryptic-sh/tmxr/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/kryptic-sh/tmxr/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/kryptic-sh/tmxr/compare/v0.13.0...v0.14.0
