@@ -20,7 +20,7 @@ TMUX_BIN=$(command -v tmux) cargo test -p tmxr-compat-oracle -- --nocapture
 `TMUX_BIN` names the tmux to compare against; without it the oracle checks tmxr
 alone against the cases' expected values, and skips cases that have none or need
 a Unix shell (as on Windows). A case whose pane runs `pane` steps rather than a
-shell `program` runs on Windows too. The corpus is measured against tmux 3.6:
+shell `program` runs on Windows too. The corpus is measured against tmux 3.8:
 another version differs for its own reasons. `TMXR_BIN` names the tmxr under
 test (default: the workspace's debug build). With `ORACLE_REQUIRE_TMUX` set, as
 CI sets it, a missing tmux fails instead of skipping.

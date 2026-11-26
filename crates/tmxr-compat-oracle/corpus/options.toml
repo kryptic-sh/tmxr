@@ -120,31 +120,6 @@ checks = [
 ]
 
 [[cases]]
-name = "show_options_quotes_strings_as_tmux"
-steps = [
-  { run = "set -g @a 'a b'" },
-  { run = "set -g @b \"it's\"" },
-  { run = "set -g @c 'x\"y'" },
-  { run = "set -g @d '~/x'" },
-  { run = "set -g @e ''" },
-  { run = "set -t o status-left '[#S] '" },
-  { run = "set -wg clock-mode-colour '#ff0000'" },
-  { run = "set -g prefix C-a" },
-  { run = "set -w -t o:0 window-status-format '#I #W'" },
-]
-checks = [
-  { command = "show -g @a", expect = '@a "a b"' },
-  { command = "show -g @b", expect = "@b \"it's\"" },
-  { command = "show -g @c", expect = "@c 'x\"y'" },
-  { command = "show -g @d", expect = '@d \~/x' },
-  { command = "show -g @e", expect = "@e ''" },
-  { command = "show -t o status-left", expect = 'status-left "[#S] "' },
-  { command = "show -wg clock-mode-colour", expect = "clock-mode-colour #ff0000" },
-  { command = "show -g prefix", expect = "prefix C-a" },
-  { command = "show -w -t o:0 window-status-format", expect = 'window-status-format "#I #W"' },
-]
-
-[[cases]]
 name = "show_options_h_lists_the_hooks_set_there"
 steps = [
   { run = "new-session -d -s p" },
@@ -455,18 +430,6 @@ steps = [
 checks = [{ format = "[#{@fi}] [#{@fo}]" }]
 
 [[cases]]
-name = "assume_paste_time_pastes_the_third_fast_key"
-attach = true
-unix_only = true
-steps = [
-  { run = "bind -n z set -g @hit y" },
-  { sleep = 0.3 },
-  { keys = "xyz" },
-  { sleep = 0.5 },
-]
-checks = [{ format = "[#{@hit}]" }, { command = "show -gv assume-paste-time" }]
-
-[[cases]]
 name = "assume_paste_time_zero_runs_every_bind"
 attach = true
 unix_only = true
@@ -506,45 +469,6 @@ steps = [
 checks = [{ format = "[#{@ca}]" }]
 
 [[cases]]
-name = "status_takes_on_off_and_2_to_5_as_tmux"
-steps = [{ run = "set -g status 4" }]
-checks = [
-  { command = "show -gv status" },
-  { command = "show -g status-format" },
-  { command = "show -gv status-format[2]" },
-]
-
-[[cases]]
-name = "status_3_draws_the_pane_and_session_lines_as_tmux"
-attach = true
-unix_only = true
-steps = [{ run = "set -g status 3" }, { sleep = 0.5 }]
-checks = [
-  { format = "#{window_height} #{pane_height}" },
-  { screen_contains = " P: 0[", expect = true },
-  { screen_contains = " S: o*", expect = true },
-]
-
-[[cases]]
-name = "message_line_puts_a_message_on_that_status_line_as_tmux"
-attach = true
-unix_only = true
-steps = [
-  { run = "set -g status 3" },
-  { run = "set -g message-line 2" },
-  { sleep = 0.3 },
-  { run = "display-message -d 0 '#[fg=red]STYLEDMSG'" },
-  { sleep = 0.3 },
-]
-checks = [
-  { screen_contains = "STYLEDMSG", expect = true },
-  { screen_contains = "#[fg", expect = false },
-  { screen_contains = " P: 0[", expect = true },
-  { screen_contains = " S: o*", expect = false },
-  { command = "show -gv message-line" },
-]
-
-[[cases]]
 name = "message_line_past_the_last_line_takes_the_last_as_tmux"
 attach = true
 unix_only = true
@@ -558,19 +482,6 @@ steps = [
 checks = [
   { screen_contains = "LASTLINEMSG", expect = true },
   { screen_contains = " P: 0[", expect = false },
-]
-
-[[cases]]
-name = "show_hooks_lists_hooks_in_tmuxs_order"
-steps = [
-  { run = "set-hook -g after-new-window 'display hi'" },
-  { run = "set-hook -gw pane-died 'display dead'" },
-  { run = "set-hook -t o session-renamed 'display r'" },
-  { run = "set-hook -t o client-attached 'display a'" },
-]
-checks = [
-  { command = "show-hooks -gw" },
-  { command = "show-hooks -t o" },
 ]
 
 [[cases]]

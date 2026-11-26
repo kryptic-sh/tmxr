@@ -258,7 +258,6 @@ checks = [
   { format = "#{mouse_any_flag} #{mouse_standard_flag} #{mouse_button_flag} #{mouse_all_flag} #{mouse_sgr_flag}" },
 ]
 
-
 [[cases]]
 name = "mouse_mode_flags_follow_the_programs_modes_button_sgr"
 program = 'printf "\033[?1002;1006h"; exec sleep 1000'
@@ -266,7 +265,6 @@ steps = [{ sleep = 0.5 }]
 checks = [
   { format = "#{mouse_any_flag} #{mouse_standard_flag} #{mouse_button_flag} #{mouse_all_flag} #{mouse_sgr_flag}" },
 ]
-
 
 [[cases]]
 name = "mouse_mode_flags_follow_the_programs_modes_all"
@@ -307,13 +305,11 @@ program = 'printf "abc\b"; exec sleep 1000'
 steps = [{ sleep = 0.5 }]
 checks = [{ format = "[#{cursor_character}]" }]
 
-
 [[cases]]
 name = "cursor_character_is_under_the_cursor_empty"
 program = 'printf "abc"; exec sleep 1000'
 steps = [{ sleep = 0.5 }]
 checks = [{ format = "[#{cursor_character}]" }]
-
 
 [[cases]]
 name = "cursor_character_is_under_the_cursor_wide_half"
@@ -372,40 +368,6 @@ steps = [
 ]
 checks = [
   { format = "#{w:@a}|#{w:@s}|#{w:@u}|#{n:@u}|#{w:@e}|#{w;n:@a}|#{n;w:@a}" },
-]
-
-[[cases]]
-name = "e_t_q_and_m_chain_with_other_modifiers"
-steps = [
-  { run = "set -g @f '#{session_name}-long-text'" },
-  { run = "set -g @sp 'a b;c'" },
-  { run = "set -g @p '/home/me/my dir'" },
-  { run = "set -g @t '%Y'" },
-]
-checks = [
-  { format = "#{E;=5:@f}|#{=5;E:@f}|#{E;n:@f}|#{E;s/o/0/:@f}|#{E;p20:@f}|" },
-  { format = "#{T;=2:@t}|#{l;E:@f}|#{E;q:@f}" },
-  { format = "#{q;=3:@sp}|#{q:#{@sp}}|#{q:@sp}|#{b;q:@p}|#{q;b:@p}|#{q/e;=2:@sp}|" },
-  { format = "#{=1;m:a*,abc}|#{m;=1:a*,abc}|#{m/i;n:A*,abc}" },
-]
-
-[[cases]]
-name = "format_loops_go_over_sessions_windows_and_panes"
-steps = [
-  { run = "new-session -d -s b" },
-  { run = "new-session -d -s m" },
-  { run = "rename-window -t o:0 mid" },
-  { run = "new-window -d -t o:3 -n zed" },
-  { run = "new-window -d -t o:1 -n alpha" },
-  { run = "split-window -d -t o:0" },
-  { run = "split-window -d -t o:0" },
-  { run = "select-pane -t o:0.1" },
-]
-checks = [
-  { command = "display -p -t o:0 '#{S:#{session_name}#{?loop_last_flag,,/}}|#{S/n:#{session_name} }|#{S/nr:#{session_name} }|#{S/r:#{session_name} }|#{S/t:#{session_name} }'" },
-  { command = "display -p -t o:0 '#{W:#{window_index}:#{window_name} }|#{W:#{window_index} ,*#{window_index} }|#{W/n:#{window_name} }|#{W/r:#{window_index} }|#{W:a,b,c}'" },
-  { command = "display -p -t o:0 '#{P:#{pane_index} }|#{P:#{pane_index} ,*#{pane_index} }|#{P/r:#{pane_index} }|#{loop_last_flag}'" },
-  { command = "display -p -t o:0 '#{W:#{session_name}#{window_index}#{loop_last_flag} }|#{S:#{session_name}#{W:#{window_index}}|}|#{W/x:#{window_index}}'" },
 ]
 
 [[cases]]
@@ -597,18 +559,6 @@ steps = [{ sleep = 0.5 }]
 checks = [{ format = "#{mouse_any_flag} #{mouse_standard_flag} #{mouse_button_flag} #{mouse_all_flag} #{mouse_sgr_flag} #{mouse_utf8_flag}" }]
 
 [[cases]]
-name = "formats_read_option_values_as_tmux"
-steps = [
-  { run = "set -g status-justify centre" },
-  { run = "set -w -t o pane-status-style fg=red" },
-  { run = "set -g escape-time 25" },
-]
-checks = [
-  { format = "[#{status-justify}] [#{E:pane-status-style}] [#{escape-time}] [#{base-index}] [#{pane-status-current-style}] [#{session-status-style}] [#{nosuchoption}]" },
-  { command = "show -gv session-status-current-style" },
-]
-
-[[cases]]
 name = "a_job_in_the_status_line_shows_what_it_printed_as_tmux"
 attach = true
 unix_only = true
@@ -619,21 +569,6 @@ steps = [
 checks = [
   { screen_contains = "<JOBOUT>", expect = true },
   { format = "[#(echo hi)]" },
-]
-
-[[cases]]
-name = "loops_and_n_whose_lookups_fail_as_tmux"
-steps = []
-checks = [
-  { command = "display -p 'a#{N:nosuch}b'" },
-  { command = "display -p 'a#{N:0}b'" },
-  { command = "display -p 'a#{N/w:nosuch}b'" },
-  { command = "display -p 'a#{N/s:o}b#{N/s:zz}c'" },
-  { command = "display -p 'a#{W:x#{window_index}}b'" },
-  { command = "display -p 'a#{S:}b'" },
-  { command = "display -p 'a#{P:#{pane_index},}b'" },
-  { command = "display -p 'a#{L:x}b'" },
-  { command = "display -p 'a#{W/zz:x}b'" },
 ]
 
 [[cases]]
@@ -675,17 +610,6 @@ checks = [
   { command = "list-windows -t o -F '#{session_format}#{window_format}#{pane_format}'" },
   { command = "list-sessions -F '#{session_format}#{window_format}#{pane_format}'" },
   { command = "list-panes -t o:1 -F '#{session_format}#{window_format}#{pane_format}'" },
-]
-
-[[cases]]
-name = "mode_formats_as_tmux"
-steps = [{ run = "new-window -d -t o:1 -n second" }]
-checks = [
-  { command = "display -p '#{buffer_mode_format}'" },
-  { command = "display -p '#{client_mode_format}'" },
-  { command = "display -p '#{tree_mode_format}'" },
-  { command = "display -p -t o '#{W:#{E:tree_mode_format}|}'" },
-  { command = "display -p '#{S:#{E:tree_mode_format}|}'" },
 ]
 
 [[cases]]
@@ -909,20 +833,6 @@ checks = [
   { format = "#{@a}", expect = "default default" },
   { command = "display -p -t o.0 '#{pane_active} #{pane_fg} #{pane_bg}'" },
   { command = "display -p -t o.1 '#{pane_active} #{pane_fg} #{pane_bg}'" },
-]
-
-[[cases]]
-name = "command_is_the_running_command_as_tmux"
-steps = [
-  { run = "set -gF @set '#{command}'" },
-  { run = "set-hook -g after-new-window \"set -gF @hook '#{command}'\"" },
-  { run = "new-window -d" },
-  { sleep = 0.3 },
-]
-checks = [
-  { command = "display -p '#{command}'" },
-  { command = "list-windows -F '#{command}'" },
-  { format = "#{@set} #{@hook}" },
 ]
 
 [[cases]]
@@ -1306,7 +1216,6 @@ name = "capture_pane_e_writes_underline_styles_and_colours_as_tmux"
 program = "printf 'a\\033[4:3mcurly\\033[0m b\\033[4mplain\\033[0m c\\033[4;58;2;255;0;0mred\\033[59;24m d\\033[21mdbl\\033[0m e\\033[4:4;58:5:9mdot\\033[4:5mdash\\033[4mone\\033[59mx\\033[0m\\n'; exec sleep 1000"
 steps = [{ sleep = 0.5 }]
 checks = [{ command = "capture-pane -p -e -E 0" }]
-
 
 # Formats nest 99 deep and no deeper, as tmux's FORMAT_LOOP_LIMIT.
 [[cases]]

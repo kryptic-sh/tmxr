@@ -97,13 +97,14 @@ item closes the menu in 3.8 where tmxr's (from 3.6) does not.
 
 ## The work
 
-1. Per diverging case, read the tmux change behind it (tmux's `CHANGES` for 3.7
-   to 3.8) and decide: follow 3.8 (change tmxr and the case), or keep tmxr's
-   behaviour and move the case to `known_divergences.toml` with the reason.
-   Removed tmux features (the prompt types) are the owner's call: tmxr keeping
-   them is a divergence, not a bug.
-2. Set `TMUX_VERSION: '3.8'` in the `oracle` job and "measured against tmux 3.8"
-   in `crates/tmxr-compat-oracle/README.md`, in the same change as the last
-   case, so CI goes from green on 3.6 to green on 3.8.
-3. Comments citing "tmux 3.6" behaviour stay true of 3.6; reword only those
-   whose behaviour changed.
+Decided by the owner (2026-11-27): follow tmux 3.8 in every group above but the
+Tab completion menu (parked, see the backlog), including JSON layouts, with the
+old layout string still read (`select-layout`, resurrect saves). New hooks are
+listed as 3.8 lists them; firing each, and themes beyond their defaults, are
+backlog work.
+
+CI's `oracle` job builds tmux 3.8. Every case that diverged sits in
+`known_divergences.toml`, marked `tmux 3.8: <cause> (from <file>)`; each change
+that follows 3.8 for a group moves its cases back to the file named, so CI stays
+green against 3.8 throughout. When the last group is done, this phase is
+finished: what is left goes to the backlog and this file goes.

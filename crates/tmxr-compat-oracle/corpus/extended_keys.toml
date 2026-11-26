@@ -121,14 +121,6 @@ steps = [{ sleep = 0.5 }]
 checks = [{ terminal_received = "\u001b[>4;2m", expect = true }]
 
 [[cases]]
-name = "a_terminal_named_as_neither_is_not_asked_for_modify_other_keys"
-windows = "never"
-attach = true
-terminal = "WezTerm 20240203"
-steps = [{ sleep = 0.5 }]
-checks = [{ terminal_received = "\u001b[>4;2m", expect = false }]
-
-[[cases]]
 # Keys such a terminal sends under modifyOtherKeys reach a pane that asked
 # for level 2 in xterm's form: Ctrl+i (apart from Tab), Ctrl+;, and Alt+a
 # with no bare Escape. (Not a legacy Ctrl+h, which tmxr's default root
@@ -179,4 +171,3 @@ steps = [
   { sleep = 0.5 },
 ]
 checks = [{ command = "capture-pane -p -t o" }]
-

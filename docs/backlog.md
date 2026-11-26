@@ -612,6 +612,17 @@ plan 18 sections here.
 
 ## Decisions waiting on the owner
 
+- **The command prompt's Tab completion menu against tmux 3.8** (parked by the
+  owner 2026-11-27, to discuss later). tmux 3.8's `prompt.c` knows only the
+  `command` and `search` prompt types (no `target` / `window-target`, so
+  `command-prompt -T target` is an error there) and completes command names
+  inline, underlined, with no menu and no session or window names. tmxr keeps
+  3.6's menu and prompt types meanwhile; the corpus cases for them (every
+  `prompt_tab_*` and `command_prompt_tab_completes_as_tmux`) are in
+  `known_divergences.toml`, marked `tmux 3.8: no Tab completion menu`. Options:
+  keep the menu as a deliberate difference (no work), or follow 3.8 (remove the
+  menu and the target types from `overlay/prompt.rs`, add inline completion;
+  medium, and it drops a feature).
 - **tmxr sets no `TERM_PROGRAM`** (_read_ by the slice-3 reviewer): tmux sets
   `TERM_PROGRAM=tmux` and `TERM_PROGRAM_VERSION` in every pane (`environ.c`), so
   a pane started from WezTerm says WezTerm in tmxr and tmux in tmux; programs
@@ -1383,13 +1394,11 @@ plan 18 sections here.
     client sends standard input ahead of the command); an empty pane is restored
     by resurrect empty, without what was shown in it; `display-message -v`;
     `display-message -a` lists tmxr's variables (`vars::NAMES`), fewer than
-    tmux's; the `choose-*` pickers' tagging and sort keys (tmux's `t`, `T`,
-    `O`), which tmxr's picker has no counterpart for; `choose-tree -F` replaces
-    the text after a row's mark, where tmux's is the whole tree line;
-    `command-prompt` Tab completes and offers menus as tmux's (names, sessions,
-    a session's windows, the `target` and `window-target` types; `prompt_tab*`
-    in `corpus/keys.toml`), though which ten names a long menu keeps was matched
-    by result (the last ten), not read from tmux's code.
+    tmux's; the
+    `choose-*`pickers' tagging and sort keys (tmux's`t`, `T`, `O`), which tmxr's picker has no counterpart for; `choose-tree
+    -F`replaces the text after a row's mark, where tmux's is the whole tree line;`command-prompt`Tab completes and offers menus as tmux's (names, sessions, a session's windows, the`target`and`window-target`types;`prompt_tab\*`in`corpus/keys.toml`),
+    though which ten names a long menu keeps was matched by result (the last
+    ten), not read from tmux's code.
   - Hooks and modes: the client's theme follows its terminal as tmux's: the
     client sends `CSI ? 2031 h` and `CSI ? 996 n` as its terminal starts and
     `CSI ? 2031 l` as it stops, and the terminal's `CSI ? 997 ; 1 / 2 n`

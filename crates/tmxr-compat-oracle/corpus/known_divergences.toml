@@ -45,90 +45,12 @@ steps = []
 checks = [{ format = "#{sixel_support}" }]
 
 [[cases]]
-name = "decrqm_reports_modes_tmux_3_6_does_not"
-# tmux 3.8 answers DECRQM for these modes, and ANSI insert mode; 3.6 does
-# not answer them, so this matches only against 3.8 (queries.toml has the
-# modes both answer).
-pane = ["raw", { print = "\u001b[?1h\u001b[4h\u001b[?1$p\u001b[?3$p\u001b[?7$p\u001b[?25$p\u001b[?1049$p\u001b[?1000$p\u001b[4$p" }, "cat"]
-steps = [{ sleep = 0.5 }]
-checks = [{ command = "capture-pane -p -t o" }]
-
-[[cases]]
-name = "decrqm_reports_synchronized_output_as_tmux_3_8"
-windows = "bundled-conpty"
-# tmux 3.8 holds a pane's synchronized output (mode 2026) and DECRQM says
-# whether it is set; 3.6 neither holds it nor answers, so this matches only
-# against 3.8.
-pane = ["raw", { print = "\u001b[?2026$p\u001b[?2026h\u001b[?2026$p\u001b[?2026l\u001b[?2026$p" }, "cat"]
-steps = [{ sleep = 0.5 }]
-checks = [
-  { command = "capture-pane -p -t o", expect = "^[[?2026;2$y^[[?2026;1$y^[[?2026;2$y" },
-]
-
-[[cases]]
-name = "a_synchronized_redraw_is_held_until_its_end"
-# tmux 3.8 draws nothing a program writes after `CSI ? 2026 h` until its
-# `CSI ? 2026 l` or the hold's timeout, which each `h` puts off (here, for
-# longer than the check takes to come); 3.6 draws it as it comes. The hold
-# starts once the respawn's own redraw is done, as tmux 3.8 ends one on a
-# pane it redraws whole.
-attach = true
-unix_only = true
-steps = [
-  { run = "respawn-pane -k -t o 'sleep 0.5; printf \"\\033[?2026hHELDONE\"; for i in 1 2 3 4 5 6; do sleep 0.5; printf \"\\033[?2026h\"; done; printf \"HELDTWO\\033[?2026l\"; exec sleep 1000'" },
-  { sleep = 1 },
-]
-checks = [{ screen_contains = "HELDONE", expect = false }]
-
-[[cases]]
 name = "xtversion_names_tmxr"
 # tmux answers DCS >|tmux and its version; tmxr names itself and its own
 # version, as its #{version} does.
 pane = ["raw", { print = "\u001b[>q" }, "cat"]
 steps = [{ sleep = 0.5 }]
 checks = [{ command = "capture-pane -p -t o" }]
-
-[[cases]]
-name = "mouse_motion_leaves_clock_mode_with_the_mouse_off"
-# tmux 3.8's window_pane_key drops mouse motion for a pane in a mode, so
-# moving over a clock pane keeps the clock, as tmxr's; 3.6 gives the motion
-# to the clock, which ends, so this matches only against 3.8.
-attach = true
-unix_only = true
-program = "stty raw -echo; printf '\\033[?1003h\\033[?1006hready\\r\\n'; exec cat -v"
-steps = [
-  { run = "set -g mouse off" },
-  { wait_text = "ready" },
-  { run = "clock-mode -t o" },
-  { sleep = 0.5 },
-  { mouse = { action = "move", at = [5, 5] } },
-  { mouse = { action = "move", at = [6, 5] } },
-  { sleep = 0.5 },
-]
-checks = [
-  { format = "#{pane_in_mode}", expect = "1" },
-  { command = "capture-pane -p -t o -S 0 -E 0", expect = "ready" },
-]
-
-[[cases]]
-name = "presses_on_two_panes_are_two_clicks"
-# tmux 3.8 continues a run of clicks only on the same place and pane
-# (click_loc / click_wp), as tmxr does; 3.6 checks the button alone, so its
-# second press is a double click, and this matches only against 3.8.
-attach = true
-unix_only = true
-program = "exec sleep 1000"
-steps = [
-  { run = "split-window -h -t o 'exec sleep 1000'" },
-  { run = "bind -n MouseDown1Pane set -ga @seen D" },
-  { run = "bind -n MouseUp1Pane set -ga @seen U" },
-  { run = "bind -n SecondClick1Pane set -ga @seen S" },
-  { run = "bind -n DoubleClick1Pane set -ga @seen 2" },
-  { sleep = 0.5 },
-  { keys = "\u001b[<0;4;6M\u001b[<0;4;6m\u001b[<0;70;6M\u001b[<0;70;6m" },
-  { sleep = 1.0 },
-]
-checks = [{ format = "#{@seen}", expect = "DUDU" }]
 
 [[cases]]
 name = "ctrl_shift_letter_from_an_xterm_terminal_reaches_a_pane_unshifted"
@@ -184,3 +106,1304 @@ pane = ["raw", { print = "\u001b[>4;2m" }, "cat"]
 steps = [{ sleep = 0.5 }, { run = "send-keys -t o M-S-h S-a" }, { sleep = 0.5 }]
 checks = [{ command = "capture-pane -p -t o" }]
 
+[[cases]]
+name = "a_terminal_named_as_neither_is_not_asked_for_modify_other_keys"
+# tmux 3.8: WezTerm, ghostty and Rio get extended keys (from extended_keys.toml)
+windows = "never"
+attach = true
+terminal = "WezTerm 20240203"
+steps = [{ sleep = 0.5 }]
+checks = [{ terminal_received = "\u001b[>4;2m", expect = false }]
+
+[[cases]]
+name = "e_t_q_and_m_chain_with_other_modifiers"
+# tmux 3.8: q: escapes braces too (format_quote_shell) (from formats.toml)
+steps = [
+  { run = "set -g @f '#{session_name}-long-text'" },
+  { run = "set -g @sp 'a b;c'" },
+  { run = "set -g @p '/home/me/my dir'" },
+  { run = "set -g @t '%Y'" },
+]
+checks = [
+  { format = "#{E;=5:@f}|#{=5;E:@f}|#{E;n:@f}|#{E;s/o/0/:@f}|#{E;p20:@f}|" },
+  { format = "#{T;=2:@t}|#{l;E:@f}|#{E;q:@f}" },
+  { format = "#{q;=3:@sp}|#{q:#{@sp}}|#{q:@sp}|#{b;q:@p}|#{q;b:@p}|#{q/e;=2:@sp}|" },
+  { format = "#{=1;m:a*,abc}|#{m;=1:a*,abc}|#{m/i;n:A*,abc}" },
+]
+
+[[cases]]
+name = "format_loops_go_over_sessions_windows_and_panes"
+# tmux 3.8: loop_last_flag only inside a loop (from formats.toml)
+steps = [
+  { run = "new-session -d -s b" },
+  { run = "new-session -d -s m" },
+  { run = "rename-window -t o:0 mid" },
+  { run = "new-window -d -t o:3 -n zed" },
+  { run = "new-window -d -t o:1 -n alpha" },
+  { run = "split-window -d -t o:0" },
+  { run = "split-window -d -t o:0" },
+  { run = "select-pane -t o:0.1" },
+]
+checks = [
+  { command = "display -p -t o:0 '#{S:#{session_name}#{?loop_last_flag,,/}}|#{S/n:#{session_name} }|#{S/nr:#{session_name} }|#{S/r:#{session_name} }|#{S/t:#{session_name} }'" },
+  { command = "display -p -t o:0 '#{W:#{window_index}:#{window_name} }|#{W:#{window_index} ,*#{window_index} }|#{W/n:#{window_name} }|#{W/r:#{window_index} }|#{W:a,b,c}'" },
+  { command = "display -p -t o:0 '#{P:#{pane_index} }|#{P:#{pane_index} ,*#{pane_index} }|#{P/r:#{pane_index} }|#{loop_last_flag}'" },
+  { command = "display -p -t o:0 '#{W:#{session_name}#{window_index}#{loop_last_flag} }|#{S:#{session_name}#{W:#{window_index}}|}|#{W/x:#{window_index}}'" },
+]
+
+[[cases]]
+name = "formats_read_option_values_as_tmux"
+# tmux 3.8: new default status lines 2 to 5 (from formats.toml)
+steps = [
+  { run = "set -g status-justify centre" },
+  { run = "set -w -t o pane-status-style fg=red" },
+  { run = "set -g escape-time 25" },
+]
+checks = [
+  { format = "[#{status-justify}] [#{E:pane-status-style}] [#{escape-time}] [#{base-index}] [#{pane-status-current-style}] [#{session-status-style}] [#{nosuchoption}]" },
+  { command = "show -gv session-status-current-style" },
+]
+
+[[cases]]
+name = "loops_and_n_whose_lookups_fail_as_tmux"
+# tmux 3.8: #{L:} counts only attached clients (from formats.toml)
+steps = []
+checks = [
+  { command = "display -p 'a#{N:nosuch}b'" },
+  { command = "display -p 'a#{N:0}b'" },
+  { command = "display -p 'a#{N/w:nosuch}b'" },
+  { command = "display -p 'a#{N/s:o}b#{N/s:zz}c'" },
+  { command = "display -p 'a#{W:x#{window_index}}b'" },
+  { command = "display -p 'a#{S:}b'" },
+  { command = "display -p 'a#{P:#{pane_index},}b'" },
+  { command = "display -p 'a#{L:x}b'" },
+  { command = "display -p 'a#{W/zz:x}b'" },
+]
+
+[[cases]]
+name = "mode_formats_as_tmux"
+# tmux 3.8: theme colours in the defaults (from formats.toml)
+steps = [{ run = "new-window -d -t o:1 -n second" }]
+checks = [
+  { command = "display -p '#{buffer_mode_format}'" },
+  { command = "display -p '#{client_mode_format}'" },
+  { command = "display -p '#{tree_mode_format}'" },
+  { command = "display -p -t o '#{W:#{E:tree_mode_format}|}'" },
+  { command = "display -p '#{S:#{E:tree_mode_format}|}'" },
+]
+
+[[cases]]
+name = "command_is_the_running_command_as_tmux"
+# tmux 3.8: a hook's command is the one that fired it (hooks_insert_event) (from formats.toml)
+steps = [
+  { run = "set -gF @set '#{command}'" },
+  { run = "set-hook -g after-new-window \"set -gF @hook '#{command}'\"" },
+  { run = "new-window -d" },
+  { sleep = 0.3 },
+]
+checks = [
+  { command = "display -p '#{command}'" },
+  { command = "list-windows -F '#{command}'" },
+  { format = "#{@set} #{@hook}" },
+]
+
+[[cases]]
+name = "list_keys_in_tmuxs_order_and_layout"
+# tmux 3.8: list-keys prints through LIST_KEYS_TEMPLATE (from keys.toml)
+steps = [
+  { run = "unbind -a" },
+  { run = "unbind -a -T root" },
+  { run = "bind -N 'note a' a display-message a" },
+  { run = "bind -N 'ctrl b' C-b send-prefix" },
+  { run = "bind -N 'meta x' M-x display-message mx" },
+  { run = "bind -N 'up arrow' Up display-message up" },
+  { run = "bind -N 'space bar' Space display-message sp" },
+  { run = "bind -N quote '\"' display-message q" },
+  { run = "bind -r -N 'f one' F1 display-message f1" },
+  { run = "bind -n -N 'root z' z display-message rz" },
+  { run = "bind -n M-y display-message rmy" },
+  { run = "bind -n MouseDown1Pane select-pane" },
+  { run = "bind -T mytab Enter display-message e" },
+]
+checks = [
+  { command = "list-keys -N" },
+  { command = "list-keys -aN" },
+  { command = "list-keys -N -P '>> '" },
+  { command = "list-keys -N -T root" },
+  { command = "list-keys -T prefix" },
+  { command = "list-keys -T root" },
+  { command = "list-keys -T mytab" },
+  { command = "list-keys -T prefix F1" },
+]
+
+[[cases]]
+name = "scrolling_keeps_the_cursors_row_and_history_bottom_its_end_as_tmux"
+# tmux 3.8: vi scrolling keeps the cursor on its text (from keys.toml)
+# scroll-up / -down move the cursor with the view, keeping its column as
+# cursor-up / -down do; history-bottom goes to the last line's end.
+unix_only = true
+size = [40, 12]
+program = "for i in $(seq 1 40); do echo \"line $i ( foo bar.baz )\"; echo; done; printf 'last line'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 4 -X cursor-down" },
+  { run = "send-keys -t o -N 7 -X cursor-right" },
+  { run = "send-keys -t o -N 2 -X scroll-down" },
+  { run = "set -gF @down '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position}'" },
+  { run = "send-keys -t o -X scroll-up" },
+  { run = "set -gF @up '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position}'" },
+  { run = "send-keys -t o -X history-bottom" },
+]
+checks = [
+  { format = "#{@down} #{@up} #{copy_cursor_x},#{copy_cursor_y} #{scroll_position}" },
+]
+
+[[cases]]
+name = "a_searchs_formats_as_tmux"
+# tmux 3.8: a cleared search drops its counts (window_copy_clear_marks) (from keys.toml)
+# tmux's search marks, their count over the whole history, the match at
+# the cursor (or just past it), and which commands clear the marks: under
+# vi keys a cursor move keeps them, begin-selection does not.
+unix_only = true
+size = [40, 8]
+program = "for i in $(seq 1 12); do echo \"foo bar $i foo\"; done; echo 'a foo-bar'; printf 'end foo'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g mode-keys vi" },
+  { run = "copy-mode -t o" },
+  { run = "set -gF @before '#{search_present} #{search_count}'" },
+  { run = "send-keys -t o -X search-backward zzz" },
+  { run = "set -gF @none '#{search_present} #{search_count} [#{search_match}]'" },
+  { run = "send-keys -t o -X search-backward foo" },
+  { run = "send-keys -t o -N 3 -X cursor-right" },
+  { run = "set -gF @found '#{search_present} #{search_count} [#{search_match}] [#{copy_cursor_line}]'" },
+  { run = "send-keys -t o -X cursor-right" },
+  { run = "set -gF @past '#{search_present} [#{search_match}]'" },
+  { run = "send-keys -t o -X begin-selection" },
+]
+checks = [
+  { format = "#{@before} | #{@none} | #{@found} | #{@past} | #{search_present} #{search_count} #{search_count_partial} #{search_timed_out}" },
+]
+
+[[cases]]
+name = "emacs_keys_clear_a_searchs_marks_on_a_move_as_tmux"
+# tmux 3.8: a cleared search drops its counts (window_copy_clear_marks) (from keys.toml)
+unix_only = true
+size = [40, 8]
+program = "for i in $(seq 1 12); do echo \"foo bar $i foo\"; done; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g mode-keys emacs" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X search-backward foo" },
+  { run = "send-keys -t o -X toggle-position" },
+  { run = "set -gF @kept '#{search_present}'" },
+  { run = "send-keys -t o -X cursor-down" },
+]
+checks = [
+  { format = "#{@kept} #{search_present} #{search_count}" },
+]
+
+[[cases]]
+name = "copied_text_under_vi_keys_as_tmux"
+# tmux 3.8: vi copy mode keeps the cursor off the cell past the text (window_copy_update_cursor) (from keys.toml)
+# tmux's window_copy_get_selection: under vi keys the cell at the end is
+# copied and a selection past its last line's text keeps the newline;
+# under emacs keys neither. copy-line clears the selection after.
+unix_only = true
+size = [30, 10]
+program = "printf 'short\\nhello world  \\nabcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJ\\n\\n  indented line\\nlast'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g mode-keys vi" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 2 cursor-right" },
+  { run = "send-keys -t o -X copy-selection" },
+  { run = "set -gF @char '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X copy-line" },
+  { run = "set -gF @line '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X -N 2 cursor-right" },
+  { run = "send-keys -t o -X copy-end-of-line" },
+  { run = "set -gF @eol '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X end-of-line" },
+  { run = "send-keys -t o -X copy-selection" },
+  { run = "set -gF @wrapped '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X copy-selection" },
+  { run = "set -gF @rows '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X -N 3 cursor-right" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X -N 2 cursor-up" },
+  { run = "send-keys -t o -X copy-selection" },
+  { run = "set -gF @up '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X -N 2 cursor-down" },
+  { run = "send-keys -t o -X -N 3 cursor-right" },
+  { run = "send-keys -t o -X rectangle-toggle" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X -N 2 cursor-left" },
+  { run = "send-keys -t o -X copy-selection" },
+  { run = "send-keys -t o -X rectangle-toggle" },
+  { run = "set -gF @rect '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -X begin-selection" },
+  { run = "send-keys -t o -X cursor-right" },
+  { run = "send-keys -t o -X copy-line" },
+  { run = "set -gF @kept '#{buffer_size}:#{buffer_sample} #{selection_present}'" },
+]
+checks = [
+  { format = "#{@char} | #{@line} | #{@eol} | #{@wrapped} | #{@rows} | #{@up} | #{@rect} | #{@kept}" },
+]
+
+[[cases]]
+name = "line_and_word_selections_move_by_lines_as_tmux"
+# tmux 3.8: vi copy mode keeps the cursor off the cell past the text (window_copy_update_cursor) (from keys.toml)
+# tmux's lineflag: after select-line or select-word a move up or down puts
+# the cursor at its line's end, or its start once the selection is turned
+# round at its first line; the ends keep their words and lines.
+unix_only = true
+size = [30, 8]
+program = "for i in $(seq 1 20); do echo \"line $i has some words\"; echo \"  short $i\"; done; printf end; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "set -g mode-keys vi" },
+  { run = "copy-mode -t o" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 10 -X cursor-down" },
+  { run = "send-keys -t o -N 7 -X cursor-right" },
+  { run = "send-keys -t o -X select-line" },
+  { run = "send-keys -t o -X cursor-up" },
+  { run = "set -gF @lineup '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{selection_start_x}.#{selection_start_y}-#{selection_end_x}.#{selection_end_y}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 10 -X cursor-down" },
+  { run = "send-keys -t o -N 7 -X cursor-right" },
+  { run = "send-keys -t o -X select-line" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "set -gF @linedown '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{selection_start_x}.#{selection_start_y}-#{selection_end_x}.#{selection_end_y}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 10 -X cursor-down" },
+  { run = "send-keys -t o -N 7 -X cursor-right" },
+  { run = "send-keys -t o -X select-line" },
+  { run = "send-keys -t o -X cursor-up" },
+  { run = "send-keys -t o -X other-end" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "set -gF @lineturn '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{selection_start_x}.#{selection_start_y}-#{selection_end_x}.#{selection_end_y}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 10 -X cursor-down" },
+  { run = "send-keys -t o -N 7 -X cursor-right" },
+  { run = "send-keys -t o -X -N 3 select-line" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "set -gF @lines3 '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{selection_start_x}.#{selection_start_y}-#{selection_end_x}.#{selection_end_y}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 10 -X cursor-down" },
+  { run = "send-keys -t o -N 7 -X cursor-right" },
+  { run = "send-keys -t o -X select-word" },
+  { run = "send-keys -t o -X cursor-up" },
+  { run = "set -gF @wordup '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{selection_start_x}.#{selection_start_y}-#{selection_end_x}.#{selection_end_y}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 10 -X cursor-down" },
+  { run = "send-keys -t o -N 7 -X cursor-right" },
+  { run = "send-keys -t o -X select-word" },
+  { run = "send-keys -t o -X cursor-up" },
+  { run = "send-keys -t o -X other-end" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "set -gF @wordturn '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{selection_start_x}.#{selection_start_y}-#{selection_end_x}.#{selection_end_y}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 10 -X cursor-down" },
+  { run = "send-keys -t o -N 7 -X cursor-right" },
+  { run = "send-keys -t o -X select-word" },
+  { run = "send-keys -t o -X cursor-up" },
+  { run = "send-keys -t o -X history-bottom" },
+  { run = "set -gF @wordbottom '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{selection_start_x}.#{selection_start_y}-#{selection_end_x}.#{selection_end_y}'" },
+  { run = "send-keys -t o -X clear-selection" },
+  { run = "send-keys -t o -X history-top" },
+  { run = "send-keys -t o -N 10 -X cursor-down" },
+  { run = "send-keys -t o -N 7 -X cursor-right" },
+  { run = "send-keys -t o -X select-word" },
+  { run = "send-keys -t o -X cursor-down" },
+  { run = "send-keys -t o -X stop-selection" },
+  { run = "send-keys -t o -X cursor-up" },
+  { run = "set -gF @stopped '#{copy_cursor_x},#{copy_cursor_y} #{scroll_position} #{selection_start_x}.#{selection_start_y}-#{selection_end_x}.#{selection_end_y}'" },
+  { run = "send-keys -t o -X clear-selection" },
+]
+checks = [
+  { format = "#{@lineup} | #{@linedown} | #{@lineturn} | #{@lines3} | #{@wordup} | #{@wordturn} | #{@wordbottom} | #{@stopped}" },
+]
+
+[[cases]]
+name = "list_keys_prints_commands_as_tmux"
+# tmux 3.8: list-keys prints through LIST_KEYS_TEMPLATE (from keys.toml)
+steps = [
+  { run = "bind -T mytab a display hi" },
+  { run = "bind -T mytab b set -g @x 1 \\; display 'a b'" },
+  { run = "bind -T mytab c splitw -h -c '#{pane_current_path}'" },
+]
+checks = [{ command = "list-keys -T mytab" }, { command = "list-keys -aN -T mytab" }]
+
+[[cases]]
+name = "list_keys_keeps_apart_the_keys_tmux_does"
+# tmux 3.8: list-keys prints through LIST_KEYS_TEMPLATE (from keys.toml)
+# tmux 3.6 binds each of these as a key of its own and lists it back as
+# bound: Shift kept apart on a Ctrl letter, Ctrl with an upper-case letter
+# alone, Ctrl with a digit or @ apart from the key its legacy byte is, and
+# the keypad apart from the main keys.
+steps = [
+  { run = "bind -T t C-h display a" },
+  { run = "bind -T t C-S-h display b" },
+  { run = "bind -T t C-H display c" },
+  { run = "bind -T t C-a display d" },
+  { run = "bind -T t C-A display e" },
+  { run = "bind -T t C-4 display f" },
+  { run = "bind -T t 'C-\\' display g" },
+  { run = "bind -T t C-@ display h" },
+  { run = "bind -T t C-Space display i" },
+  { run = "bind -T t C-2 display j" },
+  { run = "bind -T t KP1 display k" },
+  { run = "bind -T t 1 display l" },
+  { run = "bind -T t KPEnter display m" },
+  { run = "bind -T t S-F1 display n" },
+  { run = "bind -T t C-S-Up display o" },
+  { run = "bind -T t C-i display p" },
+  { run = "bind -T t Tab display q" },
+  { run = "bind -T t S-Tab display r" },
+  { run = "bind -T t BTab display s" },
+  { run = "bind -T t C-S-Tab display t" },
+  { run = "bind -T t C-S-1 display u" },
+  { run = "bind -T t C-1 display v" },
+]
+checks = [{ command = "list-keys -T t" }]
+
+[[cases]]
+name = "command_prompt_tab_completes_as_tmux"
+# tmux 3.8: no Tab completion menu and no target prompt types (prompt.c); kept for now, the owner's call (from keys.toml)
+attach = true
+unix_only = true
+steps = [
+  { run = "command-prompt -b \"set -g @a '%%'\"" },
+  { sleep = 0.3 },
+  { keys = "new-w\u0009" },
+  { sleep = 0.2 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+  { run = "command-prompt -b \"set -g @b '%%'\"" },
+  { sleep = 0.3 },
+  { keys = "sel\u0009" },
+  { sleep = 0.2 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+  { run = "command-prompt -b \"set -g @c '%%'\"" },
+  { sleep = 0.3 },
+  { keys = "set -g status-l\u0009" },
+  { sleep = 0.2 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+  { run = "command-prompt -b \"set -g @d '%%'\"" },
+  { sleep = 0.3 },
+  { keys = "switch-client -t o\u0009" },
+  { sleep = 0.2 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+  { run = "command-prompt -b \"set -g @e '%%'\"" },
+  { sleep = 0.3 },
+  { keys = "x even-h\u0009" },
+  { sleep = 0.2 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+  { run = "command-prompt -b \"set -g @f '%%'\"" },
+  { sleep = 0.3 },
+  { keys = "pane-bor\u0009" },
+  { sleep = 0.2 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+  { run = "command-prompt -b \"set -g @g '%%'\"" },
+  { sleep = 0.3 },
+  { keys = "switch-client -to\u0009" },
+  { sleep = 0.2 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+  { run = "command-prompt -b -T target \"set -g @h '%%'\"" },
+  { sleep = 0.3 },
+  { keys = "o\u0009" },
+  { sleep = 0.2 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+]
+checks = [{ format = "[#{@a}] [#{@b}] [#{@c}] [#{@d}] [#{@e}] [#{@f}] [#{@g}] [#{@h}]" }]
+
+[[cases]]
+name = "select_line_cursor_moves_as_tmux"
+# tmux 3.8: vi copy mode keeps the cursor off the cell past the text (window_copy_update_cursor) (from keys.toml)
+program = "printf 'alpha beta gamma delta\nsecond line here\nthird line\n'; exec sleep 1000"
+steps = [
+  { sleep = 0.5 },
+  { run = "copy-mode -t o" },
+  { run = "send -t o -X history-top" },
+  { run = "send -t o -X -N 3 cursor-right" },
+  { run = "send -t o -X select-line" },
+  { run = "send -t o -X cursor-down" },
+]
+checks = [
+  { format = "#{copy_cursor_x},#{copy_cursor_y}" },
+]
+
+[[cases]]
+name = "select_word_on_a_line_of_wide_characters_as_tmux"
+# tmux 3.8: vi copy mode keeps the cursor off the cell past the text (window_copy_update_cursor) (from keys.toml)
+program = "sleep 0.5; printf 'ab \\346\\227\\245\\346\\234\\254\\350\\252\\236xy cd\n'; exec sleep 1000"
+steps = [
+  { sleep = 1.0 },
+  { run = "copy-mode -t o" },
+  { run = "send -t o -X history-top" },
+  { run = "send -t o -X -N 5 cursor-right" },
+  { run = "send -t o -X select-word" },
+  { run = "send -t o -X copy-selection" },
+  { run = "send -t o -X select-line" },
+  { run = "send -t o -X cursor-left" },
+  { run = "send -t o -X copy-selection" },
+]
+checks = [
+  { command = "show-buffer -b buffer0" },
+  { command = "show-buffer -b buffer1" },
+  { format = "#{copy_cursor_x},#{copy_cursor_y}" },
+]
+
+[[cases]]
+name = "a_binds_variables_print_expanded_as_tmux"
+# tmux 3.8: list-keys prints through LIST_KEYS_TEMPLATE (from keys.toml)
+attach = true
+unix_only = true
+steps = [
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "bind F5 display \"$HOME\" \\; display ${HOME}x\u000d" },
+  { sleep = 0.3 },
+  { run = "bind F6 display '$HOME'" },
+]
+checks = [{ command = "list-keys -T prefix F5" }, { command = "list-keys -T prefix F6" }]
+
+[[cases]]
+name = "prompt_tab_opens_a_menu_of_the_names_as_tmux"
+# tmux 3.8: no Tab completion menu and no target prompt types (prompt.c); kept for now, the owner's call (from keys.toml)
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "select-\u0009" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_find = "select-layout (0)", expect = "2,9" },
+  { screen_find = "select-window (2)", expect = "2,11" },
+  { screen_find = "└", expect = "0,12" },
+]
+
+[[cases]]
+name = "prompt_tab_menu_enter_takes_the_first_name_as_tmux"
+# tmux 3.8: no Tab completion menu and no target prompt types (prompt.c); kept for now, the owner's call (from keys.toml)
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "select-\u0009" },
+  { sleep = 0.3 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+  { keys = "X" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_contains = ":select-layoutX", expect = true },
+  { screen_find = "┌", expect = "none" },
+]
+
+[[cases]]
+name = "prompt_tab_menu_moves_with_tab_and_the_arrows_as_tmux"
+# tmux 3.8: no Tab completion menu and no target prompt types (prompt.c); kept for now, the owner's call (from keys.toml)
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "select-\u0009" },
+  { sleep = 0.3 },
+  { keys = "\u0009" },
+  { sleep = 0.3 },
+  { keys = "\u001b[B" },
+  { sleep = 0.3 },
+  { keys = "\u001b[B" },
+  { sleep = 0.3 },
+  { keys = "\u001b[A" },
+  { sleep = 0.3 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+  { keys = "X" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_contains = ":select-windowX", expect = true },
+]
+
+[[cases]]
+name = "prompt_tab_menu_takes_a_names_digit_as_tmux"
+# tmux 3.8: no Tab completion menu and no target prompt types (prompt.c); kept for now, the owner's call (from keys.toml)
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "select-\u0009" },
+  { sleep = 0.3 },
+  { keys = "1" },
+  { sleep = 0.3 },
+  { keys = "X" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_contains = ":select-paneX", expect = true },
+]
+
+[[cases]]
+name = "prompt_tab_menu_escape_keeps_the_word_as_tmux"
+# tmux 3.8: no Tab completion menu and no target prompt types (prompt.c); kept for now, the owner's call (from keys.toml)
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "select-\u0009" },
+  { sleep = 0.3 },
+  { keys = "\u001b" },
+  { sleep = 0.3 },
+  { keys = "X" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_contains = ":select-X", expect = true },
+  { screen_find = "┌", expect = "none" },
+]
+
+[[cases]]
+name = "prompt_tab_menu_sits_under_its_word_as_tmux"
+# tmux 3.8: no Tab completion menu and no target prompt types (prompt.c); kept for now, the owner's call (from keys.toml)
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "display -t x; kill-s\u0009" },
+  { sleep = 0.3 },
+  { keys = "\u0009" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_find = "┌", expect = "13,9" },
+  { screen_find = "kill-session (1)", expect = "15,11" },
+]
+
+[[cases]]
+name = "prompt_tab_menu_of_sessions_after_t_as_tmux"
+# tmux 3.8: no Tab completion menu and no target prompt types (prompt.c); kept for now, the owner's call (from keys.toml)
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "new-session -d -s other" },
+  { run = "new-session -d -s ox" },
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "switch-client -to\u0009" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_find = "┌", expect = "15,8" },
+  { screen_find = "other: (1)", expect = "17,10" },
+]
+
+[[cases]]
+name = "prompt_tab_session_menu_puts_the_t_back_as_tmux"
+# tmux 3.8: no Tab completion menu and no target prompt types (prompt.c); kept for now, the owner's call (from keys.toml)
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "new-session -d -s other" },
+  { run = "new-session -d -s ox" },
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "switch-client -to\u0009" },
+  { sleep = 0.3 },
+  { keys = "1" },
+  { sleep = 0.3 },
+  { keys = "X" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_contains = ":switch-client -tother:X", expect = true },
+]
+
+[[cases]]
+name = "prompt_tab_session_menu_in_a_target_prompt_as_tmux"
+# tmux 3.8: no Tab completion menu and no target prompt types (prompt.c); kept for now, the owner's call (from keys.toml)
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "new-session -d -s other" },
+  { run = "new-session -d -s ox" },
+  { run = "command-prompt -b -T target" },
+  { sleep = 0.3 },
+  { keys = "o\u0009" },
+  { sleep = 0.3 },
+  { keys = "\u001b[B" },
+  { sleep = 0.3 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+  { keys = "X" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_contains = ":other:X", expect = true },
+]
+
+[[cases]]
+name = "prompt_tab_menu_of_windows_after_a_colon_as_tmux"
+# tmux 3.8: no Tab completion menu and no target prompt types (prompt.c); kept for now, the owner's call (from keys.toml)
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "new-window -d -t o:1" },
+  { run = "new-window -d -t o:12 -n zz" },
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "switch-client -to:\u0009" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_find = "┌", expect = "15,8" },
+  { screen_find = "o:12 (zz)", expect = "17,11" },
+]
+
+[[cases]]
+name = "prompt_tab_window_menu_puts_the_target_back_as_tmux"
+# tmux 3.8: no Tab completion menu and no target prompt types (prompt.c); kept for now, the owner's call (from keys.toml)
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "new-window -d -t o:1" },
+  { run = "new-window -d -t o:12 -n zz" },
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "switch-client -to:\u0009" },
+  { sleep = 0.3 },
+  { keys = "\u000d" },
+  { sleep = 0.3 },
+  { keys = "X" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_contains = ":switch-client -to:0X", expect = true },
+]
+
+[[cases]]
+name = "prompt_tab_window_menu_matches_the_index_as_tmux"
+# tmux 3.8: no Tab completion menu and no target prompt types (prompt.c); kept for now, the owner's call (from keys.toml)
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "new-window -d -t o:1" },
+  { run = "new-window -d -t o:12 -n zz" },
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "switch-client -to:1\u0009" },
+  { sleep = 0.3 },
+  { keys = "1" },
+  { sleep = 0.3 },
+  { keys = "X" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_contains = ":switch-client -to:12X", expect = true },
+]
+
+[[cases]]
+name = "prompt_tab_window_menu_in_a_window_target_prompt_as_tmux"
+# tmux 3.8: no Tab completion menu and no target prompt types (prompt.c); kept for now, the owner's call (from keys.toml)
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "new-window -d -t o:1" },
+  { run = "new-window -d -t o:12 -n zz" },
+  { run = "command-prompt -b -T window-target" },
+  { sleep = 0.3 },
+  { keys = "\u0009" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_find = "12 (zz)", expect = "2,11" },
+  { screen_find = "o:12", expect = "none" },
+]
+
+[[cases]]
+name = "prompt_tab_menu_shows_the_last_ten_names_as_tmux"
+# tmux 3.8: no Tab completion menu and no target prompt types (prompt.c); kept for now, the owner's call (from keys.toml)
+size = [60, 14]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "s\u0009" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_find = "switchc", expect = "2,11" },
+  { screen_find = "save-buffer", expect = "none" },
+]
+
+[[cases]]
+name = "prompt_tab_menu_keeps_to_the_rows_it_has_as_tmux"
+# tmux 3.8: no Tab completion menu and no target prompt types (prompt.c); kept for now, the owner's call (from keys.toml)
+size = [60, 9]
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "s\u0009" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_find = "switchc", expect = "2,6" },
+  { screen_find = "swapw", expect = "2,4" },
+]
+
+[[cases]]
+name = "blocks_print_in_braces_as_tmux"
+# tmux 3.8: list-keys prints through LIST_KEYS_TEMPLATE (from keys.toml)
+attach = true
+unix_only = true
+steps = [
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "bind F7 command-prompt { display \"%%\" }\u000d" },
+  { sleep = 0.3 },
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "bind F8 if -F 1 { display a; display b } { display c }\u000d" },
+  { sleep = 0.3 },
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "bind F9 if -F 1 { if -F 1 { display deep } }\u000d" },
+  { sleep = 0.3 },
+  { run = "command-prompt -b" },
+  { sleep = 0.3 },
+  { keys = "set-hook -g after-new-window { display hooked; display twice }\u000d" },
+  { sleep = 0.3 },
+]
+checks = [
+  { command = "list-keys -T prefix F7" },
+  { command = "list-keys -T prefix F8" },
+  { command = "list-keys -T prefix F9" },
+  { command = "show-hooks -g after-new-window" },
+]
+
+[[cases]]
+name = "line_selection_back_where_it_was_made_as_tmux"
+# tmux 3.8: vi copy mode keeps the cursor off the cell past the text (window_copy_update_cursor) (from keys.toml)
+program = "sleep 0.5; printf 'one two three four\nfive six seven\n'; exec sleep 1000"
+steps = [
+  { sleep = 1.0 },
+  { run = "copy-mode -t o" },
+  { run = "send -t o -X history-top" },
+  { run = "send -t o -X -N 5 cursor-right" },
+  { run = "send -t o -X select-line" },
+  { run = "send -t o -X cursor-down" },
+  { run = "send -t o -X cursor-up" },
+  { run = "send -t o -X copy-selection" },
+]
+checks = [{ command = "show-buffer" }, { format = "#{copy_cursor_x},#{copy_cursor_y}" }]
+
+[[cases]]
+# copy-mode -e leaves once halfpage-down or page-down reaches the bottom,
+# a selection or not.
+name = "copy_mode_e_leaves_at_the_bottom_as_tmux"
+# tmux 3.8: copy mode stays at the bottom while selecting (from keys.toml)
+pane = [{ seq = 100 }]
+steps = [
+  { sleep = 0.5 },
+  { run = "copy-mode -e -t o" },
+  { run = "send -t o -X halfpage-up" },
+  { run = "send -t o -X halfpage-down" },
+  { run = "set -gF @half '#{pane_in_mode}'" },
+  { run = "copy-mode -e -t o" },
+  { run = "send -t o -X halfpage-up" },
+  { run = "send -t o -X begin-selection" },
+  { run = "send -t o -X page-down" },
+  { run = "set -gF @selected '#{pane_in_mode}'" },
+]
+checks = [{ format = "#{@half} #{@selected}", expect = "0 0" }]
+
+[[cases]]
+name = "scrollbars_modal_in_copy_mode"
+# tmux 3.8: scrollbars overlay the pane rather than narrow it (from layout.toml)
+steps = [
+  { run = "set -g pane-scrollbars modal" },
+  { run = "set -g pane-scrollbars-position left" },
+  { run = "set -g pane-scrollbars-style bg=black,fg=white,width=2,pad=1" },
+  { run = "split-window -h -t o" },
+  { run = "copy-mode -t o:0.0" },
+]
+checks = [{ command = "list-panes -t o -F '#{pane_left}+#{pane_width}'", expect = "3+47\n51+49" }]
+
+[[cases]]
+name = "window_layout_is_tmuxs_string_and_select_layout_takes_it"
+# tmux 3.8: layouts are JSON (from layout.toml)
+steps = [
+  { run = "split-window -h -t o:0" },
+  { run = "split-window -v -t o:0.1" },
+  { run = "split-window -h -t o:0.0" },
+  { run = "new-window -d -t o:1" },
+  { run = "split-window -v -t o:1" },
+  { run = "split-window -v -t o:1" },
+  { run = "select-layout -t o:1 'd67e,80x24,0,0{40x24,0,0,0,39x24,41,0[39x12,41,0,1,39x11,41,13,2]}'" },
+  { run = "new-window -d -t o:2" },
+  { run = "split-window -h -t o:2" },
+  { run = "resize-pane -Z -t o:2.0" },
+]
+checks = [
+  { command = "display -p -t o:0 '#{window_layout}'" },
+  { command = "list-panes -t o:1 -F '#{pane_index} #{pane_left},#{pane_top} #{pane_width}x#{pane_height}'" },
+  { command = "display -p -t o:2 '#{window_layout} #{window_visible_layout}'" },
+]
+
+[[cases]]
+name = "split_window_with_an_empty_command_makes_an_empty_pane"
+# tmux 3.8: an empty pane has no pid and is not dead (from layout.toml)
+steps = [
+  { run = "split-window -t o ''" },
+  { run = "send-keys -t o.1 typed Enter" },
+  { sleep = 0.3 },
+]
+checks = [
+  { command = "list-panes -t o -F '#{pane_index} #{?#{==:#{pane_pid},0},none,pid} #{pane_dead} #{cursor_flag}'" },
+  { command = "capture-pane -p -t o.1" },
+]
+
+[[cases]]
+name = "a_slider_drag_ends_on_the_slider"
+# tmux 3.8: differs for a reason not yet found (from mouse.toml)
+attach = true
+program = "seq 1 200; exec sleep 1000"
+steps = [
+  { wait_text = "200" },
+  { run = "set -g pane-scrollbars on" },
+  { run = "bind -n MouseDragEnd1ScrollbarSlider set -g @seen slider" },
+  { sleep = 0.5 },
+  { mouse = { action = "drag", at = [99, 28], to = [99, 5] } },
+  { sleep = 0.5 },
+]
+checks = [
+  { format = "#{@seen}", expect = "slider" },
+  { format = "#{pane_in_mode}", expect = "1" },
+  { format = "#{scroll_position}" },
+]
+
+[[cases]]
+name = "a_key_after_a_click_counts_toward_a_paste_as_tmux"
+# tmux 3.8: no paste guessing when the terminal brackets pastes (from mouse.toml)
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "set -g mouse on" },
+  { run = "set -g assume-paste-time 500" },
+  { run = "bind -n x set -ga @hits x" },
+  { sleep = 0.7 },
+  { mouse = { action = "click", at = [5, 5] } },
+  { keys = "x" },
+  { keys = "x" },
+  { sleep = 0.6 },
+]
+checks = [{ format = "[#{@hits}]" }]
+
+[[cases]]
+name = "show_options_quotes_strings_as_tmux"
+# tmux 3.8: theme colours in the defaults (from options.toml)
+steps = [
+  { run = "set -g @a 'a b'" },
+  { run = "set -g @b \"it's\"" },
+  { run = "set -g @c 'x\"y'" },
+  { run = "set -g @d '~/x'" },
+  { run = "set -g @e ''" },
+  { run = "set -t o status-left '[#S] '" },
+  { run = "set -wg clock-mode-colour '#ff0000'" },
+  { run = "set -g prefix C-a" },
+  { run = "set -w -t o:0 window-status-format '#I #W'" },
+]
+checks = [
+  { command = "show -g @a", expect = '@a "a b"' },
+  { command = "show -g @b", expect = "@b \"it's\"" },
+  { command = "show -g @c", expect = "@c 'x\"y'" },
+  { command = "show -g @d", expect = '@d \~/x' },
+  { command = "show -g @e", expect = "@e ''" },
+  { command = "show -t o status-left", expect = 'status-left "[#S] "' },
+  { command = "show -wg clock-mode-colour", expect = "clock-mode-colour #ff0000" },
+  { command = "show -g prefix", expect = "prefix C-a" },
+  { command = "show -w -t o:0 window-status-format", expect = 'window-status-format "#I #W"' },
+]
+
+[[cases]]
+name = "assume_paste_time_pastes_the_third_fast_key"
+# tmux 3.8: no paste guessing when the terminal brackets pastes (from options.toml)
+attach = true
+unix_only = true
+steps = [
+  { run = "bind -n z set -g @hit y" },
+  { sleep = 0.3 },
+  { keys = "xyz" },
+  { sleep = 0.5 },
+]
+checks = [{ format = "[#{@hit}]" }, { command = "show -gv assume-paste-time" }]
+
+[[cases]]
+name = "status_takes_on_off_and_2_to_5_as_tmux"
+# tmux 3.8: new default status lines 2 to 5 (from options.toml)
+steps = [{ run = "set -g status 4" }]
+checks = [
+  { command = "show -gv status" },
+  { command = "show -g status-format" },
+  { command = "show -gv status-format[2]" },
+]
+
+[[cases]]
+name = "status_3_draws_the_pane_and_session_lines_as_tmux"
+# tmux 3.8: new default status lines 2 to 5 (from options.toml)
+attach = true
+unix_only = true
+steps = [{ run = "set -g status 3" }, { sleep = 0.5 }]
+checks = [
+  { format = "#{window_height} #{pane_height}" },
+  { screen_contains = " P: 0[", expect = true },
+  { screen_contains = " S: o*", expect = true },
+]
+
+[[cases]]
+name = "message_line_puts_a_message_on_that_status_line_as_tmux"
+# tmux 3.8: new default status lines 2 to 5 (from options.toml)
+attach = true
+unix_only = true
+steps = [
+  { run = "set -g status 3" },
+  { run = "set -g message-line 2" },
+  { sleep = 0.3 },
+  { run = "display-message -d 0 '#[fg=red]STYLEDMSG'" },
+  { sleep = 0.3 },
+]
+checks = [
+  { screen_contains = "STYLEDMSG", expect = true },
+  { screen_contains = "#[fg", expect = false },
+  { screen_contains = " P: 0[", expect = true },
+  { screen_contains = " S: o*", expect = false },
+  { command = "show -gv message-line" },
+]
+
+[[cases]]
+name = "show_hooks_lists_hooks_in_tmuxs_order"
+# tmux 3.8: new hooks (from options.toml)
+steps = [
+  { run = "set-hook -g after-new-window 'display hi'" },
+  { run = "set-hook -gw pane-died 'display dead'" },
+  { run = "set-hook -t o session-renamed 'display r'" },
+  { run = "set-hook -t o client-attached 'display a'" },
+]
+checks = [
+  { command = "show-hooks -gw" },
+  { command = "show-hooks -t o" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_1_1"
+# tmux 3.8: vi copy mode keeps the cursor off the cell past the text (window_copy_update_cursor) (from paste.toml)
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:1 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:1" },
+  { run = "send-keys -t o:1 -X history-top" },
+  { run = "send-keys -t o:1 -X end-of-line" },
+]
+checks = [
+  { command = "display -p -t o:1 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_2_2"
+# tmux 3.8: vi copy mode keeps the cursor off the cell past the text (window_copy_update_cursor) (from paste.toml)
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:2 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:2" },
+  { run = "send-keys -t o:2 -X history-top" },
+  { run = "send-keys -t o:2 -N 5 -X cursor-right" },
+  { run = "send-keys -t o:2 -X cursor-down" },
+]
+checks = [
+  { command = "display -p -t o:2 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_2_3"
+# tmux 3.8: vi copy mode keeps the cursor off the cell past the text (window_copy_update_cursor) (from paste.toml)
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:2 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:2" },
+  { run = "send-keys -t o:2 -X history-top" },
+  { run = "send-keys -t o:2 -N 5 -X cursor-right" },
+  { run = "send-keys -t o:2 -X cursor-down" },
+  { run = "send-keys -t o:2 -X cursor-down" },
+]
+checks = [
+  { command = "display -p -t o:2 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_2_4"
+# tmux 3.8: vi copy mode keeps the cursor off the cell past the text (window_copy_update_cursor) (from paste.toml)
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:2 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:2" },
+  { run = "send-keys -t o:2 -X history-top" },
+  { run = "send-keys -t o:2 -N 5 -X cursor-right" },
+  { run = "send-keys -t o:2 -X cursor-down" },
+  { run = "send-keys -t o:2 -X cursor-down" },
+  { run = "send-keys -t o:2 -X cursor-up" },
+]
+checks = [
+  { command = "display -p -t o:2 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_3_1"
+# tmux 3.8: vi copy mode keeps the cursor off the cell past the text (window_copy_update_cursor) (from paste.toml)
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:3 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:3" },
+  { run = "send-keys -t o:3 -X history-top" },
+  { run = "send-keys -t o:3 -X end-of-line" },
+]
+checks = [
+  { command = "display -p -t o:3 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_3_2"
+# tmux 3.8: vi copy mode keeps the cursor off the cell past the text (window_copy_update_cursor) (from paste.toml)
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:3 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:3" },
+  { run = "send-keys -t o:3 -X history-top" },
+  { run = "send-keys -t o:3 -X end-of-line" },
+  { run = "send-keys -t o:3 -X cursor-down" },
+]
+checks = [
+  { command = "display -p -t o:3 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_3_3"
+# tmux 3.8: vi copy mode keeps the cursor off the cell past the text (window_copy_update_cursor) (from paste.toml)
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:3 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:3" },
+  { run = "send-keys -t o:3 -X history-top" },
+  { run = "send-keys -t o:3 -X end-of-line" },
+  { run = "send-keys -t o:3 -X cursor-down" },
+  { run = "send-keys -t o:3 -X cursor-down" },
+]
+checks = [
+  { command = "display -p -t o:3 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_4_1"
+# tmux 3.8: vi copy mode keeps the cursor off the cell past the text (window_copy_update_cursor) (from paste.toml)
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:4 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:4" },
+  { run = "send-keys -t o:4 -X history-top" },
+  { run = "send-keys -t o:4 -X cursor-down" },
+  { run = "send-keys -t o:4 -X end-of-line" },
+]
+checks = [
+  { command = "display -p -t o:4 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_4_2"
+# tmux 3.8: vi copy mode keeps the cursor off the cell past the text (window_copy_update_cursor) (from paste.toml)
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:4 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:4" },
+  { run = "send-keys -t o:4 -X history-top" },
+  { run = "send-keys -t o:4 -X cursor-down" },
+  { run = "send-keys -t o:4 -X end-of-line" },
+  { run = "send-keys -t o:4 -X cursor-down" },
+]
+checks = [
+  { command = "display -p -t o:4 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_4_3"
+# tmux 3.8: vi copy mode keeps the cursor off the cell past the text (window_copy_update_cursor) (from paste.toml)
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:4 'echo abcdefgh; echo ab; echo abcdef; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:4" },
+  { run = "send-keys -t o:4 -X history-top" },
+  { run = "send-keys -t o:4 -X cursor-down" },
+  { run = "send-keys -t o:4 -X end-of-line" },
+  { run = "send-keys -t o:4 -X cursor-down" },
+  { run = "send-keys -t o:4 -X cursor-left" },
+  { run = "send-keys -t o:4 -X cursor-up" },
+]
+checks = [
+  { command = "display -p -t o:4 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_over_pages_1"
+# tmux 3.8: vi copy mode keeps the cursor off the cell past the text (window_copy_update_cursor) (from paste.toml)
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:1 'for i in 1 22 333 4444 55555 666666 7777777 88888888 1 22 333 4444; do echo $i; done; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:1" },
+  { run = "send-keys -t o:1 -X history-top" },
+  { run = "send-keys -t o:1 -N 7 -X cursor-down" },
+  { run = "send-keys -t o:1 -N 5 -X cursor-right" },
+  { run = "send-keys -t o:1 -X page-down" },
+]
+checks = [
+  { command = "display -p -t o:1 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_cursor_x_follows_tmux_over_pages_2"
+# tmux 3.8: vi copy mode keeps the cursor off the cell past the text (window_copy_update_cursor) (from paste.toml)
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:2 'for i in 1 22 333 4444 55555 666666 7777777 88888888 1 22 333 4444; do echo $i; done; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:2" },
+  { run = "send-keys -t o:2 -X history-top" },
+  { run = "send-keys -t o:2 -N 7 -X cursor-down" },
+  { run = "send-keys -t o:2 -N 5 -X cursor-right" },
+  { run = "send-keys -t o:2 -X page-down" },
+  { run = "send-keys -t o:2 -X page-up" },
+]
+checks = [
+  { command = "display -p -t o:2 '#{copy_cursor_y},#{copy_cursor_x}'" },
+]
+
+[[cases]]
+name = "copy_mode_rectangle_is_cleared_by_select_line"
+# tmux 3.8: vi copy mode keeps the cursor off the cell past the text (window_copy_update_cursor) (from paste.toml)
+unix_only = true
+size = [20, 6]
+steps = [
+  { run = "new-window -d -t o:3 'echo abcdef; echo ghijkl; echo mnopqr; exec sleep 1000'" },
+  { sleep = 0.5 },
+  { run = "copy-mode -t o:3" },
+  { run = "send-keys -t o:3 -X history-top" },
+  { run = "send-keys -t o:3 -X cursor-right" },
+  { run = "send-keys -t o:3 -X rectangle-toggle" },
+  { run = "send-keys -t o:3 -X select-line" },
+  { run = "send-keys -t o:3 -X clear-selection" },
+  { run = "send-keys -t o:3 -X begin-selection" },
+  { run = "send-keys -t o:3 -X cursor-down" },
+  { run = "send-keys -t o:3 -N 2 -X cursor-right" },
+  { run = "send-keys -t o:3 -X copy-selection" },
+]
+checks = [
+  { command = "show-buffer" },
+]

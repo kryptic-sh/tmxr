@@ -299,24 +299,6 @@ steps = [
 checks = [{ format = "#{@seen}", expect = "DUSU2" }]
 
 [[cases]]
-name = "a_slider_drag_ends_on_the_slider"
-attach = true
-program = "seq 1 200; exec sleep 1000"
-steps = [
-  { wait_text = "200" },
-  { run = "set -g pane-scrollbars on" },
-  { run = "bind -n MouseDragEnd1ScrollbarSlider set -g @seen slider" },
-  { sleep = 0.5 },
-  { mouse = { action = "drag", at = [99, 28], to = [99, 5] } },
-  { sleep = 0.5 },
-]
-checks = [
-  { format = "#{@seen}", expect = "slider" },
-  { format = "#{pane_in_mode}", expect = "1" },
-  { format = "#{scroll_position}" },
-]
-
-[[cases]]
 name = "a_border_drag_ends_where_it_is_let_go"
 attach = true
 unix_only = true
@@ -368,23 +350,6 @@ steps = [
   { sleep = 0.5 },
 ]
 checks = [{ format = "#{@m}", expect = "StatusDefault" }]
-
-[[cases]]
-name = "a_key_after_a_click_counts_toward_a_paste_as_tmux"
-attach = true
-unix_only = true
-program = "exec sleep 1000"
-steps = [
-  { run = "set -g mouse on" },
-  { run = "set -g assume-paste-time 500" },
-  { run = "bind -n x set -ga @hits x" },
-  { sleep = 0.7 },
-  { mouse = { action = "click", at = [5, 5] } },
-  { keys = "x" },
-  { keys = "x" },
-  { sleep = 0.6 },
-]
-checks = [{ format = "[#{@hits}]" }]
 
 # A program that asked for the mouse (as Claude Code does) is told where a
 # drag is as it moves, and where it ended, not where it started.
@@ -673,3 +638,23 @@ checks = [
   { command = "capture-pane -p -t o -S 0 -E 1" },
   { screen_contains = "alpha beta gammaalpha bet", expect = true },
 ]
+
+[[cases]]
+name = "presses_on_two_panes_are_two_clicks"
+# tmux 3.8 continues a run of clicks only on the same place and pane
+# (click_loc / click_wp), as tmxr does; 3.6 checks the button alone, so its
+# second press is a double click, and this matches only against 3.8.
+attach = true
+unix_only = true
+program = "exec sleep 1000"
+steps = [
+  { run = "split-window -h -t o 'exec sleep 1000'" },
+  { run = "bind -n MouseDown1Pane set -ga @seen D" },
+  { run = "bind -n MouseUp1Pane set -ga @seen U" },
+  { run = "bind -n SecondClick1Pane set -ga @seen S" },
+  { run = "bind -n DoubleClick1Pane set -ga @seen 2" },
+  { sleep = 0.5 },
+  { keys = "\u001b[<0;4;6M\u001b[<0;4;6m\u001b[<0;70;6M\u001b[<0;70;6m" },
+  { sleep = 1.0 },
+]
+checks = [{ format = "#{@seen}", expect = "DUDU" }]

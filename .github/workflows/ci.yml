@@ -427,7 +427,7 @@ jobs:
     name: tmux compatibility oracle
     runs-on: ubuntu-latest
     env:
-      TMUX_VERSION: '3.6'
+      TMUX_VERSION: '3.8'
     steps:
       - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v2
