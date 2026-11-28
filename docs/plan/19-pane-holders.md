@@ -109,8 +109,9 @@ server parses them, and three things carry a pane's state across a restart:
   be saved, so the server keeps, for each pane, the output number of the last
   point where the parser was idle (no sequence or UTF-8 character open, both
   splitters empty) and the snapshot is of that point: the new server resumes the
-  ring from there. This needs serde (or a hand-written format) in `vt1k`,
-  released on its own, and in `tmxr-term`.
+  ring from there. This needs serde in `vt1k`, as an optional `serde` feature
+  off by default (the owner's decision, 2026-11-28), released on its own, and in
+  `tmxr-term`.
 - **A modes record, always.** Whenever a pane's input-affecting modes change
   (bracketed paste, application cursor and keypad, mouse modes and encoding,
   focus reports, the kitty flag stacks, the alternate screen), the server tells
@@ -233,11 +234,11 @@ newer than itself too. Each side speaks the lower of the two versions.
 - **A server that never comes back:** after `Going`, holders wait for a new
   server with no time limit (the upgrade failing must not end the programs). A
   holder that lost its server without notice does the same by default, so a
-  crash never costs a program and the next server adopts it; a server option
-  (the owner's decision, 2026-11-28; its name is to choose) sets a timeout after
-  which such a holder ends its program instead, and the holder learns it in
-  `Hello`. A new server takes a holder over from a hung old one by presenting
-  the token the state file holds.
+  crash never costs a program and the next server adopts it; a server option,
+  `pane-holder-timeout` (the owner's decision, 2026-11-28; unset keeps programs
+  forever), sets a timeout after which such a holder ends its program instead,
+  and the holder learns it in `Hello`. A new server takes a holder over from a
+  hung old one by presenting the token the state file holds.
 
 ### Upgrading
 
@@ -285,8 +286,10 @@ newer than itself too. Each side speaks the lower of the two versions.
 ## Phases
 
 1. **A proof of concept on Windows and Unix.** A holder that runs a shell, a
-   server that loses and regains it, by hand: to find the Windows surprises
-   (ConPTY lifetime, locking, pipes) first, not last.
+   server that loses and regains it: to find the Windows surprises (ConPTY
+   lifetime, locking, pipes) first, not last. Built on Linux; Windows and macOS
+   are checked by CI on a pull request, not on a Windows machine (the owner's
+   decision, 2026-11-28).
 2. **A snapshot format for the emulator.** Versioned serialization of `vt1k`'s
    screen and `tmxr-term`'s `Emulator` state, the idle-point tracking, and
    round-trip tests over the emulator tests' screens; serde in `vt1k` is its own
@@ -362,8 +365,10 @@ one nightly, every crash kept as a regression input).
 The owner settled the plan's open questions on 2026-11-28: a holder per pane,
 orphaned holders keep their programs unless an option says otherwise, a
 per-version cache copy on Windows, ring replay after a crash, `respawn-pane` in
-the same holder, and `pipe-pane` in the holder. Each is written into the section
-it belongs to above.
+the same holder, and `pipe-pane` in the holder. Later the same day: serde in
+`vt1k` as an optional feature, the option name `pane-holder-timeout`, and phase
+1 built on Linux and checked on the other systems by CI on a pull request. Each
+is written into the section it belongs to above.
 
 ## Not covered yet
 
