@@ -29,3 +29,4 @@ Section numbers are document identity. Build order is
 | 17  | 17-tmux-3-8-corpus (done)                                      | Retargeting the oracle from tmux 3.6 to 3.8 (done; what is left is in the backlog)      |
 | 18  | 18-kitty-keyboard (done)                                       | Full kitty keyboard protocol with a plain-input fallback (done)                         |
 | 19  | [19-pane-holders.md](19-pane-holders.md)                       | Pane holders, so an upgrade keeps the panes running (planned)                           |
+| 20  | [20-fuzzing.md](20-fuzzing.md)                                 | Coverage-guided fuzzing of every parser, in CI, and in vt1k and ttyr                    |

@@ -306,10 +306,56 @@ newer than itself too. Each side speaks the lower of the two versions.
    memory per pane with and without holders, in a quiet window; turn the option
    on once the numbers and a release's use allow it.
 
-Tests beyond running the suite both ways: a new server against holders from each
-released holder protocol version, `kill -9` of the server while panes run, ring
-overflow with and without `Going`, a replay that must not answer old queries,
-and on Windows a pipe squatted by another user.
+## Tests and fuzzing
+
+Every phase lands with its tests and its fuzz targets in the same change, not
+afterwards: a holder outlives the server that started it, so a bug in what it
+accepts is one an upgrade cannot fix. The fuzzing follows
+[20-fuzzing.md](20-fuzzing.md) (cargo-fuzz, a short run on every push, a long
+one nightly, every crash kept as a regression input).
+
+**Tests**, beyond running the whole suite with holders on and off:
+
+- each message and the frame prefix pinned by golden bytes, per protocol
+  version;
+- a new server against holders of each released holder protocol version, and a
+  new holder against each released server;
+- `kill -9` of the server while panes run, then adoption, with output written in
+  the gap;
+- ring overflow with and without `Going`, and `TakeFrom` reporting the gap;
+- a replay that must not answer old queries or repeat clipboard writes, renames,
+  bells or pipe writes (each checked by what reaches the program and the
+  clients);
+- snapshot then resume against feeding the same output to one emulator straight
+  through: the screens, modes and history must match;
+- `respawn-pane` in the same holder, `pipe-pane` across an upgrade with no byte
+  lost or doubled, the orphan timeout option on and off;
+- a state file that crashes the server is moved aside and not loaded twice;
+- endpoints: another user cannot connect (Unix peer credentials, Windows SID
+  check) and a squatted pipe name is refused, on Windows a pipe created first by
+  another user;
+- the Windows per-version cache copy: holders run from it, a Scoop update
+  succeeds with panes open, unused copies are removed.
+
+**Fuzz targets**, each with its invariant:
+
+- `holder_frame`: any bytes read as a holder message or an error, in both
+  directions and at every protocol version; never a panic, never an allocation
+  past the frame limit.
+- `holder_session`: a sequence of well-formed messages in any order (a `Spawn`
+  twice, `Input` before `Spawn`, `TakeFrom` past the ring) against a holder with
+  a stand-in terminal: no panic, and the ring's numbering stays contiguous.
+- `snapshot_load`: any bytes as a snapshot file are loaded or refused; one that
+  loads gives a screen within its stated size.
+- `snapshot_roundtrip`: output fed to an emulator, snapshot taken at the idle
+  point, loaded, the rest fed: equal to feeding all of it straight through (the
+  strongest check of the idle-point rule).
+- `state_load`: any bytes as a state file are adopted or refused, never a panic;
+  one that loads keeps every id it names.
+- `modes_record`: any record bytes are refused or give modes the input encoder
+  accepts.
+- `replay_has_no_effects`: any output replayed gives no reply bytes, clipboard
+  writes, renames or pipe writes.
 
 ## Decided
 
