@@ -692,6 +692,13 @@ plan 18 sections here.
 
 ## Decisions waiting on the owner
 
+- **A tag can release with `audit` or `fuzz-replay` red** (found 2026-11-28, in
+  the review of PR job scoping; not changed by it). `tag-release-status`'s
+  `needs` in `ci.yml` leave out `audit` and `fuzz-replay`, and
+  `publish-github-release`'s leave out `fuzz-replay`, so a release goes out with
+  either one failing. Options: add both to those `needs` (a new advisory or a
+  fuzz regression then blocks a release until fixed), or keep them advisory on
+  tags.
 - **Require `CI result` on `main`** (raised 2026-11-28, with PR job scoping).
   `ci.yml`'s `ci-result` job ("CI result") fails unless every job the scope
   chose succeeded, so it is the one check a branch protection rule or ruleset

@@ -45,11 +45,13 @@ jobs:
           # The merge commit and its first parent, the base it merges into.
           fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 1 }}
       - run: python3 .github/scripts/ci-scope.py --self-test
+      # --no-renames: a move lists the path it left as well as the one it
+      # took, so a file moved out of a crate still selects that crate.
       - id: scope
         run: |
           set -euo pipefail
           if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-            run=$(git diff --name-only HEAD^1 HEAD | python3 .github/scripts/ci-scope.py)
+            run=$(git diff --no-renames --name-only HEAD^1 HEAD | python3 .github/scripts/ci-scope.py)
           else
             run=$(python3 .github/scripts/ci-scope.py --all "a $GITHUB_EVENT_NAME run checks everything")
           fi
