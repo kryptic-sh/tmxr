@@ -351,6 +351,11 @@ impl Tmxr {
         for (k, v) in self.env() {
             cmd.env(k, v);
         }
+        // Not Windows Terminal, whatever ran the tests: a WT_SESSION passed
+        // down turns on win32-input-mode, which this terminal does not
+        // speak, so its raw C-Space and Alt keys would not read as keys. A
+        // test of Windows Terminal sets it in `vars`.
+        cmd.env_remove("WT_SESSION");
         for (k, v) in vars {
             match v {
                 Some(v) => cmd.env(k, v),
