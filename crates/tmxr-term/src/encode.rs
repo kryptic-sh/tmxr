@@ -403,12 +403,16 @@ pub fn conpty_key(key: &KeyEvent, bytes: &[u8]) -> Option<Vec<u8>> {
 
 /// Encode pasted text for a pane, bracketed if the program asked for it.
 /// Bracket markers inside the text are removed so a paste cannot end the
-/// bracket early and have the rest run as typed input.
+/// bracket early and have the rest run as typed input; until none is left,
+/// as removing one can join the text around it into another.
 pub fn encode_paste(text: &str, modes: InputModes) -> Vec<u8> {
     if !modes.bracketed_paste {
         return text.as_bytes().to_vec();
     }
-    let clean = text.replace("\x1b[200~", "").replace("\x1b[201~", "");
+    let mut clean = text.to_owned();
+    while clean.contains("\x1b[200~") || clean.contains("\x1b[201~") {
+        clean = clean.replace("\x1b[200~", "").replace("\x1b[201~", "");
+    }
     let mut out = b"\x1b[200~".to_vec();
     out.extend_from_slice(clean.as_bytes());
     out.extend_from_slice(b"\x1b[201~");
@@ -1051,6 +1055,12 @@ mod tests {
             ..InputModes::default()
         };
         assert_eq!(encode_paste("a\x1b[201~b", modes), b"\x1b[200~ab\x1b[201~");
+        // A marker split by another, which removing the inner one would
+        // join into an end marker (found by the `encode` fuzz target).
+        assert_eq!(
+            encode_paste("a\x1b[2\x1b[201~01~b\x1b[20\x1b[200~1~c", modes),
+            b"\x1b[200~abc\x1b[201~"
+        );
     }
 
     #[test]

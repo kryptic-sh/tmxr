@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A bracketed paste can no longer end itself early.** Paste markers inside the
+  pasted text were removed in one pass, so text built to rejoin around a removed
+  marker (`ESC [2` + `ESC [201~` + `01~`) became a real end marker, and the rest
+  of the paste ran as typed input in the pane. Markers are now removed until
+  none is left. Found by the new `encode` fuzz target.
+
 ## [0.17.0] - 2026-11-27
 
 ### Breaking
