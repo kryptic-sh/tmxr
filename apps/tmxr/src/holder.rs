@@ -14,16 +14,27 @@
 //! - It serves one connection at a time. A new connection takes the place of
 //!   the current one, which is no longer read or written and ends when its
 //!   peer closes it.
-//! - It exits on [`ToHolder::Close`], ending the program first, or once the
-//!   program has exited and a connection has been told so.
+//! - It exits on [`ToHolder::Close`] once the program has ended: sent a
+//!   hangup on Unix, then killed if it is still running after
+//!   `KILL_GRACE`; terminated on Windows. If the program has not been
+//!   reaped by [`CLOSE_WAIT`] the holder exits anyway, with a failure.
+//! - It also exits once the program has exited by itself and a connection
+//!   has been sent that, after all its output. On Windows it first waits,
+//!   for at most `FLUSH_LIMIT`, for the connection to read it.
+//! - A failure to start the program is reported to the connection
+//!   ([`FromHolder::Error`]); a connection the holder cannot serve is
+//!   dropped. Neither ends the holder.
 //!
-//! The protocol is throwaway: no version, no capabilities. Output is written
-//! to the connection from the holder's loop, so a server that stops reading
-//! holds the holder up; flow control is the real protocol's.
+//! The protocol ([`proto`]) is throwaway: no version, no capabilities.
+//! Output is written to the connection from the holder's loop, so a server
+//! that stops reading holds the holder up; flow control is the real
+//! protocol's.
+
+mod proto;
 
 use std::collections::VecDeque;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
@@ -31,10 +42,11 @@ use std::time::{Duration, Instant};
 
 use interprocess::local_socket::Stream;
 use interprocess::local_socket::traits::ListenerExt as _;
-use serde::{Deserialize, Serialize};
 use tmxr_proto::codec::{read_msg, write_msg};
 use tmxr_proto::socket::{Access, Endpoint};
 use tmxr_term::{Pty, PtyEvent, SpawnSpec};
+
+use proto::{FromHolder, ToHolder};
 
 /// Hidden subcommand a holder runs as: `tmxr __holder <ENDPOINT>`.
 pub const HOLDER_ARG: &str = "__holder";
@@ -46,64 +58,35 @@ const RING_BYTES: usize = 1 << 20;
 /// [`ToHolder::TakeFrom`].
 const REPLAY_PIECE: usize = 64 * 1024;
 
-/// How long after the program exits its last output may still arrive. A
-/// program that left a child holding the terminal keeps the output stream
-/// open; its exit is reported this long after, whatever comes later.
+/// How long after the program's exit the holder waits for its output
+/// stream to end. The exit is reported once the stream has ended, so no
+/// output comes after it, or once this has passed, so a stream that does
+/// not end cannot hold the report back for good.
 const EXIT_DRAIN: Duration = Duration::from_secs(1);
 
-/// How long a [`ToHolder::Close`] waits for the killed program to be reaped
-/// before the holder exits anyway.
+/// How long a [`ToHolder::Close`] waits for the program to be reaped before
+/// the holder exits anyway, with a failure.
 const CLOSE_WAIT: Duration = Duration::from_secs(5);
+
+/// How long a program sent a hangup by [`ToHolder::Close`] has to exit
+/// before it is killed (Unix; Windows terminates it at once).
+#[cfg(unix)]
+const KILL_GRACE: Duration = Duration::from_secs(1);
+
+/// How long the holder waits for a connection to read the last it was sent
+/// before exiting (Windows: a named pipe's server end closing discards what
+/// was not read).
+#[cfg(windows)]
+const FLUSH_LIMIT: Duration = Duration::from_secs(5);
+
+/// How long the accept loop waits after a failed accept, so a failure that
+/// lasts (no descriptors left) does not spin.
+const ACCEPT_RETRY: Duration = Duration::from_millis(100);
 
 /// The cursor-position query ConPTY sends at start, and the answer the
 /// holder gives it: the top-left corner, where a new pane's cursor is.
 const CURSOR_QUERY: &[u8] = b"\x1b[6n";
 const CURSOR_REPLY: &[u8] = b"\x1b[1;1R";
-
-/// Server to holder.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ToHolder {
-    /// Start the program. Only the first one counts: a holder runs one
-    /// program in this proof of concept.
-    Spawn {
-        argv: Vec<String>,
-        cwd: Option<PathBuf>,
-        env: Vec<(String, String)>,
-        rows: u16,
-        cols: u16,
-    },
-    /// Bytes for the program.
-    Input(Vec<u8>),
-    Resize {
-        rows: u16,
-        cols: u16,
-    },
-    /// Send the ring's output from this number, or from the oldest byte kept
-    /// if that is newer, then the program's output as it comes.
-    TakeFrom(u64),
-    /// End the program and exit.
-    Close,
-}
-
-/// Holder to server.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum FromHolder {
-    /// Sent once the program runs: on `Spawn`, then on every connection.
-    /// `ring_start` is the oldest output byte kept, `next` the number the
-    /// next byte written will have.
-    Hello {
-        pid: Option<u32>,
-        ring_start: u64,
-        next: u64,
-    },
-    /// Output bytes, the first of them numbered `number`.
-    Output { number: u64, bytes: Vec<u8> },
-    /// The program exited, after all its output was sent.
-    Exited {
-        code: Option<u32>,
-        signal: Option<i32>,
-    },
-}
 
 /// What the holder's loop waits for.
 enum Event {
@@ -149,18 +132,17 @@ pub fn run(endpoint: &Endpoint) -> io::Result<()> {
                         }
                     }
                     // One failed accept does not stop the next.
-                    Err(e) => eprintln!("tmxr holder: accept failed: {e}"),
+                    Err(e) => {
+                        eprintln!("tmxr holder: accept failed: {e}");
+                        std::thread::sleep(ACCEPT_RETRY);
+                    }
                 }
             }
         })?;
-    let result = Holder::new(tx, CONPTY_QUERY).serve(&rx);
+    let result = Holder::new(tx, tmxr_term::pty::CONPTY).serve(&rx);
     let released = endpoint.release();
     result.and(released)
 }
-
-/// Whether the program's terminal asks [`CURSOR_QUERY`] at start: a ConPTY
-/// does (portable-pty creates it inheriting the cursor), a Unix pty never.
-const CONPTY_QUERY: bool = tmxr_term::pty::CONPTY;
 
 /// The current connection.
 struct Conn {
@@ -175,7 +157,11 @@ struct Holder {
     ring: Ring,
     query: StartupQuery,
     conn: Option<Conn>,
-    next_conn: u64,
+    /// The newest connection's id. Its messages are handled even after
+    /// writing to it failed and it was dropped as [`Holder::conn`]: what it
+    /// sent before going (input typed just before a disconnect) still
+    /// counts.
+    newest: u64,
     pty: Option<Pty>,
     pid: Option<u32>,
     /// The program's exit, once the waiter has seen it.
@@ -187,6 +173,9 @@ struct Holder {
     drain_until: Option<Instant>,
     /// When a `Close` gives up waiting for the program.
     close_until: Option<Instant>,
+    /// When a `Close` kills a program that did not exit on the hangup.
+    #[cfg(unix)]
+    kill_at: Option<Instant>,
 }
 
 impl Holder {
@@ -196,20 +185,26 @@ impl Holder {
             ring: Ring::default(),
             query: StartupQuery::new(conpty),
             conn: None,
-            next_conn: 0,
+            newest: 0,
             pty: None,
             pid: None,
             exit: None,
             drained: false,
             drain_until: None,
             close_until: None,
+            #[cfg(unix)]
+            kill_at: None,
         }
     }
 
     /// Handle events until the holder is done.
     fn serve(&mut self, events: &Receiver<Event>) -> io::Result<()> {
         loop {
-            let deadline = [self.drain_until, self.close_until]
+            #[cfg(unix)]
+            let kill_at = self.kill_at;
+            #[cfg(windows)]
+            let kill_at = None;
+            let deadline = [self.drain_until, self.close_until, kill_at]
                 .into_iter()
                 .flatten()
                 .min();
@@ -227,7 +222,7 @@ impl Holder {
             };
             let done = match event {
                 Some(event) => self.handle(event)?,
-                None => self.deadline_passed(),
+                None => self.deadline_passed()?,
             };
             if done {
                 return Ok(());
@@ -239,12 +234,10 @@ impl Holder {
     fn handle(&mut self, event: Event) -> io::Result<bool> {
         match event {
             Event::Connected(stream) => {
-                self.connect(stream)?;
+                self.connect(stream);
                 Ok(false)
             }
-            Event::Msg(id, msg) if self.conn.as_ref().is_some_and(|c| c.id == id) => {
-                self.message(msg)
-            }
+            Event::Msg(id, msg) if id == self.newest => self.message(msg),
             // From a connection a newer one replaced.
             Event::Msg(..) => Ok(false),
             Event::Gone(id) => {
@@ -285,29 +278,60 @@ impl Holder {
         }
     }
 
-    /// A deadline passed: the exit's drain, or a `Close`'s wait.
-    fn deadline_passed(&mut self) -> bool {
+    /// A deadline passed: the exit's drain, or a `Close`'s grace or wait;
+    /// `true` when the holder is done.
+    fn deadline_passed(&mut self) -> io::Result<bool> {
         let now = Instant::now();
         if self.close_until.is_some_and(|at| at <= now) {
-            return true;
+            return Err(io::Error::other(format!(
+                "the program ({}) had not ended {CLOSE_WAIT:?} after Close",
+                self.pid
+                    .map_or_else(|| "no pid".to_owned(), |p| p.to_string())
+            )));
+        }
+        #[cfg(unix)]
+        if self.kill_at.is_some_and(|at| at <= now) {
+            self.kill_at = None;
+            self.kill_hard();
         }
         if self.drain_until.is_some_and(|at| at <= now) {
             self.drain_until = None;
             self.drained = true;
-            return self.report_exit();
+            return Ok(self.report_exit());
         }
-        false
+        Ok(false)
+    }
+
+    /// Kill a closed program that ignored its hangup. Only while its exit
+    /// has not been seen: until then the waiter has not reported it reaped,
+    /// so its pid is still its own (short of the moment between the reap
+    /// and the report).
+    #[cfg(unix)]
+    fn kill_hard(&self) {
+        let Some(pid) = self.pid.and_then(|p| libc::pid_t::try_from(p).ok()) else {
+            return;
+        };
+        if self.exit.is_some() {
+            return;
+        }
+        // SAFETY: kill takes no pointers.
+        if unsafe { libc::kill(pid, libc::SIGKILL) } != 0 {
+            eprintln!(
+                "tmxr holder: could not kill the program: {}",
+                io::Error::last_os_error()
+            );
+        }
     }
 
     /// A new connection replaces the current one, and is greeted if the
-    /// program runs.
-    fn connect(&mut self, stream: Stream) -> io::Result<()> {
-        self.next_conn += 1;
-        let id = self.next_conn;
+    /// program runs. One the holder cannot start a reader for is dropped.
+    fn connect(&mut self, stream: Stream) {
+        self.newest += 1;
+        let id = self.newest;
         let stream = Arc::new(stream);
         let recv = Arc::clone(&stream);
         let events = self.events.clone();
-        std::thread::Builder::new()
+        let spawned = std::thread::Builder::new()
             .name(format!("tmxr-holder-read-{id}"))
             .spawn(move || {
                 loop {
@@ -327,7 +351,11 @@ impl Holder {
                 // The holder's loop may be gone already; then nobody needs
                 // to know.
                 let _ = events.send(Event::Gone(id));
-            })?;
+            });
+        if let Err(e) = spawned {
+            eprintln!("tmxr holder: could not serve connection {id}: {e}");
+            return;
+        }
         self.conn = Some(Conn {
             id,
             stream,
@@ -336,7 +364,6 @@ impl Holder {
         if self.pid.is_some() || self.exit.is_some() {
             self.hello();
         }
-        Ok(())
     }
 
     /// Handle a message from the current connection; `true` when the
@@ -366,10 +393,17 @@ impl Holder {
                     // The holder's loop is gone only when it is exiting.
                     let _ = events.send(Event::Pty(e));
                 });
-                let pty = Pty::spawn(&spec, sink)?;
-                self.pid = pty.pid();
-                self.pty = Some(pty);
-                self.hello();
+                match Pty::spawn(&spec, sink) {
+                    Ok(pty) => {
+                        self.pid = pty.pid();
+                        self.pty = Some(pty);
+                        self.hello();
+                    }
+                    Err(e) => {
+                        let error = format!("could not start {:?}: {e}", spec.argv);
+                        self.send(&FromHolder::Error(error));
+                    }
+                }
             }
             ToHolder::Input(bytes) => self.write_program(&bytes),
             ToHolder::Resize { rows, cols } => {
@@ -400,7 +434,12 @@ impl Holder {
                 if let Err(e) = pty.kill() {
                     eprintln!("tmxr holder: could not end the program: {e}");
                 }
-                self.close_until = Some(Instant::now() + CLOSE_WAIT);
+                let now = Instant::now();
+                self.close_until = Some(now + CLOSE_WAIT);
+                #[cfg(unix)]
+                {
+                    self.kill_at = Some(now + KILL_GRACE);
+                }
             }
         }
         Ok(false)
@@ -446,7 +485,8 @@ impl Holder {
     }
 
     /// Report the program's exit to a connection taking output, once its
-    /// output has all been sent; `true` once reported.
+    /// output has all been sent; `true` once reported (and, on Windows, read
+    /// or `FLUSH_LIMIT` passed).
     fn report_exit(&mut self) -> bool {
         let Some((code, signal)) = self.exit else {
             return false;
@@ -457,7 +497,10 @@ impl Holder {
         if !self.send(&FromHolder::Exited { code, signal }) {
             return false;
         }
-        self.conn.as_ref().is_some_and(|c| flushed(&c.stream))
+        if let Some(conn) = &self.conn {
+            flush(&conn.stream);
+        }
+        true
     }
 
     /// Send to the current connection; a connection that fails is dropped.
@@ -476,25 +519,36 @@ impl Holder {
     }
 }
 
-/// Wait until the peer has read everything sent, so exiting does not lose
-/// it. A Unix socket keeps what was sent after the sender exits.
+/// Nothing to wait for before exiting: a Unix socket keeps what was sent
+/// for its peer after the sender has gone.
 #[cfg(unix)]
-fn flushed(_: &Stream) -> bool {
-    true
-}
+fn flush(_: &Arc<Stream>) {}
 
-/// Wait until the peer has read everything sent: a named pipe's server end
-/// closing discards what its client has not read, and interprocess's own
-/// `flush` of a local socket does nothing. Not run on Windows yet.
+/// Wait, for at most [`FLUSH_LIMIT`], until the peer has read everything
+/// sent: a named pipe's server end closing discards what its client has not
+/// read, and interprocess's own `flush` of a local socket does nothing.
+/// `FlushFileBuffers` waits as long as the client does not read, so it runs
+/// on a thread of its own, left behind if the limit passes. Not run on
+/// Windows yet.
 #[cfg(windows)]
-fn flushed(stream: &Stream) -> bool {
-    let Stream::NamedPipe(pipe) = stream;
-    match pipe.inner().flush() {
-        Ok(()) => true,
-        Err(e) => {
-            eprintln!("tmxr holder: pipe not flushed: {e}");
-            false
-        }
+fn flush(stream: &Arc<Stream>) {
+    let (done, flushed) = channel();
+    let stream = Arc::clone(stream);
+    let spawned = std::thread::Builder::new()
+        .name("tmxr-holder-flush".into())
+        .spawn(move || {
+            let Stream::NamedPipe(pipe) = &*stream;
+            // Nobody receives this once the holder has stopped waiting.
+            let _ = done.send(pipe.inner().flush());
+        });
+    if let Err(e) = spawned {
+        eprintln!("tmxr holder: could not flush the pipe: {e}");
+        return;
+    }
+    match flushed.recv_timeout(FLUSH_LIMIT) {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => eprintln!("tmxr holder: pipe not flushed: {e}"),
+        Err(_) => eprintln!("tmxr holder: the pipe was not read within {FLUSH_LIMIT:?}"),
     }
 }
 
@@ -535,7 +589,11 @@ impl Ring {
 /// Finds ConPTY's first [`CURSOR_QUERY`] in the output and takes it out,
 /// so the holder answers it and no server ever sees it (the plan's
 /// "ConPTY startup query"). Until it is found, a tail that could be the
-/// start of one is held back for the next read.
+/// start of one is held back for the next read. It takes the first one
+/// anywhere in the stream, relying on ConPTY sending its own before any of
+/// the program's output, which it does when created inheriting the cursor
+/// (`PSEUDOCONSOLE_INHERIT_CURSOR`, as portable-pty 0.9.0 creates it);
+/// otherwise a program's own first query would be swallowed.
 #[derive(Debug)]
 struct StartupQuery {
     pending: bool,
