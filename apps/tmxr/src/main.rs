@@ -2,7 +2,8 @@
 //!
 //! The same binary is the client (`tmxr [command]`) and, run as
 //! `tmxr -S <socket> __server`, the server a client starts on demand, and,
-//! as `tmxr __clipboard`, the helper that holds a copy for the desktop.
+//! as `tmxr __clipboard`, the helper that holds a copy for the desktop, and,
+//! as `tmxr __holder <endpoint>`, a pane holder (a proof of concept).
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -10,6 +11,8 @@ use std::process::ExitCode;
 use clap::Parser;
 use tmxr_client::SERVER_ARG;
 use tmxr_proto::socket::Endpoint;
+
+mod holder;
 
 /// Command-line interface, modelled on tmux's:
 /// `tmxr [-L label | -S socket] [-f config] [command [flags] [args]]`.
@@ -136,6 +139,9 @@ fn main() -> ExitCode {
         } else {
             ExitCode::FAILURE
         };
+    }
+    if cli.command.first().map(String::as_str) == Some(holder::HOLDER_ARG) {
+        return holder::main(&cli.command[1..]);
     }
     let endpoint = match Endpoint::resolve(cli.socket.as_deref(), cli.label.as_deref()) {
         Ok(e) => e,
