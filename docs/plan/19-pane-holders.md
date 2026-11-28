@@ -120,7 +120,9 @@ server parses them, and three things carry a pane's state across a restart:
 - **A replay, after a crash.** With no snapshot, the new server feeds the ring
   into a fresh emulator, then applies the modes record. Anything older than the
   ring is lost, and a ring that starts inside a sequence shows garbage until the
-  next one; Ctrl-L redraws most programs.
+  next one; Ctrl-L redraws most programs. That is enough (the owner's decision,
+  2026-11-28): crashes are rare, and periodic snapshots would cost writes and
+  CPU in proportion to history. They can be added if crashes prove to matter.
 
 **Replayed output has no effects.** Feeding old bytes through `pty_event` as it
 stands would answer every query in them again (typing DA and DSR replies into
@@ -141,6 +143,18 @@ before any other output, and removes it from what it forwards; the server's
 emulator never sees it, so it is never answered twice. Whether this cures the F3
 is to be shown, not assumed.
 
+### `pipe-pane` in the holder
+
+`pipe-pane` sends the bytes the program wrote (not anything the emulator made,
+`pty_event` passes it the raw output) and, with `-I`, writes the pipe's output
+to the program as input. Both are bytes the holder already carries, so the
+holder runs the pipe's child (the owner's decision, 2026-11-28: the holder
+carries the I/O, the server keeps the parsing). The server expands the command's
+formats and sends `Pipe` with the result; the holder starts the child, feeds it
+from its reader and its output to the terminal, and reports `PipeEnded` when it
+exits. The pipe then survives an upgrade and a crash with no gap, and `-o`
+(toggle) stays the server's, from the holder's `Hello`.
+
 ### The holder protocol
 
 Holders outlive upgrades, so a server meets holders older than itself, and,
@@ -153,14 +167,18 @@ newer than itself too. Each side speaks the lower of the two versions.
   a new message, offered as a capability. Golden-byte tests pin each version's
   frames, as `codec.rs` tests pin the client protocol's.
 - **Server to holder:** `Hello` (version, capabilities, the server's token),
-  `Spawn(...)`, `Input(bytes)`, `Resize(cols, rows)`, `Signal(hangup | kill)`,
-  `TakeFrom(number)`, `Modes(number, record)`, `Ack(number)`, `Going` (an
-  upgrade: keep everything from the snapshot's number, stop reading the terminal
-  rather than drop it), `Close` (the pane is gone: end the program and exit).
+  `Spawn(...)` (also after the program has exited: `respawn-pane` starts the new
+  program in the same holder, in a fresh terminal, so the pane keeps its holder
+  and endpoint), `Input(bytes)`, `Resize(cols, rows)`, `Signal(hangup | kill)`,
+  `TakeFrom(number)`, `Modes(number, record)`, `Ack(number)`,
+  `Pipe(argv, directory, environment, out, in)` and `Unpipe` (below), `Going`
+  (an upgrade: keep everything from the snapshot's number, stop reading the
+  terminal rather than drop it), `Close` (the pane is gone: end the program and
+  exit).
 - **Holder to server:** `Hello` (version, capabilities, whether it runs the
   bundled ConPTY, the program's pid and tty name, its spawn number and pane id,
-  its ring's oldest number, its modes record), `Output(number, bytes)`, `Eof`,
-  `Exited(code, signal)`.
+  its ring's oldest number, its modes record, its pipe if one runs),
+  `Output(number, bytes)`, `Eof`, `Exited(code, signal)`, `PipeEnded`.
 - **No round trips on the hot path:** format expansion runs synchronously, so
   process inspection must not wait on a holder. The tty name never changes and
   comes in `Hello`; the foreground process group comes from the program's pid
@@ -213,11 +231,13 @@ newer than itself too. Each side speaks the lower of the two versions.
   alongside the pid; `command_client_ctx` accepts either, so commands in adopted
   panes keep their pane.
 - **A server that never comes back:** after `Going`, holders wait for a new
-  server with no time limit (the upgrade failing must not end the programs);
-  only a holder that lost its server without notice ends its program after a
-  timeout (its length, and whether it is an option, are open). A new server
-  takes a holder over from a hung old one by presenting the token the state file
-  holds.
+  server with no time limit (the upgrade failing must not end the programs). A
+  holder that lost its server without notice does the same by default, so a
+  crash never costs a program and the next server adopts it; a server option
+  (the owner's decision, 2026-11-28; its name is to choose) sets a timeout after
+  which such a holder ends its program instead, and the holder learns it in
+  `Hello`. A new server takes a holder over from a hung old one by presenting
+  the token the state file holds.
 
 ### Upgrading
 
@@ -240,7 +260,7 @@ newer than itself too. Each side speaks the lower of the two versions.
 - **`kill-server` with holders:** ending the server must not orphan programs.
   `kill-server` asks the server to close its holders, through the same frozen
   request when the versions differ; a server ended any other way leaves holders
-  that end their programs after the timeout.
+  that wait as after a crash.
 - **Which executable runs holders:** after a package upgrade, an old server's
   `current_exe()` can be gone (`/usr/bin/tmxr (deleted)` on Linux; Homebrew
   cleans old versions), so it starts new holders from the installed executable
@@ -251,9 +271,13 @@ newer than itself too. Each side speaks the lower of the two versions.
   and `OpenConsole.exe` (each pane runs one). Scoop installs each version in its
   own directory behind a `current` junction, but `scoop update` refuses while
   any process from the app runs unless `ignore_running_processes` is set, so
-  holders would block every Scoop update. Open: copy the holder and its ConPTY
-  files to a per-version cache directory and run them from there, ship a
-  separate holder package, or document the setting.
+  holders would block every Scoop update. So holders run from a per-version
+  cache copy (the owner's decision, 2026-11-28): the server copies its
+  executable, `conpty.dll` and `OpenConsole.exe` to a directory named by version
+  under the user's local app data, and starts holders from there; a copy no
+  running holder uses is removed. A separate holder package and documenting
+  Scoop's `ignore_running_processes` were declined: one more package to ship,
+  and a setting every user would have to know (and nothing for other installs).
 - **The bundled ConPTY:** the holder reports whether it runs the bundled ConPTY
   in its `Hello`, since that, not the server's own directory
   (`passthrough_supported`), decides passthrough and DECRQSS for its pane.
@@ -276,7 +300,7 @@ newer than itself too. Each side speaks the lower of the two versions.
    the timeouts, the instance id in `TMXR`.
 5. **Upgrade.** The frozen request, upwards only, the handoff, `kill-server`,
    the executable to start holders from, the fallback for older servers.
-6. **Windows hardening.** The startup DSR, the executable locking decision, the
+6. **Windows hardening.** The startup DSR, the per-version cache copy, the
    bundled ConPTY report; tested on a Windows machine.
 7. **Measure, then make it the default.** Output throughput, key latency and
    memory per pane with and without holders, in a quiet window; turn the option
@@ -287,23 +311,16 @@ released holder protocol version, `kill -9` of the server while panes run, ring
 overflow with and without `Going`, a replay that must not answer old queries,
 and on Windows a pipe squatted by another user.
 
-## Open questions for the owner
+## Decided
 
-- **A holder whose server vanished without notice.** End its program after a
-  timeout (planned; how long?), keep it forever for a later server to adopt, or
-  make it an option.
-- **Windows executable locking.** A per-version cache copy for holders, a
-  separate holder package, or documenting Scoop's `ignore_running_processes`.
-- **Crash recovery.** Whether a ring replay plus the modes record is good enough
-  after a crash, or servers should also write snapshots periodically (costly
-  with large histories).
+The owner settled the plan's open questions on 2026-11-28: a holder per pane,
+orphaned holders keep their programs unless an option says otherwise, a
+per-version cache copy on Windows, ring replay after a crash, `respawn-pane` in
+the same holder, and `pipe-pane` in the holder. Each is written into the section
+it belongs to above.
 
 ## Not covered yet
 
 - Copy mode, popups, menus and other server-only state are rebuilt after an
   upgrade as after an attach, not carried.
-- `pipe-pane`'s child is the server's and ends with it; whether it should move
-  to the holder is not decided.
-- How a pane's `respawn-pane` maps onto a holder (a new program in the same
-  holder, or a new holder) is not decided.
 - Performance of the extra hop is unknown until it is measured.
