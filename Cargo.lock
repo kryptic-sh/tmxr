@@ -2782,9 +2782,9 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vt1k"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77a4729325d35a4b3d49c0f425689f72e3368908a74678c2f8be476d25e00040"
+checksum = "0c9d68f128985c679de2be503b55984615a4a98e408c3d237dea20c52f23aafc"
 dependencies = [
  "unicode-width",
  "vte",

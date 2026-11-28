@@ -6,8 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **An emoji widened by U+FE0F in a pane's last column stays there, one column
+  wide, and what follows wraps**, as tmux 3.8 does (vt1k 0.1.1). It moved to the
+  next row, which on the pane's bottom row left half a character.
+
 ### Fixed
 
+- **Program output split across reads in the middle of a UTF-8 character no
+  longer loses the characters after it** (vt1k 0.1.1, working around a bug in
+  vte 0.15.0): a character cut at a read boundary, with an invalid byte soon
+  after, dropped what followed it, and a C1 control completed that way was
+  printed instead of acted on. Found by the new `emulator` fuzz target.
 - **A bracketed paste can no longer end itself early.** Paste markers inside the
   pasted text were removed in one pass, so text built to rejoin around a removed
   marker (`ESC [2` + `ESC [201~` + `01~`) became a real end marker, and the rest

@@ -23,7 +23,7 @@ redundant_pub_crate = "warn"
 
 [workspace.dependencies]
 # The panes' terminal emulator, kryptic-sh's own (it replaced vt100).
-vt1k = "0.1.0"
+vt1k = "0.1.1"
 # Terminal input and its event types, kryptic-sh's own (replacing crossterm).
 ttyr = "0.3.0"
 # internal
