@@ -1,4 +1,4 @@
-# tmxr plan — index
+# tmxr plan — index 
 
 tmxr is a Rust terminal multiplexer: a tmux alternative built on the kryptic-sh
 house crates, client/server like tmux, on Linux, macOS and Windows, shipping the
