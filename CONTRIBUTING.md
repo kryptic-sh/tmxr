@@ -37,6 +37,13 @@ CI runs the same on Linux, macOS and Windows, plus `cargo nextest`,
 (`#[cfg(windows)]`, `#[cfg(unix)]`) is only compiled on its platform, so a green
 local run does not cover the others — CI does.
 
+A pull request runs only the CI jobs whose inputs it changes: a docs-only change
+runs none of the heavy ones, a crate change runs the jobs that build that crate
+and the crates depending on it, and a change to `.github/`, the lockfile or the
+toolchain runs everything. `.github/scripts/ci-scope.py` has the rules, each
+run's summary says why every job ran or skipped, and `CI result` is the one
+check that sums them up. Pushes to `main` and release tags always run every job.
+
 MSRV is **Rust 1.95** (`rust-version` in the workspace `Cargo.toml`). The
 workspace is `edition = "2024"`, `resolver = "3"`.
 

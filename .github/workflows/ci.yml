@@ -29,8 +29,37 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Which check jobs this run needs. A pull request runs the jobs whose
+  # inputs its changed files touch (.github/scripts/ci-scope.py has the
+  # rules, and the run summary lists every job with why it ran or skipped);
+  # every other event runs them all, so a tag is checked in full before
+  # tag-release-status reads the results.
+  changes:
+    name: choose jobs
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.scope.outputs.run }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The merge commit and its first parent, the base it merges into.
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 1 }}
+      - run: python3 .github/scripts/ci-scope.py --self-test
+      - id: scope
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            run=$(git diff --name-only HEAD^1 HEAD | python3 .github/scripts/ci-scope.py)
+          else
+            run=$(python3 .github/scripts/ci-scope.py --all "a $GITHUB_EVENT_NAME run checks everything")
+          fi
+          echo "$run"
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
   fmt:
     name: rustfmt
+    needs: [changes]
+    if: fromJSON(needs.changes.outputs.run)['fmt']
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -44,6 +73,8 @@ jobs:
 
   clippy:
     name: clippy ${{ matrix.os }}
+    needs: [changes]
+    if: fromJSON(needs.changes.outputs.run)['clippy']
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -64,6 +95,8 @@ jobs:
 
   machete:
     name: cargo-machete (unused deps)
+    needs: [changes]
+    if: fromJSON(needs.changes.outputs.run)['machete']
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -74,6 +107,8 @@ jobs:
 
   deny:
     name: cargo-deny
+    needs: [changes]
+    if: fromJSON(needs.changes.outputs.run)['deny']
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -84,6 +119,8 @@ jobs:
 
   audit:
     name: cargo-audit
+    needs: [changes]
+    if: fromJSON(needs.changes.outputs.run)['audit']
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -96,6 +133,8 @@ jobs:
 
   test:
     name: test ${{ matrix.os }}
+    needs: [changes]
+    if: fromJSON(needs.changes.outputs.run)['test']
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -120,6 +159,8 @@ jobs:
   # so a crash a fuzzer found stays fixed. The fuzzing is fuzz.yml.
   fuzz-replay:
     name: fuzz targets replay
+    needs: [changes]
+    if: fromJSON(needs.changes.outputs.run)['fuzz-replay']
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -147,6 +188,8 @@ jobs:
   # keep their own state there (PowerShell's under AppData), as cargo does.
   leak-guard:
     name: no test writes real user state ${{ matrix.os }}
+    needs: [changes]
+    if: fromJSON(needs.changes.outputs.run)['leak-guard']
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -196,6 +239,8 @@ jobs:
   # release ships it (the job above covers Windows' built-in ConPTY).
   test-conpty:
     name: test windows-latest, bundled ConPTY
+    needs: [changes]
+    if: fromJSON(needs.changes.outputs.run)['test-conpty']
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -214,6 +259,8 @@ jobs:
 
   smoke:
     name: build + smoke ${{ matrix.os }}
+    needs: [changes]
+    if: fromJSON(needs.changes.outputs.run)['smoke']
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -235,6 +282,8 @@ jobs:
   # DACL is owner + SYSTEM only). Needs a second account, which only CI has.
   pipe-acl:
     name: pipe admits only named users (windows)
+    needs: [changes]
+    if: fromJSON(needs.changes.outputs.run)['pipe-acl']
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -312,6 +361,8 @@ jobs:
 
   socket-acl:
     name: socket admits only named users (${{ matrix.os }})
+    needs: [changes]
+    if: fromJSON(needs.changes.outputs.run)['socket-acl']
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -382,6 +433,8 @@ jobs:
   # hjkl, and nvim with tmxr-navigator.nvim, each at its release.
   handoff:
     name: hjkl and nvim hand off to tmxr (${{ matrix.os }})
+    needs: [changes]
+    if: fromJSON(needs.changes.outputs.run)['handoff']
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -448,6 +501,8 @@ jobs:
   # its release and checked, not the runner's.
   oracle:
     name: tmux compatibility oracle
+    needs: [changes]
+    if: fromJSON(needs.changes.outputs.run)['oracle']
     runs-on: ubuntu-latest
     env:
       TMUX_VERSION: '3.8'
@@ -481,6 +536,58 @@ jobs:
           export TMXR_BIN="$GITHUB_WORKSPACE/target/debug/tmxr"
           export ORACLE_REQUIRE_TMUX=1
           cargo test --locked -p tmxr-compat-oracle -- --nocapture
+
+  # The one check to require on pull requests. It fails when a job that was
+  # chosen did not succeed, when a job ran that was not chosen, or when a
+  # check job is missing from the scope script's list.
+  ci-result:
+    name: CI result
+    needs:
+      [
+        changes,
+        fmt,
+        clippy,
+        machete,
+        deny,
+        audit,
+        test,
+        fuzz-replay,
+        leak-guard,
+        test-conpty,
+        smoke,
+        pipe-acl,
+        socket-acl,
+        handoff,
+        oracle,
+      ]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          NEEDS: ${{ toJSON(needs) }}
+          RUN: ${{ needs.changes.outputs.run }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          needs = json.loads(os.environ["NEEDS"])
+          if needs.pop("changes")["result"] != "success":
+              sys.exit("choose jobs did not succeed, so no job was chosen")
+          run = json.loads(os.environ["RUN"])
+          bad = sorted(set(needs) ^ set(run))
+          if bad:
+              sys.exit(f"ci-result's needs and ci-scope.py's JOBS differ: {bad}")
+          rows, failed = [], False
+          for job, need in needs.items():
+              want = "success" if run[job] else "skipped"
+              ok = need["result"] == want
+              failed |= not ok
+              rows.append(f"| `{job}` | {want} | {need['result']} | {'ok' if ok else 'FAILED'} |")
+          table = "\n".join(["### CI result", "", "| job | wanted | got | |", "| --- | --- | --- | --- |", *rows])
+          print(table)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write(table + "\n")
+          sys.exit(1 if failed else 0)
+          PY
 
   build:
     name: Build ${{ matrix.target }}
