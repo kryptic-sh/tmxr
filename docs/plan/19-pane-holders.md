@@ -87,9 +87,10 @@ What to run reaches it in a `Spawn` message (argv, directory, environment,
 variables to remove, size, login shell, spawn number, pane id), never on its
 command line, which other users can read; it starts the program only then.
 
-One process per pane rather than one for the whole server: a fault costs one
-pane, a holder stays small enough to rarely change, and a server restart touches
-nothing shared. It costs a process per pane (to measure).
+One process per pane rather than one for the whole server (the owner's decision,
+2026-11-28): a fault costs one pane, a holder stays small enough to rarely
+change, and a server restart touches nothing shared. It costs a process per pane
+(to measure).
 
 ### The emulator stays in the server
 
@@ -288,9 +289,6 @@ and on Windows a pipe squatted by another user.
 
 ## Open questions for the owner
 
-- **Process per pane, or one holder for all panes.** Per pane is planned
-  (isolation, simplicity); one holder means fewer processes but a shared fault
-  domain and a harder upgrade of the holder itself.
 - **A holder whose server vanished without notice.** End its program after a
   timeout (planned; how long?), keep it forever for a later server to adopt, or
   make it an option.
