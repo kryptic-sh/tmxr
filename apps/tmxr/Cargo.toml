@@ -53,10 +53,13 @@ clap_complete = "4.6.11"
 clap_complete_nushell = "4.6.2"
 clap_mangen = "0.3.3"
 hjkl-xdg = "0.46.0"
+interprocess = "2.4.7"
+serde = { version = "1.0.229", features = ["derive"] }
 tmxr-client.workspace = true
 tmxr-config.workspace = true
 tmxr-proto.workspace = true
 tmxr-server.workspace = true
+tmxr-term.workspace = true
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
@@ -64,13 +67,12 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 workspace = true
 
 [dev-dependencies]
-portable-pty = "0.9.0"
+portable-pty = "=0.9.0"
 tempfile = "3.27.0"
-tmxr-term.workspace = true
 ttyr.workspace = true
 
 [target."cfg(windows)".dev-dependencies]
-windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Console", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Console", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 
-[target."cfg(unix)".dev-dependencies]
+[target."cfg(unix)".dependencies]
 libc = "0.2.191"

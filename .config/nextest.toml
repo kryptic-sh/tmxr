@@ -26,6 +26,12 @@ filter = 'package(tmxr-cli) & binary(e2e)'
 test-group = 'pty-e2e'
 retries = 2
 
+# The pane holder tests run a program on a pty of the holder's, so they
+# join the e2e tests' group; they are not retried.
+[[profile.default.overrides]]
+filter = 'package(tmxr-cli) & binary(holder_poc)'
+test-group = 'pty-e2e'
+
 [[profile.default.overrides]]
 filter = 'package(tmxr-client) & test(/console_tests/)'
 test-group = 'windows-console'

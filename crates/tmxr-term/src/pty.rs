@@ -237,11 +237,27 @@ impl Pty {
         None
     }
 
-    /// Kill the program started in the pane.
+    /// Kill the program started in the pane: a hangup on Unix,
+    /// `TerminateProcess` on Windows.
     pub fn kill(&mut self) -> io::Result<()> {
-        match &mut self.live {
-            Some(live) => live.killer.kill(),
-            None => Ok(()),
+        let Some(live) = &mut self.live else {
+            return Ok(());
+        };
+        #[cfg(unix)]
+        {
+            live.killer.kill()
+        }
+        // portable-pty 0.9.0's `WinChildKiller::kill` (src/win/mod.rs) has
+        // its result the wrong way round: `Err` when TerminateProcess
+        // succeeds, `Ok` when it fails. Nothing between that call and this
+        // one calls into Windows, so the last error is still the one
+        // TerminateProcess set. Read from the source; not run on Windows.
+        #[cfg(windows)]
+        {
+            match live.killer.kill() {
+                Ok(()) => Err(io::Error::last_os_error()),
+                Err(_) => Ok(()),
+            }
         }
     }
 }
