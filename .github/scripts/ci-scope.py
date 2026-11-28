@@ -22,8 +22,9 @@ from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[2]
 
-# Every check job in ci.yml, in its order there. ci-result fails the run if a
-# job is missing from this list, so a new job cannot go unscoped.
+# Every check job in ci.yml, in its order there. ci-result fails the run when
+# its needs and this list differ, so a new job must be added to both; one
+# gated on a name missing here would read null and be skipped on every event.
 JOBS = [
     "fmt",
     "clippy",
@@ -45,8 +46,9 @@ JOBS = [
 WORKSPACE_JOBS = ["fmt", "clippy", "machete", "test", "leak-guard", "test-conpty"]
 # Jobs that build and run the tmxr binary: a crate it is built from selects them.
 BINARY_JOBS = ["smoke", "pipe-acl", "socket-acl", "handoff", "oracle"]
-# Dependency policy: the manifests and the lockfile select these.
-DEPENDENCY_JOBS = ["deny", "audit", "machete"]
+# Dependency policy: a crate manifest selects these. The lockfile, which
+# audit reads, selects everything.
+DEPENDENCY_JOBS = ["deny", "machete"]
 
 # Paths that change what every job builds or how it runs.
 EVERYTHING = [
@@ -76,7 +78,7 @@ NOTHING = [
     "pkg/scoop/*",
 ]
 
-# Single paths read by one job outside the crates.
+# Paths outside the crates that one job reads.
 EXTRA = {
     "pkg/windows/*": ["test-conpty"],
     "deny.toml": ["deny"],
@@ -164,7 +166,8 @@ def choose(paths, dirs, deps, fuzz_deps):
             if crate in fuzz_deps:
                 select(["fuzz-replay"], why)
         elif path.startswith("fuzz/"):
-            select(["fuzz-replay"], "`fuzz/` changed")
+            # machete walks the directory tree, so it checks fuzz/ too.
+            select(["fuzz-replay", "machete"], "`fuzz/` changed")
         elif extra := next((j for p, j in EXTRA.items() if matches(path, [p])), None):
             select(extra, f"`{path}` changed")
         elif matches(path, NOTHING):
@@ -232,14 +235,29 @@ class Rules(unittest.TestCase):
         self.assertNotIn("fuzz-replay", self.run_for("crates/tmxr-client/src/lib.rs"))
 
     def test_manifest_runs_dependency_policy(self):
-        self.assertTrue({"deny", "audit"} <= self.run_for("crates/tmxr-client/Cargo.toml"))
+        self.assertTrue({"deny", "machete"} <= self.run_for("crates/tmxr-client/Cargo.toml"))
+        self.assertNotIn("audit", self.run_for("crates/tmxr-client/Cargo.toml"))
         self.assertNotIn("deny", self.run_for("crates/tmxr-client/src/lib.rs"))
 
-    def test_fuzz_only_runs_replay(self):
-        self.assertEqual(self.run_for("fuzz/src/lib.rs", "fuzz/Cargo.lock"), {"fuzz-replay"})
+    def test_fuzz_runs_replay_and_machete(self):
+        self.assertEqual(
+            self.run_for("fuzz/src/lib.rs", "fuzz/Cargo.lock"), {"fuzz-replay", "machete"}
+        )
 
     def test_conpty_script_runs_its_job(self):
         self.assertEqual(self.run_for("pkg/windows/fetch-conpty.sh"), {"test-conpty"})
+
+
+class Workspace(unittest.TestCase):
+    """The real tree, read through cargo metadata as CI reads it."""
+
+    def test_reads_the_crates_and_their_dependencies(self):
+        dirs, deps, fuzz_deps = load_workspace()
+        self.assertEqual(dirs[BINARY], "apps/tmxr")
+        self.assertIn(ORACLE, dirs)
+        self.assertIn("tmxr-command", closure(BINARY, deps))
+        self.assertIn("tmxr-command", fuzz_deps)
+        self.assertNotIn(BINARY, fuzz_deps)
 
 
 def main():
