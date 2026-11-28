@@ -690,6 +690,28 @@ plan 18 sections here.
   in #174, unreleased on 2026-11-28); vt1k works around it, and its backlog says
   when to drop the workaround.
 
+## CI job scoping and holder review (2026-11-28)
+
+- **Considered and kept: "choose jobs" needs cargo on every event.** Its
+  self-test reads the real workspace through `cargo metadata`, on tags too,
+  relying on the `ubuntu-latest` image's preinstalled rustup (the job sets up no
+  toolchain). Kept: if cargo is ever missing, every check job is skipped and
+  `tag-release-status` turns red, so it cannot pass silently. Running the
+  workspace case only on pull requests would remove the dependency on tags.
+- **A `-S` socket's mode depends on the umask until `chmod`** (found reviewing
+  the holder proof of concept; `tmxr-proto` `socket.rs`, not changed by it).
+  `Endpoint::bind` sets `0600` after binding, and `listen` checks the directory
+  only for label sockets, so a `-S` path in a shared directory is briefly open
+  to whatever the umask allows. Holder endpoints (plan 19) live in the private
+  `tmxr-<uid>` directory, which covers them; a `-S` server socket is not.
+  Unverified by a probe.
+- **Windows: the owner-only pipe DACL's `OW` may not be the user** (same review,
+  `socket.rs`). `OW` is Owner Rights; with no owner in the descriptor the pipe's
+  owner is the token's default owner, which for an elevated administrator is
+  usually the Administrators group. Read from documentation, not tested. Plan 19
+  phase 3's SID-named pipes and peer checks are the fix for holders; the
+  server's own pipe would need the same.
+
 ## Decisions waiting on the owner
 
 - **A tag can release with `audit` or `fuzz-replay` red** (found 2026-11-28, in
