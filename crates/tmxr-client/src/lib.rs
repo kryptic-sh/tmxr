@@ -1,3 +1,4 @@
+// CI scope check, do not merge.
 //! The tmxr client.
 //!
 //! Sends one command to the server — starting the server first when the
