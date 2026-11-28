@@ -285,11 +285,11 @@ newer than itself too. Each side speaks the lower of the two versions.
 
 ## Phases
 
-1. **A proof of concept on Windows and Unix.** A holder that runs a shell, a
-   server that loses and regains it: to find the Windows surprises (ConPTY
-   lifetime, locking, pipes) first, not last. Built on Linux; Windows and macOS
-   are checked by CI on a pull request, not on a Windows machine (the owner's
-   decision, 2026-11-28).
+1. **A proof of concept on Windows and Unix.** Done (PR #19, 2026-11-29): the
+   hidden `tmxr __holder` (`apps/tmxr/src/holder.rs`, its throwaway protocol in
+   `holder/proto.rs`) and `apps/tmxr/tests/holder_poc.rs`, green on Linux, macOS
+   and Windows with both ConPTYs. What it found is under "What phase 1 found"
+   below.
 2. **A snapshot format for the emulator.** Versioned serialization of `vt1k`'s
    screen and `tmxr-term`'s `Emulator` state, the idle-point tracking, and
    round-trip tests over the emulator tests' screens; serde in `vt1k` is its own
@@ -308,6 +308,40 @@ newer than itself too. Each side speaks the lower of the two versions.
 7. **Measure, then make it the default.** Output throughput, key latency and
    memory per pane with and without holders, in a quiet window; turn the option
    on once the numbers and a release's use allow it.
+
+## What phase 1 found
+
+From the proof of concept and its CI runs (2026-11-29); each binds phase 3.
+
+- **The built-in ConPTY waits for its startup query; the bundled one does not.**
+  With the holder's answer disabled, cmd on Windows' own ConPTY drew nothing
+  (every test timed out at its first prompt), while the bundled OpenConsole drew
+  everything and the `ESC[6n` reached the server. The holder answering it works
+  on both. Whether that cures the stray F3 is still not shown.
+- **The bundled ConPTY sends more than the query at start:** `ESC[1t`, DA1
+  (`ESC[c`), focus reports on (`?1004h`) and win32-input-mode (`?9001h`) before
+  the program's first output. The holder forwards them; a server that connects
+  late replays them, so replay mode must not answer that DA1 again.
+- **portable-pty 0.9.0's Windows `ChildKiller::kill` returns the opposite of
+  what happened** (`Err` when `TerminateProcess` succeeds). `Pty::kill` turns it
+  round on Windows, and `tmxr-term` pins `portable-pty = "=0.9.0"` so an update
+  that fixes it cannot turn every result round again.
+- **A named pipe's server end loses unread data when it closes, and
+  interprocess's `flush` does nothing,** so the holder flushes the pipe itself
+  before it exits, on a thread with a time limit (a server that stops reading
+  must not hang it).
+- **A program's exit does not end its output on Linux.** A pty is not hung up
+  when its session leader exits; only the foreground group gets SIGHUP, so a
+  child that ignores it keeps writing. Exit is reported after the end of the
+  stream or a drain time, not on the waiter's word alone. macOS is thought to
+  revoke the terminal instead (read from XNU, not tested).
+- **Input sent just before a disconnect** was lost when the holder dropped the
+  connection on a failed write before reading what it had sent; the holder now
+  reads the newest connection until its reader ends. A newer connection still
+  makes an older one's unread messages stale, so a hung old server cannot close
+  the program under the new one.
+- **cmd stalls on an Enter typed before its first prompt** (as the backlog
+  records for panes), so a holder test waits for the prompt before typing.
 
 ## Tests and fuzzing
 

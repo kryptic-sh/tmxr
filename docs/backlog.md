@@ -1817,6 +1817,14 @@ machine. For each, the code path that decides it is named.
 
 ## Not yet verified
 
+- **macOS: the oracle's `split_h_gives_the_new_pane_the_smaller_half` failed
+  once on tmxr's side** (2026-11-29, the leak-guard job of a throwaway PR's run
+  46168428474, whose change could not reach it): `list-panes` gave `0+100` where
+  `0+50` and `51+49` were expected, as if the split had not happened yet when it
+  was listed. It passed in PR #19's run (46165854558), in both leak-guard and
+  the oracle job. Not reproduced; a check that lists panes right after
+  `split-window` may be racing the server.
+
 - **Console windows across the org's test suites** (2026-10-14): every Rust
   repo's `cargo test --workspace` was run on Windows from a shell with a
   console, with a watcher logging each new console or Windows Terminal window
