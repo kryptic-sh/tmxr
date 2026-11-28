@@ -6,8 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-11-28
+
 ### Changed
 
+- **Dependencies updated to their latest releases**, among the locked ones cc
+  1.12.0 and ahash 0.8.15.
 - **An emoji widened by U+FE0F in a pane's last column stays there, one column
   wide, and what follows wraps**, as tmux 3.8 does (vt1k 0.1.1). It moved to the
   next row, which on the pane's bottom row left half a character.
@@ -2659,7 +2663,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   published to GitHub Releases with `.sha256` files, and shell completions and a
   man page from the hidden `tmxr --completions <shell>` and `tmxr --man`.
 
-[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/kryptic-sh/tmxr/compare/v0.17.1...HEAD
+[0.17.1]: https://github.com/kryptic-sh/tmxr/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/kryptic-sh/tmxr/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/kryptic-sh/tmxr/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/kryptic-sh/tmxr/compare/v0.14.0...v0.15.0
