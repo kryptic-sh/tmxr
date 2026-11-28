@@ -177,6 +177,10 @@ fn expand_loop(kind: LoopKind, flags: &str, fmt: &str, ctx: &dyn Context, pass: 
 /// The most times `#{R:…}` repeats its text, as tmux's.
 const MAX_REPEAT: usize = 10_000;
 
+/// The widest `#{p…:}` pads to, either way, as tmux 3.8's: a wider one
+/// pads nothing (checked with `display -p`).
+const MAX_PAD: u64 = 10_000;
+
 /// How deep formats nest (in `#{?…}`, `#{E:…}` and the rest), as tmux's
 /// `FORMAT_LOOP_LIMIT`, so an option that refers to itself cannot recurse
 /// forever.
@@ -1076,6 +1080,7 @@ fn apply_modifiers(mods: &[Mod<'_>], inner: &str, ctx: &dyn Context, pass: Pass)
     for m in mods {
         if let Mod::Pad(n) = m
             && let Some(n) = count(n)
+            && n.unsigned_abs() <= MAX_PAD
         {
             let missing = usize::try_from(n.unsigned_abs())
                 .unwrap_or(usize::MAX)
@@ -1862,6 +1867,13 @@ mod tests {
         assert_eq!(x("#{p5:session_name}|"), "main |");
         assert_eq!(x("#{p-5:session_name}|"), " main|");
         assert_eq!(x("#{p2:@p}|"), "/home/me/src/proj|", "padding never cuts");
+        // Past 10000 either way tmux 3.8 pads nothing (checked with
+        // display -p), so a huge width cannot take the server's memory.
+        assert_eq!(x("#{p10000:@e}|").len(), 10_001);
+        assert_eq!(x("#{p-10000:@e}|").len(), 10_001);
+        assert_eq!(x("#{p10001:@e}|"), "|");
+        assert_eq!(x("#{p-10001:@e}|"), "|");
+        assert_eq!(x("#{p1776099982:session_name}|"), "main|");
         assert_eq!(x("#{p99999999999:@e}|"), "|", "past a C int: none");
         assert_eq!(x("#{b;s/r/R/:@p}"), "pRoj");
         assert_eq!(x("#{=3;b:@p}"), "pro", "written first, cut last");

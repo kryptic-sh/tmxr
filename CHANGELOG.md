@@ -14,6 +14,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A format padded past 10000 columns pads nothing**, as tmux 3.8's
+  (`#{p10001:…}` or `#{p-10001:…}`). The width was taken up to a C int, so one
+  `display -p '#{p2000000000:}'` made the server allocate gigabytes and could
+  bring it down with every session. Found by the new `format_expand` fuzz
+  target.
 - **Program output split across reads in the middle of a UTF-8 character no
   longer loses the characters after it** (vt1k 0.1.1, working around a bug in
   vte 0.15.0): a character cut at a read boundary, with an invalid byte soon
