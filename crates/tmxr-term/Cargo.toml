@@ -10,7 +10,9 @@ authors.workspace = true
 readme.workspace = true
 
 [dependencies]
-portable-pty = "0.9.0"
+# Exactly 0.9.0: `Pty::kill` (src/pty.rs) inverts this version's swapped
+# Windows kill result, and would invert a fixed one the wrong way.
+portable-pty = "=0.9.0"
 tmxr-command.workspace = true
 ttyr.workspace = true
 vt1k.workspace = true

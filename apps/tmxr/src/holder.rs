@@ -61,7 +61,17 @@ const REPLAY_PIECE: usize = 64 * 1024;
 /// How long after the program's exit the holder waits for its output
 /// stream to end. The exit is reported once the stream has ended, so no
 /// output comes after it, or once this has passed, so a stream that does
-/// not end cannot hold the report back for good.
+/// not end cannot hold the report back for good. The stream can outlive the
+/// exit:
+///
+/// - Linux: the program's exit sends its foreground group a hangup but
+///   leaves the terminal open, so a child that ignores SIGHUP keeps the
+///   stream open and its writes still arrive (`holder_poc`'s
+///   `a_child_ignoring_hangups_writes_before_the_exit_is_reported`).
+/// - macOS: the terminal is probably revoked when its session leader exits,
+///   ending the stream; unverified.
+/// - ConPTY: the stream outlives the exit until the pseudo console is
+///   closed, which the holder does on the exit.
 const EXIT_DRAIN: Duration = Duration::from_secs(1);
 
 /// How long a [`ToHolder::Close`] waits for the program to be reaped before
@@ -72,6 +82,8 @@ const CLOSE_WAIT: Duration = Duration::from_secs(5);
 /// before it is killed (Unix; Windows terminates it at once).
 #[cfg(unix)]
 const KILL_GRACE: Duration = Duration::from_secs(1);
+#[cfg(unix)]
+const _: () = assert!(KILL_GRACE.as_millis() < CLOSE_WAIT.as_millis());
 
 /// How long the holder waits for a connection to read the last it was sent
 /// before exiting (Windows: a named pipe's server end closing discards what
@@ -157,10 +169,11 @@ struct Holder {
     ring: Ring,
     query: StartupQuery,
     conn: Option<Conn>,
-    /// The newest connection's id. Its messages are handled even after
-    /// writing to it failed and it was dropped as [`Holder::conn`]: what it
-    /// sent before going (input typed just before a disconnect) still
-    /// counts.
+    /// The newest connection's id. Only its messages are handled, and they
+    /// still are after writing to it failed and it was dropped as
+    /// [`Holder::conn`], so input it sent just before going counts. Once a
+    /// newer connection has been accepted, whatever an older one sent and
+    /// was not yet handled (an `Input`, a `Close`) is dropped as stale.
     newest: u64,
     pty: Option<Pty>,
     pid: Option<u32>,
@@ -324,10 +337,10 @@ impl Holder {
     }
 
     /// A new connection replaces the current one, and is greeted if the
-    /// program runs. One the holder cannot start a reader for is dropped.
+    /// program runs. One the holder cannot start a reader for is dropped,
+    /// and the current one goes on being served.
     fn connect(&mut self, stream: Stream) {
-        self.newest += 1;
-        let id = self.newest;
+        let id = self.newest + 1;
         let stream = Arc::new(stream);
         let recv = Arc::clone(&stream);
         let events = self.events.clone();
@@ -356,6 +369,7 @@ impl Holder {
             eprintln!("tmxr holder: could not serve connection {id}: {e}");
             return;
         }
+        self.newest = id;
         self.conn = Some(Conn {
             id,
             stream,

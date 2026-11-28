@@ -383,7 +383,7 @@ fn a_holder_keeps_its_program_across_connections() {
     second.send(&ToHolder::Input(print_mark("two")));
     second.read_until_text(&two);
     assert!(find(&second.output, &late) < find(&second.output, &two));
-    // The holder answered ConPTY's startup query and took it out.
+    // ConPTY's startup query, if it sent one, did not reach the server.
     #[cfg(windows)]
     assert!(
         find(&second.output, "\x1b[6n").is_none(),
@@ -457,6 +457,41 @@ fn an_exit_is_reported_after_the_last_output() {
 #[test]
 fn an_exit_before_any_connection_takes_output_is_reported_after_it() {
     exit_is_reported_after_the_last_output(false);
+}
+
+/// How long the left-behind child below waits before writing: well under
+/// the holder's `EXIT_DRAIN`.
+#[cfg(target_os = "linux")]
+const TAIL_DELAY: Duration = Duration::from_millis(300);
+
+/// A child that ignores SIGHUP outlives the program on Linux and writes
+/// after the program's exit; that output must come before `Exited`.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_child_ignoring_hangups_writes_before_the_exit_is_reported() {
+    let holder = Watchdog::start();
+    let mark = mark();
+    let delay = TAIL_DELAY.as_secs_f64();
+    let argv = vec![
+        "/bin/sh".to_owned(),
+        "-c".to_owned(),
+        format!(
+            "trap '' HUP; (sleep {delay}; echo \"${MARK_VAR}-tail\") & echo \"${MARK_VAR}-first\"; exit 3"
+        ),
+    ];
+    let mut conn = Conn::open(&holder);
+    conn.spawn(argv, &mark);
+    conn.hello();
+    conn.take_from(0);
+    let (code, signal) = conn.read_exit();
+    let text = String::from_utf8_lossy(&conn.output).into_owned();
+    assert!(
+        text.contains(&format!("{mark}-first")) && text.contains(&format!("{mark}-tail")),
+        "the child's late output is not before Exited: {text:?}"
+    );
+    assert_eq!((code, signal), (Some(3), None));
+    let status = holder.wait_exit();
+    assert!(status.success(), "the holder exited with {status}");
 }
 
 /// `Close` ends a program that ignores the hangup it is sent first.
