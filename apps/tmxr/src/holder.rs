@@ -196,7 +196,7 @@ impl Holder {
         Self {
             events,
             ring: Ring::default(),
-            query: StartupQuery::new(conpty),
+            query: StartupQuery::new(false),
             conn: None,
             newest: 0,
             pty: None,
