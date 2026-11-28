@@ -105,9 +105,13 @@ too.
 ## Phases
 
 1. tmxr: the `fuzz/` crate, every target above, the seeds, the replay test, the
-   workflow; every crash it finds fixed, with its regression input.
-2. vt1k: the same, released if a fix is needed.
-3. ttyr: the same, released if a fix is needed.
+   workflow; every crash it finds fixed, with its regression input. (Done
+   2026-11-28: it found the paste-marker injection and, through vt1k, vte's
+   split UTF-8 bug.)
+2. vt1k: the same, released if a fix is needed. (Done 2026-11-28: three targets,
+   four fixes and one change to follow tmux, released as 0.1.1.)
+3. ttyr: the same, released if a fix is needed. (Done 2026-11-28: four targets
+   and one decoder fix, not released yet.)
 4. The pane holders' targets, with each holder phase.
 
 Each target is shown to find a planted bug before it is trusted (a panic or a

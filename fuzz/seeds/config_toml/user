@@ -1,0 +1,6 @@
+[options]
+mouse = true
+status-position = "top"
+
+[keys.prefix]
+"C-a" = "send-prefix"

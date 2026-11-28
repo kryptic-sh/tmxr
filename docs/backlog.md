@@ -664,6 +664,32 @@ plan 18 sections here.
   so each repeat goes out as a new Escape press, and the program sees several
   presses and one release. Found by review; not tested.
 
+## Fuzzing (plan 20, 2026-11-28)
+
+- **`resurrect` was not shown to catch a planted bug.** Its only parser is
+  serde's derive on `resurrect::Save`, with nowhere to plant one by hand; the
+  other targets each were (a panic planted in the code they reach, found within
+  a minute, removed). A target that went further (`load_layout`, or applying a
+  save to a server) would need those made public or a server without panes.
+- **Two-byte triggers are slow to find in some targets.** A panic planted on
+  `QZ` was not reached within 60 s by `proto_frame`, `config_toml` or
+  `splitters` (a one-byte trigger was, at once), so the short run on each push
+  finds only shallow faults there; the nightly run is where depth comes from.
+  `config_toml` is the slowest (about 300 runs a second, a temporary file per
+  run and the defaults merged each time).
+- **ttyr's fix is unreleased.** ttyr's `ESC O` digits fix (found by its
+  `chunking` target) is on its main branch; tmxr picks it up with ttyr's next
+  release.
+- **ttyr: a win32-input-mode repeat count makes up to 65535 events from one
+  record**, by design; its fuzz targets stop checking after a cap of events, and
+  whether ttyr should cap the count is in ttyr's backlog.
+- **vt1k: wide characters left without a second half after rewrapping through
+  one column**, and a combining character without autowrap: in vt1k's backlog,
+  awaiting a decision; its `parser` target checks around them.
+- **vte's split UTF-8 bug**: reported upstream already (alacritty/vte#173, fix
+  in #174, unreleased on 2026-11-28); vt1k works around it, and its backlog says
+  when to drop the workaround.
+
 ## Decisions waiting on the owner
 
 - **The command prompt's Tab completion menu against tmux 3.8** (parked by the

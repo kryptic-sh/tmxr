@@ -1,0 +1,1 @@
+set -g status-right "#[fg=blue]%H:%M #{?client_prefix,P,}"

@@ -115,6 +115,29 @@ jobs:
           --no-tests=warn
       - run: cargo test --workspace --doc --all-features --locked
 
+  # The fuzz crate (fuzz/, its own workspace) on stable: formatted, lint
+  # clean, and every committed seed and regression input through its target,
+  # so a crash a fuzzer found stays fixed. The fuzzing is fuzz.yml.
+  fuzz-replay:
+    name: fuzz targets replay
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+          cache: false
+      - run: rustup update --no-self-update stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - run: cargo fmt --manifest-path fuzz/Cargo.toml --all --check
+      - run:
+          cargo clippy --manifest-path fuzz/Cargo.toml --all-targets --locked --
+          -D warnings
+      - run: cargo test --manifest-path fuzz/Cargo.toml --locked
+
   # No test may write the user's real state. The whole suite again, with
   # $HOME and the XDG roots aimed at an empty sentinel directory: what a test
   # writes to tmxr's places there (the XDG roots and their home-relative

@@ -1,0 +1,99 @@
+name: Fuzz
+
+# Every cargo-fuzz target in fuzz/ (docs/plan/20-fuzzing.md): a short run on
+# each push to main, from the seeds and the corpus the nightly runs grew; a
+# long run nightly and by hand, which saves the grown corpus back. A crash
+# fails the job and uploads the input that caused it; its fix commits that
+# input, minimized, under fuzz/regressions/<target>/. The replay of seeds
+# and regressions on stable runs in ci.yml.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 2 * * *' # daily, 02:23 UTC
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  # Seconds each target runs, per kind of run.
+  SMOKE_SECONDS: 60
+  LONG_SECONDS: 1200
+
+# A newer push replaces a smoke run still going; the nightly run is never
+# cancelled by one.
+concurrency:
+  group: fuzz-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+jobs:
+  targets:
+    name: list targets
+    runs-on: ubuntu-latest
+    outputs:
+      targets: ${{ steps.list.outputs.targets }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: list
+        run: |
+          targets=$(ls fuzz/fuzz_targets | sed 's/\.rs$//' | jq -R . | jq -sc .)
+          echo "targets=$targets" >> "$GITHUB_OUTPUT"
+          echo "$targets"
+
+  fuzz:
+    name: fuzz ${{ matrix.target }}
+    needs: targets
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJson(needs.targets.outputs.targets) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          toolchain: nightly
+          cache: false
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - name: restore corpus
+        uses: actions/cache/restore@v5
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: fuzz-corpus-${{ matrix.target }}-
+      - name: run
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          SECONDS_TO_RUN:
+            ${{ github.event_name == 'push' && env.SMOKE_SECONDS ||
+            env.LONG_SECONDS }}
+        run: |
+          set -euo pipefail
+          mkdir -p "fuzz/corpus/$TARGET"
+          # The prebuilt cargo-fuzz is a musl build and defaults to its own
+          # target, which the runner's toolchain does not have: name the host.
+          host=$(rustc +nightly -vV | sed -n 's/^host: //p')
+          cargo +nightly fuzz run --fuzz-dir fuzz --target "$host" "$TARGET" \
+            "fuzz/corpus/$TARGET" "fuzz/seeds/$TARGET" -- \
+            -max_total_time="$SECONDS_TO_RUN" -timeout=10 -rss_limit_mb=2048 \
+            -max_len=65536 -print_final_stats=1
+      - name: save corpus
+        if: success() && github.event_name != 'push'
+        uses: actions/cache/save@v5
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+      - name: upload crash
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: crash-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}
+          if-no-files-found: ignore

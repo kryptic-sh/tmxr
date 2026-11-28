@@ -1,0 +1,1 @@
+bind-key -T prefix h select-pane -L

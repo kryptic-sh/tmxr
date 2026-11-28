@@ -1,0 +1,21 @@
+# The tmux side of the oracle: the owner's tmux config, whose settings
+# tmxr's defaults port (.config/tmux/tmux.conf in mxaddict/dotfiles),
+# without its plugins.
+set -g default-terminal "tmux-256color"
+set -g mouse on
+set -s extended-keys always
+set -g allow-passthrough on
+set -g base-index 0
+set -g pane-base-index 0
+set-option -g renumber-windows on
+set -g status-left ""
+set-window-option -g mode-keys vi
+bind -N "Focus pane left" h select-pane -L
+bind -N "Focus pane down" j select-pane -D
+bind -N "Focus pane up" k select-pane -U
+bind -N "Focus pane right" l select-pane -R
+bind -N "Previous window" -n M-h previous-window
+bind -N "Next window" -n M-l next-window
+bind-key -T copy-mode-vi v send-keys -X begin-selection
+bind-key -T copy-mode-vi C-v send-keys -X rectangle-toggle
+bind-key -T copy-mode-vi y send-keys -X copy-selection-and-cancel

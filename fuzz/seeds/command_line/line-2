@@ -1,0 +1,1 @@
+new-session -d -s 'a b' \; split-window -h -c '#{pane_current_path}'

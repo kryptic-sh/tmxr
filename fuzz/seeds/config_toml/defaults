@@ -1,0 +1,622 @@
+# tmxr built-in defaults.
+#
+# This is mxaddict's tmux config (dotfiles/.config/tmux/tmux.conf) and the
+# plugins it loads — catppuccin, vim-tmux-navigator, tmux-sensible, tmux-yank,
+# tmux-resurrect — ported to tmxr. A user config (~/.config/tmxr/config.toml)
+# is deep-merged over this file: set a key to change it, set a bind to `false`
+# to remove it. Binds are tmux command strings. See docs/plan/06 and /07.
+
+prefix = "C-b"
+# tmux's defaults: no second prefix, and keys start in the root table.
+prefix2 = "None"
+key-table = "root"
+mouse = true
+base-index = 0
+pane-base-index = 0
+# tmux's default: pane borders in single lines.
+pane-border-lines = "single"
+# tmux's default: the active pane's border coloured, half of it with two
+# panes.
+pane-border-indicators = "colour"
+# tmux's defaults: no pane status lines, and what one shows.
+pane-border-status = "off"
+pane-border-format = '#{?pane_active,#[reverse],}#{pane_index}#[default] "#{pane_title}"'
+renumber-windows = true
+mode-keys = "vi"
+# tmux's default and tmux-sensible's: the command prompt takes emacs keys.
+status-keys = "emacs"
+# tmux-sensible values.
+history-limit = 50000
+prompt-history-limit = 100
+# tmux's defaults: automatic paste buffers kept, and messages show-messages
+# keeps.
+buffer-limit = 50
+message-limit = 1000
+# tmux's defaults: the server exits with its last session, not when the last
+# client leaves, and a session outlives its clients.
+exit-empty = true
+exit-unattached = false
+# tmxr's: a client with no input for this many seconds is away, and windows
+# stop taking its size; 0, never.
+client-away-time = 300
+# tmux's default: the prefix waits for its next key however long it takes.
+prefix-timeout = 0
+destroy-unattached = "off"
+detach-on-destroy = "on"
+escape-time = 0
+# tmux-sensible's, where tmux's default is off: panes are told of focus.
+focus-events = true
+display-time = 4000
+display-panes-time = 1000
+status-interval = 5
+repeat-time = 500
+default-terminal = "tmux-256color"
+# tmux's default: a new pane given no command runs the shell.
+default-command = ""
+# tmux's default: the size a detached new session's windows get.
+default-size = "80x24"
+extended-keys = "always"
+# tmux's default: extended keys in xterm's CSI 27;<modifiers>;<key>~ form.
+extended-keys-format = "xterm"
+# tmxr's: clients ask their terminals for the kitty keyboard protocol, and
+# panes' programs may push kitty flags. false does neither: programs that ask
+# find it off and fall back. extended-keys covers xterm-style keys alone.
+kitty-keys = true
+# tmxr's: on Windows the host name (#H, #h) is shown in lower case, as other
+# systems' usually are; true shows it as Windows has it, usually upper case.
+# Other systems show it as it is either way.
+windows-proper-hostname = false
+# tmux's default: features a terminal is given by its TERM, `pattern:feature:…`
+# (tmux's `terminal-features`). tmxr acts on `extkeys` (xterm's
+# modifyOtherKeys, under extended-keys) and reads the rest.
+terminal-features = [
+  "xterm*:clipboard:ccolour:cstyle:focus:title",
+  "screen*:title",
+  "rxvt*:ignorefkeys",
+]
+set-clipboard = "on"
+# 24-bit colour on every terminal, as the tmux config's `terminal-overrides
+# ",*:RGB"`; "off" sends the 256, "16" the 16 ANSI colours, and "auto" asks
+# the client's environment (COLORTERM and WT_SESSION for 24-bit, a TERM
+# without 256 colours for the 16).
+rgb-colour = "on"
+# tmux.conf: set -g allow-passthrough on
+allow-passthrough = true
+# tmux's default: programs may not rename their window.
+allow-rename = false
+# tmux's default: programs may title their pane.
+allow-set-title = true
+# tmux's default: programs may use the alternate screen.
+alternate-screen = true
+remain-on-exit = false
+# tmux's default.
+remain-on-exit-format = "Pane is dead (#{?#{!=:#{pane_dead_status},},status #{pane_dead_status},}#{?#{!=:#{pane_dead_signal},},signal #{pane_dead_signal},}, #{t:pane_dead_time})"
+# tmux's defaults.
+synchronize-panes = false
+automatic-rename = true
+# tmux's default: a window is sized by every client whose session holds it,
+# not only those showing it.
+aggressive-resize = false
+automatic-rename-format = "#{?pane_in_mode,[tmux],#{pane_current_command}}#{?pane_dead,[dead],}"
+monitor-bell = true
+# tmux's defaults: copy-mode searches wrap, and words end at ASCII punctuation
+# but `_` (and blanks).
+wrap-search = true
+# tmux's defaults: the terminal's own cursor until a program asks for a shape
+# or a colour.
+cursor-style = "default"
+cursor-colour = "none"
+# tmux's default: a 24-hour clock without seconds.
+clock-mode-style = "24"
+word-separators = '''!"#$%&'()*+,-./:;<=>?@[\]^`{|}~'''
+# How windows are sized: "latest" (by the client that used it last),
+# "largest" or "smallest" (of the session's clients, each way), or "manual"
+# (only by resize-window).
+window-size = "smallest"
+# tmux's defaults: panes keep the terminal's colours.
+window-style = "default"
+window-active-style = "default"
+# tmux's default: the client beyond a smaller window is dotted.
+fill-character = ""
+# tmux's defaults: no activity or silence alerts.
+monitor-activity = false
+monitor-silence = 0
+# tmux's defaults: which windows' alerts act (any, none, current or other),
+# and how: the terminal's bell (off), a status message (on), or both.
+bell-action = "any"
+activity-action = "other"
+silence-action = "other"
+# tmux's default: keys a millisecond apart are pasted text.
+assume-paste-time = 1
+visual-bell = "off"
+visual-activity = "off"
+visual-silence = "off"
+# tmux's defaults: no pane scrollbars ("on", or "modal" for copy mode only).
+pane-scrollbars = "off"
+pane-scrollbars-position = "right"
+pane-scrollbars-style = "bg=black,fg=white,width=1,pad=0"
+# tmux's defaults: the main pane of main-horizontal / main-vertical, and the
+# others (0: what is left), in cells or "N%".
+main-pane-height = "24"
+main-pane-width = "80"
+other-pane-height = "0"
+other-pane-width = "0"
+copy-command = ""
+# Empty takes $VISUAL, else $EDITOR, else /usr/bin/vi as tmux's (Notepad on
+# Windows).
+editor = ""
+# tmux's default: the prompts' history is kept in no file.
+history-file = ""
+# tmux's default; `lock-client` runs it in the client's terminal.
+lock-command = "lock -np"
+# Lock a client idle this many seconds; 0 never does (tmux's default).
+lock-after-time = 0
+# The client terminal's title (tmux's set-titles, off there): the title the
+# active pane's program set, else the session and window names. A pane whose
+# program set no title has the host name for #{pane_title}, as in tmux.
+set-titles = true
+set-titles-string = "#{?#{!=:#{pane_title},#{host}},#{pane_title},#S:#W}"
+# Who may open the server's socket or pipe, read when it starts: "owner", or
+# "users" for every local user, of whom `server-access` admits those it names.
+socket-access = "owner"
+update-environment = [
+  "DISPLAY",
+  "SSH_ASKPASS",
+  "SSH_AUTH_SOCK",
+  "SSH_AGENT_PID",
+  "SSH_CONNECTION",
+  "WINDOWID",
+  "XAUTHORITY",
+  "WAYLAND_DISPLAY",
+  "XDG_SESSION_TYPE",
+  "XDG_CURRENT_DESKTOP",
+  "XDG_RUNTIME_DIR",
+]
+
+[navigator]
+# vim-tmux-navigator's @vim_navigator_pattern from the tmux config.
+pattern = '(\S+/)?g?\.?(view|l?n?vim?x?|fzf|sqeel|hjkl)(diff)?(-wrapped)?'
+disable-when-zoomed = false
+
+[status]
+# tmux's default: one status line is drawn ("off", "on", or 2 to 5 lines).
+status = "on"
+# tmux's defaults: each line's format. The first line is drawn by tmxr's own
+# status line from the options this one names; the others are expanded.
+format = [
+  '#[align=left range=left #{E:status-left-style}]#[push-default]#{T;=/#{status-left-length}:status-left}#[pop-default]#[norange default]#[list=on align=#{status-justify}]#[list=left-marker]<#[list=right-marker]>#[list=on]#{W:#[range=window|#{window_index} #{E:window-status-style}#{?#{&&:#{window_last_flag},#{!=:#{E:window-status-last-style},default}}, #{E:window-status-last-style},}#{?#{&&:#{window_bell_flag},#{!=:#{E:window-status-bell-style},default}}, #{E:window-status-bell-style},#{?#{&&:#{||:#{window_activity_flag},#{window_silence_flag}},#{!=:#{E:window-status-activity-style},default}}, #{E:window-status-activity-style},}}]#[push-default]#{T:window-status-format}#[pop-default]#[norange default]#{?loop_last_flag,,#{E:window-status-separator}},#[range=window|#{window_index} list=focus #{?#{!=:#{E:window-status-current-style},default},#{E:window-status-current-style},#{E:window-status-style}}#{?#{&&:#{window_last_flag},#{!=:#{E:window-status-last-style},default}}, #{E:window-status-last-style},}#{?#{&&:#{window_bell_flag},#{!=:#{E:window-status-bell-style},default}}, #{E:window-status-bell-style},#{?#{&&:#{||:#{window_activity_flag},#{window_silence_flag}},#{!=:#{E:window-status-activity-style},default}}, #{E:window-status-activity-style},}}]#[push-default]#{T:window-status-current-format}#[pop-default]#[norange list=on default]#{?loop_last_flag,,#{E:window-status-separator}}}#[nolist align=right range=right #{E:status-right-style}]#[push-default]#{T;=/#{status-right-length}:status-right}#[pop-default]#[norange default]',
+  '#[align=left]#{R: ,#{e|-:#{w;T;=/#{status-left-length}:status-left},3}}P: #[norange default]#[list=on align=#{status-justify}]#[list=left-marker]<#[list=right-marker]>#[list=on]#{P:#[range=pane|#{pane_id} #{E:pane-status-style}]#[push-default]#{T:window-pane-status-format}#[pop-default]#[norange list=on default]#{?loop_last_flag,,#{E:window-status-separator}},#[range=pane|#{pane_id} list=focus #{?#{!=:#{E:pane-status-current-style},default},#{E:pane-status-current-style},#{E:pane-status-style}}]#[push-default]#{T:window-pane-current-status-format}#[pop-default]#[norange list=on default]#{?loop_last_flag,,#{E:window-status-separator}}}',
+  '#[align=left]#{R: ,#{e|-:#{w;T;=/#{status-left-length}:status-left},3}}S: #[norange default]#[list=on align=#{status-justify}]#[list=left-marker]<#[list=right-marker]>#[list=on]#{S:#[range=session|#{session_id} #{E:session-status-style}]#[push-default]#S#{q/h:session_alert}#[pop-default]#[norange list=on default]  ,#[range=session|#{session_id} list=focus #{?#{!=:#{E:session-status-current-style},default},#{E:session-status-current-style},#{E:session-status-style}}]#[push-default]#S*#{q/h:session_alert}#[pop-default]#[norange list=on default] }',
+]
+style = "bg=#{@thm_mantle},fg=#{@thm_fg}"
+# tmux's defaults: status-style's colours, not these.
+fg = "default"
+bg = "default"
+# tmux's default: the window list after status-left.
+justify = "left"
+# tmux's default: the status line is the bottom row.
+position = "bottom"
+left = ""
+right = "#{E:@status_session}#{E:@status_host}"
+# tmux's defaults; the tmux config sets neither.
+left-length = 10
+right-length = 40
+# catppuccin's "basic" window style, with the config's " #W" window text.
+window-format = "#[fg=#{@thm_crust},bg=#{@thm_overlay2}] #I #[fg=#{@thm_fg},bg=#{@thm_surface0}] #W#{?window_flags, #{window_flags},} #[default]"
+# tmux 3.8's defaults: each pane's entry, and the current one's, in the
+# default second status line.
+window-pane-format = "#P:[#T]#{?pane_flags,#{pane_flags}, }"
+window-pane-current-format = "#P:[#T]#{?pane_flags,#{pane_flags}, }"
+window-current-format = "#[fg=#{@thm_crust},bg=#{@thm_mauve}] #I #[fg=#{@thm_fg},bg=#{@thm_surface1}] #W#{?window_flags, #{window_flags},} #[default]"
+# tmux's defaults: the styles under the left and right sides and each window,
+# the current one's and the last one's. The separator between windows is
+# empty, where tmux's is a space, so the list looks as it did before tmxr had
+# the option.
+left-style = "default"
+right-style = "default"
+window-style = "default"
+window-current-style = "default"
+window-last-style = "default"
+# tmux's are "reverse"; here "default", so the theme's entries, which show the
+# alert flags in their text, look as they did before tmxr had the options.
+window-activity-style = "default"
+window-bell-style = "default"
+window-separator = ""
+pane-border-style = "fg=#{@thm_surface1}"
+pane-active-border-style = "fg=#{@thm_blue}"
+message-style = "fg=#{@thm_fg},bg=#{@thm_surface0}"
+# tmux's default: messages and the prompt on the first status line.
+message-line = "0"
+# tmux's default: the prompt in vi's command mode.
+message-command-style = "bg=black,fg=yellow"
+mode-style = "fg=#{@thm_fg},bg=#{@thm_selection}"
+# tmux colours matches cyan and the current one magenta; here the palette's
+# yellow and mauve.
+copy-mode-match-style = "fg=#{@thm_crust},bg=#{@thm_yellow}"
+copy-mode-current-match-style = "fg=#{@thm_crust},bg=#{@thm_mauve}"
+# tmux's: the selection and the position indicator in mode-style, the
+# indicator's place, time and search count as tmux shows them, and the
+# set-mark line in red, here the palette's.
+copy-mode-selection-style = "#{E:mode-style}"
+copy-mode-position-style = "#{E:mode-style}"
+copy-mode-position-format = '#[align=right]#{t/p:top_line_time}#{?#{e|>:#{top_line_time},0}, ,}[#{scroll_position}/#{history_size}]#{?search_timed_out, (timed out),#{?search_count, (#{search_count}#{?search_count_partial,+,} results),}}'
+copy-mode-mark-style = "fg=#{@thm_crust},bg=#{@thm_red}"
+# tmux draws the clock in blue.
+clock-mode-colour = "#{@thm_blue}"
+# tmux's blue and red, from the palette.
+display-panes-colour = "#{@thm_blue}"
+display-panes-active-colour = "#{@thm_red}"
+# Menus and popups: tmux's default lines, bordered like the active pane, the
+# selected item like copy mode's selection.
+menu-style = "default"
+menu-selected-style = "fg=#{@thm_fg},bg=#{@thm_selection}"
+menu-border-style = "fg=#{@thm_blue}"
+menu-border-lines = "single"
+popup-style = "default"
+# tmux 3.8's defaults: the panes' and sessions' styles in its second and
+# third status lines.
+pane-status-style = "default"
+pane-status-current-style = "underscore"
+session-status-style = "default"
+session-status-current-style = "underscore"
+popup-border-style = "fg=#{@thm_blue}"
+popup-border-lines = "single"
+
+[resurrect]
+auto-save-minutes = 15
+restore-on-start = true
+keep = 20
+# Programs restored by name; tmux-resurrect's `~text` (a command line holding
+# text, restored whole) and `match->command` (restored as command) work too.
+processes = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "top", "htop", "irssi", "weechat", "mutt", "hjkl", "sqeel"]
+# Of those, the ones restored with their arguments (`less app.log`, not
+# `less`): tmux-resurrect's default list and hjkl. Arguments are saved in the
+# plain-text save file, so leave out programs whose arguments can hold
+# secrets (sqeel's connection strings).
+restore-args = ["vi", "vim", "nvim", "emacs", "man", "less", "more", "tail", "top", "htop", "irssi", "weechat", "mutt", "hjkl"]
+
+# Global hooks, as tmux's `set-hook -g`: a hook name and the command (or
+# commands, in order) it runs. None by default. For three windows in each
+# new session:
+#   session-created = ["new-window -d", "new-window -d"]
+[hooks]
+
+# User options (`@name`), readable in formats as #{@name}.
+[options]
+# Tokyo Night ("Night"), in catppuccin's role names so the status formats
+# keep catppuccin's layout. docs/plan/07 has the mapping.
+"@thm_mantle" = "#16161e"
+"@thm_crust" = "#16161e"
+"@thm_base" = "#1a1b26"
+"@thm_surface0" = "#292e42"
+"@thm_surface1" = "#3b4261"
+"@thm_overlay2" = "#737aa2"
+"@thm_fg" = "#c0caf5"
+"@thm_mauve" = "#bb9af7"
+"@thm_green" = "#9ece6a"
+"@thm_red" = "#f7768e"
+"@thm_blue" = "#7aa2f7"
+"@thm_yellow" = "#e0af68"
+"@thm_selection" = "#283457"
+# catppuccin's session and host modules with the config's █ separators. The
+# session block turns red while the prefix key is pending.
+"@status_session_colour" = "#{?client_prefix,#{@thm_red},#{@thm_green}}"
+"@status_session" = "#[range=user|sessions fg=#{E:@status_session_colour},bg=#{@thm_mantle}]█#[fg=#{@thm_crust},bg=#{E:@status_session_colour}] #[fg=#{@thm_fg},bg=#{@thm_surface0}] #S#[fg=#{@thm_surface0},bg=#{@thm_mantle}]█#[norange]"
+"@status_host" = "#[fg=#{@thm_mauve},bg=#{@thm_mantle}]█#[fg=#{@thm_crust},bg=#{@thm_mauve}]󰒋 #[fg=#{@thm_fg},bg=#{@thm_surface0}] #H#[fg=#{@thm_surface0},bg=#{@thm_mantle}]█"
+
+# ── Key binds ────────────────────────────────────────────────────────────────
+
+[keys.root]
+# vim-tmux-navigator: focus the neighbouring pane, or pass the key through to
+# vim/hjkl/fzf when one is in front (navigator.pattern).
+"C-h" = { cmd = "navigate-pane -L", note = "Focus pane left, or pass the key to vim/fzf-like apps" }
+"C-j" = { cmd = "navigate-pane -D", note = "Focus pane down, or pass the key to vim/fzf-like apps" }
+"C-k" = { cmd = "navigate-pane -U", note = "Focus pane up, or pass the key to vim/fzf-like apps" }
+"C-l" = { cmd = "navigate-pane -R", note = "Focus pane right, or pass the key to vim/fzf-like apps" }
+"C-\\" = { cmd = "navigate-pane -l", note = "Focus last pane, or pass the key to vim/fzf-like apps" }
+# tmux.conf: Shift Alt vim keys to switch windows.
+"M-h" = { cmd = "previous-window", note = "Previous window" }
+"M-l" = { cmd = "next-window", note = "Next window" }
+# The mouse (with `mouse on`), as tmux's own binds: a program that asked for
+# the mouse gets it; otherwise click to focus, drag to select into copy mode,
+# wheel up into copy mode, drag a border to resize, click a window in the
+# status line. A pane event nothing binds goes to the program.
+"MouseDown1Pane" = { cmd = "select-pane -t = ; send-keys -M", note = "Focus the pane clicked" }
+"MouseDrag1Pane" = { cmd = "if-shell -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' 'send-keys -M' 'copy-mode -M'", note = "Select text by dragging" }
+"WheelUpPane" = { cmd = "if-shell -F '#{||:#{alternate_on},#{pane_in_mode},#{mouse_any_flag}}' 'send-keys -M' 'copy-mode -e'", note = "Scroll up into copy mode" }
+"MouseDrag1Border" = { cmd = "resize-pane -M", note = "Resize panes by dragging a border" }
+# The session's name (status-right's `sessions` range) opens the session
+# picker; anywhere else switches to the window or session clicked, as tmux.
+"MouseDown1Status" = { cmd = "if-shell -F '#{==:#{mouse_status_range},sessions}' { choose-tree -Zs } { switch-client -t = }", note = "Switch to the window or session clicked, or pick a session" }
+# tmux 3.6's menus on the right button, as its list-keys prints them.
+"MouseDown3Pane" = { cmd = '''if-shell -F -t = "#{||:#{mouse_any_flag},#{&&:#{pane_in_mode},#{?#{m/r:(copy|view)-mode,#{pane_mode}},0,1}}}" { select-pane -t = ; send-keys -M } { display-menu -T "#[align=centre]#{pane_index} (#{pane_id})" -t = -x M -y M "#{?#{m/r:(copy|view)-mode,#{pane_mode}},Go To Top,}" < { send-keys -X history-top } "#{?#{m/r:(copy|view)-mode,#{pane_mode}},Go To Bottom,}" > { send-keys -X history-bottom } '' "#{?mouse_word,Search For #[underscore]#{=/9/...:mouse_word},}" C-r { if-shell -F "#{?#{m/r:(copy|view)-mode,#{pane_mode}},0,1}" "copy-mode -t=" ; send-keys -X -t = search-backward -- "#{q:mouse_word}" } "#{?mouse_word,Type #[underscore]#{=/9/...:mouse_word},}" C-y { copy-mode -q ; send-keys -l "#{q:mouse_word}" } "#{?mouse_word,Copy #[underscore]#{=/9/...:mouse_word},}" c { copy-mode -q ; set-buffer "#{q:mouse_word}" } "#{?mouse_line,Copy Line,}" l { copy-mode -q ; set-buffer "#{q:mouse_line}" } '' "#{?mouse_hyperlink,Type #[underscore]#{=/9/...:mouse_hyperlink},}" C-h { copy-mode -q ; send-keys -l "#{q:mouse_hyperlink}" } "#{?mouse_hyperlink,Copy #[underscore]#{=/9/...:mouse_hyperlink},}" h { copy-mode -q ; set-buffer "#{q:mouse_hyperlink}" } '' "Horizontal Split" h { split-window -h } "Vertical Split" v { split-window -v } '' "#{?#{>:#{window_panes},1},,-}Swap Up" u { swap-pane -U } "#{?#{>:#{window_panes},1},,-}Swap Down" d { swap-pane -D } "#{?pane_marked_set,,-}Swap Marked" s { swap-pane } '' Kill X { kill-pane } Respawn R { respawn-pane -k } "#{?pane_marked,Unmark,Mark}" m { select-pane -m } "#{?#{>:#{window_panes},1},,-}#{?window_zoomed_flag,Unzoom,Zoom}" z { resize-pane -Z } }''', note = "Pane menu" }
+"M-MouseDown3Pane" = { cmd = '''display-menu -T "#[align=centre]#{pane_index} (#{pane_id})" -t = -x M -y M "#{?#{m/r:(copy|view)-mode,#{pane_mode}},Go To Top,}" < { send-keys -X history-top } "#{?#{m/r:(copy|view)-mode,#{pane_mode}},Go To Bottom,}" > { send-keys -X history-bottom } '' "#{?mouse_word,Search For #[underscore]#{=/9/...:mouse_word},}" C-r { if-shell -F "#{?#{m/r:(copy|view)-mode,#{pane_mode}},0,1}" "copy-mode -t=" ; send-keys -X -t = search-backward -- "#{q:mouse_word}" } "#{?mouse_word,Type #[underscore]#{=/9/...:mouse_word},}" C-y { copy-mode -q ; send-keys -l "#{q:mouse_word}" } "#{?mouse_word,Copy #[underscore]#{=/9/...:mouse_word},}" c { copy-mode -q ; set-buffer "#{q:mouse_word}" } "#{?mouse_line,Copy Line,}" l { copy-mode -q ; set-buffer "#{q:mouse_line}" } '' "#{?mouse_hyperlink,Type #[underscore]#{=/9/...:mouse_hyperlink},}" C-h { copy-mode -q ; send-keys -l "#{q:mouse_hyperlink}" } "#{?mouse_hyperlink,Copy #[underscore]#{=/9/...:mouse_hyperlink},}" h { copy-mode -q ; set-buffer "#{q:mouse_hyperlink}" } '' "Horizontal Split" h { split-window -h } "Vertical Split" v { split-window -v } '' "#{?#{>:#{window_panes},1},,-}Swap Up" u { swap-pane -U } "#{?#{>:#{window_panes},1},,-}Swap Down" d { swap-pane -D } "#{?pane_marked_set,,-}Swap Marked" s { swap-pane } '' Kill X { kill-pane } Respawn R { respawn-pane -k } "#{?pane_marked,Unmark,Mark}" m { select-pane -m } "#{?#{>:#{window_panes},1},,-}#{?window_zoomed_flag,Unzoom,Zoom}" z { resize-pane -Z }''', note = "Pane menu" }
+"MouseDown3Status" = { cmd = '''display-menu -T "#[align=centre]#{window_index}:#{window_name}" -t = -x W -y W "#{?#{>:#{session_windows},1},,-}Swap Left" l { swap-window -t :-1 } "#{?#{>:#{session_windows},1},,-}Swap Right" r { swap-window -t :+1 } "#{?pane_marked_set,,-}Swap Marked" s { swap-window } '' Kill X { kill-window } Respawn R { respawn-window -k } "#{?pane_marked,Unmark,Mark}" m { select-pane -m } Rename n { command-prompt -F -I "#W" { rename-window -t "#{window_id}" "%%" } } '' "New After" w { new-window -a } "New At End" W { new-window }''', note = "Window menu" }
+"M-MouseDown3Status" = { cmd = '''display-menu -T "#[align=centre]#{window_index}:#{window_name}" -t = -x W -y W "#{?#{>:#{session_windows},1},,-}Swap Left" l { swap-window -t :-1 } "#{?#{>:#{session_windows},1},,-}Swap Right" r { swap-window -t :+1 } "#{?pane_marked_set,,-}Swap Marked" s { swap-window } '' Kill X { kill-window } Respawn R { respawn-window -k } "#{?pane_marked,Unmark,Mark}" m { select-pane -m } Rename n { command-prompt -F -I "#W" { rename-window -t "#{window_id}" "%%" } } '' "New After" w { new-window -a } "New At End" W { new-window }''', note = "Window menu" }
+"MouseDown3StatusLeft" = { cmd = '''display-menu -T "#[align=centre]#{session_name}" -t = -x M -y W Next n { switch-client -n } Previous p { switch-client -p } '' Renumber N { move-window -r } Rename n { command-prompt -I "#S" { rename-session "%%" } } '' "New Session" s { new-session } "New Window" w { new-window }''', note = "Session menu" }
+"M-MouseDown3StatusLeft" = { cmd = '''display-menu -T "#[align=centre]#{session_name}" -t = -x M -y W Next n { switch-client -n } Previous p { switch-client -p } '' Renumber N { move-window -r } Rename n { command-prompt -I "#S" { rename-session "%%" } } '' "New Session" s { new-session } "New Window" w { new-window }''', note = "Session menu" }
+"WheelUpStatus" = { cmd = "previous-window", note = "Previous window" }
+# Pane scrollbars (pane-scrollbars), as tmux binds them: a page above or
+# below the slider, the slider dragged.
+"MouseDown1ScrollbarUp" = { cmd = "copy-mode -u", note = "Scroll up a page" }
+"MouseDown1ScrollbarDown" = { cmd = "copy-mode -d", note = "Scroll down a page" }
+"MouseDrag1ScrollbarSlider" = { cmd = "copy-mode -S", note = "Drag the scrollbar" }
+"WheelDownStatus" = { cmd = "next-window", note = "Next window" }
+"MouseDown2Pane" = { cmd = "select-pane -t = ; if-shell -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' { send-keys -M } { paste-buffer -p }", note = "Paste the latest buffer" }
+"DoubleClick1Pane" = { cmd = "select-pane -t = ; if-shell -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' 'send-keys -M' 'copy-mode -H ; send-keys -X select-word ; run-shell -d 0.3 ; send-keys -X copy-pipe-and-cancel'", note = "Copy the word double-clicked" }
+"TripleClick1Pane" = { cmd = "select-pane -t = ; if-shell -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' 'send-keys -M' 'copy-mode -H ; send-keys -X select-line ; run-shell -d 0.3 ; send-keys -X copy-pipe-and-cancel'", note = "Copy the line triple-clicked" }
+
+[keys.prefix]
+# tmux.conf: vim style pane selection.
+"h" = { cmd = "select-pane -L", note = "Focus pane left" }
+"j" = { cmd = "select-pane -D", note = "Focus pane down" }
+"k" = { cmd = "select-pane -U", note = "Focus pane up" }
+"l" = { cmd = "select-pane -R", note = "Focus pane right" }
+# tmux.conf: splits and new windows in the current directory.
+"'" = { cmd = 'split-window -v -c "#{pane_current_path}"', note = "Split pane top/bottom in current dir" }
+'"' = { cmd = 'split-window -v -c "#{pane_current_path}"', note = "Split pane top/bottom in current dir" }
+";" = { cmd = 'split-window -h -c "#{pane_current_path}"', note = "Split pane left/right in current dir" }
+"%" = { cmd = 'split-window -h -c "#{pane_current_path}"', note = "Split pane left/right in current dir" }
+"c" = { cmd = 'new-window -c "#{pane_current_path}"', note = "New window in current dir" }
+"x" = { cmd = "set-window-option synchronize-panes", note = "Toggle synchronized input to all panes" }
+# vim-tmux-navigator.
+"C-l" = { cmd = "send-keys C-l", note = "Clear screen (CTRL + l is taken by navigation)" }
+# tmux-sensible.
+"b" = { cmd = "last-window", note = "Last window" }
+"C-n" = { cmd = "next-window", note = "Next window" }
+"C-p" = { cmd = "previous-window", note = "Previous window" }
+"R" = { cmd = "source-file", note = "Reload config" }
+# tmux-resurrect.
+"C-s" = { cmd = "resurrect-save", note = "Save sessions" }
+"C-r" = { cmd = "resurrect-restore", note = "Restore saved sessions" }
+# tmux-yank.
+"Y" = { cmd = 'set-buffer -w "#{pane_current_path}"', note = "Copy the pane's working directory to the clipboard" }
+# tmux-yank: the shell's command line to the clipboard.
+"y" = { cmd = "copy-command-line", note = "Copy the shell's command line to the clipboard" }
+# tmux built-ins kept as they are.
+"C-b" = { cmd = "send-prefix", note = "Send the prefix key" }
+"s" = { cmd = "choose-tree -Zs", note = "Switch session" }
+"w" = { cmd = "choose-tree -Zw", note = "Switch window" }
+"d" = { cmd = "detach-client", note = "Detach" }
+"$" = { cmd = 'command-prompt -I "#S" "rename-session -- %%"', note = "Rename session" }
+"," = { cmd = 'command-prompt -I "#W" "rename-window -- %%"', note = "Rename window" }
+"0" = { cmd = "select-window -t :=0", note = "Select window 0" }
+"1" = { cmd = "select-window -t :=1", note = "Select window 1" }
+"2" = { cmd = "select-window -t :=2", note = "Select window 2" }
+"3" = { cmd = "select-window -t :=3", note = "Select window 3" }
+"4" = { cmd = "select-window -t :=4", note = "Select window 4" }
+"5" = { cmd = "select-window -t :=5", note = "Select window 5" }
+"6" = { cmd = "select-window -t :=6", note = "Select window 6" }
+"7" = { cmd = "select-window -t :=7", note = "Select window 7" }
+"8" = { cmd = "select-window -t :=8", note = "Select window 8" }
+"9" = { cmd = "select-window -t :=9", note = "Select window 9" }
+":" = { cmd = "command-prompt", note = "Command prompt" }
+"?" = { cmd = "list-keys -N", note = "List key binds" }
+"[" = { cmd = "copy-mode", note = "Copy mode" }
+"PPage" = { cmd = "copy-mode -u", note = "Copy mode, one page up" }
+"]" = { cmd = "paste-buffer -p", note = "Paste the most recent buffer" }
+"z" = { cmd = "resize-pane -Z", note = "Zoom pane" }
+"!" = { cmd = "break-pane", note = "Break pane into a window" }
+"{" = { cmd = "swap-pane -U", note = "Swap pane up" }
+"}" = { cmd = "swap-pane -D", note = "Swap pane down" }
+"o" = { cmd = "select-pane -t :.+", note = "Next pane" }
+"C-o" = { cmd = "rotate-window", note = "Rotate panes" }
+"M-o" = { cmd = "rotate-window -D", note = "Rotate panes down" }
+"E" = { cmd = "select-layout -E", note = "Spread panes out evenly" }
+"t" = { cmd = "clock-mode", note = "Show a clock" }
+"D" = { cmd = "choose-client -Z", note = "Choose a client to detach" }
+"C-z" = { cmd = "suspend-client", note = "Suspend the client (fg brings it back)" }
+"/" = { cmd = 'command-prompt -k -p key "list-keys -1N %%"', note = "Describe a key" }
+"m" = { cmd = "select-pane -m", note = "Mark or unmark the pane" }
+"M" = { cmd = "select-pane -M", note = "Clear the marked pane" }
+"=" = { cmd = "choose-buffer -Z", note = "Choose a paste buffer to paste" }
+"f" = { cmd = 'command-prompt -p "(find-window)" "find-window -Z \"%%\""', note = "Find a window" }
+"M-n" = { cmd = "next-window -a", note = "Next window with an alert" }
+"M-p" = { cmd = "previous-window -a", note = "Previous window with an alert" }
+"n" = { cmd = "next-window", note = "Next window" }
+"p" = { cmd = "previous-window", note = "Previous window" }
+"q" = { cmd = "display-panes", note = "Show pane numbers; a number selects the pane" }
+"#" = { cmd = "list-buffers", note = "List paste buffers" }
+"-" = { cmd = "delete-buffer", note = "Delete the most recent buffer" }
+"." = { cmd = 'command-prompt -p "(move-window)" "move-window -t \"%%\""', note = "Move window" }
+"Space" = { cmd = "next-layout", note = "Next layout" }
+"M-1" = { cmd = "select-layout even-horizontal", note = "Layout: even horizontal" }
+"M-2" = { cmd = "select-layout even-vertical", note = "Layout: even vertical" }
+"M-3" = { cmd = "select-layout main-horizontal", note = "Layout: main horizontal" }
+"M-4" = { cmd = "select-layout main-vertical", note = "Layout: main vertical" }
+"M-5" = { cmd = "select-layout tiled", note = "Layout: tiled" }
+"M-6" = { cmd = "select-layout main-horizontal-mirrored", note = "Layout: main horizontal, mirrored" }
+"M-7" = { cmd = "select-layout main-vertical-mirrored", note = "Layout: main vertical, mirrored" }
+"C" = { cmd = "customize-mode -Z", note = "Customize options and binds" }
+# tmux's: move the view of a window larger than the client, or follow the
+# cursor again.
+"DC" = { cmd = "refresh-client -c", note = "Follow the cursor" }
+"S-Up" = { cmd = "refresh-client -U 10", note = "Move the view up" }
+"S-Down" = { cmd = "refresh-client -D 10", note = "Move the view down" }
+"S-Left" = { cmd = "refresh-client -L 10", note = "Move the view left" }
+"S-Right" = { cmd = "refresh-client -R 10", note = "Move the view right" }
+# tmux 3.6's window and pane menus, as its list-keys prints them.
+"<" = { cmd = '''display-menu -T "#[align=centre]#{window_index}:#{window_name}" -x W -y W "#{?#{>:#{session_windows},1},,-}Swap Left" l { swap-window -t :-1 } "#{?#{>:#{session_windows},1},,-}Swap Right" r { swap-window -t :+1 } "#{?pane_marked_set,,-}Swap Marked" s { swap-window } '' Kill X { kill-window } Respawn R { respawn-window -k } "#{?pane_marked,Unmark,Mark}" m { select-pane -m } Rename n { command-prompt -F -I "#W" { rename-window -t "#{window_id}" "%%" } } '' "New After" w { new-window -a } "New At End" W { new-window }''', note = "Window menu" }
+">" = { cmd = '''display-menu -T "#[align=centre]#{pane_index} (#{pane_id})" -x P -y P "#{?#{m/r:(copy|view)-mode,#{pane_mode}},Go To Top,}" < { send-keys -X history-top } "#{?#{m/r:(copy|view)-mode,#{pane_mode}},Go To Bottom,}" > { send-keys -X history-bottom } '' "#{?mouse_word,Search For #[underscore]#{=/9/...:mouse_word},}" C-r { if-shell -F "#{?#{m/r:(copy|view)-mode,#{pane_mode}},0,1}" "copy-mode -t=" ; send-keys -X -t = search-backward -- "#{q:mouse_word}" } "#{?mouse_word,Type #[underscore]#{=/9/...:mouse_word},}" C-y { copy-mode -q ; send-keys -l "#{q:mouse_word}" } "#{?mouse_word,Copy #[underscore]#{=/9/...:mouse_word},}" c { copy-mode -q ; set-buffer "#{q:mouse_word}" } "#{?mouse_line,Copy Line,}" l { copy-mode -q ; set-buffer "#{q:mouse_line}" } '' "#{?mouse_hyperlink,Type #[underscore]#{=/9/...:mouse_hyperlink},}" C-h { copy-mode -q ; send-keys -l "#{q:mouse_hyperlink}" } "#{?mouse_hyperlink,Copy #[underscore]#{=/9/...:mouse_hyperlink},}" h { copy-mode -q ; set-buffer "#{q:mouse_hyperlink}" } '' "Horizontal Split" h { split-window -h } "Vertical Split" v { split-window -v } '' "#{?#{>:#{window_panes},1},,-}Swap Up" u { swap-pane -U } "#{?#{>:#{window_panes},1},,-}Swap Down" d { swap-pane -D } "#{?pane_marked_set,,-}Swap Marked" s { swap-pane } '' Kill X { kill-pane } Respawn R { respawn-pane -k } "#{?pane_marked,Unmark,Mark}" m { select-pane -m } "#{?#{>:#{window_panes},1},,-}#{?window_zoomed_flag,Unzoom,Zoom}" z { resize-pane -Z }''', note = "Pane menu" }
+"Up" = { cmd = "select-pane -U", note = "Focus pane up" }
+"Down" = { cmd = "select-pane -D", note = "Focus pane down" }
+"Left" = { cmd = "select-pane -L", note = "Focus pane left" }
+"Right" = { cmd = "select-pane -R", note = "Focus pane right" }
+"C-Up" = { cmd = "resize-pane -U", repeat = true, note = "Resize pane up" }
+"C-Down" = { cmd = "resize-pane -D", repeat = true, note = "Resize pane down" }
+"C-Left" = { cmd = "resize-pane -L", repeat = true, note = "Resize pane left" }
+"C-Right" = { cmd = "resize-pane -R", repeat = true, note = "Resize pane right" }
+"M-Up" = { cmd = "resize-pane -U 5", repeat = true, note = "Resize pane up by 5" }
+"M-Down" = { cmd = "resize-pane -D 5", repeat = true, note = "Resize pane down by 5" }
+"M-Left" = { cmd = "resize-pane -L 5", repeat = true, note = "Resize pane left by 5" }
+"M-Right" = { cmd = "resize-pane -R 5", repeat = true, note = "Resize pane right by 5" }
+"(" = { cmd = "switch-client -p", note = "Previous session" }
+")" = { cmd = "switch-client -n", note = "Next session" }
+"L" = { cmd = "switch-client -l", note = "Last session" }
+"&" = { cmd = 'confirm-before -p "kill-window #W? (y/n)" kill-window', note = "Kill window" }
+"X" = { cmd = 'confirm-before -p "kill-pane #P? (y/n)" kill-pane', note = "Kill pane" }
+"i" = { cmd = "display-message", note = "Show pane info" }
+"~" = { cmd = "show-messages", note = "Show messages" }
+"r" = { cmd = "refresh-client", note = "Redraw" }
+
+[keys.copy-mode-vi]
+# tmux.conf.
+"v" = { cmd = "send-keys -X begin-selection", note = "Start selection" }
+"C-v" = { cmd = "send-keys -X rectangle-toggle", note = "Toggle rectangle selection" }
+"y" = { cmd = "send-keys -X copy-selection-and-cancel", note = "Copy selection" }
+# vim-tmux-navigator.
+"C-h" = { cmd = "select-pane -L", note = "Focus pane left" }
+"C-j" = { cmd = "select-pane -D", note = "Focus pane down" }
+"C-k" = { cmd = "select-pane -U", note = "Focus pane up" }
+"C-l" = { cmd = "select-pane -R", note = "Focus pane right" }
+"C-\\" = { cmd = "select-pane -l", note = "Focus last pane" }
+# tmux-yank.
+"Y" = { cmd = "send-keys -X copy-selection-and-cancel ; paste-buffer -p", note = "Paste selection into the pane" }
+"M-y" = { cmd = "send-keys -X copy-selection-and-cancel ; paste-buffer -p", note = "Copy selection to the clipboard and paste it" }
+"!" = { cmd = "send-keys -X copy-selection-no-newlines-and-cancel", note = "Copy selection to the clipboard without newlines" }
+# tmux's own copy-mode-vi table.
+"Escape" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
+"q" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
+"C-c" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
+"A" = { cmd = "send-keys -X append-selection-and-cancel", note = "Add the selection to the newest buffer" }
+"o" = { cmd = "send-keys -X other-end", note = "Cursor to the selection's other end" }
+"z" = { cmd = "send-keys -X scroll-middle", note = "Scroll the cursor's line to the middle" }
+"#" = { cmd = "send-keys -FX search-backward -- '#{copy_cursor_word}'", note = "Search back for the word at the cursor" }
+"*" = { cmd = "send-keys -FX search-forward -- '#{copy_cursor_word}'", note = "Search for the word at the cursor" }
+"P" = { cmd = "send-keys -X toggle-position", note = "Show or hide the position" }
+"BSpace" = { cmd = "send-keys -X cursor-left", note = "Cursor left" }
+"Home" = { cmd = "send-keys -X start-of-line", note = "Start of line" }
+"End" = { cmd = "send-keys -X end-of-line", note = "End of line" }
+"J" = { cmd = "send-keys -X scroll-down", note = "Scroll down a line" }
+"K" = { cmd = "send-keys -X scroll-up", note = "Scroll up a line" }
+"C-Down" = { cmd = "send-keys -X scroll-down", note = "Scroll down a line" }
+"C-Up" = { cmd = "send-keys -X scroll-up", note = "Scroll up a line" }
+"Enter" = { cmd = "send-keys -X copy-selection-and-cancel", note = "Copy selection" }
+"Space" = { cmd = "send-keys -X begin-selection", note = "Start selection" }
+"V" = { cmd = "send-keys -X select-line", note = "Select line" }
+"h" = { cmd = "send-keys -X cursor-left", note = "Cursor left" }
+"j" = { cmd = "send-keys -X cursor-down", note = "Cursor down" }
+"k" = { cmd = "send-keys -X cursor-up", note = "Cursor up" }
+"l" = { cmd = "send-keys -X cursor-right", note = "Cursor right" }
+"Left" = { cmd = "send-keys -X cursor-left", note = "Cursor left" }
+"Down" = { cmd = "send-keys -X cursor-down", note = "Cursor down" }
+"Up" = { cmd = "send-keys -X cursor-up", note = "Cursor up" }
+"Right" = { cmd = "send-keys -X cursor-right", note = "Cursor right" }
+"w" = { cmd = "send-keys -X next-word", note = "Next word" }
+"W" = { cmd = "send-keys -X next-space", note = "Next WORD" }
+"b" = { cmd = "send-keys -X previous-word", note = "Previous word" }
+"B" = { cmd = "send-keys -X previous-space", note = "Previous WORD" }
+"e" = { cmd = "send-keys -X next-word-end", note = "End of word" }
+"E" = { cmd = "send-keys -X next-space-end", note = "End of WORD" }
+"0" = { cmd = "send-keys -X start-of-line", note = "Start of line" }
+"^" = { cmd = "send-keys -X back-to-indentation", note = "First non-blank" }
+"$" = { cmd = "send-keys -X end-of-line", note = "End of line" }
+"g" = { cmd = "send-keys -X history-top", note = "Top of history" }
+"G" = { cmd = "send-keys -X history-bottom", note = "Bottom of history" }
+"H" = { cmd = "send-keys -X top-line", note = "Top of screen" }
+"M" = { cmd = "send-keys -X middle-line", note = "Middle of screen" }
+"L" = { cmd = "send-keys -X bottom-line", note = "Bottom of screen" }
+"C-u" = { cmd = "send-keys -X halfpage-up", note = "Half page up" }
+"C-d" = { cmd = "send-keys -X halfpage-down", note = "Half page down" }
+"C-b" = { cmd = "send-keys -X page-up", note = "Page up" }
+"C-f" = { cmd = "send-keys -X page-down", note = "Page down" }
+"PPage" = { cmd = "send-keys -X page-up", note = "Page up" }
+"NPage" = { cmd = "send-keys -X page-down", note = "Page down" }
+"C-y" = { cmd = "send-keys -X scroll-up", note = "Scroll up" }
+"C-e" = { cmd = "send-keys -X scroll-down", note = "Scroll down" }
+"/" = { cmd = 'command-prompt -T search -p "(search down)" "send-keys -X search-forward \"%%\""', note = "Search down" }
+"?" = { cmd = 'command-prompt -T search -p "(search up)" "send-keys -X search-backward \"%%\""', note = "Search up" }
+"n" = { cmd = "send-keys -X search-again", note = "Next match" }
+"N" = { cmd = "send-keys -X search-reverse", note = "Previous match" }
+"f" = { cmd = "send-keys -X jump-forward", note = "Jump to the next char typed" }
+"F" = { cmd = "send-keys -X jump-backward", note = "Jump back to the char typed" }
+"t" = { cmd = "send-keys -X jump-to-forward", note = "Jump to just before the next char typed" }
+"T" = { cmd = "send-keys -X jump-to-backward", note = "Jump back to just after the char typed" }
+";" = { cmd = "send-keys -X jump-again", note = "Repeat the last jump" }
+"," = { cmd = "send-keys -X jump-reverse", note = "Repeat the last jump the other way" }
+"X" = { cmd = "send-keys -X set-mark", note = "Set the mark" }
+"M-x" = { cmd = "send-keys -X jump-to-mark", note = "Jump to the mark (and back)" }
+"%" = { cmd = "send-keys -X next-matching-bracket", note = "Matching bracket" }
+"r" = { cmd = "send-keys -X refresh-from-pane", note = "Refresh from the live pane" }
+"{" = { cmd = "send-keys -X previous-paragraph", note = "Previous paragraph" }
+"}" = { cmd = "send-keys -X next-paragraph", note = "Next paragraph" }
+":" = { cmd = 'command-prompt -p "(goto line)" "send-keys -X goto-line \"%%\""', note = "Go to a line" }
+"D" = { cmd = "send-keys -X copy-pipe-end-of-line-and-cancel", note = "Copy to the end of the line" }
+# The mouse in copy mode: click moves the cursor, a drag selects and its end
+# copies (tmux-yank's MouseDragEnd1Pane), the wheel scrolls.
+"MouseDown1Pane" = { cmd = "select-pane ; send-keys -X clear-selection", note = "Move the cursor to the click" }
+"MouseDrag1Pane" = { cmd = "select-pane ; send-keys -X begin-selection", note = "Select by dragging" }
+"MouseDragEnd1Pane" = { cmd = "send-keys -X copy-selection-and-cancel", note = "Copy the dragged selection" }
+"WheelUpPane" = { cmd = "select-pane ; send-keys -X -N 5 scroll-up", note = "Scroll up" }
+"WheelDownPane" = { cmd = "select-pane ; send-keys -X -N 5 scroll-down", note = "Scroll down" }
+"DoubleClick1Pane" = { cmd = "select-pane ; send-keys -X select-word ; run-shell -d 0.3 ; send-keys -X copy-selection-and-cancel", note = "Copy the word double-clicked" }
+"TripleClick1Pane" = { cmd = "select-pane ; send-keys -X select-line ; run-shell -d 0.3 ; send-keys -X copy-selection-and-cancel", note = "Copy the line triple-clicked" }
+
+# Copy mode with `mode-keys emacs`: tmux's own copy-mode table. Counts are
+# M-1 … M-9.
+[keys.copy-mode]
+"Escape" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
+"C-l" = { cmd = "send-keys -X cursor-centre-vertical", note = "Cursor to the middle row" }
+"M-l" = { cmd = "send-keys -X cursor-centre-horizontal", note = "Cursor to the middle column" }
+"P" = { cmd = "send-keys -X toggle-position", note = "Show or hide the position" }
+"C-c" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
+"q" = { cmd = "send-keys -X cancel", note = "Leave copy mode" }
+"C-Space" = { cmd = "send-keys -X begin-selection", note = "Start selection" }
+"C-g" = { cmd = "send-keys -X clear-selection", note = "Clear selection" }
+"R" = { cmd = "send-keys -X rectangle-toggle", note = "Toggle rectangle selection" }
+"M-w" = { cmd = "send-keys -X copy-selection-and-cancel", note = "Copy selection" }
+"C-w" = { cmd = "send-keys -X copy-selection-and-cancel", note = "Copy selection" }
+"C-b" = { cmd = "send-keys -X cursor-left", note = "Cursor left" }
+"C-f" = { cmd = "send-keys -X cursor-right", note = "Cursor right" }
+"C-p" = { cmd = "send-keys -X cursor-up", note = "Cursor up" }
+"C-n" = { cmd = "send-keys -X cursor-down", note = "Cursor down" }
+"Left" = { cmd = "send-keys -X cursor-left", note = "Cursor left" }
+"Right" = { cmd = "send-keys -X cursor-right", note = "Cursor right" }
+"Up" = { cmd = "send-keys -X cursor-up", note = "Cursor up" }
+"Down" = { cmd = "send-keys -X cursor-down", note = "Cursor down" }
+"C-a" = { cmd = "send-keys -X start-of-line", note = "Start of line" }
+"C-e" = { cmd = "send-keys -X end-of-line", note = "End of line" }
+"Home" = { cmd = "send-keys -X start-of-line", note = "Start of line" }
+"End" = { cmd = "send-keys -X end-of-line", note = "End of line" }
+"M-m" = { cmd = "send-keys -X back-to-indentation", note = "First non-blank" }
+"M-b" = { cmd = "send-keys -X previous-word", note = "Previous word" }
+"M-f" = { cmd = "send-keys -X next-word-end", note = "End of word" }
+"C-M-f" = { cmd = "send-keys -X next-matching-bracket", note = "Matching bracket" }
+"C-M-b" = { cmd = "send-keys -X previous-matching-bracket", note = "Matching bracket back" }
+"M-{" = { cmd = "send-keys -X previous-paragraph", note = "Previous paragraph" }
+"M-}" = { cmd = "send-keys -X next-paragraph", note = "Next paragraph" }
+"g" = { cmd = 'command-prompt -p "(goto line)" "send-keys -X goto-line \"%%\""', note = "Go to a line" }
+"C-k" = { cmd = "send-keys -X copy-pipe-end-of-line-and-cancel", note = "Copy to the end of the line" }
+"M-<" = { cmd = "send-keys -X history-top", note = "Top of history" }
+"M->" = { cmd = "send-keys -X history-bottom", note = "Bottom of history" }
+"M-R" = { cmd = "send-keys -X top-line", note = "Top of screen" }
+"M-r" = { cmd = "send-keys -X middle-line", note = "Middle of screen" }
+"C-v" = { cmd = "send-keys -X page-down", note = "Page down" }
+"M-v" = { cmd = "send-keys -X page-up", note = "Page up" }
+"Space" = { cmd = "send-keys -X page-down", note = "Page down" }
+"NPage" = { cmd = "send-keys -X page-down", note = "Page down" }
+"PPage" = { cmd = "send-keys -X page-up", note = "Page up" }
+"M-Up" = { cmd = "send-keys -X halfpage-up", note = "Half page up" }
+"M-Down" = { cmd = "send-keys -X halfpage-down", note = "Half page down" }
+"C-Up" = { cmd = "send-keys -X scroll-up", note = "Scroll up" }
+"C-Down" = { cmd = "send-keys -X scroll-down", note = "Scroll down" }
+"C-s" = { cmd = 'command-prompt -i -T search -p "(search down)" "send-keys -X search-forward-incremental \"%%\""', note = "Search down as you type" }
+"C-r" = { cmd = 'command-prompt -i -T search -p "(search up)" "send-keys -X search-backward-incremental \"%%\""', note = "Search up as you type" }
+"n" = { cmd = "send-keys -X search-again", note = "Next match" }
+"N" = { cmd = "send-keys -X search-reverse", note = "Previous match" }
+"f" = { cmd = "send-keys -X jump-forward", note = "Jump to the next char typed" }
+"F" = { cmd = "send-keys -X jump-backward", note = "Jump back to the char typed" }
+"t" = { cmd = "send-keys -X jump-to-forward", note = "Jump to just before the next char typed" }
+"T" = { cmd = "send-keys -X jump-to-backward", note = "Jump back to just after the char typed" }
+";" = { cmd = "send-keys -X jump-again", note = "Repeat the last jump" }
+"," = { cmd = "send-keys -X jump-reverse", note = "Repeat the last jump the other way" }
+"X" = { cmd = "send-keys -X set-mark", note = "Set the mark" }
+"M-x" = { cmd = "send-keys -X jump-to-mark", note = "Jump to the mark (and back)" }
+"r" = { cmd = "send-keys -X refresh-from-pane", note = "Refresh from the live pane" }
+"MouseDown1Pane" = { cmd = "select-pane ; send-keys -X clear-selection", note = "Move the cursor to the click" }
+"MouseDrag1Pane" = { cmd = "select-pane ; send-keys -X begin-selection", note = "Select by dragging" }
+"MouseDragEnd1Pane" = { cmd = "send-keys -X copy-selection-and-cancel", note = "Copy the dragged selection" }
+"WheelUpPane" = { cmd = "select-pane ; send-keys -X -N 5 scroll-up", note = "Scroll up" }
+"WheelDownPane" = { cmd = "select-pane ; send-keys -X -N 5 scroll-down", note = "Scroll down" }
+"DoubleClick1Pane" = { cmd = "select-pane ; send-keys -X select-word ; run-shell -d 0.3 ; send-keys -X copy-selection-and-cancel", note = "Copy the word double-clicked" }
+"TripleClick1Pane" = { cmd = "select-pane ; send-keys -X select-line ; run-shell -d 0.3 ; send-keys -X copy-selection-and-cancel", note = "Copy the line triple-clicked" }
