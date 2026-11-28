@@ -690,6 +690,36 @@ plan 18 sections here.
   in #174, unreleased on 2026-11-28); vt1k works around it, and its backlog says
   when to drop the workaround.
 
+## Scope PR CI runs to the jobs a change needs (asked by the owner, 2026-11-28)
+
+A pull request runs every CI job, whatever files it touches. Run only the jobs
+whose inputs changed, judged from the PR's changed files. Not started.
+
+- **What exists:** `ci.yml` runs on `pull_request`, on pushes to `main` and `v*`
+  tags, and by hand. On a pull request it runs every check job: `fmt`, `clippy`
+  and `test` on all three OSes, `machete`, `deny`, `audit`, `fuzz-replay`,
+  `leak-guard`, `test-conpty`, `smoke`, `pipe-acl`, `socket-acl`, `handoff` and
+  `oracle`. Only `build` and `install-packages` (and the publish jobs behind
+  them) are skipped there, by `if: github.event_name != 'pull_request'`.
+  `fuzz.yml` runs on pushes to `main`, nightly and by hand, never on a pull
+  request; `cron.yml` is a scheduled `deny`. No workflow filters by path
+  (`paths:` appears in none), and a superseded PR run is already cancelled by
+  `ci.yml`'s `concurrency` group. `main` has no branch protection, so no check
+  is required today.
+- **How, without a new dependency:** a first job lists the PR's changed files
+  against its base (`git diff --name-only`) and maps them to the jobs that need
+  them, and the other jobs read its outputs in their `if:`. Changes to
+  `.github/`, the lockfile or the toolchain pin select everything; in a Cargo
+  workspace a changed crate selects its reverse dependencies too (`fuzz/` has
+  its own lockfile and selects `fuzz-replay`). A path-filter action such as
+  `dorny/paths-filter` would be a new dependency, which is the owner's call.
+- **Keep:** pushes to the default branch, tags and scheduled runs still run
+  everything. A skipped job says why in the run summary rather than passing
+  silently, and since a job skipped by `if:` reports as skipped, required checks
+  and any release job's `needs` must tolerate it: `tag-release-status` demands
+  every result be `success`, so the filter must never apply on a tag. One
+  summary job to require is the usual answer.
+
 ## Decisions waiting on the owner
 
 - **The command prompt's Tab completion menu against tmux 3.8** (parked by the
@@ -1474,9 +1504,12 @@ plan 18 sections here.
     client sends standard input ahead of the command); an empty pane is restored
     by resurrect empty, without what was shown in it; `display-message -v`;
     `display-message -a` lists tmxr's variables (`vars::NAMES`), fewer than
-    tmux's; the
-    `choose-*`pickers' tagging and sort keys (tmux's`t`, `T`, `O`), which tmxr's picker has no counterpart for; `choose-tree
-    -F`replaces the text after a row's mark, where tmux's is the whole tree line;`command-prompt`Tab completes and offers menus as tmux's (names, sessions, a session's windows, the`target`and`window-target`types;`prompt_tab\*`in`corpus/keys.toml`),
+    tmux's; the `choose-*`pickers' tagging and sort keys (tmux's`t`, `T`, `O`),
+    which tmxr's picker has no counterpart for; `choose-tree -F`replaces the
+    text after a row's mark, where tmux's is the whole tree
+    line;`command-prompt`Tab completes and offers menus as tmux's (names,
+    sessions, a session's windows,
+    the`target`and`window-target`types;`prompt_tab\*`in`corpus/keys.toml`),
     though which ten names a long menu keeps was matched by result (the last
     ten), not read from tmux's code.
   - Hooks and modes: the client's theme follows its terminal as tmux's: the
